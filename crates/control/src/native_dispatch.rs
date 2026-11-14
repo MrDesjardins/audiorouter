@@ -766,6 +766,7 @@ impl ControlPlane {
                 NodeKind::TestSignal
                 | NodeKind::AudioFile
                 | NodeKind::Soundboard
+                | NodeKind::Instrument
                 | NodeKind::PhysicalOutput
                 | NodeKind::VirtualCaptureSink
                 | NodeKind::NetworkSend

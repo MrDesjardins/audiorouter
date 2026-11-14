@@ -71,17 +71,18 @@ pub(super) fn compile(
     let mut side_sources = HashMap::<(EntityId, String), OutputBranchSource>::new();
     let mut pending = session.nodes.iter().collect::<Vec<_>>();
     for (index, source) in sources.iter().enumerate() {
-        if !matches!(
-            source.kind,
-            NodeKind::PhysicalInput
-                | NodeKind::ApplicationCapture
-                | NodeKind::EndpointLoopback
-                | NodeKind::VirtualRenderSource
-                | NodeKind::TestSignal
-                | NodeKind::AudioFile
-                | NodeKind::Soundboard
-                | NodeKind::NetworkReceive
-        ) {
+        // Generators come from the engine's exhaustive classifier, so a new
+        // generator kind (an Instrument was the third) cannot be missed here.
+        if !(crate::renders_own_audio(source.kind)
+            || matches!(
+                source.kind,
+                NodeKind::PhysicalInput
+                    | NodeKind::ApplicationCapture
+                    | NodeKind::EndpointLoopback
+                    | NodeKind::VirtualRenderSource
+                    | NodeKind::NetworkReceive
+            ))
+        {
             return Err(unsupported());
         }
         let channels = source

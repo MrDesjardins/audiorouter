@@ -73,7 +73,9 @@ pub(crate) fn node_template(kind: NodeKind) -> Option<(&'static str, Vec<Port>, 
         NodeKind::FirFilter => tool("FIR Filter", "Applies a room or speaker impulse response."),
         NodeKind::TimeShift => tool("Time Shift", "A live-audio DVR: pause, jump back and return to live."),
         NodeKind::FunVoiceChanger => tool("Fun Voice Changer", "Playful voice presets: pitch correct, deep, robot, radio and more; tweak any of them."),
+        // Plugin-backed kinds are created from a scanned plugin, not by name.
         NodeKind::Plugin
+        | NodeKind::Instrument
         | NodeKind::ApplicationCapture
         | NodeKind::EndpointLoopback
         | NodeKind::VirtualRenderSource

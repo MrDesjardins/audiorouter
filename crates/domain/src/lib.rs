@@ -119,7 +119,8 @@ fn latency_samples_with(kind: NodeKind, parameter: impl Fn(&str) -> Option<f64>)
         | NodeKind::NetworkSend
         | NodeKind::NetworkReceive
         | NodeKind::Duck
-        | NodeKind::Soundboard => 0,
+        | NodeKind::Soundboard
+        | NodeKind::Instrument => 0,
     }
 }
 
@@ -145,6 +146,7 @@ pub fn mixer_input_volume(mixer: &Node, upstream: &EntityId) -> f32 {
 pub const MAX_PLUGIN_PATH_BYTES: usize = 512;
 pub const MAX_PLUGIN_FINGERPRINT_BYTES: usize = 64;
 pub const MAX_PLUGIN_CLASS_ID_BYTES: usize = 64;
+pub const MAX_MIDI_INPUT_NAME_BYTES: usize = 256;
 pub const MAX_APPLICATION_EXECUTABLE_BYTES: usize = 256;
 pub const MAX_APPLICATION_PATH_BYTES: usize = 512;
 const EVENT_RETENTION: Duration = Duration::from_secs(15 * 60);
@@ -211,10 +213,13 @@ pub enum NodeKind {
     FunVoiceChanger,
     /// Plays up to nine short sounds on demand (SND-01); a source with no input.
     Soundboard,
+    /// Plays a VST2 or VST3 instrument from MIDI (notes from a keyboard, the
+    /// on-screen keyboard or the API); a source with no input.
+    Instrument,
 }
 
 impl NodeKind {
-    pub const ALL: [Self; 37] = [
+    pub const ALL: [Self; 38] = [
         Self::PhysicalInput,
         Self::ApplicationCapture,
         Self::EndpointLoopback,
@@ -252,6 +257,7 @@ impl NodeKind {
         Self::Duck,
         Self::FunVoiceChanger,
         Self::Soundboard,
+        Self::Instrument,
     ];
 
     pub fn type_name(self) -> &'static str {
@@ -293,6 +299,7 @@ impl NodeKind {
             Self::Duck => "duck",
             Self::FunVoiceChanger => "fun-voice-changer",
             Self::Soundboard => "soundboard",
+            Self::Instrument => "instrument",
         }
     }
 }
@@ -459,7 +466,7 @@ fn valid_creation_time(value: &serde_json::Value) -> bool {
     })
 }
 
-pub fn node_registry() -> [NodeTypeSpec; 37] {
+pub fn node_registry() -> [NodeTypeSpec; 38] {
     NodeKind::ALL.map(|kind| NodeTypeSpec {
         kind,
         version: 1,
@@ -502,7 +509,7 @@ pub fn node_registry() -> [NodeTypeSpec; 37] {
             NodeKind::VirtualRenderSource | NodeKind::VirtualCaptureSink => {
                 CapabilityAvailability::Unavailable("requires M03 managed virtual driver")
             }
-            NodeKind::Plugin => {
+            NodeKind::Plugin | NodeKind::Instrument => {
                 CapabilityAvailability::Unavailable("requires a bound isolated plugin worker")
             }
         },
@@ -532,7 +539,7 @@ pub fn node_registry() -> [NodeTypeSpec; 37] {
             | NodeKind::FirFilter
             | NodeKind::SpectralGate
             | NodeKind::FunVoiceChanger => "high",
-            NodeKind::Plugin => "worker-bound",
+            NodeKind::Plugin | NodeKind::Instrument => "worker-bound",
             NodeKind::PhysicalInput
             | NodeKind::ApplicationCapture
             | NodeKind::EndpointLoopback
@@ -1782,6 +1789,7 @@ impl Node {
             | NodeKind::Pitch
             | NodeKind::Recorder
             | NodeKind::Plugin
+            | NodeKind::Instrument
             | NodeKind::Volume
             | NodeKind::BassTreble
             | NodeKind::Dehum
@@ -2443,21 +2451,39 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                     !name.is_empty() && name.len() <= 255 && !name.chars().any(char::is_control)
                 }),
                 (NodeKind::Soundboard, name) => valid_soundboard_parameter(name, value),
-                (NodeKind::Plugin, "path") => value
+                (NodeKind::Plugin | NodeKind::Instrument, "path") => value
                     .as_str()
                     .is_some_and(|path| !path.is_empty() && path.len() <= MAX_PLUGIN_PATH_BYTES),
-                (NodeKind::Plugin, "format") => value
+                (NodeKind::Plugin | NodeKind::Instrument, "format") => value
                     .as_str()
                     .is_some_and(|format| matches!(format, "vst2" | "vst3")),
-                (NodeKind::Plugin, "fingerprint") => value.as_str().is_some_and(|fingerprint| {
-                    fingerprint.len() == MAX_PLUGIN_FINGERPRINT_BYTES
-                        && fingerprint.bytes().all(|byte| byte.is_ascii_hexdigit())
-                }),
+                (NodeKind::Plugin | NodeKind::Instrument, "fingerprint") => {
+                    value.as_str().is_some_and(|fingerprint| {
+                        fingerprint.len() == MAX_PLUGIN_FINGERPRINT_BYTES
+                            && fingerprint.bytes().all(|byte| byte.is_ascii_hexdigit())
+                    })
+                }
                 // Stored plugin state (an entity id), restored before the worker runs.
-                (NodeKind::Plugin, "stateId") => valid_bounded_string(value, MAX_ENTITY_ID_BYTES),
-                (NodeKind::Plugin, "classId") => value.as_str().is_some_and(|class_id| {
-                    !class_id.is_empty() && class_id.len() <= MAX_PLUGIN_CLASS_ID_BYTES
+                (NodeKind::Plugin | NodeKind::Instrument, "stateId") => {
+                    valid_bounded_string(value, MAX_ENTITY_ID_BYTES)
+                }
+                (NodeKind::Plugin | NodeKind::Instrument, "classId") => {
+                    value.as_str().is_some_and(|class_id| {
+                        !class_id.is_empty() && class_id.len() <= MAX_PLUGIN_CLASS_ID_BYTES
+                    })
+                }
+                // Where an Instrument takes its notes from: "keyboard" (the
+                // on-screen keyboard and the API only), "all" (every MIDI
+                // input), or one MIDI input device by name.
+                (NodeKind::Instrument, "midiInput") => value.as_str().is_some_and(|input| {
+                    !input.is_empty()
+                        && input.len() <= MAX_MIDI_INPUT_NAME_BYTES
+                        && !input.chars().any(char::is_control)
                 }),
+                // 0 plays every MIDI channel; 1-16 plays one.
+                (NodeKind::Instrument, "midiChannel") => value
+                    .as_u64()
+                    .is_some_and(|channel| (0..=16).contains(&channel)),
                 // The user says this plugin is meant to leave audio unchanged,
                 // so it is not silenced as unlicensed on a microphone path.
                 (NodeKind::Plugin, "passThroughAllowed") => value.is_boolean(),
@@ -2503,7 +2529,7 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                         !bus_id.is_empty() && bus_id.len() <= MAX_ENTITY_ID_BYTES
                     })
                 }
-                (NodeKind::Plugin, name)
+                (NodeKind::Plugin | NodeKind::Instrument, name)
                     if name
                         .strip_prefix("pluginParameter:")
                         .and_then(|id| id.parse::<u32>().ok())
@@ -4776,7 +4802,7 @@ mod tests {
     #[test]
     fn registry_reports_audio_and_processor_capabilities_explicitly() {
         let registry = node_registry();
-        assert_eq!(registry.len(), 37);
+        assert_eq!(registry.len(), 38);
         let voice = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::FunVoiceChanger)

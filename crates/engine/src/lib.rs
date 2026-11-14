@@ -6239,7 +6239,7 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
         }
         // A placeholder must never be treated as a transparent processor:
         // until its isolated worker is bound, activation fails closed.
-        if node.kind == NodeKind::Plugin && !plugins.contains_key(&node.id) {
+        if hosts_plugin_worker(node.kind) && !plugins.contains_key(&node.id) {
             return Err(GraphCompileError::UnsupportedTopology);
         }
         if node.bypass {
@@ -7059,7 +7059,9 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                     }
                 );
             }
-            NodeKind::Plugin => push_stage!(
+            // An Instrument reuses the effect stage: the engine hands it a
+            // silent block and the worker's rendered audio replaces it.
+            NodeKind::Plugin | NodeKind::Instrument => push_stage!(
                 node_id,
                 ProcessingStage::Plugin {
                     processor: plugins
@@ -7454,7 +7456,7 @@ impl OutputBranchCompiler<'_> {
             return Err(GraphCompileError::UnsupportedTopology);
         }
         if !is_chain_processor(node.kind)
-            || (node.kind == NodeKind::Plugin && !self.plugins.contains_key(&node.id))
+            || (hosts_plugin_worker(node.kind) && !self.plugins.contains_key(&node.id))
         {
             return Err(GraphCompileError::UnsupportedTopology);
         }
@@ -7521,7 +7523,7 @@ fn compile_path_graph(
     >,
     audio_media: &std::collections::HashMap<String, Arc<DecodedAudio>>,
 ) -> Result<CompiledMixerFanoutGraph, GraphCompileError> {
-    use audiorouter_domain::{NodeKind, PortDirection};
+    use audiorouter_domain::PortDirection;
     use std::collections::HashSet;
 
     let mut participants = HashSet::new();
@@ -7589,7 +7591,7 @@ fn compile_path_graph(
         if edge.destination_port != input.name || input.channels != branch_source_channels {
             return Err(GraphCompileError::UnsupportedTopology);
         }
-        if destination.kind == NodeKind::Plugin && !plugins.contains_key(&destination.id) {
+        if hosts_plugin_worker(destination.kind) && !plugins.contains_key(&destination.id) {
             return Err(GraphCompileError::UnsupportedTopology);
         }
         processing_nodes.push(destination.clone());
@@ -7915,7 +7917,7 @@ fn compile_mixer_entry<'s>(
         }
         if chain
             .iter()
-            .any(|node| node.kind == NodeKind::Plugin && !plugins.contains_key(&node.id))
+            .any(|node| hosts_plugin_worker(node.kind) && !plugins.contains_key(&node.id))
         {
             return Err(GraphCompileError::UnsupportedTopology);
         }
@@ -7972,7 +7974,7 @@ fn compile_direct_entry<'s>(
     participants: &mut std::collections::HashSet<audiorouter_domain::EntityId>,
     processing_nodes: &mut Vec<audiorouter_domain::Node>,
 ) -> Result<PathEntry<'s>, GraphCompileError> {
-    use audiorouter_domain::{NodeKind, PortDirection};
+    use audiorouter_domain::PortDirection;
 
     let source_port = source
         .ports
@@ -8025,7 +8027,7 @@ fn compile_direct_entry<'s>(
         if edge.source_port != source_port.name
             || edge.destination_port != input.name
             || edge.matrix.len() != usize::from(input.channels) * source_channels
-            || (first.kind == NodeKind::Plugin && !plugins.contains_key(&first.id))
+            || (hosts_plugin_worker(first.kind) && !plugins.contains_key(&first.id))
             || !participants.insert(first.id.clone())
         {
             return Err(GraphCompileError::UnsupportedTopology);
@@ -8692,7 +8694,12 @@ fn prepare_soundboard(
 pub fn renders_own_audio(kind: audiorouter_domain::NodeKind) -> bool {
     use audiorouter_domain::NodeKind;
     match kind {
-        NodeKind::TestSignal | NodeKind::AudioFile | NodeKind::Soundboard => true,
+        // An Instrument renders its own audio: its worker replaces the silent
+        // block the native input paces it with (see `hosts_plugin_worker`).
+        NodeKind::TestSignal
+        | NodeKind::AudioFile
+        | NodeKind::Soundboard
+        | NodeKind::Instrument => true,
         NodeKind::PhysicalInput
         | NodeKind::ApplicationCapture
         | NodeKind::EndpointLoopback
@@ -8730,6 +8737,55 @@ pub fn renders_own_audio(kind: audiorouter_domain::NodeKind) -> bool {
     }
 }
 
+/// Whether a node's audio comes from an isolated plugin worker that the
+/// control plane binds before the graph is compiled (a VST effect or a VST
+/// instrument). Such a node without a bound worker must never compile as a
+/// transparent stage: activation fails closed. Exhaustive on purpose (no `_`
+/// arm), so a new kind has to decide here instead of slipping past a
+/// hand-written `== NodeKind::Plugin` check.
+pub fn hosts_plugin_worker(kind: audiorouter_domain::NodeKind) -> bool {
+    use audiorouter_domain::NodeKind;
+    match kind {
+        NodeKind::Plugin | NodeKind::Instrument => true,
+        NodeKind::PhysicalInput
+        | NodeKind::ApplicationCapture
+        | NodeKind::EndpointLoopback
+        | NodeKind::PhysicalOutput
+        | NodeKind::VirtualRenderSource
+        | NodeKind::VirtualCaptureSink
+        | NodeKind::NetworkSend
+        | NodeKind::NetworkReceive
+        | NodeKind::TestSignal
+        | NodeKind::Mixer
+        | NodeKind::Gain
+        | NodeKind::Mute
+        | NodeKind::Meter
+        | NodeKind::ParametricEq
+        | NodeKind::Compressor
+        | NodeKind::Gate
+        | NodeKind::Limiter
+        | NodeKind::Delay
+        | NodeKind::GraphicEq
+        | NodeKind::Pitch
+        | NodeKind::Recorder
+        | NodeKind::AudioFile
+        | NodeKind::Volume
+        | NodeKind::BassTreble
+        | NodeKind::Dehum
+        | NodeKind::Declick
+        | NodeKind::InputSwitch
+        | NodeKind::OutputSwitch
+        | NodeKind::Denoise
+        | NodeKind::SpeechDenoise
+        | NodeKind::FirFilter
+        | NodeKind::SpectralGate
+        | NodeKind::TimeShift
+        | NodeKind::Duck
+        | NodeKind::FunVoiceChanger
+        | NodeKind::Soundboard => false,
+    }
+}
+
 /// Disabled endpoints/generators and Mixers silence their route. A disabled
 /// Recorder keeps its dry monitoring path without recording; disabled switches
 /// use the dry path already selected by the route compiler.
@@ -8747,6 +8803,7 @@ fn disabled_node_mutes(kind: audiorouter_domain::NodeKind) -> bool {
         | NodeKind::TestSignal
         | NodeKind::AudioFile
         | NodeKind::Soundboard
+        | NodeKind::Instrument
         | NodeKind::Mixer => true,
         NodeKind::Gain
         | NodeKind::Volume
@@ -8814,6 +8871,7 @@ fn is_chain_processor(kind: audiorouter_domain::NodeKind) -> bool {
         | NodeKind::TestSignal
         | NodeKind::AudioFile
         | NodeKind::Soundboard
+        | NodeKind::Instrument
         | NodeKind::Mixer
         | NodeKind::Recorder
         | NodeKind::InputSwitch

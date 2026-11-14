@@ -1260,7 +1260,7 @@ fn has_no_settings(kind: audiorouter_domain::NodeKind) -> bool {
         | ParametricEq | Compressor | Gate | Limiter | Delay | GraphicEq | Pitch | Recorder
         | AudioFile | Soundboard | Volume | BassTreble | Dehum | Declick | InputSwitch
         | OutputSwitch | Denoise | SpeechDenoise | FirFilter | SpectralGate | TimeShift
-        | NetworkSend | NetworkReceive | Duck | FunVoiceChanger => false,
+        | NetworkSend | NetworkReceive | Duck | FunVoiceChanger | Instrument => false,
     }
 }
 

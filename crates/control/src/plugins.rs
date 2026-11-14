@@ -418,6 +418,7 @@ fn records_from_a_device(kind: NodeKind) -> bool {
         | NodeKind::NetworkReceive
         | NodeKind::TestSignal
         | NodeKind::AudioFile
+        | NodeKind::Instrument
         | NodeKind::Soundboard => false,
         NodeKind::PhysicalOutput
         | NodeKind::VirtualCaptureSink
