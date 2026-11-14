@@ -364,11 +364,9 @@ impl ControlPlane {
         // pass audio dry. Leaving it out made a later live un-bypass insert a
         // stage whose worker pipeline was empty: a quantum of silence and a
         // latency step. Live flag changes then only flip the bridge flag.
-        for node in session
-            .nodes
-            .iter_mut()
-            .filter(|node| node.kind == NodeKind::Plugin && node.enabled && node.bypass)
-        {
+        for node in session.nodes.iter_mut().filter(|node| {
+            audiorouter_engine::hosts_plugin_worker(node.kind) && node.enabled && node.bypass
+        }) {
             if let Ok(bridge) = self.plugin_bridge(&session_id, &node.id) {
                 bridge.set_processing_active(false);
                 node.bypass = false;

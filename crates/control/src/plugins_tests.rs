@@ -855,3 +855,83 @@ fn play_applies_only_sliders_moved_since_the_state_was_captured() {
         .collect::<Vec<_>>();
     assert_eq!(names, ["pluginParameter:2", "pluginParameter:3"]);
 }
+
+/// An Instrument node starts its own worker through the same path a route
+/// uses (`start_plugin_bridges`), and its bridge plays MIDI pushed to the
+/// queue (phase P8b). Needs the built VST2 worker and the test instrument
+/// (`tools/vst2-test-instrument`): set `AUDIOROUTER_PLUGIN_WORKER_PATH` and
+/// `AUDIOROUTER_TEST_VST2_INSTRUMENT`.
+#[cfg(windows)]
+#[test]
+#[ignore = "needs the built VST2 worker and the test instrument DLL"]
+fn an_instrument_node_starts_a_worker_and_plays_midi() {
+    use audiorouter_domain::{Node, Port};
+    use audiorouter_plugin_host::{inspect_binary, MidiEvent};
+    let dll = std::path::PathBuf::from(
+        std::env::var_os("AUDIOROUTER_TEST_VST2_INSTRUMENT").expect("test instrument path"),
+    );
+    let root = dll.parent().unwrap().to_path_buf();
+    let identity = inspect_binary(&dll, std::slice::from_ref(&root)).unwrap();
+    let node = |id: &str, kind: NodeKind| Node {
+        id: EntityId::new(id),
+        name: id.into(),
+        kind,
+        type_version: 1,
+        enabled: true,
+        bypass: false,
+        parameters: Default::default(),
+        ports: vec![Port {
+            name: "out".into(),
+            direction: PortDirection::Output,
+            channels: 2,
+        }],
+    };
+    let session = Session {
+        id: EntityId::new("instrument-session"),
+        name: "instrument".into(),
+        schema_version: 1,
+        revision: 0,
+        nodes: vec![node("piano", NodeKind::Instrument)],
+        edges: vec![],
+    };
+    let request = |node_id: &str| PluginStageRequest {
+        node_id: EntityId::new(node_id),
+        scanned_path: dll.clone(),
+        configured_root: root.clone(),
+        fingerprint: identity.sha256.clone(),
+        channels: 2,
+        state: None,
+        parameters: Vec::new(),
+    };
+    let started = start_plugin_bridges(&session, vec![request("piano")], 48_000).unwrap();
+    assert_eq!(started.len(), 1);
+    let (id, bridge) = &started[0];
+    assert_eq!(id.as_str(), "piano");
+    let peak = |quanta: usize| {
+        let mut peak = 0.0_f32;
+        let mut samples = vec![0.0_f32; audiorouter_engine::PROCESSING_QUANTUM_FRAMES * 2];
+        for _ in 0..quanta {
+            let mut block = audiorouter_engine::AudioBlock::new(
+                2,
+                audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+            )
+            .unwrap();
+            audiorouter_engine::RealtimePluginProcessor::process(bridge.as_ref(), &mut block);
+            block.copy_to_interleaved(&mut samples).unwrap();
+            peak = samples
+                .iter()
+                .fold(peak, |peak, sample| peak.max(sample.abs()));
+            std::thread::sleep(std::time::Duration::from_millis(3));
+        }
+        peak
+    };
+    assert!(peak(40) < 1e-6, "silent until a note arrives");
+    bridge
+        .midi_queue()
+        .push(&[MidiEvent::new(0, 0x90, 69, 120).unwrap()]);
+    assert!(peak(40) > 0.1, "the held note sounds");
+    // With no request for it, the instrument node starts nothing.
+    assert!(start_plugin_bridges(&session, vec![], 48_000)
+        .unwrap()
+        .is_empty());
+}

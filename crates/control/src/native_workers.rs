@@ -617,7 +617,7 @@ impl ControlPlane {
             for node in session
                 .nodes
                 .iter_mut()
-                .filter(|node| node.kind == NodeKind::Plugin)
+                .filter(|node| audiorouter_engine::hosts_plugin_worker(node.kind))
             {
                 let bridge = self.plugin_bridge(session_id, &node.id)?;
                 bridge.set_silence_if_unchanged(guards.contains(&node.id));

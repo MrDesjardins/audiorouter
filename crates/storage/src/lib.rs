@@ -3203,7 +3203,12 @@ impl Storage {
         let mut latest_applied = false;
         for (node_id, state_id) in self.plugin_node_states(id.as_str())? {
             if let Some(node) = exported_session.nodes.iter_mut().find(|node| {
-                node.id.as_str() == node_id && node.kind == audiorouter_domain::NodeKind::Plugin
+                node.id.as_str() == node_id
+                    && matches!(
+                        node.kind,
+                        audiorouter_domain::NodeKind::Plugin
+                            | audiorouter_domain::NodeKind::Instrument
+                    )
             }) {
                 node.parameters
                     .insert("stateId".into(), serde_json::Value::String(state_id));

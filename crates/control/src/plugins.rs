@@ -222,10 +222,12 @@ pub(crate) fn start_plugin_bridges(
                 // A chain is one process, so it cannot mix bitness; each 32-bit
                 // plugin runs in its own 32-bit worker.
                 && identity.architecture == audiorouter_plugin_host::PeArchitecture::X64
+                // An instrument is a source with its own MIDI-fed worker; it
+                // never shares a chain process with effects.
                 && session
                     .nodes
                     .iter()
-                    .any(|node| &node.id == *id && !node.bypass)
+                    .any(|node| &node.id == *id && !node.bypass && node.kind == NodeKind::Plugin)
         })
         .map(|(id, (_, _, channels, _, _))| (id.clone(), *channels))
         .collect();
@@ -345,6 +347,64 @@ pub(crate) fn start_plugin_bridges(
             started.push((id.clone(), bridge));
         }
     }
+    // Instruments: one worker each, started with `--instrument`, fed by the
+    // bridge's MIDI queue (played from the keyboard, a MIDI device or the API).
+    for node in session
+        .nodes
+        .iter()
+        .filter(|node| node.kind == NodeKind::Instrument)
+    {
+        let Some((verified, configured_root, channels, state, parameters)) = prepared.get(&node.id)
+        else {
+            continue;
+        };
+        let not_ready = |message: String| ControlError::NodeNotReady {
+            node_id: node.id.as_str().to_owned(),
+            message: format!("\"{}\" cannot play: {message}", node.name),
+        };
+        let worker_executable = require_plugin_worker(PluginWorkerKind::for_identity(
+            verified.format,
+            verified.architecture,
+        ))
+        .map_err(|error| match error {
+            ControlError::InvalidRequest(message) => not_ready(message),
+            other => other,
+        })?;
+        let mut worker =
+            audiorouter_plugin_host::SupervisedWorkerProcess::spawn_instrument_verified(
+                worker_executable.as_path(),
+                verified,
+                std::slice::from_ref(configured_root),
+                *channels as u16,
+                sample_rate_hz,
+                Instant::now(),
+            )
+            .map_err(|error| not_ready(format!("Instrument worker launch failed: {error}")))?;
+        if let Some(asset) = state {
+            worker
+                .restore_state(asset.clone(), Instant::now())
+                .map_err(|error| {
+                    not_ready(format!(
+                        "Instrument state restore failed: {error}. Start from defaults is available in Properties; your previous state files are kept"
+                    ))
+                })?;
+        }
+        let bridge = audiorouter_plugin_host::PluginRuntimeBridge::start_instrument(
+            worker,
+            *channels,
+            audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+            8,
+        )
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!("instrument runtime bridge failed: {error:?}"))
+        })?;
+        bridge.set_parameters(parameters.clone()).map_err(|error| {
+            ControlError::InvalidRequest(format!(
+                "instrument parameter template rejected: {error:?}"
+            ))
+        })?;
+        started.push((node.id.clone(), bridge));
+    }
     Ok(started)
 }
 
@@ -399,6 +459,7 @@ pub(crate) fn plugin_unchanged_guards(session: &Session) -> std::collections::Ha
     session
         .nodes
         .iter()
+        // Effects only: an instrument has no input to pass through.
         .filter(|node| node.kind == NodeKind::Plugin)
         .filter(|node| plugin_silences_unchanged_audio(session, &node.id))
         .map(|node| node.id.clone())
@@ -930,7 +991,7 @@ impl ControlPlane {
         for node in session
             .nodes
             .iter()
-            .filter(|node| node.kind == NodeKind::Plugin)
+            .filter(|node| audiorouter_engine::hosts_plugin_worker(node.kind))
         {
             let path = node
                 .parameters
@@ -1042,7 +1103,7 @@ impl ControlPlane {
             pruned.as_ref()
         };
         let wanted = |node: &&audiorouter_domain::Node| {
-            node.kind == NodeKind::Plugin
+            audiorouter_engine::hosts_plugin_worker(node.kind)
                 && match only {
                     Some(id) => &node.id == id,
                     None => node.enabled,
@@ -1090,10 +1151,17 @@ impl ControlPlane {
             let scanned_path =
                 std::path::PathBuf::from(entry.get("path").and_then(Value::as_str).unwrap_or(path));
             let configured_root = std::path::PathBuf::from(root);
+            // An effect follows its input port; an instrument has only an
+            // output port.
+            let channel_direction = if node.kind == NodeKind::Instrument {
+                audiorouter_domain::PortDirection::Output
+            } else {
+                audiorouter_domain::PortDirection::Input
+            };
             let channels = node
                 .ports
                 .iter()
-                .find(|port| port.direction == audiorouter_domain::PortDirection::Input)
+                .find(|port| port.direction == channel_direction)
                 .map(|port| usize::from(port.channels))
                 .unwrap_or(1);
             // The node's latest capture (editor close, Save state, Stop) wins;
@@ -1192,7 +1260,7 @@ impl ControlPlane {
             .get_session(&session_id)?
             .nodes
             .iter()
-            .find(|node| node.id == node_id && node.kind == NodeKind::Plugin)
+            .find(|node| node.id == node_id && audiorouter_engine::hosts_plugin_worker(node.kind))
             .cloned()
             .ok_or_else(|| ControlError::InvalidRequest("nodeId must name a plugin".into()))?;
         let path = node
@@ -1708,7 +1776,7 @@ impl ControlPlane {
             .get_session(&session_id)?
             .nodes
             .iter()
-            .find(|node| node.id == node_id && node.kind == NodeKind::Plugin)
+            .find(|node| node.id == node_id && audiorouter_engine::hosts_plugin_worker(node.kind))
             .and_then(|node| {
                 let fingerprint = node
                     .parameters
