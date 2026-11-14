@@ -1251,7 +1251,9 @@ export type StateEventCategory =
   | "recording.renamed"
   | "recording.entryRemoved"
   | "recording.recycled"
-  | "application.captureStateChanged";
+  | "application.captureStateChanged"
+  | "runtime.recovered"
+  | "runtime.recoveryFailed";
 
 export interface StateEvent {
   sequence: number;

@@ -161,7 +161,7 @@ const MAX_PLAN_REQUIRED_SCOPES: usize = 1;
 const MAX_PLAN_WARNINGS: usize = 1;
 const AUDIO_UPLOAD_CHUNK_BYTES: usize = 192 * 1024;
 const AUDIO_UPLOAD_TTL: Duration = Duration::from_secs(30 * 60);
-const STATE_CATEGORIES: [&str; 22] = [
+const STATE_CATEGORIES: [&str; 24] = [
     "session.created",
     "session.deleted",
     "session.selectionChanged",
@@ -184,6 +184,8 @@ const STATE_CATEGORIES: [&str; 22] = [
     "recording.entryRemoved",
     "recording.recycled",
     "application.captureStateChanged",
+    "runtime.recovered",
+    "runtime.recoveryFailed",
 ];
 const APPLICATION_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_millis(100);
 #[allow(
@@ -402,6 +404,10 @@ pub struct ControlPlane {
     os_suspended_native_sessions: Vec<EntityId>,
     #[cfg(windows)]
     sleep_route_recovery: Option<safety::SleepRouteRecovery>,
+    /// When device-loss recoveries were armed, to stop a flapping device
+    /// from restarting the route without end.
+    #[cfg(windows)]
+    device_recovery_arms: VecDeque<Instant>,
     virtual_buses: VirtualBusRegistry,
     virtual_bus_routes: VirtualBusRouteRegistry,
     virtual_bus_route_revision: u64,
@@ -587,6 +593,8 @@ impl ControlPlane {
             os_suspended_native_sessions: Vec::new(),
             #[cfg(windows)]
             sleep_route_recovery: None,
+            #[cfg(windows)]
+            device_recovery_arms: VecDeque::new(),
             virtual_buses: VirtualBusRegistry::default(),
             virtual_bus_routes: VirtualBusRouteRegistry::default(),
             virtual_bus_route_revision: 0,

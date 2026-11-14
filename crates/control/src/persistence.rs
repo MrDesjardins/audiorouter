@@ -273,6 +273,8 @@ impl ControlPlane {
             os_suspended_native_sessions: Vec::new(),
             #[cfg(windows)]
             sleep_route_recovery: None,
+            #[cfg(windows)]
+            device_recovery_arms: std::collections::VecDeque::new(),
             virtual_buses,
             virtual_bus_routes,
             virtual_bus_route_revision,

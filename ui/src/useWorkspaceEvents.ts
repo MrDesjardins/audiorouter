@@ -31,6 +31,8 @@ export const WORKSPACE_EVENT_CATEGORIES = [
   "recording.entryRemoved",
   "recording.recycled",
   "application.captureStateChanged",
+  "runtime.recovered",
+  "runtime.recoveryFailed",
 ] as const satisfies readonly StateEventCategory[];
 
 /** Polls the backend's state events once a second; an event or a resync
@@ -110,15 +112,27 @@ export function useWorkspaceEvents({
         if (!active) return;
         const adoptedSessionId =
           activeSession?.sessionId && follow(activeSession.sessionId) ? activeSession.sessionId : session.id;
+        const recoveredEvent = result.events.find((event) => event.category === "runtime.recovered");
+        const recoveryFailedEvent = result.events.find((event) => event.category === "runtime.recoveryFailed");
         const bridgeEvent = result.events.find(
           (event) => event.category === "virtualBridge.failed" || event.category === "virtualBridge.expired",
         );
         // Marked as errors: "stopped" otherwise reads as a success, which
         // showed a green check and closed itself after 8 s (owner, 2026-11-07).
-        if (bindingInvalidatedEvent) {
+        // The latest outcome wins: a recovery reported in the same batch as
+        // the device change that caused it.
+        if (recoveryFailedEvent) {
           showMessage(
             markErrorMessage(
-              "An audio device this route uses was disconnected or changed, so audio stopped. Reconnect it, then press Stop and Play.",
+              "AudioRouter could not restart the route: the device it uses did not come back with the same identity. Check the device in Properties, then press Play.",
+            ),
+          );
+        } else if (recoveredEvent) {
+          showMessage("The audio device came back, so AudioRouter restarted the route.");
+        } else if (bindingInvalidatedEvent) {
+          showMessage(
+            markErrorMessage(
+              "An audio device this route uses was disconnected or changed, so audio stopped. AudioRouter restarts the route when the same device is back, for up to two minutes; after that, reconnect it and press Play.",
             ),
           );
         } else if (bridgeEvent) {

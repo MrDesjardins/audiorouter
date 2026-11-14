@@ -2,12 +2,44 @@
 
 use super::*;
 
+/// A bounded, automatic restart of the exact saved multi-path route after
+/// sleep or after one of its devices disappeared (RES-3, STATE-11, CAP-11).
+/// Every attempt prepares the saved revision against its saved endpoint
+/// IDs, so it never substitutes a device: a device that returns with a new
+/// ID (a driver update) exhausts the attempts and reports
+/// `runtime.recoveryFailed`. A user Start, Stop or Quit cancels it.
 #[cfg(windows)]
 pub(crate) struct SleepRouteRecovery {
     session_id: EntityId,
     revision: u64,
     next_attempt: Option<Instant>,
     attempts: u8,
+    max_attempts: u8,
+    /// Device loss leaves the runtime marked running with a stopped worker;
+    /// stop its audio before the first restart.
+    stop_first: bool,
+}
+
+/// Attempts, one a second, after resume.
+#[cfg(windows)]
+pub(crate) const SLEEP_RECOVERY_ATTEMPTS: u8 = 20;
+/// Attempts, one a second, while a lost device may come back (two minutes).
+#[cfg(windows)]
+pub(crate) const DEVICE_RECOVERY_ATTEMPTS: u8 = 120;
+
+#[cfg(windows)]
+impl SleepRouteRecovery {
+    /// Recovery after a bound endpoint of the running route changed.
+    pub(crate) fn after_device_loss(session_id: EntityId, revision: u64, now: Instant) -> Self {
+        Self {
+            session_id,
+            revision,
+            next_attempt: Some(now),
+            attempts: 0,
+            max_attempts: DEVICE_RECOVERY_ATTEMPTS,
+            stop_first: true,
+        }
+    }
 }
 
 impl ControlPlane {
@@ -40,16 +72,29 @@ impl ControlPlane {
             self.sleep_route_recovery = Some(recovery);
             return;
         }
-        let id = &recovery.session_id;
+        let id = recovery.session_id.clone();
+        let id = &id;
         if self
             .get_session(id)
             .map_or(true, |session| session.revision != recovery.revision)
             || self.session_is_recording(id)
-            || self
-                .runtimes
-                .get(id)
-                .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
         {
+            return;
+        }
+        let running = self
+            .runtimes
+            .get(id)
+            .is_some_and(|runtime| runtime.state() == RuntimeState::Running);
+        if running && recovery.stop_first {
+            // Silence the interrupted route before restarting it. Stopping
+            // cancels a pending recovery, and this one is already taken out.
+            recovery.stop_first = false;
+            if self.stop_session_audio(id).is_err() {
+                recovery.next_attempt = Some(Instant::now() + std::time::Duration::from_secs(1));
+                self.sleep_route_recovery = Some(recovery);
+                return;
+            }
+        } else if running {
             return;
         }
         let result = (|| {
@@ -77,7 +122,7 @@ impl ControlPlane {
                 "sleep recovery: {}",
                 audio_pump_error_category(&error)
             ));
-            if recovery.attempts < 20 {
+            if recovery.attempts < recovery.max_attempts {
                 recovery.next_attempt = Some(Instant::now() + std::time::Duration::from_secs(1));
                 self.sleep_route_recovery = Some(recovery);
             } else {
@@ -395,6 +440,8 @@ impl ControlPlane {
                             session_id: id,
                             next_attempt: None,
                             attempts: 0,
+                            max_attempts: SLEEP_RECOVERY_ATTEMPTS,
+                            stop_first: false,
                         })
                     } else {
                         // A second suspend while waiting for the device must

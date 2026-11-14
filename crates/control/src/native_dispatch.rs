@@ -2,6 +2,11 @@
 
 use super::*;
 
+/// Device-loss recoveries allowed in ten minutes before a flapping device
+/// leaves the route stopped (RES-3).
+#[cfg(windows)]
+pub(crate) const MAX_DEVICE_RECOVERY_ARMS: usize = 5;
+
 impl ControlPlane {
     #[cfg(windows)]
     /// Pump bounded capture, graph, and prepared branch work for the exact
@@ -1399,6 +1404,7 @@ impl ControlPlane {
                     ))
                 })?;
                 invalidated = true;
+                self.arm_device_loss_recovery();
             }
         }
         if !invalidated {
@@ -1407,6 +1413,45 @@ impl ControlPlane {
         self.events
             .append(0, None, "devices.bindingInvalidated", None);
         Ok(())
+    }
+
+    /// After a device of the running multi-path route changed, restart the
+    /// exact saved route when its devices are back (RES-3). Not armed for a
+    /// recording session (recordings never resume) or a route with a failed
+    /// plugin: a failed processor stays silent until the user restarts it.
+    #[cfg(windows)]
+    pub(crate) fn arm_device_loss_recovery(&mut self) {
+        let Some(id) = self.native_multi_input_worker_session.clone() else {
+            return;
+        };
+        if self.session_is_recording(&id) || self.session_has_failed_plugin(&id) {
+            return;
+        }
+        let Ok(revision) = self.get_session(&id).map(|session| session.revision) else {
+            return;
+        };
+        let now = Instant::now();
+        let window = std::time::Duration::from_secs(10 * 60);
+        self.device_recovery_arms
+            .retain(|armed| now.saturating_duration_since(*armed) <= window);
+        if self.device_recovery_arms.len() >= MAX_DEVICE_RECOVERY_ARMS {
+            // The device keeps dropping out: leave the route stopped and
+            // let the user restart it, as before automatic recovery.
+            return;
+        }
+        self.device_recovery_arms.push_back(now);
+        self.sleep_route_recovery = Some(super::safety::SleepRouteRecovery::after_device_loss(
+            id, revision, now,
+        ));
+    }
+
+    /// Whether a plugin worker of this session has stopped.
+    pub(crate) fn session_has_failed_plugin(&self, id: &EntityId) -> bool {
+        self.plugin_bridges.lock().is_ok_and(|bridges| {
+            bridges.iter().any(|((session, _), bridge)| {
+                session == id && bridge.upgrade().is_some_and(|bridge| bridge.failed())
+            })
+        })
     }
 
     /// Poll endpoint notifications from a mutating native lifecycle boundary.
