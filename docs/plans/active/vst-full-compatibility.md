@@ -323,3 +323,23 @@ runs. Not started: P8b MIDI source and instrument nodes (the largest piece),
 P2/P3 conformance gaps (opcodes and interfaces listed above), P4 layouts, P5
 sidechain, P6 stopped-session editors, P7 shared VST3 worker, P9 release gate,
 and rebuilding the desktop exe/installer with the x86 workers (not run).
+
+## P2 step 1 (2026-11-13): VST2 host callback
+
+- **Defect:** the host answered `getSampleRate`/`getBlockSize` on opcodes 10 and
+  11 (`tempoAt`, `getNumAutomatableParameters`); the real numbers are 16 and
+  17 (public `aeffectx.h`, checked against LMMS's copy). A plugin that asks the
+  host for its sample rate (common in JUCE and iPlug VST2) received 0.
+  Fixed; `host_opcodes_match_the_public_aeffectx_numbering` pins the
+  literals.
+- Added the answers a conforming host gives: vendor and product string
+  ("AudioRouter"), `canDo` (yes: sizeWindow, acceptIOChanges, startStopProcess,
+  supplyIdle, sendVstTimeInfo; no: receive events, offline, file selectors,
+  shell category; unknown stays 0), language, pin connected, automation state,
+  replace-or-accumulate, latency queries, update display, begin/end edit,
+  need idle, `ioChanged` (sets `io_changed` on the context for the worker to
+  read) and `wantMidi`.
+- Verified: unit tests; census of the VST2 plugins in `C:\Program Files\VSTPlugins`
+  (ReaPlugs, Pitchproof), Dragonfly and 32-bit ReaPlugs: no change in results.
+- Open in P2: plugin-side opcodes (bypass, programs, `effCanDo`, shell
+  plugins, `.fxp/.fxb`), acting on `io_changed`, old `process` fallback.

@@ -95,6 +95,9 @@ struct Vst2HostContext {
     /// The shell window the editor is shown in (0 while closed), so the
     /// plugin can ask for a new size (`audioMasterSizeWindow`).
     editor_parent: std::sync::atomic::AtomicUsize,
+    /// Set when the plugin reported `audioMasterIOChanged` (its channel
+    /// layout or latency changed); the worker re-reads both.
+    io_changed: std::sync::atomic::AtomicBool,
 }
 
 #[cfg(windows)]
@@ -105,6 +108,7 @@ impl Default for Vst2HostContext {
             block_size: std::sync::atomic::AtomicI32::new(128),
             sample_position: std::sync::atomic::AtomicU64::new(0),
             editor_parent: std::sync::atomic::AtomicUsize::new(0),
+            io_changed: std::sync::atomic::AtomicBool::new(false),
         }
     }
 }
@@ -339,9 +343,48 @@ const PARAMETER_BANK_MAGIC: &[u8] = b"AudioRouter VST2 parameters v1\0";
 #[cfg(windows)]
 const AUDIO_MASTER_VERSION: i32 = 1;
 #[cfg(windows)]
-const AUDIO_MASTER_GET_SAMPLE_RATE: i32 = 10;
+const AUDIO_MASTER_GET_SAMPLE_RATE: i32 = 16;
 #[cfg(windows)]
-const AUDIO_MASTER_GET_BLOCK_SIZE: i32 = 11;
+const AUDIO_MASTER_GET_BLOCK_SIZE: i32 = 17;
+// Other host opcodes (public aeffectx.h numbering; pinned in a test).
+#[cfg(windows)]
+const AUDIO_MASTER_AUTOMATE: i32 = 0;
+#[cfg(windows)]
+const AUDIO_MASTER_CURRENT_ID: i32 = 2;
+#[cfg(windows)]
+const AUDIO_MASTER_IDLE: i32 = 3;
+#[cfg(windows)]
+const AUDIO_MASTER_PIN_CONNECTED: i32 = 4;
+#[cfg(windows)]
+const AUDIO_MASTER_WANT_MIDI: i32 = 6;
+#[cfg(windows)]
+const AUDIO_MASTER_PROCESS_EVENTS: i32 = 8;
+#[cfg(windows)]
+const AUDIO_MASTER_IO_CHANGED: i32 = 13;
+#[cfg(windows)]
+const AUDIO_MASTER_NEED_IDLE: i32 = 14;
+#[cfg(windows)]
+const AUDIO_MASTER_GET_INPUT_LATENCY: i32 = 18;
+#[cfg(windows)]
+const AUDIO_MASTER_GET_OUTPUT_LATENCY: i32 = 19;
+#[cfg(windows)]
+const AUDIO_MASTER_WILL_REPLACE_OR_ACCUMULATE: i32 = 22;
+#[cfg(windows)]
+const AUDIO_MASTER_GET_AUTOMATION_STATE: i32 = 24;
+#[cfg(windows)]
+const AUDIO_MASTER_GET_VENDOR_STRING: i32 = 32;
+#[cfg(windows)]
+const AUDIO_MASTER_GET_PRODUCT_STRING: i32 = 33;
+#[cfg(windows)]
+const AUDIO_MASTER_CAN_DO: i32 = 37;
+#[cfg(windows)]
+const AUDIO_MASTER_GET_LANGUAGE: i32 = 38;
+#[cfg(windows)]
+const AUDIO_MASTER_UPDATE_DISPLAY: i32 = 42;
+#[cfg(windows)]
+const AUDIO_MASTER_BEGIN_EDIT: i32 = 43;
+#[cfg(windows)]
+const AUDIO_MASTER_END_EDIT: i32 = 44;
 #[cfg(windows)]
 const AUDIO_MASTER_SIZE_WINDOW: i32 = 15;
 /// Largest editor side accepted from a plugin, in pixels.
@@ -368,6 +411,114 @@ mod opcode_tests {
         assert_eq!(EFF_EDIT_IDLE, 19);
         assert_eq!(EFF_GET_CHUNK, 23);
         assert_eq!(EFF_SET_CHUNK, 24);
+    }
+
+    /// Regression (2026-11-13): the host answered sample rate and block size
+    /// on opcodes 10 and 11 (tempoAt, getNumAutomatableParameters) instead of
+    /// 16 and 17, so a plugin asking through the callback got 0. Numbers from
+    /// the public aeffectx.h (checked against LMMS's copy), pinned literally.
+    #[test]
+    fn host_opcodes_match_the_public_aeffectx_numbering() {
+        assert_eq!(AUDIO_MASTER_GET_SAMPLE_RATE, 16);
+        assert_eq!(AUDIO_MASTER_GET_BLOCK_SIZE, 17);
+        assert_eq!(AUDIO_MASTER_SIZE_WINDOW, 15);
+        for (value, expected) in [
+            (AUDIO_MASTER_AUTOMATE, 0),
+            (AUDIO_MASTER_VERSION, 1),
+            (AUDIO_MASTER_CURRENT_ID, 2),
+            (AUDIO_MASTER_IDLE, 3),
+            (AUDIO_MASTER_PIN_CONNECTED, 4),
+            (AUDIO_MASTER_WANT_MIDI, 6),
+            (AUDIO_MASTER_PROCESS_EVENTS, 8),
+            (AUDIO_MASTER_IO_CHANGED, 13),
+            (AUDIO_MASTER_NEED_IDLE, 14),
+            (AUDIO_MASTER_GET_INPUT_LATENCY, 18),
+            (AUDIO_MASTER_GET_OUTPUT_LATENCY, 19),
+            (AUDIO_MASTER_WILL_REPLACE_OR_ACCUMULATE, 22),
+            (AUDIO_MASTER_GET_AUTOMATION_STATE, 24),
+            (AUDIO_MASTER_GET_VENDOR_STRING, 32),
+            (AUDIO_MASTER_GET_PRODUCT_STRING, 33),
+            (AUDIO_MASTER_CAN_DO, 37),
+            (AUDIO_MASTER_GET_LANGUAGE, 38),
+            (AUDIO_MASTER_UPDATE_DISPLAY, 42),
+            (AUDIO_MASTER_BEGIN_EDIT, 43),
+            (AUDIO_MASTER_END_EDIT, 44),
+        ] {
+            assert_eq!(value, expected);
+        }
+    }
+
+    fn blank_effect(user: *mut c_void) -> Vst2Effect {
+        Vst2Effect {
+            magic: VST2_EFFECT_MAGIC,
+            dispatcher: None,
+            process: None,
+            set_parameter: None,
+            get_parameter: None,
+            num_programs: 0,
+            num_parameters: 0,
+            num_inputs: 1,
+            num_outputs: 1,
+            flags: VST2_FLAG_CAN_REPLACING,
+            reserved_1: 0,
+            reserved_2: 0,
+            initial_delay: 0,
+            real_quality: 0,
+            off_quality: 0,
+            io_ratio: 1.0,
+            object: ptr::null_mut(),
+            user,
+            unique_id: 0,
+            version: 0,
+            process_replacing: None,
+            future: [0; 56],
+        }
+    }
+
+    #[test]
+    fn host_callback_answers_strings_capabilities_and_io_changes() {
+        let context = Box::new(Vst2HostContext::default());
+        let mut effect = blank_effect((&*context as *const Vst2HostContext) as *mut c_void);
+        let effect = &mut effect as *mut Vst2Effect;
+        let call = |opcode: i32, pointer: *mut c_void| {
+            // SAFETY: `effect` is the live local AEffect whose host field is the
+            // boxed context; each pointer argument is a live local buffer.
+            unsafe { host_callback(effect, opcode, 0, 0, pointer, 0.0) }
+        };
+        let mut buffer = [0xffu8; 64];
+        assert_eq!(
+            call(AUDIO_MASTER_GET_VENDOR_STRING, buffer.as_mut_ptr().cast()),
+            1
+        );
+        assert_eq!(&buffer[..12], b"AudioRouter ");
+        let mut product = [0xffu8; 64];
+        assert_eq!(
+            call(AUDIO_MASTER_GET_PRODUCT_STRING, product.as_mut_ptr().cast()),
+            1
+        );
+        assert_eq!(&product[..12], b"AudioRouter ");
+        assert_eq!(call(AUDIO_MASTER_GET_VENDOR_STRING, ptr::null_mut()), 0);
+        let mut ask = |text: &[u8]| {
+            let mut c = text.to_vec();
+            c.push(0);
+            call(AUDIO_MASTER_CAN_DO, c.as_mut_ptr().cast())
+        };
+        assert_eq!(ask(b"sizeWindow"), 1);
+        assert_eq!(ask(b"acceptIOChanges"), 1);
+        assert_eq!(ask(b"receiveVstMidiEvent"), -1);
+        assert_eq!(ask(b"somethingNew"), 0);
+        assert_eq!(
+            call(AUDIO_MASTER_WILL_REPLACE_OR_ACCUMULATE, ptr::null_mut()),
+            1
+        );
+        assert_eq!(call(AUDIO_MASTER_GET_LANGUAGE, ptr::null_mut()), 1);
+        assert!(!context
+            .io_changed
+            .load(std::sync::atomic::Ordering::Acquire));
+        assert_eq!(call(AUDIO_MASTER_IO_CHANGED, ptr::null_mut()), 1);
+        assert!(context
+            .io_changed
+            .load(std::sync::atomic::Ordering::Acquire));
     }
 
     #[test]
@@ -1219,7 +1370,7 @@ unsafe extern "C" fn host_callback(
     opcode: i32,
     index: i32,
     value: isize,
-    _: *mut c_void,
+    pointer: *mut c_void,
     _: f32,
 ) -> isize {
     // SAFETY: a non-null effect reaching this callback is the plugin's live
@@ -1280,6 +1431,42 @@ unsafe extern "C" fn host_callback(
             }
         }
         34 => 10000, // audioMasterGetVendorVersion.
+        // Notifications and questions a conforming host answers. Unanswered
+        // (0) is "not supported", which several plugins treat as a reason to
+        // skip features or to assume 44.1 kHz.
+        AUDIO_MASTER_AUTOMATE | AUDIO_MASTER_IDLE | AUDIO_MASTER_NEED_IDLE => 0,
+        AUDIO_MASTER_CURRENT_ID => 0,
+        // 0 means "connected" for the deprecated pin query.
+        AUDIO_MASTER_PIN_CONNECTED => 0,
+        AUDIO_MASTER_WANT_MIDI => 1,
+        // Effects send no events back to the host.
+        AUDIO_MASTER_PROCESS_EVENTS => 0,
+        AUDIO_MASTER_IO_CHANGED => {
+            if let Some(context) = context {
+                context
+                    .io_changed
+                    .store(true, std::sync::atomic::Ordering::Release);
+            }
+            1
+        }
+        AUDIO_MASTER_GET_INPUT_LATENCY | AUDIO_MASTER_GET_OUTPUT_LATENCY => 0,
+        // 1: the host replaces the output buffer (processReplacing).
+        AUDIO_MASTER_WILL_REPLACE_OR_ACCUMULATE => 1,
+        // 0: automation state is unsupported (not "off").
+        AUDIO_MASTER_GET_AUTOMATION_STATE => 0,
+        AUDIO_MASTER_GET_VENDOR_STRING | AUDIO_MASTER_GET_PRODUCT_STRING => {
+            // SAFETY: the VST2 ABI gives a writable buffer of at least 64
+            // bytes (kVstMaxVendorStrLen/ProductStrLen) when it is non-null.
+            unsafe { write_host_string(pointer, "AudioRouter") }
+        }
+        AUDIO_MASTER_CAN_DO => {
+            // SAFETY: a canDo query passes a NUL-terminated ASCII string.
+            let text = unsafe { read_host_string(pointer) };
+            host_can_do(&text)
+        }
+        // English; this host shows no plugin UI text of its own.
+        AUDIO_MASTER_GET_LANGUAGE => 1,
+        AUDIO_MASTER_UPDATE_DISPLAY | AUDIO_MASTER_BEGIN_EDIT | AUDIO_MASTER_END_EDIT => 0,
         AUDIO_MASTER_GET_SAMPLE_RATE => context.map_or(48_000, |context| {
             f32::from_bits(
                 context
@@ -1295,6 +1482,66 @@ unsafe extern "C" fn host_callback(
         }),
         _ => 0,
     }
+}
+
+/// Capability answer for `audioMasterCanDo`: 1 yes, -1 no, 0 unknown.
+#[cfg(windows)]
+fn host_can_do(capability: &str) -> isize {
+    match capability {
+        "sendVstTimeInfo" | "sizeWindow" | "acceptIOChanges" | "startStopProcess"
+        | "supplyIdle" | "sendVstEvents" | "sendVstMidiEvent" => 1,
+        // This host never sends these.
+        "receiveVstEvents"
+        | "receiveVstMidiEvent"
+        | "reportConnectionChanges"
+        | "offline"
+        | "openFileSelector"
+        | "closeFileSelector"
+        | "editFile"
+        | "shellCategory"
+        | "asyncProcessing" => -1,
+        _ => 0,
+    }
+}
+
+/// Copy `text` and a NUL into a plugin buffer of at least 64 bytes.
+///
+/// # Safety
+/// `pointer` is null or points to at least 64 writable bytes.
+#[cfg(windows)]
+unsafe fn write_host_string(pointer: *mut c_void, text: &str) -> isize {
+    if pointer.is_null() {
+        return 0;
+    }
+    let bytes = text.as_bytes();
+    let length = bytes.len().min(63);
+    // SAFETY: the caller guarantees 64 writable bytes; length + 1 <= 64.
+    unsafe {
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), pointer.cast::<u8>(), length);
+        *pointer.cast::<u8>().add(length) = 0;
+    }
+    1
+}
+
+/// Read a short NUL-terminated string a plugin passed, bounded to 64 bytes.
+///
+/// # Safety
+/// `pointer` is null or points to a NUL-terminated string.
+#[cfg(windows)]
+unsafe fn read_host_string(pointer: *mut c_void) -> String {
+    if pointer.is_null() {
+        return String::new();
+    }
+    let mut bytes = Vec::new();
+    for index in 0..64 {
+        // SAFETY: reading up to the NUL terminator the caller guarantees.
+        let byte = unsafe { *pointer.cast::<u8>().add(index) };
+        if byte == 0 {
+            break;
+        }
+        bytes.push(byte);
+    }
+    String::from_utf8_lossy(&bytes).into_owned()
 }
 
 /// The host context of an effect, when it has one yet.
