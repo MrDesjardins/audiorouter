@@ -3709,6 +3709,7 @@ impl SupervisedWorkerProcess {
                 plugin_path,
                 None,
                 identity.metadata.class_ids.first().map(String::as_str),
+                false,
             )
         } else if identity.format == PluginFormat::Vst2 || plugin_path.is_some() {
             WorkerProcess::spawn_for_plugin_with_sample_rate(
@@ -5643,6 +5644,32 @@ impl WorkerProcess {
             plugin_path,
             bus_layout,
             None,
+            false,
+        )
+    }
+
+    /// Spawn a worker that hosts a VST2 *instrument*: it is played with
+    /// `send_midi` and needs no audio input. The graph block handed to
+    /// `process` is ignored and replaced by the instrument's output.
+    #[cfg(windows)]
+    pub fn spawn_vst2_instrument(
+        executable: impl AsRef<Path>,
+        plugin_path: impl AsRef<Path>,
+        plugin_sha256: &str,
+        channels: u16,
+        sample_rate_hz: u32,
+    ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_inner_with_class(
+            executable,
+            plugin_sha256,
+            channels,
+            sample_rate_hz,
+            None,
+            None,
+            Some(plugin_path.as_ref()),
+            None,
+            None,
+            true,
         )
     }
 
@@ -5657,6 +5684,7 @@ impl WorkerProcess {
         plugin_path: Option<&Path>,
         bus_layout: Option<&WorkerAudioBusLayout>,
         class_id: Option<&str>,
+        instrument: bool,
     ) -> Result<Self, WorkerProcessError> {
         let executable =
             validate_worker_executable(executable.as_ref()).map_err(WorkerProcessError::Spawn)?;
@@ -5706,6 +5734,9 @@ impl WorkerProcess {
                 "--plugin-path",
                 &loadable_plugin_path(plugin_path).to_string_lossy(),
             ]);
+        }
+        if instrument {
+            command.arg("--instrument");
         }
         if let Some(class_id) = class_id {
             if class_id.len() != 32 || !class_id.bytes().all(|byte| byte.is_ascii_hexdigit()) {

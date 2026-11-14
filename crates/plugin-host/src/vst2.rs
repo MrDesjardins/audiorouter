@@ -126,8 +126,19 @@ pub enum Vst2HeaderError {
     },
     TooManyParameters,
     ReplacingUnsupported,
-    /// The plugin declares `effFlagsIsSynth`. Instruments need a MIDI source,
-    /// which the graph does not have yet (see the full-compatibility plan).
+    /// The plugin declares `effFlagsIsSynth` but was loaded as an effect:
+    /// only an Instrument tool plays instruments.
+    Instrument,
+    /// The plugin does not declare `effFlagsIsSynth` but was loaded as an
+    /// instrument.
+    NotInstrument,
+}
+
+/// How the worker uses a VST2 plugin: an effect processes the route's audio;
+/// an instrument makes audio from MIDI and needs no audio input.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Vst2Role {
+    Effect,
     Instrument,
 }
 
@@ -139,6 +150,7 @@ impl Vst2HeaderError {
             Self::Instrument => {
                 "VST2 plugin is an instrument; AudioRouter hosts audio effects only (no MIDI input yet)"
             }
+            Self::NotInstrument => "VST2 plugin is an effect, not an instrument",
             Self::InvalidChannels { .. } => {
                 "VST2 plugin has an audio channel layout AudioRouter cannot use"
             }
@@ -158,6 +170,12 @@ impl Vst2Effect {
     /// The returned header is still untrusted until the worker owns its
     /// lifetime and applies the callback/audio-buffer policy.
     pub fn validate_audio_effect(&self) -> Result<(), Vst2HeaderError> {
+        self.validate(Vst2Role::Effect)
+    }
+
+    /// Header checks for the chosen role. An instrument may have no audio
+    /// inputs; an effect needs at least one and must not be a synth.
+    pub fn validate(&self, role: Vst2Role) -> Result<(), Vst2HeaderError> {
         if self.magic != VST2_EFFECT_MAGIC {
             return Err(Vst2HeaderError::InvalidMagic);
         }
@@ -175,10 +193,13 @@ impl Vst2Effect {
         }
         // Before the channel rules: an instrument often has no inputs, and
         // "is an instrument" is the useful reason.
-        if self.is_instrument() {
-            return Err(Vst2HeaderError::Instrument);
+        match (role, self.is_instrument()) {
+            (Vst2Role::Effect, true) => return Err(Vst2HeaderError::Instrument),
+            (Vst2Role::Instrument, false) => return Err(Vst2HeaderError::NotInstrument),
+            _ => {}
         }
-        if !(1..=VST2_MAX_INPUT_CHANNELS).contains(&self.num_inputs)
+        let minimum_inputs = i32::from(role == Vst2Role::Effect);
+        if !(minimum_inputs..=VST2_MAX_INPUT_CHANNELS).contains(&self.num_inputs)
             || !(1..=VST2_MAX_AUDIO_CHANNELS).contains(&self.num_outputs)
         {
             return Err(Vst2HeaderError::InvalidChannels {
@@ -284,6 +305,61 @@ mod tests {
     }
 
     #[test]
+    fn an_instrument_role_needs_the_synth_flag_and_allows_no_audio_inputs() {
+        let mut synth = valid_effect();
+        synth.flags |= VST2_FLAG_IS_SYNTH;
+        synth.num_inputs = 0;
+        assert_eq!(synth.validate(Vst2Role::Instrument), Ok(()));
+        // Not an effect: the other role still refuses it.
+        assert_eq!(
+            synth.validate(Vst2Role::Effect),
+            Err(Vst2HeaderError::Instrument)
+        );
+        // An effect is not an instrument, whatever its channels.
+        assert_eq!(
+            valid_effect().validate(Vst2Role::Instrument),
+            Err(Vst2HeaderError::NotInstrument)
+        );
+        // Outputs are still required and bounded.
+        synth.num_outputs = 0;
+        assert!(matches!(
+            synth.validate(Vst2Role::Instrument),
+            Err(Vst2HeaderError::InvalidChannels { .. })
+        ));
+    }
+
+    #[test]
+    fn the_events_argument_has_the_public_vstevents_layout() {
+        assert_eq!(std::mem::size_of::<Vst2MidiEvent>(), 32);
+        let events = [
+            crate::MidiEvent::new(10, 0x90, 60, 100).unwrap(),
+            crate::MidiEvent::new(70, 0x80, 60, 0).unwrap(),
+            crate::MidiEvent::new(200, 0x90, 62, 90).unwrap(),
+        ];
+        // Only the events of the segment 64..128 go, relative to its start.
+        let mut block = Vst2EventBlock::from_range(&events, 64, 128).unwrap();
+        let word = std::mem::size_of::<isize>();
+        let base = block.as_pointer() as *const u8;
+        // SAFETY: `base` is the start of the block's word buffer, which holds
+        // the numEvents word, the reserved word and one pointer word.
+        let (count, reserved, first) = unsafe {
+            (
+                std::ptr::read(base.cast::<i32>()),
+                std::ptr::read(base.add(word).cast::<isize>()),
+                std::ptr::read(base.add(2 * word).cast::<*const Vst2MidiEvent>()),
+            )
+        };
+        assert_eq!((count, reserved), (1, 0));
+        // SAFETY: the pointer was just read from the block, which owns the event.
+        let event = unsafe { *first };
+        assert_eq!(event.event_type, 1);
+        assert_eq!(event.byte_size, 32);
+        assert_eq!(event.delta_frames, 6);
+        assert_eq!(event.midi_data, [0x80, 60, 0, 0]);
+        assert!(Vst2EventBlock::from_range(&events, 128, 192).is_none());
+    }
+
+    #[test]
     fn rejects_headers_that_cannot_be_used_as_bounded_audio_effects() {
         let mut effect = valid_effect();
         effect.magic = 0;
@@ -331,10 +407,85 @@ const EFF_EDIT_CLOSE: i32 = 15;
 #[cfg(windows)]
 const EFF_EDIT_IDLE: i32 = 19;
 #[cfg(windows)]
+const EFF_PROCESS_EVENTS: i32 = 25;
 const EFF_GET_CHUNK: i32 = 23;
 #[cfg(windows)]
 const EFF_SET_CHUNK: i32 = 24;
 #[cfg(windows)]
+/// `kVstMidiType` and `kVstMidiEventIsRealtime` of the public aeffectx.h.
+const VST_MIDI_EVENT_TYPE: i32 = 1;
+const VST_MIDI_EVENT_IS_REALTIME: i32 = 1;
+
+/// `VstMidiEvent`: 32 bytes with the same layout on 32- and 64-bit.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct Vst2MidiEvent {
+    event_type: i32,
+    byte_size: i32,
+    delta_frames: i32,
+    flags: i32,
+    note_length: i32,
+    note_offset: i32,
+    midi_data: [u8; 4],
+    detune: i8,
+    note_off_velocity: u8,
+    reserved_1: u8,
+    reserved_2: u8,
+}
+const _: () = assert!(std::mem::size_of::<Vst2MidiEvent>() == 32);
+
+/// The memory behind one `effProcessEvents` argument: a `VstEvents` header
+/// (`int32 numEvents`, pointer-sized `reserved`) followed by one pointer per
+/// event. It is held as pointer-sized words, which gives the right layout for
+/// both pointer widths: `numEvents` in the low four bytes of word 0 (the
+/// 64-bit padding stays zero), `reserved` in word 1, pointers from word 2.
+/// The event buffer is never resized after the pointers are taken, so they
+/// stay valid for as long as this value lives.
+struct Vst2EventBlock {
+    _events: Vec<Vst2MidiEvent>,
+    words: Vec<isize>,
+}
+
+impl Vst2EventBlock {
+    /// Events whose offset lies in `start..end`, with offsets made relative to
+    /// `start` (`deltaFrames`). `None` when there are none to send.
+    fn from_range(events: &[crate::MidiEvent], start: usize, end: usize) -> Option<Self> {
+        let converted: Vec<Vst2MidiEvent> = events
+            .iter()
+            .filter(|event| (start..end).contains(&(event.sample_offset as usize)))
+            .map(|event| Vst2MidiEvent {
+                event_type: VST_MIDI_EVENT_TYPE,
+                byte_size: std::mem::size_of::<Vst2MidiEvent>() as i32,
+                delta_frames: (event.sample_offset as usize - start) as i32,
+                flags: VST_MIDI_EVENT_IS_REALTIME,
+                note_length: 0,
+                note_offset: 0,
+                midi_data: [event.status, event.data1, event.data2, 0],
+                detune: 0,
+                note_off_velocity: 0,
+                reserved_1: 0,
+                reserved_2: 0,
+            })
+            .collect();
+        if converted.is_empty() {
+            return None;
+        }
+        let mut words = vec![0_isize; 2 + converted.len()];
+        words[0] = converted.len() as isize;
+        for (index, event) in converted.iter().enumerate() {
+            words[2 + index] = event as *const Vst2MidiEvent as isize;
+        }
+        Some(Self {
+            _events: converted,
+            words,
+        })
+    }
+
+    fn as_pointer(&mut self) -> *mut c_void {
+        self.words.as_mut_ptr().cast()
+    }
+}
+
 const MAX_VST2_STATE_BYTES: usize = crate::MAX_WORKER_STATE_BYTES;
 /// Marks a parameter-bank state (see `save_parameter_bank`); a plugin chunk
 /// never starts with it in practice.
@@ -649,6 +800,7 @@ mod opcode_tests {
             effect,
             processing_format: None,
             editor_open: false,
+            role: Vst2Role::Effect,
             host_context: Box::new(Vst2HostContext::default()),
         };
         DISPATCH_COUNT.with(|count| count.set(0));
@@ -727,6 +879,7 @@ mod opcode_tests {
             effect,
             processing_format: None,
             editor_open: false,
+            role: Vst2Role::Effect,
             host_context: Box::new(Vst2HostContext::default()),
         };
         let input = [0.0; 4];
@@ -787,6 +940,7 @@ pub struct Vst2Library {
     effect: *mut Vst2Effect,
     processing_format: Option<(u32, i32)>,
     editor_open: bool,
+    role: Vst2Role,
     // Declared last so the context outlives the effect/module cleanup. VST2
     // reserves AEffect::user for host-owned instance data; resvd1/resvd2
     // remain reserved by the ABI and are not repurposed.
@@ -799,6 +953,11 @@ impl Vst2Library {
     /// the DLL's loader and VST2 entry point; callers must invoke it only from
     /// the disposable worker after identity and job-sandbox setup.
     pub fn load(path: &Path) -> Result<Self, Vst2LibraryError> {
+        Self::load_as(path, Vst2Role::Effect)
+    }
+
+    /// Like `load`, for an effect or an instrument.
+    pub fn load_as(path: &Path, role: Vst2Role) -> Result<Self, Vst2LibraryError> {
         if !path.is_absolute() || !path.is_file() {
             return Err(Vst2LibraryError::InvalidPath);
         }
@@ -838,7 +997,7 @@ impl Vst2Library {
         }
         // SAFETY: The plugin owns this pointer, but the entry-point contract
         // makes the returned AEffect readable until effClose.
-        let validation = unsafe { (*effect).validate_audio_effect() };
+        let validation = unsafe { (*effect).validate(role) };
         if let Err(error) = validation {
             // SAFETY: A valid dispatcher is required by the ABI, but invalid
             // headers cannot be trusted. Unload without invoking plugin code.
@@ -868,6 +1027,7 @@ impl Vst2Library {
             effect,
             processing_format: None,
             editor_open: false,
+            role,
             host_context,
         })
     }
@@ -1268,6 +1428,36 @@ impl Vst2Library {
             .map_err(|_| Vst2LibraryError::InvalidState)
     }
 
+    /// Delivers the MIDI events whose offsets lie in `start..end` to the
+    /// plugin (`effProcessEvents`), offsets relative to `start`, just before
+    /// the segment of the block that begins there is processed. Nothing is
+    /// sent when there are no such events.
+    pub fn send_midi(
+        &mut self,
+        events: &[crate::MidiEvent],
+        start: usize,
+        end: usize,
+    ) -> Result<(), Vst2LibraryError> {
+        let Some(mut block) = Vst2EventBlock::from_range(events, start, end) else {
+            return Ok(());
+        };
+        // SAFETY: the validated dispatcher takes a VstEvents pointer for
+        // effProcessEvents; `block` owns the header words and every event and
+        // outlives the call, and the plugin must not keep the pointer.
+        unsafe {
+            let dispatcher = (*self.effect).dispatcher.expect("validated dispatcher");
+            dispatcher(
+                self.effect,
+                EFF_PROCESS_EVENTS,
+                0,
+                0,
+                block.as_pointer(),
+                0.0,
+            );
+        }
+        Ok(())
+    }
+
     /// Process one bounded block on the worker thread. The slices are fixed
     /// caller-owned buffers; this method does not allocate or touch the audio
     /// engine's realtime callback.
@@ -1276,20 +1466,18 @@ impl Vst2Library {
         inputs: &[&[f32]],
         outputs: &mut [&mut [f32]],
     ) -> Result<(), Vst2LibraryError> {
+        // An instrument may have no audio inputs; the block length is then
+        // the output length.
+        let frames = outputs.first().map_or(0, |channel| channel.len());
         if inputs.len() != self.input_channels()
             || outputs.len() != self.output_channels()
-            || !(1..=VST2_MAX_INPUT_CHANNELS as usize).contains(&inputs.len())
+            || inputs.len() > VST2_MAX_INPUT_CHANNELS as usize
+            || (inputs.is_empty() && self.role == Vst2Role::Effect)
             || !(1..=VST2_MAX_AUDIO_CHANNELS as usize).contains(&outputs.len())
-            || inputs.iter().any(|channel| channel.is_empty())
-            || inputs
-                .first()
-                .is_some_and(|channel| channel.len() > crate::MAX_WORKER_FRAMES)
-            || inputs
-                .iter()
-                .any(|channel| channel.len() != inputs[0].len())
-            || outputs
-                .iter()
-                .any(|channel| channel.len() != inputs[0].len())
+            || frames == 0
+            || frames > crate::MAX_WORKER_FRAMES
+            || inputs.iter().any(|channel| channel.len() != frames)
+            || outputs.iter().any(|channel| channel.len() != frames)
         {
             return Err(Vst2LibraryError::InvalidPath);
         }
@@ -1314,13 +1502,13 @@ impl Vst2Library {
                 self.effect,
                 input_ptrs.as_ptr(),
                 output_ptrs.as_mut_ptr(),
-                inputs[0].len() as i32,
+                frames as i32,
             );
             IN_PROCESS_CALL.store(false, std::sync::atomic::Ordering::Relaxed);
         }
         self.host_context
             .sample_position
-            .fetch_add(inputs[0].len() as u64, std::sync::atomic::Ordering::Relaxed);
+            .fetch_add(frames as u64, std::sync::atomic::Ordering::Relaxed);
         if outputs
             .iter()
             .flat_map(|channel| channel.iter())
@@ -1916,6 +2104,14 @@ impl Vst2EditorThread {
     /// and show editors on one UI thread and process on another, which the
     /// VST2 ABI allows; this does the same.
     pub fn spawn_loading(path: &Path) -> Result<(Vst2Library, Self), Vst2LibraryError> {
+        Self::spawn_loading_as(path, Vst2Role::Effect)
+    }
+
+    /// Like `spawn_loading`, for an effect or an instrument.
+    pub fn spawn_loading_as(
+        path: &Path,
+        role: Vst2Role,
+    ) -> Result<(Vst2Library, Self), Vst2LibraryError> {
         let path = path.to_path_buf();
         let (commands, receiver) = mpsc::channel();
         let (exit_signal, exited) = mpsc::channel();
@@ -1923,7 +2119,7 @@ impl Vst2EditorThread {
         let thread = thread::Builder::new()
             .name("audiorouter-vst2-editor".into())
             .spawn(move || {
-                let library = match Vst2Library::load(&path) {
+                let library = match Vst2Library::load_as(&path, role) {
                     Ok(library) => library,
                     Err(error) => {
                         let _ = loaded_sender.send(Err(error));

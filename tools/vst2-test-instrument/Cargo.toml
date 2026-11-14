@@ -1,0 +1,18 @@
+[package]
+name = "vst2-test-instrument"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "A tiny VST2 instrument used only by AudioRouter's tests (no third-party code)."
+
+# Not part of the main workspace: it builds a DLL that the plugin-host tests
+# load through the real worker.
+[workspace]
+
+[lib]
+name = "ar_test_instrument"
+crate-type = ["cdylib", "rlib"]
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"
+missing_safety_doc = "deny"

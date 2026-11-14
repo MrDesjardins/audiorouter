@@ -1,5 +1,5 @@
 #[cfg(windows)]
-use audiorouter_plugin_host::vst2::{Vst2EditorThread, Vst2Library};
+use audiorouter_plugin_host::vst2::{Vst2EditorThread, Vst2Library, Vst2Role};
 #[cfg(feature = "test-fixtures")]
 use audiorouter_plugin_host::ParameterDescriptor;
 use audiorouter_plugin_host::{
@@ -27,6 +27,8 @@ type WorkerArguments = (
     Option<String>,
     Option<PathBuf>,
     Option<WorkerAudioBusLayout>,
+    // True when the plugin is an instrument played with MIDI (--instrument).
+    bool,
 );
 
 /// The worker's stderr line is what the supervisor shows after a failed
@@ -181,6 +183,7 @@ fn run() -> Result<(), String> {
         fixture_mode,
         plugin_path,
         multi_bus_layout,
+        instrument,
     ) = parse_arguments()?;
     if let Some(layout) = multi_bus_layout {
         return run_multi_bus(plugin_sha256, layout, fixture_mode.as_deref());
@@ -195,9 +198,20 @@ fn run() -> Result<(), String> {
     // Each plugin is loaded on its editor's UI thread, which later shows its
     // window: many plugins crash when another thread opens it (2026-11-12).
     #[cfg(windows)]
+    let vst2_role = if instrument {
+        Vst2Role::Instrument
+    } else {
+        Vst2Role::Effect
+    };
+    #[cfg(not(windows))]
+    let _ = instrument;
+    // MIDI received for the next block (instrument workers only).
+    #[cfg_attr(not(windows), allow(unused_mut))]
+    let mut pending_midi: Vec<audiorouter_plugin_host::MidiEvent> = Vec::new();
+    #[cfg(windows)]
     let loaded = plugin_path
         .clone()
-        .map(|path| Vst2EditorThread::spawn_loading(&path))
+        .map(|path| Vst2EditorThread::spawn_loading_as(&path, vst2_role))
         .transpose()
         .map_err(|error| load_failure_text("VST2 load failed", &error))?;
     #[cfg(windows)]
@@ -370,7 +384,7 @@ fn run() -> Result<(), String> {
                             continue;
                         }
                         if let Err(error) =
-                            process_vst2_frame(plugin, &mut frame, events, sample_rate_hz)
+                            process_vst2_frame(plugin, &mut frame, events, &[], sample_rate_hz)
                         {
                             write_worker_message(
                                 &mut writer,
@@ -422,6 +436,17 @@ fn run() -> Result<(), String> {
                 )
                 .map_err(|error| format!("processed shared write failed: {error:?}"))?;
             }
+            WorkerMessage::Midi { events } => {
+                // One-way. Only an instrument plays MIDI; for an effect the
+                // events are dropped, and a backlog never builds up.
+                if instrument {
+                    pending_midi.extend(events);
+                    let excess = pending_midi
+                        .len()
+                        .saturating_sub(audiorouter_plugin_host::MAX_MIDI_EVENTS_PER_BLOCK);
+                    pending_midi.drain(..excess);
+                }
+            }
             WorkerMessage::Process {
                 mut frame,
                 parameters,
@@ -441,8 +466,9 @@ fn run() -> Result<(), String> {
                 }
                 #[cfg(windows)]
                 if let Some(plugin) = vst2_plugins.get_mut(selected_instance) {
+                    let midi = std::mem::take(&mut pending_midi);
                     if let Err(error) =
-                        process_vst2_frame(plugin, &mut frame, &parameters, sample_rate_hz)
+                        process_vst2_frame(plugin, &mut frame, &parameters, &midi, sample_rate_hz)
                     {
                         let failure = format!("vst2Processing:{error}");
                         write_worker_message(
@@ -793,6 +819,7 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
     let mut plugin_path = None;
     let mut input_buses = None;
     let mut output_buses = None;
+    let mut instrument = false;
     #[cfg(feature = "test-fixtures")]
     let mut fixture_mode = None;
     #[cfg(not(feature = "test-fixtures"))]
@@ -828,6 +855,7 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
             }
             "--input-buses" => input_buses = arguments.next(),
             "--output-buses" => output_buses = arguments.next(),
+            "--instrument" => instrument = true,
             "--fixture-mode" => {
                 #[cfg(feature = "test-fixtures")]
                 {
@@ -902,6 +930,7 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
             fixture_mode,
             plugin_path,
             multi_bus_layout,
+            instrument,
         )),
         (None, None) => Ok((
             hash,
@@ -911,6 +940,7 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
             fixture_mode,
             plugin_path,
             multi_bus_layout,
+            instrument,
         )),
         _ => Err("--input-path and --output-path must be supplied together".into()),
     }
@@ -921,6 +951,7 @@ fn process_vst2_frame(
     plugin: &mut Vst2Library,
     frame: &mut audiorouter_plugin_host::WorkerFrame,
     parameters: &[audiorouter_plugin_host::ParameterEvent],
+    midi: &[audiorouter_plugin_host::MidiEvent],
     sample_rate_hz: u32,
 ) -> Result<(), String> {
     let channels = usize::from(frame.channels);
@@ -950,6 +981,15 @@ fn process_vst2_frame(
             ));
         }
     }
+    if let Some(event) = midi
+        .iter()
+        .find(|event| event.sample_offset as usize >= frames)
+    {
+        return Err(format!(
+            "MIDI sample offset {} exceeds block length {frames}",
+            event.sample_offset
+        ));
+    }
     let mut segment_start = 0;
     let mut event_index = 0;
     while event_index < ordered_events.len() {
@@ -963,6 +1003,9 @@ fn process_vst2_frame(
                 .iter_mut()
                 .map(|channel| &mut channel[segment_start..offset])
                 .collect();
+            plugin
+                .send_midi(midi, segment_start, offset)
+                .map_err(|error| format!("MIDI delivery failed: {error:?}"))?;
             plugin
                 .process_replacing(&inputs, &mut outputs)
                 .map_err(|error| format!("process callback failed: {error:?}"))?;
@@ -987,6 +1030,9 @@ fn process_vst2_frame(
             .iter_mut()
             .map(|channel| &mut channel[segment_start..frames])
             .collect();
+        plugin
+            .send_midi(midi, segment_start, frames)
+            .map_err(|error| format!("MIDI delivery failed: {error:?}"))?;
         plugin
             .process_replacing(&inputs, &mut outputs)
             .map_err(|error| format!("process callback failed: {error:?}"))?;
