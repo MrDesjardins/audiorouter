@@ -293,3 +293,33 @@ Defect found by the census: 32-bit VST3 bundles keep their binary in
 worker (`resolve_binary`) did not look in ("Missing"). Fixed in both;
 regression `inspects_a_32_bit_vst3_bundle_under_x86_win_contents`; verified by
 loading the four 32-bit Dragonfly VST3 effects in the 32-bit VST3 worker.
+
+### Census run 2 (2026-11-13): wider free corpus
+
+Added: FILT-R, TIME-12, RipplerX (tiagolr, JUCE), Zam plugins 4.5 (DPF, 64-bit
+and 32-bit, VST2 and VST3), Surge XT nightly (VST3 plugins). 160 files or
+bundles walked (80 are LV2 helper DLLs or instruments, counted as "not a
+supported effect"); about 75 plugin builds ran through the real workers.
+
+- Passed everything: FILT-R, TIME-12, all Zam effects in all four
+  variants (VST2/VST3 x x64/x86), Surge XT Effects.
+- **ZamAutoSat.vst3** (x64 and x86): saves 17 bytes of state, but the plugin
+  rejects its own state on restore, so the host reports `StateUnsupported`
+  (documented capability limitation; the route keeps running). Plugin quirk,
+  not a host crash; keep recorded.
+- **Surge XT.vst3** is an instrument but the scan lists it
+  `supportedVst3X64`; the worker then refuses it at load with the plain
+  message. Same scan-time classification gap as the VST2 case (P1 follow-up).
+  `RipplerX.vst3` is correctly classified `unsupportedInstrument` at scan.
+- Still unproven: editors for VST3, sidechain, host callbacks (P2/P3), anything
+  needing MIDI (waits for P8b).
+
+## Where this stands (end of 2026-11-13 session)
+
+Done and committed: decision record and spec revision; instrument refusal for
+VST2 at load; 32-bit VST2 and VST3 hosting (workers, detection, packaging
+scripts), exercised with real 32-bit plugins; census tool plus two corpus
+runs. Not started: P8b MIDI source and instrument nodes (the largest piece),
+P2/P3 conformance gaps (opcodes and interfaces listed above), P4 layouts, P5
+sidechain, P6 stopped-session editors, P7 shared VST3 worker, P9 release gate,
+and rebuilding the desktop exe/installer with the x86 workers (not run).
