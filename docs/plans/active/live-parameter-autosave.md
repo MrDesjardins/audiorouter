@@ -522,9 +522,27 @@ evidence. The implementation is ready for human review and PR approval, but
 must not be described as fully hardware-qualified until that attended check is
 recorded.
 
+## CI repair — 2026-11-15
+
+PR #150's first hosted run failed one Edge scenario,
+`session-workflows.pw.ts:99` (shard 3/4). The test compares a replayed
+`graph.commit` to the original response; the new `activation.timing` block
+made those responses differ because a per-request duration is not
+reproducible. The repair keeps the per-request number only where work was
+actually published: a simulated/pending commit and an idempotent storage
+replay now return the original `{ "state": "pending", "runtime": "fake" }`
+shape, while a running commit still reports `timing.commitMicros` and a live
+native publication reports `commitMicros`/`prepareMicros`/`swapMicros`/
+`pluginStarts`. Regressions: `dispatch_plan_and_commit_use_json_contracts`
+now also replays the same idempotency key and requires identical activation,
+and `a_running_commit_reports_its_own_timing` keeps the timing assertion on
+the path that publishes. The failing Edge spec was rerun locally with the
+rebuilt `e2e_backend` (`session-workflows.pw.ts`, 7/7 passed).
+
 ## Next action
 
-Inspect the complete staged diff, commit and push this branch, then open the
-approved PR. Keep the attended Mute/Fun Voice Changer recording as the final
-hardware/user-route qualification gate; do not merge or release on the copied
-database evidence alone.
+PR [#150](https://github.com/MrDesjardins/audiorouter/pull/150) is open with
+the CI repair pushed. Inspect the new hosted checks and annotations, then
+finish the attended Mute/Fun Voice Changer recording as the final
+hardware/user-route gate; do not merge or release on the copied database
+evidence alone.

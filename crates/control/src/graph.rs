@@ -695,11 +695,10 @@ impl ControlPlane {
             }
             response["activation"] = activation;
         } else {
-            response["activation"] = json!({
-                "state": "pending",
-                "runtime": "fake",
-                "timing": { "commitMicros": elapsed_micros(commit_started) },
-            });
+            // A simulated commit publishes nothing, so there is no preparation
+            // to time. Keeping the shape free of per-request numbers also keeps
+            // an idempotent replay equal to the response it replays.
+            response["activation"] = json!({ "state": "pending", "runtime": "fake" });
         }
         self.remember_operation_outcome(idempotency_key, response.clone(), "graph.commit", None);
         Ok(response)

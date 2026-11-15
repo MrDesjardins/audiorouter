@@ -385,13 +385,36 @@ fn dispatch_plan_and_commit_use_json_contracts() {
         method: "graph.commit".into(),
         params: Some(json!({ "planId": plan_id, "baseRevision": 0, "idempotencyKey": "api-op" })),
     };
-    let committed = plane.dispatch(commit_request).result.unwrap();
+    let committed = plane.dispatch(commit_request.clone()).result.unwrap();
     assert_eq!(committed["revision"], 1);
+    // A simulated commit publishes no audio, so it reports no per-request time.
+    assert_eq!(
+        committed["activation"],
+        json!({ "state": "pending", "runtime": "fake" })
+    );
+    // An idempotent replay must return the same activation shape; a fresh
+    // per-request number here would differ and break clients that compare it.
+    let replayed = plane.dispatch(commit_request).result.unwrap();
+    assert_eq!(replayed["activation"], committed["activation"]);
+    assert_eq!(replayed["revision"], committed["revision"]);
+}
+
+#[test]
+fn a_running_commit_reports_its_own_timing() {
+    let mut plane = ControlPlane::default();
+    let original = session();
+    plane.insert_session(original.clone()).unwrap();
+    plane.session_start(&original.id).unwrap();
+    let mut candidate = original.clone();
+    candidate.name = "timed-edit".into();
+    let plan = plane.plan_graph(&original.id, 0, candidate).unwrap();
+    let committed = plane.commit_graph(&plan, 0, "timed-edit-op").unwrap();
+    assert_eq!(committed["activation"]["state"], "running");
     assert!(
         committed["activation"]["timing"]["commitMicros"]
             .as_u64()
             .is_some(),
-        "graph.commit reports its duration: {committed}"
+        "a running graph.commit reports its duration: {committed}"
     );
 }
 
