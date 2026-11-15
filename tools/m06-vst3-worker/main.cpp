@@ -1011,6 +1011,11 @@ public:
         // AudioRouter processes 32-bit float only. A plugin that requires
         // 64-bit samples must be refused with a plain reason instead of a
         // generic VST3 result, and never silently converted.
+        if (processor_->canProcessSampleSize(Vst::kSample32) == kResultFalse) {
+            throw std::runtime_error(
+                "sampleFormatUnsupported: the plugin does not accept the 32-bit sample format "
+                "AudioRouter uses");
+        }
         const auto setup_result = processor_->setupProcessing(setup);
         if (setup_result != kResultOk && setup_result != kNotImplemented) {
             throw std::runtime_error(

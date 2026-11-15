@@ -969,3 +969,5 @@ sidechain contract changes; keep worker protocol and graph schema versions
 compatible or reject old assets explicitly. A failed editor change rolls back
 to the existing fixed-size host without changing processing. A failed release
 gate leaves the previous signed artifact and database untouched.
+
+VSTC-09 sample size (2026-11-14): the VST3 worker now asks `canProcessSampleSize(kSample32)` before `setupProcessing` and refuses with `sampleFormatUnsupported` on `kResultFalse`; it always requests `kSample32`. Worker builds and its `--self-test-host` passes. Not done: a 64-bit-only fixture proving the refusal, a multi-class effect corpus run, class state isolation, the Steinberg validator run, VSTC-08 units/programs, VSTC-10 and VSTC-11 (several are owner-gated).
