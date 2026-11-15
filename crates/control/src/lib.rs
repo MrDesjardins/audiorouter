@@ -222,6 +222,10 @@ pub enum ControlError {
         node_id: String,
         message: String,
     },
+    /// The saved change cannot be applied to the playing graph without a
+    /// Stop and Play. The old route is still playing and intact; distinct
+    /// from a failed preparation, which must never stop it.
+    RestartRequired(String),
     IdempotencyConflict,
     Store(audiorouter_domain::StoreError),
     Json(String),
@@ -357,6 +361,19 @@ pub struct ControlPlane {
     next_audio_media: u64,
     audio_file_sources:
         HashMap<(EntityId, EntityId), std::sync::Arc<audiorouter_engine::AudioFileSource>>,
+    /// Decoded Audio File/FIR media reused by live commits instead of being
+    /// decoded again for every parameter change. Bounded by the media a
+    /// session currently references.
+    audio_media_cache: HashMap<(EntityId, String, u32), Arc<DecodedAudio>>,
+    /// Sessions whose last committed change could not be applied live. The
+    /// graph still playing is the previous one, so the next commit must not
+    /// reuse its plugins or compare against the saved session as if they
+    /// matched; a full preparation is attempted first.
+    live_graph_stale: std::collections::HashSet<EntityId>,
+    /// A control update that a reused plugin rejected after the new graph had
+    /// already swapped in. The commit is still applied, but the next one must
+    /// prepare that plugin again instead of trusting the stale template.
+    live_publication_warnings: HashMap<EntityId, String>,
     test_signal_sources:
         HashMap<(EntityId, EntityId), std::sync::Arc<audiorouter_engine::TestSignalSource>>,
     soundboard_sources:
@@ -530,6 +547,7 @@ impl Default for ControlPlane {
 fn control_error_message(error: &ControlError) -> String {
     let text = match error {
         ControlError::InvalidRequest(message) => message.clone(),
+        ControlError::RestartRequired(message) => message.clone(),
         ControlError::Audio { message, .. } => message.clone(),
         ControlError::NodeNotReady { message, .. } => message.clone(),
         other => format!("{other:?}"),
@@ -566,6 +584,9 @@ impl ControlPlane {
             next_audio_upload: 1,
             next_audio_media: 1,
             audio_file_sources: HashMap::new(),
+            audio_media_cache: HashMap::new(),
+            live_graph_stale: std::collections::HashSet::new(),
+            live_publication_warnings: HashMap::new(),
             test_signal_sources: HashMap::new(),
             soundboard_sources: HashMap::new(),
             enrollments: HashMap::new(),
@@ -1018,6 +1039,7 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
         ControlError::Json(_) => "internalError",
         ControlError::IdempotencyConflict => "idempotencyConflict",
         ControlError::InvalidRequest(_) => "invalidRequest",
+        ControlError::RestartRequired(_) => "invalidRequest",
         ControlError::Audio { code, .. } => code,
         ControlError::PluginScan(error) => error.code(),
         ControlError::NodeNotReady { .. } => "nodeNotReady",
@@ -1025,6 +1047,7 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
     let message = match &error {
         ControlError::Audio { message, .. } => message.clone(),
         ControlError::NodeNotReady { message, .. } => message.clone(),
+        ControlError::RestartRequired(message) => message.clone(),
         _ => format!("{error:?}"),
     };
     let audio_details = match &error {

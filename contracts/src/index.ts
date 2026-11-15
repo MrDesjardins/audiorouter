@@ -160,6 +160,14 @@ export interface GraphPlanResult {
   affectedDestinations: string[];
   warnings: string[];
   requiredScopes: string[];
+  timing?: { planMicros: number };
+}
+
+export interface GraphCommitTiming {
+  commitMicros: number;
+  prepareMicros?: number | null;
+  swapMicros?: number | null;
+  pluginStarts?: number | null;
 }
 
 export interface GraphCommitResult {
@@ -167,8 +175,8 @@ export interface GraphCommitResult {
   revision: number;
   idempotentReplay?: boolean;
   activation?:
-    | { state: "pending"; runtime: "fake" }
-    | { state: "running"; generation: number; runtime: "fake" | "native"; native?: { state: "applied"; adapter: string } | { state: "restarted"; adapter: string; reason: string } | { state: "restartRequired"; reason: string } | null };
+    | { state: "pending"; runtime: "fake"; timing?: GraphCommitTiming }
+    | { state: "running"; generation: number; runtime: "fake" | "native"; timing?: GraphCommitTiming; native?: { state: "applied"; adapter: string; warning?: string } | { state: "restarted"; adapter: string; reason: string } | { state: "restartRequired"; reason: string } | null };
 }
 
 export interface OperationCompleted {
@@ -882,6 +890,12 @@ export interface DiagnosticsSnapshot {
     plugin: {
       state: "unknown" | "stopped" | "running" | "failed" | "quarantined";
       failureCount: number;
+      /**
+       * Identity of the worker behind this plugin, shared by a VST2 chain.
+       * Unchanged across a live save that reuses the loaded plugin; a new
+       * value means the worker was restarted.
+       */
+      workerId?: number;
       /** Missing completed quanta, including startup warm-up; shared per chain. */
       outputMisses?: number;
       /** Input quanta discarded because the in-flight queue had no storage. */

@@ -2,6 +2,11 @@
 
 use super::*;
 
+/// Decoded PCM the media cache may hold across sessions before releasing
+/// other sessions' entries. Audio File/FIR media is limited to 64 MiB each, so
+/// this covers several large files without growing without bound.
+const AUDIO_MEDIA_CACHE_BUDGET_BYTES: usize = 256 * 1024 * 1024;
+
 pub(crate) fn decode_base64_chunk(value: &str) -> Result<Vec<u8>, ControlError> {
     fn digit(byte: u8) -> Option<u8> {
         match byte {
@@ -128,6 +133,11 @@ impl ControlPlane {
             if media.contains_key(media_id) {
                 continue;
             }
+            let cache_key = (session.id.clone(), media_id.to_owned(), sample_rate_hz);
+            if let Some(decoded) = self.audio_media_cache.get(&cache_key).cloned() {
+                media.insert(media_id.to_owned(), decoded);
+                continue;
+            }
             let (_, format, bytes) = self
                 .with_storage_worker(|storage| storage.load_audio_media(media_id).map_err(storage_error))?
                 .ok_or_else(|| {
@@ -146,10 +156,55 @@ impl ControlPlane {
                         node.name
                     ))
                 })?;
-            media.insert(media_id.to_owned(), Arc::new(decoded));
+            let decoded = Arc::new(decoded);
+            self.audio_media_cache
+                .insert(cache_key, Arc::clone(&decoded));
+            media.insert(media_id.to_owned(), decoded);
         }
         self.load_soundboard_media(session, sample_rate_hz, &mut media)?;
+        // Keep only this session's media at this sample rate: a removed source
+        // must not keep playing from stale decoded bytes, and opening the same
+        // file at another device rate must not accumulate a second copy.
+        let referenced = media
+            .keys()
+            .cloned()
+            .map(|media_id| (media_id, sample_rate_hz))
+            .collect::<std::collections::HashSet<_>>();
+        self.audio_media_cache.retain(|(owner, media_id, rate), _| {
+            owner != &session.id || referenced.contains(&(media_id.clone(), *rate))
+        });
+        self.trim_audio_media_cache(&session.id);
         Ok(media)
+    }
+
+    /// Bound the decoded-media cache. Entries needed by the session being
+    /// compiled always stay; other sessions' decoded audio is released when
+    /// the total exceeds the budget (repeatedly opening large files in many
+    /// sessions must not retain PCM until the app exits).
+    fn trim_audio_media_cache(&mut self, keep: &EntityId) {
+        self.trim_audio_media_cache_to(keep, AUDIO_MEDIA_CACHE_BUDGET_BYTES);
+    }
+
+    fn trim_audio_media_cache_to(&mut self, keep: &EntityId, budget: usize) {
+        let bytes = |audio: &Arc<DecodedAudio>| audio.samples.len().saturating_mul(4);
+        let mut total = self.audio_media_cache.values().map(bytes).sum::<usize>();
+        if total <= budget {
+            return;
+        }
+        let victims = self
+            .audio_media_cache
+            .iter()
+            .filter(|((owner, _, _), _)| owner != keep)
+            .map(|(key, _)| key.clone())
+            .collect::<Vec<_>>();
+        for key in victims {
+            if total <= budget {
+                break;
+            }
+            if let Some(removed) = self.audio_media_cache.remove(&key) {
+                total = total.saturating_sub(bytes(&removed));
+            }
+        }
     }
 
     pub(crate) fn source_transport_handles(
@@ -188,13 +243,44 @@ impl ControlPlane {
             .collect()
     }
 
+    /// The source transports a rebuild may reuse. `None` means rebuild every
+    /// source. A source whose saved settings changed is never reused, or the
+    /// old configuration would keep playing after a successful save.
+    pub(crate) fn reusable_source_transports(
+        &self,
+        session: &Session,
+        retention: SourceRetention<'_>,
+    ) -> Option<HashMap<EntityId, audiorouter_engine::SourceTransport>> {
+        let handles = self.source_transport_handles(&session.id);
+        match retention {
+            SourceRetention::None => None,
+            SourceRetention::All => Some(handles),
+            SourceRetention::Unchanged(previous) => Some(
+                handles
+                    .into_iter()
+                    .filter(|(node_id, _)| {
+                        let Some(before) = previous.nodes.iter().find(|node| node.id == *node_id)
+                        else {
+                            return false;
+                        };
+                        session.nodes.iter().any(|node| {
+                            node.id == *node_id
+                                && node.kind == before.kind
+                                && node.parameters == before.parameters
+                        })
+                    })
+                    .collect(),
+            ),
+        }
+    }
+
     pub(crate) fn compile_session_graph_with_audio(
         &mut self,
         session: &Session,
         generation: RuntimeGeneration,
         sample_rate_hz: u32,
         plugins: &HashMap<EntityId, Arc<dyn RealtimePluginProcessor>>,
-        flags_only: bool,
+        retention: SourceRetention<'_>,
     ) -> Result<audiorouter_engine::RuntimeGraph, ControlError> {
         let media = self.session_audio_media(session, sample_rate_hz)?;
         // The application (process-loopback) worker opens no physical capture,
@@ -222,8 +308,8 @@ impl ControlPlane {
         .map_err(|error| {
             ControlError::InvalidRequest(format!("native graph rejected: {error:?}"))
         })?;
-        if flags_only {
-            graph.retain_unchanged_source_transports(&self.source_transport_handles(&session.id));
+        if let Some(handles) = self.reusable_source_transports(session, retention) {
+            graph.retain_unchanged_source_transports(&handles);
         }
         self.audio_file_sources
             .retain(|(owner_session, _), _| owner_session != &session.id);
@@ -578,6 +664,10 @@ impl ControlPlane {
             })?
             .delete_audio_media(media_id)
             .map_err(storage_error)?;
+        if deleted {
+            self.audio_media_cache
+                .retain(|(_, cached_media_id, _), _| cached_media_id != media_id);
+        }
         Ok(json!({ "deleted": deleted }))
     }
 

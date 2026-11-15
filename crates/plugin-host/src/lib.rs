@@ -17,7 +17,7 @@ use std::os::windows::io::AsRawHandle;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
 use std::sync::{
-    atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering},
+    atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering},
     mpsc::{self, Receiver},
     Arc, Mutex,
 };
@@ -4226,8 +4226,20 @@ pub struct PluginRuntimeBridge {
     /// Frames per pipeline quantum, for reporting pipeline delay.
     quantum_frames: usize,
     instance_index: usize,
+    /// Identity of the worker this bridge runs on, shared by every member of a
+    /// VST2 chain. Diagnostics use it to tell a reused worker from a restarted
+    /// one across live commits.
+    worker_id: u64,
     /// Member handles keep the queue owner alive; only the owner joins it.
     owner: Option<Arc<PluginRuntimeBridge>>,
+}
+
+/// Each started worker gets the next identity. Never reused within a process,
+/// so a diagnostics reader can compare two reads safely.
+static NEXT_WORKER_ID: AtomicU64 = AtomicU64::new(1);
+
+fn next_worker_id() -> u64 {
+    NEXT_WORKER_ID.fetch_add(1, Ordering::Relaxed)
 }
 
 /// Longest worker failure reason kept for telemetry and the backend log.
@@ -4448,6 +4460,7 @@ impl PluginRuntimeBridge {
                 worker: None,
                 quantum_frames: frames,
                 instance_index,
+                worker_id: head.worker_id,
                 owner: Some(Arc::clone(&head)),
             }));
         }
@@ -4835,6 +4848,7 @@ impl PluginRuntimeBridge {
             worker: Some(worker_thread),
             quantum_frames: frames,
             instance_index: 0,
+            worker_id: next_worker_id(),
             owner: None,
         }))
     }
@@ -5095,6 +5109,7 @@ impl audiorouter_engine::RealtimePluginProcessor for PluginRuntimeBridge {
         audiorouter_engine::PluginWorkerHealth {
             state,
             failure_count: self.health_failure_count(),
+            worker_id: self.worker_id,
         }
     }
 }

@@ -744,7 +744,15 @@ fn method_output_schema_impl(name: &str) -> Value {
                     }
                 },
                 "warnings": { "type": "array", "maxItems": MAX_PLAN_WARNINGS, "items": { "type": "string", "minLength": 1 } },
-                "requiredScopes": { "type": "array", "maxItems": MAX_PLAN_REQUIRED_SCOPES, "items": { "type": "string", "minLength": 1 } }
+                "requiredScopes": { "type": "array", "maxItems": MAX_PLAN_REQUIRED_SCOPES, "items": { "type": "string", "minLength": 1 } },
+                "timing": {
+                    "type": "object",
+                    "properties": {
+                        "planMicros": { "type": "integer", "minimum": 0 }
+                    },
+                    "required": ["planMicros"],
+                    "additionalProperties": false
+                }
             },
             "required": ["planId", "baseRevision", "expiresInMs", "diff", "affectedDestinations", "warnings", "requiredScopes"],
             "additionalProperties": false
@@ -1961,6 +1969,7 @@ pub(crate) fn diagnostics_output_schema() -> Value {
                             "properties": {
                                 "state": { "enum": ["unknown", "stopped", "running", "failed", "quarantined"] },
                                 "failureCount": { "type": "integer", "minimum": 0 },
+                                "workerId": { "type": "integer", "minimum": 0 },
                                 "outputMisses": { "type": "integer", "minimum": 0 },
                                 "inputDrops": { "type": "integer", "minimum": 0 },
                                 "unchangedAudio": { "type": "boolean" },

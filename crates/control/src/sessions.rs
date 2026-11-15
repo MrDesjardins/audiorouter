@@ -362,6 +362,9 @@ impl ControlPlane {
             }
         }
         self.store.remove_session(id).map_err(ControlError::from)?;
+        self.audio_media_cache
+            .retain(|(owner, _, _), _| owner != id);
+        self.live_graph_stale.remove(id);
         // All refusals and the durable delete precede transient cleanup: a
         // failed delete must preserve saved notes and the comparison timeout.
         self.clear_comparison(id);
@@ -756,6 +759,11 @@ impl ControlPlane {
         // File work can fail or wait on storage. Retire every audio worker
         // first, then report each recorder independently of that boundary.
         let audio_result = self.stop_session_audio(id);
+        // Decoded Audio File/FIR PCM belongs to what was playing. Release it
+        // at Stop; a stopped route must not keep up to the full cache budget
+        // of decoded audio in memory until another session needs the room.
+        self.audio_media_cache
+            .retain(|(owner, _, _), _| owner != id);
         let recorder_outcomes = self.finalize_session_recorders(id, deadline);
         let mut result = audio_result?;
         result["recorders"] = json!(recorder_outcomes);
@@ -924,6 +932,10 @@ impl ControlPlane {
     pub(crate) fn stop_session_audio(&mut self, id: &EntityId) -> Result<Value, ControlError> {
         self.ensure_session_loaded(id)?;
         self.clear_comparison(id);
+        // Nothing is playing now, so the saved session cannot be stale and a
+        // publication warning no longer describes a route the user can hear.
+        self.live_graph_stale.remove(id);
+        self.live_publication_warnings.remove(id);
         #[cfg(windows)]
         self.cancel_sleep_route_recovery(id);
         let native_attached = self.native_endpoint_session_is_attached(id) || {

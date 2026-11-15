@@ -4,6 +4,80 @@ use super::*;
 use crate::test_support::*;
 
 #[test]
+fn a_changed_source_setting_drops_its_reused_transport() {
+    let mut plane = ControlPlane::default();
+    let mut current = session();
+    let node = current.nodes[0].clone();
+    current.nodes[0].kind = NodeKind::TestSignal;
+    current.nodes[0].parameters = serde_json::from_value(json!({"frequencyHz": 880.0})).unwrap();
+    let mut previous = current.clone();
+    previous.nodes[0].parameters = serde_json::from_value(json!({"frequencyHz": 440.0})).unwrap();
+    plane.insert_session(current.clone()).unwrap();
+    let source = std::sync::Arc::new(audiorouter_engine::TestSignalSource::new(
+        440.0, -18.0, 1_000.0, 48_000,
+    ));
+    plane.test_signal_sources.insert(
+        (current.id.clone(), node.id.clone()),
+        std::sync::Arc::clone(&source),
+    );
+
+    // A new frequency must rebuild the source: the old tone would keep playing.
+    let retained = plane
+        .reusable_source_transports(&current, SourceRetention::Unchanged(&previous))
+        .unwrap();
+    assert!(retained.is_empty());
+    // An unchanged source keeps its playback position.
+    let retained = plane
+        .reusable_source_transports(&current, SourceRetention::Unchanged(&current))
+        .unwrap();
+    assert_eq!(retained.len(), 1);
+    // Compare-only republishes keep every transport; structural edits none.
+    assert_eq!(
+        plane
+            .reusable_source_transports(&current, SourceRetention::All)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(plane
+        .reusable_source_transports(&current, SourceRetention::None)
+        .is_none());
+}
+
+#[test]
+fn the_decoded_media_cache_is_bounded_and_cleared_with_its_session() {
+    let mut plane = ControlPlane::default();
+    let session = session();
+    plane.insert_session(session.clone()).unwrap();
+    let decoded = |samples: usize| {
+        std::sync::Arc::new(DecodedAudio {
+            channels: 1,
+            sample_rate_hz: 48_000,
+            samples: vec![0.0; samples].into(),
+        })
+    };
+    plane
+        .audio_media_cache
+        .insert((session.id.clone(), "keep".into(), 48_000), decoded(4));
+    plane.audio_media_cache.insert(
+        (EntityId::new("other"), "drop".into(), 48_000),
+        decoded(100),
+    );
+    plane.trim_audio_media_cache_to(&session.id, 8);
+    assert!(plane
+        .audio_media_cache
+        .contains_key(&(session.id.clone(), "keep".into(), 48_000)));
+    assert!(!plane.audio_media_cache.contains_key(&(
+        EntityId::new("other"),
+        "drop".into(),
+        48_000
+    )));
+
+    plane.delete_session(&session.id).unwrap();
+    assert!(plane.audio_media_cache.is_empty());
+}
+
+#[test]
 fn media_references_prevent_deleting_board_sounds_and_impulses() {
     for (kind, parameters) in [
         (NodeKind::Soundboard, json!({"slot1MediaId": "used"})),
@@ -320,4 +394,27 @@ fn a_missing_audio_file_names_its_node_for_the_canvas() {
     assert_eq!(data["code"], "nodeNotReady");
     assert_eq!(data["fieldPath"], "nodes/audioFile-1");
     assert_eq!(data["resourceIds"], json!(["audioFile-1"]));
+}
+
+#[test]
+fn stopping_a_session_releases_its_decoded_media() {
+    let mut plane = ControlPlane::default();
+    let session = session();
+    plane.insert_session(session.clone()).unwrap();
+    plane.audio_media_cache.insert(
+        (session.id.clone(), "file".into(), 48_000),
+        std::sync::Arc::new(DecodedAudio {
+            channels: 1,
+            sample_rate_hz: 48_000,
+            samples: vec![0.0; 16].into(),
+        }),
+    );
+    plane.session_stop(&session.id).unwrap();
+    assert!(
+        !plane
+            .audio_media_cache
+            .keys()
+            .any(|(owner, _, _)| owner == &session.id),
+        "Stop must release the route's decoded Audio File/FIR PCM"
+    );
 }
