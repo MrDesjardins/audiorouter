@@ -22,6 +22,7 @@ pub struct SidechainRuntimeBridge {
     sequence: AtomicU64,
     /// One scheduler quantum of pipeline delay, in frames.
     pipeline_frames: u32,
+    worker_id: u64,
 }
 
 impl std::fmt::Debug for SidechainRuntimeBridge {
@@ -94,11 +95,13 @@ impl SidechainRuntimeBridge {
             rate,
             latency.samples,
         )?;
+        static NEXT_SIDECHAIN_WORKER_ID: AtomicU64 = AtomicU64::new(1);
         Ok(Arc::new(Self {
             owner,
             stage,
             sequence: AtomicU64::new(0),
             pipeline_frames: u32::try_from(frames).unwrap_or(u32::MAX),
+            worker_id: NEXT_SIDECHAIN_WORKER_ID.fetch_add(1, Ordering::Relaxed),
         }))
     }
 
@@ -212,6 +215,7 @@ impl RealtimePluginProcessor for SidechainRuntimeBridge {
                 WorkerState::Running => PluginWorkerState::Running,
             },
             failure_count: self.health_failure_count(),
+            worker_id: self.worker_id,
         }
     }
 
