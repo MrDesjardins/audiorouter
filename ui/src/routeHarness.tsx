@@ -563,6 +563,9 @@ const previewBackend: UiBackend = {
   async addPluginSidechainPort(sessionId: string, nodeId: string) {
     return { sessionId, nodeId, port: "sidechain", channels: 2 };
   },
+  async removePluginSidechainPort(sessionId: string, nodeId: string) {
+    return { sessionId, nodeId, removed: true };
+  },
   async listPluginPrograms(sessionId: string, nodeId: string) {
     return {
       sessionId,

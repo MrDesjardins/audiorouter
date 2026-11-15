@@ -693,7 +693,12 @@ export function PluginNodeInspector({
   snapshot: import("@audiorouter/contracts").DiagnosticsSnapshot | null;
   backend?: Pick<
     UiBackend,
-    "resumePlugin" | "listPluginPrograms" | "selectPluginProgram" | "applyPluginPreset" | "addPluginSidechainPort"
+    | "resumePlugin"
+    | "listPluginPrograms"
+    | "selectPluginProgram"
+    | "applyPluginPreset"
+    | "addPluginSidechainPort"
+    | "removePluginSidechainPort"
   >;
   sessionId?: string;
   /** Why adding a sidechain port is unavailable right now (for example unsaved changes). */
@@ -770,6 +775,20 @@ export function PluginNodeInspector({
       setSidechain({
         busy: false,
         error: formatUiError(error, "This plugin has no sidechain input to add."),
+        added: false,
+      });
+    }
+  };
+  const removeSidechain = async () => {
+    if (!backend?.removePluginSidechainPort || !sessionId) return;
+    setSidechain({ busy: true, error: null, added: false });
+    try {
+      await backend.removePluginSidechainPort(sessionId, node.id);
+      setSidechain({ busy: false, error: null, added: false });
+    } catch (error) {
+      setSidechain({
+        busy: false,
+        error: formatUiError(error, "The sidechain input could not be removed."),
         added: false,
       });
     }
@@ -884,10 +903,25 @@ export function PluginNodeInspector({
         <section className="plugin-programs" aria-label="Sidechain input">
           <span className="eyebrow">Sidechain input</span>
           {hasSidechainPort || sidechain.added ? (
-            <small>
-              This plugin has a sidechain input named &quot;sidechain&quot;. Connect a source to it on the canvas; it is
-              not mixed into the main signal.
-            </small>
+            <>
+              <small>
+                This plugin has a sidechain input named &quot;sidechain&quot;. Connect a source to it on the canvas; it
+                is not mixed into the main signal.
+              </small>
+              <button
+                type="button"
+                disabled={
+                  disabled ||
+                  sidechain.busy ||
+                  !backend?.removePluginSidechainPort ||
+                  !sessionId ||
+                  sidechainBlockedReason !== undefined
+                }
+                onClick={() => void removeSidechain()}
+              >
+                {sidechain.busy ? "Removing..." : "Remove sidechain input"}
+              </button>
+            </>
           ) : (
             <>
               <button

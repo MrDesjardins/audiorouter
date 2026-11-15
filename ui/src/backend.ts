@@ -257,6 +257,8 @@ export interface UiBackend {
   resumePlugin?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.resume"]>;
   /** Give a VST3 plugin node its declared auxiliary input as a named sidechain port. */
   addPluginSidechainPort?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.addSidechainPort"]>;
+  /** Remove a plugin node's sidechain port; refused while a connection uses it. */
+  removePluginSidechainPort?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.removeSidechainPort"]>;
   /** Bounded VST2 programs of a plugin in a playing route. */
   listPluginPrograms?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.programs"]>;
   /** Select one VST2 program by its bounded index. */
@@ -944,6 +946,9 @@ export function createLiveBackend(
     },
     async addPluginSidechainPort(currentSessionId, nodeId) {
       return client.request("plugins.addSidechainPort", { sessionId: currentSessionId, nodeId });
+    },
+    async removePluginSidechainPort(currentSessionId, nodeId) {
+      return client.request("plugins.removeSidechainPort", { sessionId: currentSessionId, nodeId });
     },
     async listPluginPrograms(currentSessionId, nodeId) {
       return client.request("plugins.programs", { sessionId: currentSessionId, nodeId });

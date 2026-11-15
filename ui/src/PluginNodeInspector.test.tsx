@@ -327,6 +327,30 @@ describe("PluginEditorControls before Play", () => {
     expect(screen.queryByText("Sidechain input")).toBeNull();
   });
 
+  it("removes a sidechain input and shows the backend's refusal when a connection uses it", async () => {
+    const removePluginSidechainPort = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("still has a connection into its sidechain port; disconnect it first"))
+      .mockResolvedValue({ sessionId: "s", nodeId: "plugin-1", removed: true });
+    const node = plugin({ path: "C:\\VST3\\Comp.vst3", format: "vst3" });
+    node.ports = [...node.ports, { name: "sidechain", direction: "input", channels: 1 }];
+    render(
+      <PluginNodeInspector
+        node={node}
+        disabled={false}
+        onUnload={() => {}}
+        snapshot={null}
+        backend={{ removePluginSidechainPort }}
+        sessionId="s"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Remove sidechain input" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("disconnect it first");
+    fireEvent.click(screen.getByRole("button", { name: "Remove sidechain input" }));
+    await waitFor(() => expect(removePluginSidechainPort).toHaveBeenCalledTimes(2));
+    expect(removePluginSidechainPort).toHaveBeenLastCalledWith("s", "plugin-1");
+  });
+
   it("does not offer a sidechain input while the tool has unsaved changes", () => {
     const addPluginSidechainPort = vi.fn();
     render(
