@@ -735,3 +735,142 @@ fn startup_mutations_require_the_dedicated_startup_write_scope() {
     );
     assert!(allowed.result.is_some());
 }
+
+/// A running fake route marked as the multi-path worker's session, as a
+/// device change would find it. No endpoint is opened.
+#[cfg(windows)]
+fn running_multi_path_route(plane: &mut ControlPlane) -> EntityId {
+    let value = session();
+    let session_id = value.id.clone();
+    plane.insert_session(value).unwrap();
+    plane.session_start(&session_id).unwrap();
+    plane.native_multi_input_worker_session = Some(session_id.clone());
+    session_id
+}
+
+#[cfg(windows)]
+#[test]
+fn device_loss_arms_a_bounded_recovery_of_the_exact_saved_route() {
+    let mut plane = ControlPlane::default();
+    let session_id = running_multi_path_route(&mut plane);
+    plane.arm_device_loss_recovery();
+    let recovery = plane.sleep_route_recovery.as_ref().unwrap();
+    assert_eq!(recovery.session_id, session_id);
+    assert_eq!(
+        recovery.revision,
+        plane.get_session(&session_id).unwrap().revision
+    );
+    assert_eq!(recovery.max_attempts, DEVICE_RECOVERY_ATTEMPTS);
+    assert!(recovery.stop_first);
+}
+
+#[cfg(windows)]
+#[test]
+fn device_loss_never_arms_recovery_for_a_recording_route() {
+    let mut plane = ControlPlane::default();
+    let session_id = running_multi_path_route(&mut plane);
+    let mut recorder = RecorderController::new();
+    recorder.arm().unwrap();
+    recorder.start(0).unwrap();
+    plane.recorders.insert(session_id, recorder);
+    plane.arm_device_loss_recovery();
+    assert!(plane.sleep_route_recovery.is_none());
+}
+
+#[cfg(windows)]
+#[test]
+fn a_flapping_device_stops_rearming_recovery() {
+    let mut plane = ControlPlane::default();
+    running_multi_path_route(&mut plane);
+    for _ in 0..crate::native_dispatch::MAX_DEVICE_RECOVERY_ARMS {
+        plane.sleep_route_recovery = None;
+        plane.arm_device_loss_recovery();
+        assert!(plane.sleep_route_recovery.is_some());
+    }
+    plane.sleep_route_recovery = None;
+    plane.arm_device_loss_recovery();
+    assert!(plane.sleep_route_recovery.is_none());
+}
+
+#[cfg(windows)]
+#[test]
+fn a_user_stop_cancels_a_pending_device_recovery() {
+    let mut plane = ControlPlane::default();
+    let session_id = running_multi_path_route(&mut plane);
+    plane.arm_device_loss_recovery();
+    plane.session_stop(&session_id).unwrap();
+    assert!(plane.sleep_route_recovery.is_none());
+}
+
+#[cfg(windows)]
+#[test]
+fn device_recovery_silences_the_route_then_gives_up_when_the_device_never_returns() {
+    let mut plane = ControlPlane::default();
+    let session_id = running_multi_path_route(&mut plane);
+    plane.arm_device_loss_recovery();
+    if let Some(recovery) = plane.sleep_route_recovery.as_mut() {
+        recovery.max_attempts = 2;
+    }
+    // First pass: the interrupted runtime is stopped, and the restart fails
+    // because the fake route has no device to prepare.
+    plane.service_sleep_route_recovery(Instant::now());
+    assert_eq!(
+        plane.status_snapshot().unwrap()["activeSessionIds"],
+        json!([])
+    );
+    let recovery = plane.sleep_route_recovery.as_ref().unwrap();
+    assert_eq!(recovery.attempts, 1);
+    // Second (last) failure reports runtime.recoveryFailed and ends it.
+    plane.service_sleep_route_recovery(Instant::now() + std::time::Duration::from_secs(2));
+    assert!(plane.sleep_route_recovery.is_none());
+    let categories = plane
+        .events
+        .since(0, 500)
+        .unwrap()
+        .into_iter()
+        .map(|event| event.category)
+        .collect::<Vec<_>>();
+    assert!(categories
+        .iter()
+        .any(|category| category == "runtime.recoveryFailed"));
+    assert!(plane.get_session(&session_id).is_ok());
+}
+
+#[test]
+fn the_running_witness_lists_playing_sessions_without_recordings() {
+    let witness = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut plane = ControlPlane::default();
+    let mut playing = session();
+    playing.id = EntityId::new("playing");
+    let mut recording = session();
+    recording.id = EntityId::new("recording");
+    plane.insert_session(playing).unwrap();
+    plane.insert_session(recording).unwrap();
+    plane.set_running_witness(witness.clone());
+    for id in ["playing", "recording"] {
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(id)),
+            method: "session.start".into(),
+            params: Some(json!({"sessionId": id, "idempotencyKey": format!("start-{id}")})),
+        });
+        assert!(response.error.is_none(), "{:?}", response.error);
+    }
+    assert_eq!(
+        *witness.lock().unwrap(),
+        vec![EntityId::new("playing"), EntityId::new("recording")]
+    );
+    // A recording session is never restored after a crash (STATE-10).
+    let mut recorder = RecorderController::new();
+    recorder.arm().unwrap();
+    recorder.start(0).unwrap();
+    plane.recorders.insert(EntityId::new("recording"), recorder);
+    let response = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!("stop")),
+        method: "session.stop".into(),
+        params: Some(json!({"sessionId": "playing", "idempotencyKey": "stop-playing"})),
+    });
+    assert!(response.error.is_none(), "{:?}", response.error);
+    assert!(witness.lock().unwrap().is_empty());
+}

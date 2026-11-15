@@ -383,3 +383,27 @@ fn verbose_diagnostics_switch_needs_session_control_and_reports_the_window() {
     assert_eq!(off["enabled"], false);
     assert_eq!(off["expiresAtUnixMs"], Value::Null);
 }
+
+/// Hold-to-compare has no committed previous session. Its saved reuse base
+/// must be the saved session, or a missed bridge lookup restarts every plugin.
+#[test]
+fn a_flag_only_publication_reuses_the_saved_session_as_its_base() {
+    let mut plane = ControlPlane::default();
+    let saved = session();
+    plane.insert_session(saved.clone()).unwrap();
+    let base = plane
+        .saved_reuse_base(&saved.id, None, LiveEdit::FlagsOnly)
+        .unwrap()
+        .expect("a flag-only publication needs the saved session as its base");
+    assert_eq!(base.revision, saved.revision);
+    // A real commit carries its own previous session; a parameter-only edit
+    // must reuse that, not the saved session.
+    assert!(plane
+        .saved_reuse_base(&saved.id, Some(&saved), LiveEdit::FlagsOnly)
+        .unwrap()
+        .is_none());
+    assert!(plane
+        .saved_reuse_base(&saved.id, None, LiveEdit::ParametersOnly)
+        .unwrap()
+        .is_none());
+}

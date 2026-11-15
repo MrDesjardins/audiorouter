@@ -1,10 +1,13 @@
 /** @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { EventsSubscribeResult, Session, StateEvent } from "@audiorouter/contracts";
+import { AudioRouterRpcError, type EventsSubscribeResult, type Session, type StateEvent } from "@audiorouter/contracts";
 import { App } from "./App";
 import { createDisconnectedBackend } from "./backend";
 import { demoSession } from "./fixtures";
+
+/** An error the backend answered with, as opposed to no answer at all. */
+const answered = (message: string) => new AudioRouterRpcError({ code: -32000, message });
 
 beforeAll(() => {
   Object.defineProperty(window, "DOMMatrixReadOnly", {
@@ -154,7 +157,7 @@ describe("startup session selection", () => {
     const { backend, active } = await backendWithSavedActiveSession();
     const answer = backend.snapshot.getMockImplementation()!;
     backend.snapshot.mockImplementation((sessionId = "desktop-session") =>
-      sessionId === "removed-session" ? Promise.reject(new Error("session not found")) : answer(sessionId),
+      sessionId === "removed-session" ? Promise.reject(answered("session not found")) : answer(sessionId),
     );
     render(<App backend={backend} />);
     expect(
@@ -168,7 +171,7 @@ describe("startup session selection", () => {
   it("keeps offering Reconnect when the remembered route still exists but will not load", async () => {
     window.localStorage.setItem("audiorouter.ui.last-session", "desktop-session");
     const { backend } = await backendWithSavedActiveSession();
-    backend.snapshot.mockImplementation(() => Promise.reject(new Error("backend busy")));
+    backend.snapshot.mockImplementation(() => Promise.reject(answered("backend busy")));
     render(<App backend={backend} />);
     expect(await screen.findByText(/Unable to load your saved session/, {}, { timeout: 5000 })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Reconnect" })).toBeTruthy();

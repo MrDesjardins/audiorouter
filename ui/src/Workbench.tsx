@@ -112,7 +112,7 @@ export const SETTINGS_PAGE_KEYWORDS: Record<SettingsPage, string> = {
   virtualCables: "cable driver virtual device install",
   plugins: "vst vst2 vst3 effects scan folder",
   deviceAccess: "permission allow devices microphone privacy",
-  uiOptions: "theme dark light high contrast colors look animation",
+  uiOptions: "theme dark light high contrast colors look animation autosave save",
   startup: "sign in login autostart autoplay tray",
   shortcuts: "keys keyboard hotkey shortcut chord",
   versions: "update release upgrade prerelease channel check now",

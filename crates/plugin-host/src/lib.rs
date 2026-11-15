@@ -17,7 +17,7 @@ use std::os::windows::io::AsRawHandle;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
 use std::sync::{
-    atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering},
+    atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering},
     mpsc::{self, Receiver},
     Arc, Mutex,
 };
@@ -5575,6 +5575,14 @@ pub struct PluginRuntimeBridge {
     owner: Option<Arc<PluginRuntimeBridge>>,
 }
 
+/// Each started worker gets the next identity. Never reused within a process,
+/// so a diagnostics reader can compare two reads safely.
+static NEXT_WORKER_ID: AtomicU64 = AtomicU64::new(1);
+
+fn next_worker_id() -> u64 {
+    NEXT_WORKER_ID.fetch_add(1, Ordering::Relaxed)
+}
+
 /// Longest worker failure reason kept for telemetry and the backend log.
 const MAX_FAILURE_REASON_CHARS: usize = 300;
 
@@ -6549,6 +6557,7 @@ impl audiorouter_engine::RealtimePluginProcessor for PluginRuntimeBridge {
         audiorouter_engine::PluginWorkerHealth {
             state,
             failure_count: self.health_failure_count(),
+            worker_id: self.worker_id,
         }
     }
 }

@@ -53,7 +53,7 @@ impl ControlPlane {
             let branch_node_ids = self
                 .native_multi_input_worker
                 .as_ref()
-                .expect("multi-input owner is attached")
+                .ok_or(ControlError::Internal("multi-input owner missing"))?
                 .output_node_ids()
                 .to_vec();
             let session = self.get_session(&session_id)?.clone();
@@ -171,7 +171,7 @@ impl ControlPlane {
             let branch_node_ids = self
                 .native_multi_input_worker
                 .as_ref()
-                .expect("multi-input owner is attached")
+                .ok_or(ControlError::Internal("multi-input owner missing"))?
                 .output_node_ids()
                 .to_vec();
             let session = self.get_session(&session_id)?.clone();
@@ -225,7 +225,7 @@ impl ControlPlane {
         if multi_owner {
             self.native_multi_input_worker
                 .as_mut()
-                .expect("multi-input owner is attached")
+                .ok_or(ControlError::Internal("multi-input owner missing"))?
                 .attach_output_fanout(fanout)
                 .map_err(|error| {
                     ControlError::InvalidRequest(format!(
@@ -281,7 +281,7 @@ impl ControlPlane {
             let monitor = self
                 .endpoint_monitor
                 .as_mut()
-                .expect("endpoint monitor initialized above");
+                .ok_or(ControlError::Internal("endpoint monitor missing"))?;
             monitor.refresh_changes().map_err(audio_control_error)?;
             let capture = monitor
                 .snapshot()
@@ -592,7 +592,7 @@ impl ControlPlane {
             let heartbeat_result = self
                 .native_duplex_worker
                 .as_mut()
-                .expect("native duplex worker remains present")
+                .ok_or(ControlError::Internal("native duplex worker missing"))?
                 .heartbeat();
             if let Err(error) = heartbeat_result {
                 self.deactivate_virtual_bridge(bus_id);
@@ -613,7 +613,9 @@ impl ControlPlane {
             let heartbeat_result = self
                 .native_render_source_worker
                 .as_mut()
-                .expect("native render-source worker remains present")
+                .ok_or(ControlError::Internal(
+                    "native render-source worker missing",
+                ))?
                 .heartbeat();
             if let Err(error) = heartbeat_result {
                 self.deactivate_virtual_bridge(bus_id);
@@ -650,7 +652,7 @@ impl ControlPlane {
             let result = self
                 .native_capture_sink_bindings
                 .get_mut(&bus_id)
-                .expect("captured native binding key must remain present")
+                .ok_or(ControlError::Internal("captured native binding missing"))?
                 .heartbeat_if_due();
             if let Err(error) = result {
                 if let Some(binding) = self.native_capture_sink_bindings.remove(&bus_id) {
@@ -682,7 +684,7 @@ impl ControlPlane {
             let result = self
                 .native_render_source_bindings
                 .get_mut(&bus_id)
-                .expect("captured native binding key must remain present")
+                .ok_or(ControlError::Internal("captured native binding missing"))?
                 .heartbeat_if_due();
             if let Err(error) = result {
                 if let Some(binding) = self.native_render_source_bindings.remove(&bus_id) {
@@ -714,7 +716,7 @@ impl ControlPlane {
             let result = self
                 .native_duplex_bindings
                 .get_mut(&bus_id)
-                .expect("captured native binding key must remain present")
+                .ok_or(ControlError::Internal("captured native binding missing"))?
                 .heartbeat();
             if let Err(error) = result {
                 if let Some(binding) = self.native_duplex_bindings.remove(&bus_id) {
@@ -819,7 +821,7 @@ impl ControlPlane {
         Ok(self
             .native_duplex_bindings
             .remove(bus_id)
-            .expect("binding was checked above")
+            .ok_or(ControlError::Internal("native binding missing"))?
             .into_worker_parts())
     }
 
@@ -859,7 +861,7 @@ impl ControlPlane {
         let binding = self
             .native_duplex_bindings
             .remove(bus_id)
-            .expect("binding was checked above");
+            .ok_or(ControlError::Internal("native binding missing"))?;
         self.deactivate_virtual_bridge(bus_id);
         let worker = audiorouter_windows_audio::NativeBridgeDuplexWorker::from_binding(
             binding,
@@ -896,7 +898,7 @@ impl ControlPlane {
         Ok(self
             .native_render_source_bindings
             .remove(bus_id)
-            .expect("binding was checked above")
+            .ok_or(ControlError::Internal("native binding missing"))?
             .into_controller())
     }
 }

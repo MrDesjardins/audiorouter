@@ -74,6 +74,42 @@ if (missing.length > 0 || extra.length > 0) {
   throw new Error(`contract method drift detected (${details.join("; ")})`);
 }
 
+// RES-6: a client must never give up on a state change sooner than the
+// backend may take. Every method the backend does not classify as read-only
+// needs the long deadline, apart from the high-rate pump and transport polls.
+const deadlineTable = contracts.match(
+  /export const METHOD_DEADLINES[^=]*=\s*\{([\s\S]*?)\n\};/,
+);
+if (!deadlineTable) {
+  throw new Error("METHOD_DEADLINES is missing from contracts/src/index.ts");
+}
+const deadlines = new Map(
+  [...deadlineTable[1].matchAll(/^\s*"([^"]+)":\s*"(quick|long)",?$/gm)].map((match) => [
+    match[1],
+    match[2],
+  ]),
+);
+const deadlineProblems = [];
+for (const method of schema.methods ?? []) {
+  const deadline = deadlines.get(method.name);
+  if (!deadline) {
+    deadlineProblems.push(`${method.name} has no deadline`);
+  } else if (
+    method.sideEffect !== "readOnly" &&
+    deadline !== "long" &&
+    !method.name.endsWith(".pump") &&
+    !method.name.endsWith(".transport")
+  ) {
+    deadlineProblems.push(`${method.name} is ${method.sideEffect} but has a quick deadline`);
+  }
+}
+for (const method of deadlines.keys()) {
+  if (!discoveredSet.has(method)) deadlineProblems.push(`${method} is not a backend method`);
+}
+if (deadlineProblems.length > 0) {
+  throw new Error(`method deadline drift detected: ${deadlineProblems.join("; ")}`);
+}
+
 if (schema.protocolVersion?.major !== 1) {
   throw new Error(`unexpected CLI protocol major: ${schema.protocolVersion?.major}`);
 }

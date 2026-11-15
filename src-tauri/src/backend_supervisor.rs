@@ -49,9 +49,36 @@ impl BackendSupervisor {
     }
 }
 
+/// Sessions to play again after a backend failure (RES-2, STATE-10): only
+/// after the first failure in the window, never in safe mode, and never
+/// when the durable crash count (which also counts an abnormal process
+/// exit, RES-8) shows earlier failures. `witnessed` holds only sessions
+/// that were playing without a recording.
+pub fn sessions_to_restore(
+    safe_mode: bool,
+    recent_failures: usize,
+    durable_failures: Option<usize>,
+    witnessed: Vec<String>,
+) -> Vec<String> {
+    if safe_mode || recent_failures != 1 || durable_failures.is_some_and(|count| count > 1) {
+        return Vec::new();
+    }
+    witnessed
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn routes_are_restored_only_after_the_first_failure_outside_safe_mode() {
+        let playing = || vec!["call".to_owned()];
+        assert_eq!(sessions_to_restore(false, 1, Some(1), playing()), playing());
+        assert_eq!(sessions_to_restore(false, 1, None, playing()), playing());
+        assert!(sessions_to_restore(false, 2, Some(2), playing()).is_empty());
+        assert!(sessions_to_restore(false, 1, Some(2), playing()).is_empty());
+        assert!(sessions_to_restore(true, 1, Some(1), playing()).is_empty());
+    }
 
     #[test]
     fn retries_with_bounded_backoff_then_enters_safe_mode() {

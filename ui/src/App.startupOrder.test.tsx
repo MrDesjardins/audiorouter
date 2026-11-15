@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { AudioRouterRpcError } from "@audiorouter/contracts";
 import { App } from "./App";
 import { createDisconnectedBackend } from "./backend";
 
@@ -23,6 +24,7 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
+  Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
 });
 
 const later = <T,>(value: () => T, ms = 20) => new Promise<T>((resolve) => setTimeout(() => resolve(value()), ms));
@@ -38,7 +40,9 @@ describe("start-up order", () => {
           backend={{
             ...createDisconnectedBackend(),
             connected: true,
-            snapshot: vi.fn().mockRejectedValue(new Error("Worker unavailable")),
+            snapshot: vi
+              .fn()
+              .mockRejectedValue(new AudioRouterRpcError({ code: -32000, message: "Worker unavailable" })),
           }}
         />,
       );
@@ -51,6 +55,41 @@ describe("start-up order", () => {
       else Reflect.deleteProperty(navigator, "clipboard");
     }
   });
+
+  it("shows the saved-data recovery state when the shell reports database corruption", async () => {
+    Object.assign(window, {
+      __TAURI_INTERNALS__: {
+        invoke: vi.fn(async (command: string) => {
+          if (command === "backend_state")
+            return {
+              phase: "stopped",
+              reason: "corruptDatabase",
+              message: "AudioRouter could not read your saved data.",
+            };
+          if (command === "recovery_backups") return [{ name: "audiorouter-backup-0000020000.sqlite", bytes: 1024 }];
+          throw new Error(`Unexpected shell command: ${command}`);
+        }),
+      },
+    });
+    const disconnected = createDisconnectedBackend();
+    render(
+      <App
+        backend={{
+          ...disconnected,
+          connected: true,
+          snapshot: vi
+            .fn()
+            .mockRejectedValue(new AudioRouterRpcError({ code: -32000, message: "database unavailable" })),
+        }}
+      />,
+    );
+
+    expect(await screen.findByText("Your saved data needs attention.")).toBeTruthy();
+    expect(screen.getByRole("main", { name: "Saved data recovery" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "audiorouter-backup-0000020000.sqlite (1 MiB)" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Reconnect" })).toBeNull();
+  });
+
   // The backend serves one request at a time; anything sent before the
   // snapshot delays the first screen.
   it.each([

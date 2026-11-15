@@ -75,7 +75,8 @@ impl ControlPlane {
             self.comparison_test_publications = Some(publications);
             return Ok(Some("test"));
         }
-        self.republish_running_native_graph(session, generation, true)
+        self.republish_running_native_graph(session, generation, LiveEdit::FlagsOnly, None)
+            .map(|published| published.map(|(adapter, _timing)| adapter))
     }
 
     /// The graph to publish: the saved one, with any held comparison applied.

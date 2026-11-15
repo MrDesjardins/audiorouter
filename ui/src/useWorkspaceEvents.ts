@@ -31,6 +31,8 @@ export const WORKSPACE_EVENT_CATEGORIES = [
   "recording.entryRemoved",
   "recording.recycled",
   "application.captureStateChanged",
+  "runtime.recovered",
+  "runtime.recoveryFailed",
 ] as const satisfies readonly StateEventCategory[];
 
 /** Polls the backend's state events once a second; an event or a resync
@@ -51,6 +53,7 @@ export function useWorkspaceEvents({
   setRecordingsError,
   setRecorderStatuses,
   setRecorderStatusAvailable,
+  reconnecting = false,
 }: {
   backend: UiBackend;
   hasSnapshot: boolean;
@@ -68,8 +71,11 @@ export function useWorkspaceEvents({
   setRecordingsError: Dispatch<SetStateAction<string | null>>;
   setRecorderStatuses: Dispatch<SetStateAction<RecorderStatus[]>>;
   setRecorderStatusAvailable: Dispatch<SetStateAction<boolean>>;
+  /** A user reconnect is running; the poll must not supersede its snapshot request. */
+  reconnecting?: boolean;
 }) {
   // Callbacks from the caller: always the latest, never a reason to restart polling.
+  const reconnectRunning = useEffectEvent(() => reconnecting);
   const follow = useEffectEvent((sessionId: string) => followBackendActiveSession(sessionId));
   const showMessage = useEffectEvent((message: string) => setActionMessage(message));
   const updateSnapshot = useEffectEvent((update: SetStateAction<UiSnapshotState>) => setSnapshotState(update));
@@ -91,8 +97,9 @@ export function useWorkspaceEvents({
     if (!backend.connected || !hasSnapshot) return;
     let active = true;
     let polling = false;
+    let subscriptionFailed = false;
     const poll = async () => {
-      if (!active || polling) return;
+      if (!active || polling || reconnectRunning()) return;
       polling = true;
       try {
         const result = await backend.subscribe(
@@ -109,15 +116,27 @@ export function useWorkspaceEvents({
         if (!active) return;
         const adoptedSessionId =
           activeSession?.sessionId && follow(activeSession.sessionId) ? activeSession.sessionId : session.id;
+        const recoveredEvent = result.events.find((event) => event.category === "runtime.recovered");
+        const recoveryFailedEvent = result.events.find((event) => event.category === "runtime.recoveryFailed");
         const bridgeEvent = result.events.find(
           (event) => event.category === "virtualBridge.failed" || event.category === "virtualBridge.expired",
         );
         // Marked as errors: "stopped" otherwise reads as a success, which
         // showed a green check and closed itself after 8 s (owner, 2026-11-07).
-        if (bindingInvalidatedEvent) {
+        // The latest outcome wins: a recovery reported in the same batch as
+        // the device change that caused it.
+        if (recoveryFailedEvent) {
           showMessage(
             markErrorMessage(
-              "An audio device this route uses was disconnected or changed, so audio stopped. Reconnect it, then press Stop and Play.",
+              "AudioRouter could not restart the route: the device it uses did not come back with the same identity. Check the device in Properties, then press Play.",
+            ),
+          );
+        } else if (recoveredEvent) {
+          showMessage("The audio device came back, so AudioRouter restarted the route.");
+        } else if (bindingInvalidatedEvent) {
+          showMessage(
+            markErrorMessage(
+              "An audio device this route uses was disconnected or changed, so audio stopped. AudioRouter restarts the route when the same device is back, for up to two minutes; after that, reconnect it and press Play.",
             ),
           );
         } else if (bridgeEvent) {
@@ -130,7 +149,7 @@ export function useWorkspaceEvents({
             ),
           );
         }
-        if (result.resyncRequired || result.events.length > 0) {
+        if (subscriptionFailed || result.resyncRequired || result.events.length > 0) {
           const nextState = await snapshotCache.refresh(backend, adoptedSessionId);
           if (active) {
             updateSnapshot(nextState);
@@ -151,6 +170,7 @@ export function useWorkspaceEvents({
               .catch(() => {
                 if (active) showRecorders(null);
               });
+            subscriptionFailed = nextState.stale;
             if (!nextState.stale)
               eventCursor.current = { backendEpoch: result.backendEpoch, sequence: result.nextSequence };
           }
@@ -158,6 +178,7 @@ export function useWorkspaceEvents({
           eventCursor.current = { backendEpoch: result.backendEpoch, sequence: result.nextSequence };
         }
       } catch (error) {
+        subscriptionFailed = true;
         if (active)
           updateSnapshot((current) => ({
             ...current,

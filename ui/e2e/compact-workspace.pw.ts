@@ -124,6 +124,31 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await page.screenshot({ path: info.outputPath(`${theme}-live-name-draft.png`) });
   });
 
+  test(`live autosave can be turned off in ${theme}`, async ({ page }, info) => {
+    await page.addInitScript(
+      ({ route, theme }) => {
+        Object.assign(window, { __routeFixtureSession: route, __routeFixtureRunning: true });
+        localStorage.setItem("audiorouter.ui.theme", theme);
+      },
+      { route, theme },
+    );
+    await page.goto("/route-harness.html");
+    await openPage(page, "Appearance");
+    await page.getByRole("checkbox", { name: /Save parameter changes while audio plays/ }).uncheck();
+    await openPage(page, "Session");
+    await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
+    await page.getByRole("group", { name: "Gain choices" }).getByRole("button", { name: "−6 dB", exact: true }).click();
+    await page.waitForTimeout(700);
+    const content = page.getByTestId("rf__node-voice").locator(".flow-node-content");
+    await expect(content).toHaveAttribute("data-save-state", "needs-save");
+    expect(
+      await page.evaluate(() => (window as unknown as { __routeFixturePlanCalls(): number }).__routeFixturePlanCalls()),
+    ).toBe(0);
+    const save = page.locator(".topbar").getByRole("button", { name: "Save", exact: true });
+    await expect(save).toBeEnabled();
+    await page.screenshot({ path: info.outputPath(`${theme}-autosave-off.png`) });
+  });
+
   test(`every workbench tab shares question-mark help in ${theme}`, async ({ page }, info) => {
     await page.addInitScript((theme) => localStorage.setItem("audiorouter.ui.theme", theme), theme);
     await page.goto("/route-harness.html");

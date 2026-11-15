@@ -1,6 +1,7 @@
 //! Starting, stopping, pumping and telemetry of native workers, and native graph activation.
 
 use super::*;
+use crate::status::{elapsed_micros, LivePublicationTiming};
 
 impl ControlPlane {
     /// Start the explicitly attached endpoint pair on the control thread.
@@ -560,8 +561,10 @@ impl ControlPlane {
             generation,
             sample_rate_hz,
             candidate,
-            false,
+            LiveEdit::Structural,
+            None,
         )
+        .map(|_| ())
     }
 
     pub(crate) fn activate_native_graph_candidate_with_flags(
@@ -570,8 +573,10 @@ impl ControlPlane {
         generation: u64,
         sample_rate_hz: u32,
         candidate: Option<&Session>,
-        flags_only: bool,
-    ) -> Result<(), ControlError> {
+        live: LiveEdit,
+        previous: Option<&Session>,
+    ) -> Result<LivePublicationTiming, ControlError> {
+        let prepare_started = Instant::now();
         if !self.native_endpoint_session_is_attached(session_id) {
             return Err(ControlError::InvalidRequest(
                 "native endpoint worker is not attached".into(),
@@ -588,9 +593,16 @@ impl ControlPlane {
                 "native endpoint worker generation is stale".into(),
             ));
         }
-        let mut session = candidate
-            .cloned()
-            .unwrap_or_else(|| self.get_session(session_id).expect("loaded above").clone());
+        let mut session = match candidate {
+            Some(candidate) => candidate.clone(),
+            None => self.get_session(session_id)?.clone(),
+        };
+        // Hold-to-compare publishes the saved graph with a bypass overlay and
+        // has no committed previous session. The saved session is the right
+        // reuse base: a comparison changes no plugin identity or saved state,
+        // and without it a missing plugin worker restarts every plugin.
+        let saved_reuse_base = self.saved_reuse_base(session_id, previous, live)?;
+        let previous = previous.or(saved_reuse_base.as_ref());
         session = self.with_comparison(session);
         session = audiorouter_engine::prune_unfed_upstream(&session).into_owned();
         let recorder_node_ids = session
@@ -610,9 +622,10 @@ impl ControlPlane {
                     ControlError::InvalidRequest("recorder graph tap binding is invalid".into())
                 })?
         };
-        let mut bridge_flags = Vec::new();
-        let plugin_stages = if flags_only {
-            let mut stages: HashMap<EntityId, Arc<dyn RealtimePluginProcessor>> = HashMap::new();
+        let plugin_stages = if live == LiveEdit::FlagsOnly
+            && self.live_plugin_bridges_are_complete(session_id, &session)
+        {
+            let mut stages = crate::plugins::PluginStageSet::empty();
             let guards = crate::plugins::plugin_unchanged_guards(&session);
             for node in session
                 .nodes
@@ -640,15 +653,16 @@ impl ControlPlane {
             }
             stages
         } else {
-            self.prepare_plugin_stages(&session, sample_rate_hz)?
+            self.prepare_plugin_stages(&session, sample_rate_hz, previous)?
         };
         let graph = self.compile_session_graph_with_audio(
             &session,
             RuntimeGeneration::new(generation),
             sample_rate_hz,
-            &plugin_stages,
-            flags_only,
+            &plugin_stages.stages,
+            source_retention(live, previous),
         )?;
+        let prepare_micros = elapsed_micros(prepare_started);
 
         let capture_bus_ids = session_virtual_capture_bus_ids(&session);
         self.prepare_virtual_route_bridges(session_id, generation, &capture_bus_ids)?;
@@ -673,6 +687,7 @@ impl ControlPlane {
             })?;
         }
 
+        let swap_started = Instant::now();
         self.native_endpoint_worker_for_session_mut(session_id)
             .ok_or_else(|| {
                 ControlError::InvalidRequest("native endpoint worker is not attached".into())
@@ -686,10 +701,29 @@ impl ControlPlane {
                 ControlError::InvalidRequest("native endpoint worker is not attached".into())
             })?;
         *taps = Some(recorder_taps);
-        for (bridge, active) in bridge_flags {
-            bridge.set_processing_active(active);
+        // The new graph is playing; now publish worker handles and apply the
+        // deferred control changes to reused plugins.
+        if let Err(error) = plugin_stages.publish(self, session_id) {
+            // The saved graph is already playing. A rejected control update
+            // must not turn the commit into a reported failure, but the next
+            // commit must prepare the plugin again rather than trust a stale
+            // template.
+            self.live_graph_stale.insert(session_id.clone());
+            self.live_publication_warnings.insert(
+                session_id.clone(),
+                format!(
+                    "the route is playing, but a plugin control update was rejected: {}",
+                    control_error_message(&error)
+                ),
+            );
+        } else {
+            self.record_live_publication(session_id, live);
         }
-        Ok(())
+        Ok(LivePublicationTiming {
+            prepare_micros,
+            swap_micros: elapsed_micros(swap_started),
+            plugin_starts: plugin_stages.started_count(),
+        })
     }
 
     #[cfg(windows)]
@@ -722,13 +756,13 @@ impl ControlPlane {
             ));
         }
         let session = self.get_session(session_id)?.clone();
-        let plugin_stages = self.prepare_plugin_stages(&session, sample_rate_hz)?;
+        let plugin_stages = self.prepare_plugin_stages(&session, sample_rate_hz, None)?;
         let graph = self.compile_session_graph_with_audio(
             &session,
             RuntimeGeneration::new(generation),
             sample_rate_hz,
-            &plugin_stages,
-            false,
+            &plugin_stages.stages,
+            SourceRetention::None,
         )?;
         let recorder_node_ids = session
             .nodes
@@ -755,9 +789,23 @@ impl ControlPlane {
         })?;
         self.native_render_source_worker
             .as_mut()
-            .expect("worker presence checked above")
+            .ok_or(ControlError::Internal(
+                "native render-source worker missing",
+            ))?
             .publish_graph(graph);
         self.native_render_source_taps = Some(taps);
+        if let Err(error) = plugin_stages.publish(self, session_id) {
+            self.live_graph_stale.insert(session_id.clone());
+            self.live_publication_warnings.insert(
+                session_id.clone(),
+                format!(
+                    "the route is playing, but a plugin control update was rejected: {}",
+                    control_error_message(&error)
+                ),
+            );
+        } else {
+            self.record_live_publication(session_id, LiveEdit::Structural);
+        }
         Ok(())
     }
 

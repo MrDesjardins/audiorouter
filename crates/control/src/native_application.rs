@@ -156,7 +156,9 @@ impl ControlPlane {
             self.endpoint_monitor = Some(
                 audiorouter_windows_audio::EndpointMonitor::start().map_err(audio_control_error)?,
             );
-            self.endpoint_monitor.as_mut().expect("monitor initialized")
+            self.endpoint_monitor
+                .as_mut()
+                .ok_or(ControlError::Internal("endpoint monitor missing"))?
         };
         let render_client =
             audiorouter_windows_audio::SharedRender::open_refreshed_bound_with_retry(

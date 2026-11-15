@@ -1,3 +1,4 @@
+import { METHOD_DEADLINES } from "@audiorouter/contracts";
 import type { JsonRpcRequest, JsonRpcResponse, RpcTransport } from "@audiorouter/contracts";
 import {
   createDisconnectedBackend,
@@ -30,15 +31,17 @@ type PendingRequest = {
 };
 
 /**
- * Requests that load or scan third-party plugins can legitimately take far
- * longer than an ordinary call: the backend allows a plugin 30 s to load,
- * restore or save, and a scan hashes every binary. Give them the transport's
- * upper bound, so the UI does not report a timeout while the backend is still
- * working.
+ * The transport's upper bound, for methods the contracts mark "long"
+ * (RES-6): state changes and slow work such as plugin loads (the backend
+ * allows a plugin 30 s), recorder finalization (10 s) and session bundles.
+ * A UI that gave up sooner reported a failure for a change the backend then
+ * made. Reads keep the ordinary deadline. An unknown method is treated as
+ * long, so a missing table entry can only make the UI wait longer.
  */
 export const SLOW_REQUEST_TIMEOUT_MS = 60_000;
 export function requestTimeoutMs(method: string, ordinaryMs: number): number {
-  const slow = method.startsWith("plugins.") || method.endsWith(".prepare");
+  const deadline = (METHOD_DEADLINES as Readonly<Record<string, string | undefined>>)[method];
+  const slow = deadline !== "quick";
   return slow ? Math.max(ordinaryMs, SLOW_REQUEST_TIMEOUT_MS) : ordinaryMs;
 }
 

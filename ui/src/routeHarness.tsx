@@ -377,7 +377,9 @@ const previewBackend: UiBackend = {
     if (selected) committed = structuredClone(selected);
     if (injected.__routeFixtureDelayMs)
       await new Promise((resolve) => setTimeout(resolve, injected.__routeFixtureDelayMs));
-    if (injected.__routeFixtureSnapshotError) throw new Error(injected.__routeFixtureSnapshotError);
+    // A backend that answered with an error, not one that has not answered yet.
+    if (injected.__routeFixtureSnapshotError)
+      throw new AudioRouterRpcError({ code: -32000, message: injected.__routeFixtureSnapshotError });
     return structuredClone({
       ...initial,
       session: committed,

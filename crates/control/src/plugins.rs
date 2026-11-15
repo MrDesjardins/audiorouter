@@ -145,8 +145,281 @@ pub(crate) fn editor_authorization_issuer(
     })
 }
 
-/// What `ControlPlane::prepare_plugin_stages` gathers for one enabled plugin
-/// node before the slow part runs off the control thread.
+/// The input channel count a plugin node runs at.
+fn plugin_input_channels(node: &audiorouter_domain::Node) -> usize {
+    node.ports
+        .iter()
+        .find(|port| port.direction == audiorouter_domain::PortDirection::Input)
+        .map(|port| usize::from(port.channels))
+        .unwrap_or(1)
+}
+
+/// Slider values the route asks the plugin to apply.
+fn plugin_parameter_events(
+    node: &audiorouter_domain::Node,
+    captured_sliders: Option<&serde_json::Map<String, Value>>,
+) -> Vec<audiorouter_plugin_host::ParameterEvent> {
+    let mut parameters = plugin_sliders_to_apply(&node.parameters, captured_sliders)
+        .into_iter()
+        .filter_map(|(name, value)| {
+            Some(audiorouter_plugin_host::ParameterEvent {
+                parameter_id: name.strip_prefix("pluginParameter:")?.parse().ok()?,
+                normalized_value: value.as_f64()? as f32,
+                sample_offset: 0,
+            })
+        })
+        .collect::<Vec<_>>();
+    parameters.sort_by_key(|event| event.parameter_id);
+    parameters
+}
+
+/// Slider events for a reused bridge. While a member stays active, send only
+/// values that changed since the saved node, so edits made in the plugin's own
+/// editor survive. A member becoming active gets the full authored set: its
+/// template may still hold changes saved while it was bypassed, and replacing
+/// it with a delta would drop them. A slider removed from the node keeps its
+/// last applied value.
+fn reused_parameter_events(
+    before: &audiorouter_domain::Node,
+    after: &audiorouter_domain::Node,
+) -> Vec<audiorouter_plugin_host::ParameterEvent> {
+    let was_active = before.enabled && !before.bypass;
+    let is_active = after.enabled && !after.bypass;
+    if is_active && !was_active {
+        plugin_parameter_events(after, None)
+    } else {
+        plugin_parameter_events(after, Some(&before.parameters))
+    }
+}
+
+/// Plugin identity and saved state, excluding parameters that can be pushed
+/// into a live bridge and excluding the enabled/bypass flags.
+fn plugin_identity_matches(
+    before: &audiorouter_domain::Node,
+    after: &audiorouter_domain::Node,
+) -> bool {
+    before.kind == after.kind
+        && before.type_version == after.type_version
+        && before.ports == after.ports
+        && ["path", "fingerprint", "classId", "format", "stateId"]
+            .iter()
+            .all(|name| before.parameters.get(*name) == after.parameters.get(*name))
+}
+
+/// Whether a live plugin bridge can carry this save. A failed or quarantined
+/// worker stays silent until it is restarted; reusing it would keep the route
+/// silent after a parameter change, so the reuse path starts a fresh worker
+/// instead. `Stopped` is a healthy bridge whose runtime has not processed a
+/// quantum yet, not a failure.
+fn plugin_bridge_state_is_reusable(state: audiorouter_plugin_host::WorkerState) -> bool {
+    !matches!(
+        state,
+        audiorouter_plugin_host::WorkerState::Failed
+            | audiorouter_plugin_host::WorkerState::Quarantined
+    )
+}
+
+/// VST2 nodes that may share an exclusive plugin worker, by node and channel
+/// count.
+fn vst2_eligible(session: &Session) -> HashMap<EntityId, usize> {
+    session
+        .nodes
+        .iter()
+        .filter(|node| {
+            node.enabled
+                && node.kind == NodeKind::Plugin
+                && node.parameters.get("format").and_then(Value::as_str) == Some("vst2")
+        })
+        .map(|node| (node.id.clone(), plugin_input_channels(node)))
+        .collect()
+}
+
+/// A stable identity for one VST2 chain group. The order is the processing
+/// order the shared worker runs, so reversing a chain is a different group.
+fn plugin_group_key(group: &[EntityId]) -> Vec<String> {
+    group
+        .iter()
+        .map(|id| id.as_str().to_owned())
+        .collect::<Vec<_>>()
+}
+
+/// Whether a slider template is acceptable to the worker bridge. Mirrors the
+/// bridge's own bounds so a deferred update cannot fail after publication.
+fn plugin_parameters_valid(events: &[audiorouter_plugin_host::ParameterEvent]) -> bool {
+    events.len() <= audiorouter_plugin_host::MAX_PARAMETER_EVENTS
+        && events.iter().all(|event| {
+            event.normalized_value.is_finite() && (0.0..=1.0).contains(&event.normalized_value)
+        })
+}
+
+/// The live-bridge operations plugin reuse needs. `PluginRuntimeBridge` is the
+/// production implementation; a test double lets reuse be exercised without a
+/// worker process, so a parameter save can be proven to reuse a loaded plugin.
+pub(crate) trait LivePluginBridge: RealtimePluginProcessor {
+    /// Published worker health. A failed or quarantined bridge is not reused.
+    fn bridge_health(&self) -> audiorouter_plugin_host::WorkerState;
+    /// Push a slider template into the loaded plugin.
+    fn apply_parameters(
+        &self,
+        parameters: Vec<audiorouter_plugin_host::ParameterEvent>,
+    ) -> Result<(), String>;
+    fn apply_silence_if_unchanged(&self, silence: bool);
+    fn apply_processing_active(&self, active: bool);
+    /// The graph stage for this bridge.
+    fn into_processor(self: Arc<Self>) -> Arc<dyn RealtimePluginProcessor>;
+    /// The handle registered for a bridge this preparation started. A reused
+    /// or test bridge is already registered (or never will be), so `None`.
+    fn into_registered_bridge(
+        self: Arc<Self>,
+    ) -> Option<Arc<audiorouter_plugin_host::PluginRuntimeBridge>>;
+}
+
+impl LivePluginBridge for audiorouter_plugin_host::PluginRuntimeBridge {
+    fn bridge_health(&self) -> audiorouter_plugin_host::WorkerState {
+        self.health_state()
+    }
+
+    fn apply_parameters(
+        &self,
+        parameters: Vec<audiorouter_plugin_host::ParameterEvent>,
+    ) -> Result<(), String> {
+        self.set_parameters(parameters)
+            .map_err(|error| format!("{error:?}"))
+    }
+
+    fn apply_silence_if_unchanged(&self, silence: bool) {
+        self.set_silence_if_unchanged(silence);
+    }
+
+    fn apply_processing_active(&self, active: bool) {
+        self.set_processing_active(active);
+    }
+
+    fn into_processor(self: Arc<Self>) -> Arc<dyn RealtimePluginProcessor> {
+        self
+    }
+
+    fn into_registered_bridge(
+        self: Arc<Self>,
+    ) -> Option<Arc<audiorouter_plugin_host::PluginRuntimeBridge>> {
+        Some(self)
+    }
+}
+
+/// One live plugin bridge whose control state is applied only after the new
+/// graph has replaced the playing one.
+struct DeferredPluginUpdate<B: LivePluginBridge> {
+    bridge: Arc<B>,
+    /// Only sliders that differ from the previously saved node, so values
+    /// changed in the plugin's own editor are not overwritten.
+    parameters: Vec<audiorouter_plugin_host::ParameterEvent>,
+    silence_unchanged: bool,
+    processing_active: bool,
+}
+
+/// The plugin stages of one prepared graph, plus the live control changes
+/// that must wait for its atomic publication.
+pub(crate) struct PluginStageSet<B: LivePluginBridge = audiorouter_plugin_host::PluginRuntimeBridge>
+{
+    pub(crate) stages: HashMap<EntityId, Arc<dyn RealtimePluginProcessor>>,
+    started: Vec<(EntityId, Arc<B>)>,
+    updates: Vec<DeferredPluginUpdate<B>>,
+}
+
+impl<B: LivePluginBridge> PluginStageSet<B> {
+    pub(crate) fn empty() -> Self {
+        Self {
+            stages: HashMap::new(),
+            started: Vec::new(),
+            updates: Vec::new(),
+        }
+    }
+
+    /// Add a bridge that keeps playing the new graph, with its control changes
+    /// applied only at publication.
+    pub(crate) fn defer_reuse(
+        &mut self,
+        node_id: EntityId,
+        bridge: Arc<B>,
+        parameters: Vec<audiorouter_plugin_host::ParameterEvent>,
+        silence_unchanged: bool,
+        processing_active: bool,
+    ) {
+        self.stages
+            .insert(node_id, Arc::clone(&bridge).into_processor());
+        self.updates.push(DeferredPluginUpdate {
+            bridge,
+            parameters,
+            silence_unchanged,
+            processing_active,
+        });
+    }
+
+    /// A bridge started for this prepared graph (not a reused one).
+    pub(crate) fn started_bridge(&self, node_id: &EntityId) -> Option<&Arc<B>> {
+        self.started
+            .iter()
+            .find(|(id, _)| id == node_id)
+            .map(|(_, bridge)| bridge)
+    }
+
+    /// Mark a started bridge inactive without removing it from the graph: a
+    /// bypassed plugin still runs and passes audio dry.
+    pub(crate) fn deactivate_started_bridge(&self, node_id: &EntityId) -> bool {
+        match self.started_bridge(node_id) {
+            Some(bridge) => {
+                bridge.apply_processing_active(false);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// How many plugin workers this preparation started. Reused bridges are
+    /// not counted; reported with `graph.commit` so a live save can prove it
+    /// did not reload unrelated plugins.
+    pub(crate) fn started_count(&self) -> usize {
+        self.started.len()
+    }
+
+    /// Publish the new worker handles and apply the deferred control changes.
+    /// Call only after the compiled graph has replaced the playing one; on a
+    /// failed preparation nothing here has touched the old graph.
+    pub(crate) fn publish(
+        &self,
+        plane: &ControlPlane,
+        session_id: &EntityId,
+    ) -> Result<(), ControlError> {
+        if let Ok(mut bridges) = plane.plugin_bridges.lock() {
+            bridges.retain(|(owner, _), bridge| owner != session_id || bridge.strong_count() > 0);
+            for (id, bridge) in &self.started {
+                if let Some(bridge) = Arc::clone(bridge).into_registered_bridge() {
+                    bridges.insert((session_id.clone(), id.clone()), Arc::downgrade(&bridge));
+                }
+            }
+        }
+        for update in &self.updates {
+            if !update.parameters.is_empty() {
+                update
+                    .bridge
+                    .apply_parameters(update.parameters.clone())
+                    .map_err(|error| {
+                        ControlError::InvalidRequest(format!(
+                            "plugin parameter template rejected: {error}"
+                        ))
+                    })?;
+            }
+            update
+                .bridge
+                .apply_silence_if_unchanged(update.silence_unchanged);
+            update
+                .bridge
+                .apply_processing_active(update.processing_active);
+        }
+        Ok(())
+    }
+}
+
 pub(crate) struct PluginStageRequest {
     node_id: EntityId,
     /// The binary path exactly as scanned under `configured_root`.
@@ -493,14 +766,20 @@ pub(crate) fn start_plugin_bridges(
         }
         let members = group
             .iter()
-            .map(|id| prepared.get(id).expect("prepared plugin group"))
-            .collect::<Vec<_>>();
-        let (verified, configured_root, channels, _, _) = members[0];
+            .map(|id| {
+                prepared
+                    .get(id)
+                    .ok_or(ControlError::Internal("prepared plugin group missing"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let (verified, configured_root, channels, _, _) = members
+            .first()
+            .ok_or(ControlError::Internal("prepared plugin group empty"))?;
         let node = session
             .nodes
             .iter()
-            .find(|node| node.id == group[0])
-            .expect("prepared plugin node");
+            .find(|node| Some(&node.id) == group.first())
+            .ok_or(ControlError::Internal("prepared plugin node missing"))?;
         let not_ready = |message: String| ControlError::NodeNotReady {
             node_id: node.id.as_str().to_owned(),
             message: format!("\"{}\" cannot play: {message}", node.name),
@@ -1057,6 +1336,127 @@ mod plugin_chain_group_tests {
         assert!(groups(&session).contains(&vec!["c".into()]));
     }
     #[test]
+    fn plugin_reuse_accepts_slider_and_flag_changes_but_not_identity_or_state() {
+        let before = graph().nodes[1].clone();
+        let mut after = before.clone();
+        after
+            .parameters
+            .insert("path".into(), json!(r"C:\Plugins\clear.vst3"));
+        after.parameters.insert("fingerprint".into(), json!("abc"));
+        after.parameters.insert("format".into(), json!("vst3"));
+        after
+            .parameters
+            .insert("pluginParameter:1".into(), json!(0.25));
+        let mut saved = before.clone();
+        saved.parameters = after.parameters.clone();
+        assert!(plugin_identity_matches(&saved, &after));
+
+        // Sliders and the live enabled/bypass flags are not identity.
+        after
+            .parameters
+            .insert("pluginParameter:1".into(), json!(0.75));
+        after.bypass = true;
+        after.enabled = false;
+        assert!(plugin_identity_matches(&saved, &after));
+        let delta = plugin_parameter_events(&after, Some(&saved.parameters));
+        assert_eq!(delta.len(), 1);
+        assert_eq!(delta[0].parameter_id, 1);
+        assert!((delta[0].normalized_value - 0.75).abs() < 1.0e-6);
+        assert!(plugin_parameter_events(&saved, Some(&saved.parameters)).is_empty());
+
+        // While active, only the changed slider is pushed, so an editor edit
+        // to another slider survives. Becoming active sends the full set so a
+        // change saved while bypassed is not dropped with the template.
+        let mut two_sliders = saved.clone();
+        two_sliders
+            .parameters
+            .insert("pluginParameter:2".into(), json!(0.4));
+        let mut changed_one = two_sliders.clone();
+        changed_one
+            .parameters
+            .insert("pluginParameter:1".into(), json!(0.9));
+        assert_eq!(reused_parameter_events(&two_sliders, &changed_one).len(), 1);
+        let mut was_bypassed = two_sliders.clone();
+        was_bypassed.bypass = true;
+        assert_eq!(
+            reused_parameter_events(&was_bypassed, &changed_one).len(),
+            2
+        );
+
+        // A different saved state, binary, class, format or channel layout
+        // must restart the plugin.
+        for (name, value) in [
+            ("stateId", json!("state-2")),
+            ("path", json!(r"C:\Plugins\other.vst3")),
+            ("fingerprint", json!("def")),
+            ("classId", json!("class-2")),
+            ("format", json!("vst2")),
+        ] {
+            let mut changed = saved.clone();
+            changed.parameters.insert(name.into(), value);
+            assert!(
+                !plugin_identity_matches(&saved, &changed),
+                "{name} must restart the plugin"
+            );
+        }
+        let mut wider = saved.clone();
+        wider.ports[0].channels = 2;
+        assert!(!plugin_identity_matches(&saved, &wider));
+        let mut newer = saved.clone();
+        newer.type_version += 1;
+        assert!(!plugin_identity_matches(&saved, &newer));
+    }
+
+    #[test]
+    fn plugin_group_keys_follow_processing_order() {
+        assert_ne!(
+            plugin_group_key(&[EntityId::new("b"), EntityId::new("a")]),
+            plugin_group_key(&[EntityId::new("a"), EntityId::new("b")])
+        );
+        assert_eq!(
+            plugin_group_key(&[EntityId::new("a"), EntityId::new("b")]),
+            plugin_group_key(&[EntityId::new("a"), EntityId::new("b")])
+        );
+    }
+
+    #[test]
+    fn only_requested_plugin_groups_start_and_fully_reused_groups_are_skipped() {
+        let mut session = graph();
+        session.edges.clear();
+        let eligible = session
+            .nodes
+            .iter()
+            .map(|node| (node.id.clone(), 1))
+            .collect();
+        let requested = [EntityId::new("b")].into_iter().collect();
+        let groups = requested_plugin_groups(&session, &eligible, &requested).unwrap();
+        // "a", "c" and "d" are reused and must not get a second worker.
+        assert_eq!(groups, vec![vec![EntityId::new("b")]]);
+        let all = session.nodes.iter().map(|node| node.id.clone()).collect();
+        assert_eq!(
+            requested_plugin_groups(&session, &eligible, &all)
+                .unwrap()
+                .len(),
+            4
+        );
+    }
+
+    #[test]
+    fn a_partial_shared_vst2_chain_is_refused() {
+        let session = graph();
+        let eligible = session
+            .nodes
+            .iter()
+            .map(|node| (node.id.clone(), 1))
+            .collect();
+        let requested = [EntityId::new("c")].into_iter().collect();
+        assert!(matches!(
+            requested_plugin_groups(&session, &eligible, &requested),
+            Err(ControlError::Internal(_))
+        ));
+    }
+
+    #[test]
     fn shared_plugin_groups_bound_members_even_for_large_or_cyclic_graphs() {
         let mut session = graph();
         session.nodes.clear();
@@ -1357,8 +1757,9 @@ impl ControlPlane {
     /// each binary, starting its worker process and its runtime bridge run on
     /// a helper thread while routes that are already running keep being
     /// serviced (the route being prepared is not published until the caller
-    /// compiles it from the returned stages). The bridges are published for
-    /// node controls only once every group started.
+    /// compiles and swaps it in). Nothing here changes a bridge that is still
+    /// serving the old graph; [`PluginStageSet::publish`] applies those
+    /// changes only after the swap succeeds.
     pub(crate) fn prepare_plugin_stages(
         &mut self,
         session: &Session,
@@ -1421,6 +1822,58 @@ impl ControlPlane {
         if !session.nodes.iter().any(|node| wanted(&node)) {
             return Ok(HashMap::new());
         }
+        let guards = plugin_unchanged_guards(session);
+        // A live bridge can keep playing when its plugin binary, saved state,
+        // channel count and VST2 chain membership are unchanged. Parameter
+        // sliders are pushed into the bridge instead of reloading it.
+        let mut reused: HashMap<EntityId, (Arc<B>, &audiorouter_domain::Node)> = HashMap::new();
+        if let Some(previous) = previous {
+            for node in session
+                .nodes
+                .iter()
+                .filter(|node| node.enabled && node.kind == NodeKind::Plugin)
+            {
+                let Some(before) = previous
+                    .nodes
+                    .iter()
+                    .find(|before| before.id == node.id && before.kind == NodeKind::Plugin)
+                else {
+                    continue;
+                };
+                if !plugin_identity_matches(before, node) {
+                    continue;
+                }
+                if let Some(bridge) = live
+                    .get(&node.id)
+                    .filter(|bridge| plugin_bridge_state_is_reusable(bridge.bridge_health()))
+                {
+                    reused.insert(node.id.clone(), (Arc::clone(bridge), before));
+                }
+            }
+            // A VST2 chain shares one exclusive worker. Reuse is valid only
+            // when the whole group is unchanged; a changed member, a new
+            // member or a changed chain shape restarts every member.
+            let previous_eligible = vst2_eligible(previous);
+            let previous_groups = plugin_chain_groups(previous, &previous_eligible)
+                .iter()
+                .filter(|group| group.iter().any(|id| previous_eligible.contains_key(id)))
+                .map(|group| plugin_group_key(group))
+                .collect::<std::collections::HashSet<_>>();
+            let current_eligible = vst2_eligible(session);
+            for group in plugin_chain_groups(session, &current_eligible) {
+                if !group.iter().any(|id| current_eligible.contains_key(id)) {
+                    continue;
+                }
+                if !previous_groups.contains(&plugin_group_key(&group))
+                    || group.iter().any(|id| !reused.contains_key(id))
+                {
+                    for id in group {
+                        reused.remove(&id);
+                    }
+                }
+            }
+        }
+        let mut stages = PluginStageSet::empty();
         let mut requests = Vec::new();
         for node in session.nodes.iter().filter(wanted) {
             let path = node
@@ -1520,18 +1973,6 @@ impl ControlPlane {
             } else {
                 (None, None)
             };
-            let mut parameters =
-                plugin_sliders_to_apply(&node.parameters, captured_sliders.as_ref())
-                    .into_iter()
-                    .filter_map(|(name, value)| {
-                        Some(audiorouter_plugin_host::ParameterEvent {
-                            parameter_id: name.strip_prefix("pluginParameter:")?.parse().ok()?,
-                            normalized_value: value.as_f64()? as f32,
-                            sample_offset: 0,
-                        })
-                    })
-                    .collect::<Vec<_>>();
-            parameters.sort_by_key(|event| event.parameter_id);
             requests.push(PluginStageRequest {
                 node_id: node.id.clone(),
                 scanned_path,
@@ -1539,7 +1980,7 @@ impl ControlPlane {
                 fingerprint: fingerprint.to_owned(),
                 channels,
                 state,
-                parameters,
+                parameters: plugin_parameter_events(node, captured_sliders.as_ref()),
             });
         }
         let started =

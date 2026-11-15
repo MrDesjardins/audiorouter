@@ -509,6 +509,10 @@ fn dispatch_plan_and_commit_use_json_contracts() {
     let plan_result = plane.dispatch(plan_request).result.unwrap();
     assert_eq!(plan_result["diff"][0]["path"], "/name");
     assert_eq!(plan_result["requiredScopes"], json!(["graph.write"]));
+    assert!(
+        plan_result["timing"]["planMicros"].as_u64().is_some(),
+        "graph.plan reports its duration: {plan_result}"
+    );
     let plan_id = plan_result["planId"].clone();
     let commit_request = JsonRpcRequest {
         jsonrpc: "2.0".into(),
@@ -516,9 +520,36 @@ fn dispatch_plan_and_commit_use_json_contracts() {
         method: "graph.commit".into(),
         params: Some(json!({ "planId": plan_id, "baseRevision": 0, "idempotencyKey": "api-op" })),
     };
+    let committed = plane.dispatch(commit_request.clone()).result.unwrap();
+    assert_eq!(committed["revision"], 1);
+    // A simulated commit publishes no audio, so it reports no per-request time.
     assert_eq!(
-        plane.dispatch(commit_request).result.unwrap()["revision"],
-        1
+        committed["activation"],
+        json!({ "state": "pending", "runtime": "fake" })
+    );
+    // An idempotent replay must return the same activation shape; a fresh
+    // per-request number here would differ and break clients that compare it.
+    let replayed = plane.dispatch(commit_request).result.unwrap();
+    assert_eq!(replayed["activation"], committed["activation"]);
+    assert_eq!(replayed["revision"], committed["revision"]);
+}
+
+#[test]
+fn a_running_commit_reports_its_own_timing() {
+    let mut plane = ControlPlane::default();
+    let original = session();
+    plane.insert_session(original.clone()).unwrap();
+    plane.session_start(&original.id).unwrap();
+    let mut candidate = original.clone();
+    candidate.name = "timed-edit".into();
+    let plan = plane.plan_graph(&original.id, 0, candidate).unwrap();
+    let committed = plane.commit_graph(&plan, 0, "timed-edit-op").unwrap();
+    assert_eq!(committed["activation"]["state"], "running");
+    assert!(
+        committed["activation"]["timing"]["commitMicros"]
+            .as_u64()
+            .is_some(),
+        "a running graph.commit reports its duration: {committed}"
     );
 }
 
@@ -550,4 +581,72 @@ fn graph_commit_acknowledgments_are_validated_and_cannot_grant_scope() {
         })),
     });
     assert!(invalid.error.unwrap().message.contains("warning IDs"));
+}
+
+#[test]
+fn live_edit_classification_distinguishes_parameters_flags_and_topology() {
+    let saved = feedback_fixture();
+    assert_eq!(classify_live_edit(&saved, &saved), LiveEdit::FlagsOnly);
+
+    let mut flag = saved.clone();
+    flag.nodes[1].bypass = true;
+    assert_eq!(classify_live_edit(&saved, &flag), LiveEdit::FlagsOnly);
+
+    let mut parameter = saved.clone();
+    parameter.nodes[1]
+        .parameters
+        .insert("gainDb".into(), json!(-6.0));
+    let live = classify_live_edit(&saved, &parameter);
+    assert_eq!(live, LiveEdit::ParametersOnly);
+    assert!(live.retains_sources());
+
+    let mut renamed = saved.clone();
+    renamed.nodes[1].name = "Renamed".into();
+    assert_eq!(classify_live_edit(&saved, &renamed), LiveEdit::Structural);
+    assert!(!LiveEdit::Structural.retains_sources());
+
+    let mut rewired = saved.clone();
+    rewired.edges.pop();
+    assert_eq!(classify_live_edit(&saved, &rewired), LiveEdit::Structural);
+
+    let mut both = saved.clone();
+    both.nodes[1].bypass = true;
+    both.nodes[1]
+        .parameters
+        .insert("gainDb".into(), json!(-6.0));
+    assert_eq!(classify_live_edit(&saved, &both), LiveEdit::ParametersOnly);
+}
+
+#[test]
+fn only_a_layout_change_may_restart_the_live_route() {
+    // A changed path layout needs Stop/Play; the old graph is intact.
+    assert!(failed_activation_may_restart(
+        &ControlError::RestartRequired("stop and press Play".into())
+    ));
+    // A failed preparation must never stop working audio.
+    assert!(!failed_activation_may_restart(
+        &ControlError::NodeNotReady {
+            node_id: "clear".into(),
+            message: "plugin did not load".into(),
+        }
+    ));
+    assert!(!failed_activation_may_restart(
+        &ControlError::InvalidRequest("multi-input graph rejected".into())
+    ));
+}
+
+#[test]
+fn only_a_prepared_publication_clears_the_stale_graph_marker() {
+    let mut plane = ControlPlane::default();
+    let session = EntityId::new("stale-route");
+    plane.live_graph_stale.insert(session.clone());
+
+    // Hold-to-compare and a flag toggle reuse the playing bridges by node
+    // ID, so a marker left by a failed save must survive them.
+    plane.record_live_publication(&session, LiveEdit::FlagsOnly);
+    assert!(plane.live_graph_stale.contains(&session));
+
+    // A parameter or structural publication prepared from the saved session.
+    plane.record_live_publication(&session, LiveEdit::ParametersOnly);
+    assert!(!plane.live_graph_stale.contains(&session));
 }

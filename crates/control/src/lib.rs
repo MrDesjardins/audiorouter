@@ -6,6 +6,7 @@
 
 // The discovery document's JSON schemas are large `json!` literals.
 #![recursion_limit = "256"]
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 
 use audiorouter_domain::{
     format_validation_errors, inspect_routes, node_registry, validate_session, ApiMethodSpec,
@@ -161,7 +162,7 @@ const MAX_PLAN_REQUIRED_SCOPES: usize = 1;
 const MAX_PLAN_WARNINGS: usize = 1;
 const AUDIO_UPLOAD_CHUNK_BYTES: usize = 192 * 1024;
 const AUDIO_UPLOAD_TTL: Duration = Duration::from_secs(30 * 60);
-const STATE_CATEGORIES: [&str; 22] = [
+const STATE_CATEGORIES: [&str; 24] = [
     "session.created",
     "session.deleted",
     "session.selectionChanged",
@@ -184,12 +185,24 @@ const STATE_CATEGORIES: [&str; 22] = [
     "recording.entryRemoved",
     "recording.recycled",
     "application.captureStateChanged",
+    "runtime.recovered",
+    "runtime.recoveryFailed",
 ];
 const APPLICATION_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_millis(100);
+#[allow(
+    clippy::expect_used,
+    reason = "Fixed nonzero capacities and the engine quantum are constructor constants, never request data; exercised by every control-plane construction test."
+)]
+fn default_virtual_bridges() -> VirtualBusBridgeSet {
+    VirtualBusBridgeSet::new(8, 2, audiorouter_engine::PROCESSING_QUANTUM_FRAMES)
+        .expect("valid default virtual bridge collection")
+}
 const VIRTUAL_DEVICE_PLAN_TTL: Duration = Duration::from_secs(5 * 60);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ControlError {
+    /// A named backend invariant failed; never includes request data.
+    Internal(&'static str),
     InvalidRequest(String),
     Audio {
         code: &'static str,
@@ -210,6 +223,10 @@ pub enum ControlError {
         node_id: String,
         message: String,
     },
+    /// The saved change cannot be applied to the playing graph without a
+    /// Stop and Play. The old route is still playing and intact; distinct
+    /// from a failed preparation, which must never stop it.
+    RestartRequired(String),
     IdempotencyConflict,
     Store(audiorouter_domain::StoreError),
     Json(String),
@@ -349,6 +366,19 @@ pub struct ControlPlane {
     next_audio_media: u64,
     audio_file_sources:
         HashMap<(EntityId, EntityId), std::sync::Arc<audiorouter_engine::AudioFileSource>>,
+    /// Decoded Audio File/FIR media reused by live commits instead of being
+    /// decoded again for every parameter change. Bounded by the media a
+    /// session currently references.
+    audio_media_cache: HashMap<(EntityId, String, u32), Arc<DecodedAudio>>,
+    /// Sessions whose last committed change could not be applied live. The
+    /// graph still playing is the previous one, so the next commit must not
+    /// reuse its plugins or compare against the saved session as if they
+    /// matched; a full preparation is attempted first.
+    live_graph_stale: std::collections::HashSet<EntityId>,
+    /// A control update that a reused plugin rejected after the new graph had
+    /// already swapped in. The commit is still applied, but the next one must
+    /// prepare that plugin again instead of trusting the stale template.
+    live_publication_warnings: HashMap<EntityId, String>,
     test_signal_sources:
         HashMap<(EntityId, EntityId), std::sync::Arc<audiorouter_engine::TestSignalSource>>,
     soundboard_sources:
@@ -370,6 +400,8 @@ pub struct ControlPlane {
     comparison: HashMap<EntityId, compare::Comparison>,
     #[cfg(test)]
     comparison_test_publications: Option<Vec<Session>>,
+    #[cfg(test)]
+    panic_on_method: Option<&'static str>,
     /// Who saved each revision and when, by session; written through to storage.
     revision_notes: HashMap<EntityId, Vec<Value>>,
     /// Named tool presets when there is no database.
@@ -417,6 +449,13 @@ pub struct ControlPlane {
     os_suspended_native_sessions: Vec<EntityId>,
     #[cfg(windows)]
     sleep_route_recovery: Option<safety::SleepRouteRecovery>,
+    /// When device-loss recoveries were armed, to stop a flapping device
+    /// from restarting the route without end.
+    #[cfg(windows)]
+    device_recovery_arms: VecDeque<Instant>,
+    /// Shared with the shell's backend supervisor: the sessions playing
+    /// without a recording, so a restarted backend can restore them (RES-2).
+    running_witness: Option<std::sync::Arc<std::sync::Mutex<Vec<EntityId>>>>,
     virtual_buses: VirtualBusRegistry,
     virtual_bus_routes: VirtualBusRouteRegistry,
     virtual_bus_route_revision: u64,
@@ -536,6 +575,7 @@ impl Default for ControlPlane {
 fn control_error_message(error: &ControlError) -> String {
     let text = match error {
         ControlError::InvalidRequest(message) => message.clone(),
+        ControlError::RestartRequired(message) => message.clone(),
         ControlError::Audio { message, .. } => message.clone(),
         ControlError::NodeNotReady { message, .. } => message.clone(),
         other => format!("{other:?}"),
@@ -572,6 +612,9 @@ impl ControlPlane {
             next_audio_upload: 1,
             next_audio_media: 1,
             audio_file_sources: HashMap::new(),
+            audio_media_cache: HashMap::new(),
+            live_graph_stale: std::collections::HashSet::new(),
+            live_publication_warnings: HashMap::new(),
             test_signal_sources: HashMap::new(),
             soundboard_sources: HashMap::new(),
             enrollments: HashMap::new(),
@@ -587,6 +630,8 @@ impl ControlPlane {
             comparison: HashMap::new(),
             #[cfg(test)]
             comparison_test_publications: None,
+            #[cfg(test)]
+            panic_on_method: None,
             revision_notes: HashMap::new(),
             tool_presets: Vec::new(),
             plugin_inventories: HashMap::new(),
@@ -606,15 +651,13 @@ impl ControlPlane {
             os_suspended_native_sessions: Vec::new(),
             #[cfg(windows)]
             sleep_route_recovery: None,
+            #[cfg(windows)]
+            device_recovery_arms: VecDeque::new(),
+            running_witness: None,
             virtual_buses: VirtualBusRegistry::default(),
             virtual_bus_routes: VirtualBusRouteRegistry::default(),
             virtual_bus_route_revision: 0,
-            virtual_bridges: VirtualBusBridgeSet::new(
-                8,
-                2,
-                audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
-            )
-            .expect("valid default virtual bridge collection"),
+            virtual_bridges: default_virtual_bridges(),
             virtual_bus_plans: HashMap::new(),
             next_virtual_bus_plan: 1,
             startup_plans: HashMap::new(),
@@ -705,10 +748,32 @@ impl ControlPlane {
                 "mutating notifications are not supported",
             );
         }
-        let result = validate_method_params(&request.method, request.params.as_ref())
-            .and_then(|_| dispatch_methods::dispatch_method(self, &request.method, request.params));
+        let read_only = API_METHODS.iter().any(|spec| {
+            spec.name == request.method
+                && spec.side_effect == audiorouter_domain::SideEffectClass::ReadOnly
+        });
+        let dispatch = || {
+            validate_method_params(&request.method, request.params.as_ref())?;
+            #[cfg(test)]
+            if self.panic_on_method == Some(request.method.as_str()) {
+                self.panic_on_method = None;
+                panic!("injected request failure");
+            }
+            dispatch_methods::dispatch_method(self, &request.method, request.params)
+        };
+        // Read-only handlers cannot partially commit graph or lifecycle changes.
+        // Keep their failures local to this request so unrelated audio survives.
+        // Mutating handlers still unwind to the supervisor: their state may be
+        // inconsistent and must never be reused after an unexpected panic.
+        let result = if read_only {
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(dispatch))
+                .unwrap_or(Err(ControlError::Internal("read-only request panicked")))
+        } else {
+            dispatch()
+        };
         if mutating {
             self.refresh_siege_round_feed();
+            self.publish_running_witness();
         }
         match result {
             Ok(value) => JsonRpcResponse::success(id, value),
@@ -990,6 +1055,7 @@ impl ControlPlane {
 
 fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpcResponse {
     let code = match &error {
+        ControlError::Internal(_) => "internalError",
         ControlError::Store(error) => match error {
             audiorouter_domain::StoreError::SessionNotFound => "notFound",
             audiorouter_domain::StoreError::PlanNotFound => "notFound",
@@ -1007,6 +1073,7 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
         ControlError::Json(_) => "internalError",
         ControlError::IdempotencyConflict => "idempotencyConflict",
         ControlError::InvalidRequest(_) => "invalidRequest",
+        ControlError::RestartRequired(_) => "invalidRequest",
         ControlError::Audio { code, .. } => code,
         ControlError::PluginScan(error) => error.code(),
         ControlError::NodeNotReady { .. } => "nodeNotReady",
@@ -1014,6 +1081,7 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
     let message = match &error {
         ControlError::Audio { message, .. } => message.clone(),
         ControlError::NodeNotReady { message, .. } => message.clone(),
+        ControlError::RestartRequired(message) => message.clone(),
         _ => format!("{error:?}"),
     };
     let audio_details = match &error {
@@ -1116,6 +1184,52 @@ fn application_error_data(code: &str) -> Value {
 mod tests {
     use super::*;
     use crate::test_support::*;
+
+    #[test]
+    fn read_request_panic_returns_internal_error_without_stopping_runtime() {
+        let mut plane = ControlPlane::default();
+        let session = session();
+        plane.insert_session(session.clone()).unwrap();
+        plane.session_start(&session.id).unwrap();
+        let generation = plane.runtimes[&session.id].generation();
+        plane.panic_on_method = Some("status.get");
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!("panic-read")),
+            method: "status.get".into(),
+            params: None,
+        };
+        let response = plane.dispatch_authorized_for_client(
+            request.clone(),
+            "observer",
+            &ClientGrant::read_only(),
+        );
+        assert_eq!(
+            response.error.unwrap().data.unwrap()["code"],
+            "internalError"
+        );
+        assert_eq!(plane.runtimes[&session.id].generation(), generation);
+        assert_eq!(plane.runtimes[&session.id].state(), RuntimeState::Running);
+        assert!(plane.active_idempotency_scope.is_none());
+        assert!(plane.dispatch(request).error.is_none());
+    }
+
+    #[test]
+    fn mutating_request_panic_still_unwinds_to_supervisor() {
+        let mut plane = ControlPlane {
+            panic_on_method: Some("session.stop"),
+            ..ControlPlane::default()
+        };
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!("panic-write")),
+            method: "session.stop".into(),
+            params: Some(json!({"sessionId":"session", "idempotencyKey":"stop-panic"})),
+        };
+        let result =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| plane.dispatch(request)));
+        assert!(result.is_err());
+    }
 
     #[test]
     fn application_errors_include_stable_codes() {

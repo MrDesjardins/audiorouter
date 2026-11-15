@@ -1,6 +1,7 @@
 import { optionalLocalStorage, readPresentationJson, writePresentationJson } from "./presentationStorage";
 import { Icon } from "./icons";
 import { CopyErrorButton } from "./CopyErrorButton";
+import { StartupRecovery } from "./StartupRecovery";
 import { keepNativeContextMenu } from "./contextMenuPolicy";
 import { SessionSwitchDialog } from "./SessionSwitchDialog";
 import { SidechainReplaceDialog } from "./SidechainReplaceDialog";
@@ -131,11 +132,13 @@ import {
 import {
   readFlowAnimation,
   readLastSession,
+  readLiveAutosave,
   readShortcuts,
   readSidebarWidth,
   readTheme,
   writeFlowAnimation,
   writeLastSession,
+  writeLiveAutosave,
   writeShortcuts,
   writeSidebarWidth,
   writeTheme,
@@ -438,6 +441,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setFlowAnimation(mode);
     writeFlowAnimation(optionalLocalStorage(), mode);
   };
+  const [liveAutosave, setLiveAutosave] = useState(() => readLiveAutosave(optionalLocalStorage()));
+  const changeLiveAutosave = (enabled: boolean) => {
+    setLiveAutosave(enabled);
+    writeLiveAutosave(optionalLocalStorage(), enabled);
+  };
   const [sidebarWidth, setSidebarWidth] = useState(() => readSidebarWidth(optionalLocalStorage()));
   const changeSidebarWidth = (width: number) => {
     setSidebarWidth(width);
@@ -640,7 +648,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               () => null,
             );
       if (backendActive) backendActiveSessionRef.current = backendActive;
-      const first = await snapshotCache.refresh(backend, rememberedSessionId ?? backendActive ?? undefined);
+      const first = await snapshotCache.refresh(backend, rememberedSessionId ?? backendActive ?? undefined, {
+        startup: true,
+      });
       if (!first.error || !rememberedSessionId) return first;
       // The remembered route may be gone (removed by a script, or an older database
       // restored). Only the list can say so; any other failure keeps it and offers Reconnect.
@@ -815,6 +825,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   // Reconnect reloads everything from the backend; it reports progress and
   // the outcome in the message slot so the click is visibly acknowledged.
   const [reconnecting, setReconnecting] = useState(false);
+  const [savedDataDamaged, setSavedDataDamaged] = useState(false);
   const reconnect = async () => {
     if (reconnecting) return;
     setReconnecting(true);
@@ -828,6 +839,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           `Reconnect failed: ${nextState.error}. Your edits are kept. Reconnect before saving or starting audio.`,
         );
       } else {
+        setSavedDataDamaged(false);
         setActionMessage("Reconnected. Sessions, devices and audio status are up to date.");
       }
     } catch (error) {
@@ -1338,6 +1350,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setRecordingsError,
     setRecorderStatuses,
     setRecorderStatusAvailable,
+    reconnecting,
   });
   useDiagnosticsRefresh({
     backend,
@@ -1616,15 +1629,24 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     );
     await refresh();
   };
-  const planChanges = async () => {
+  const lastAutoSaveDraft = useRef<string | null>(null);
+  const autoSaveRunning = useRef(false);
+  const planChanges = async (automatic = false) => {
     if (graphBusy || !backendReady) return;
+    if (automatic && autoSaveRunning.current) return;
+    if (automatic) {
+      autoSaveRunning.current = true;
+      lastAutoSaveDraft.current = JSON.stringify(draft);
+    }
     setGraphBusy(true);
-    setActionMessage("Checking route before saving...");
+    if (!automatic) setActionMessage("Checking route before saving...");
     try {
       const operation = uiIdempotencyKey("graph-commit");
       const plan = await backend.planGraph(draft);
       if (currentSessionIdRef.current !== draft.id || !sameSessionDraft(draftRef.current, draft)) {
-        setActionMessage("Your edits changed during review. Review and save them again.");
+        // An automatic save can race the user's next edit. Stay quiet and let
+        // the effect save the latest draft instead of asking for a review.
+        if (!automatic) setActionMessage("Your edits changed during review. Review and save them again.");
         return;
       }
       if (plan.baseRevision !== draft.revision)
@@ -1655,13 +1677,16 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       } else setActionMessage(formatUiError(error, "Unable to apply graph changes."));
     } finally {
       setGraphBusy(false);
+      if (automatic) autoSaveRunning.current = false;
     }
   };
   // While audio plays, slider-style edits (parameter values only) are saved
   // after a short pause so the change is heard without Stop/Play. Topology
   // edits still wait for an explicit Save.
-  const lastAutoSaveDraft = useRef<string | null>(null);
+  // Edits made while an automatic save runs are picked up by the effect below
+  // once it finishes, so they coalesce into one newer save.
   const autoSavePending =
+    liveAutosave &&
     sessionRunning &&
     backendReady &&
     !pendingGraphPlan &&
@@ -1670,16 +1695,22 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const planChangesRef = useRef(planChanges);
   planChangesRef.current = planChanges;
   useEffect(() => {
-    if (!sessionRunning || graphBusy || !backendReady || pendingGraphPlan || !isParameterOnlyChange(session, draft))
+    if (
+      !liveAutosave ||
+      !sessionRunning ||
+      graphBusy ||
+      !backendReady ||
+      pendingGraphPlan ||
+      !isParameterOnlyChange(session, draft)
+    )
       return;
     const key = JSON.stringify(draft);
     if (lastAutoSaveDraft.current === key) return;
     const timer = window.setTimeout(() => {
-      lastAutoSaveDraft.current = key;
-      void planChangesRef.current();
+      void planChangesRef.current(true);
     }, 400);
     return () => window.clearTimeout(timer);
-  }, [draft, session, sessionRunning, graphBusy, backendReady, pendingGraphPlan]);
+  }, [draft, session, sessionRunning, graphBusy, backendReady, pendingGraphPlan, liveAutosave]);
   const commitAcknowledgedPlan = async () => {
     if (
       graphBusy ||
@@ -3234,7 +3265,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       <div className={`app-shell app-startup ${themeClassName}`} style={themeStyle}>
         <main
           className="panel startup-card"
-          aria-label="Loading saved session"
+          aria-label={savedDataDamaged ? "Saved data recovery" : "Loading saved session"}
           aria-busy={!snapshotState.error || reconnecting}
         >
           <p className="eyebrow">Your audio workspace</p>
@@ -3242,23 +3273,33 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           <p role="status">
             {reconnecting
               ? "Reconnecting to the AudioRouter backend…"
-              : snapshotState.error
-                ? `Unable to load your saved session: ${snapshotState.error}`
-                : "Loading your saved session…"}
+              : savedDataDamaged
+                ? "Your saved data needs attention."
+                : snapshotState.error
+                  ? `Unable to load your saved session: ${snapshotState.error}`
+                  : "Loading your saved session…"}
           </p>
           <p className="muted">
-            {snapshotState.error
-              ? "Reconnect to try again. Your saved session has not been replaced."
-              : "Your route will appear when the backend responds."}
+            {savedDataDamaged
+              ? "The audio service stopped instead of replacing data it could not read."
+              : snapshotState.error
+                ? "Reconnect to try again. Your saved session has not been replaced."
+                : "Your route will appear when the backend responds."}
           </p>
-          {snapshotState.error && (
+          {snapshotState.error && !savedDataDamaged && (
             <CopyErrorButton message={`Unable to load your saved session: ${snapshotState.error}`} />
           )}
-          {snapshotState.error && (
+          {snapshotState.error && !savedDataDamaged && (
             <button type="button" onClick={() => void reconnect()} disabled={reconnecting} aria-busy={reconnecting}>
               Reconnect
             </button>
           )}
+          <StartupRecovery
+            onRestored={async () => {
+              window.location.reload();
+            }}
+            onDamaged={() => setSavedDataDamaged(true)}
+          />
         </main>
       </div>
     );
@@ -3500,6 +3541,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       onCustomThemes={changeCustomThemes}
       flowAnimation={flowAnimation}
       onFlowAnimation={changeFlowAnimation}
+      liveAutosave={liveAutosave}
+      onLiveAutosave={changeLiveAutosave}
     />
   );
   const devicesWorkbenchContent = (

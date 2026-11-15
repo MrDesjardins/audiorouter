@@ -54,6 +54,13 @@ pub fn play_saved_session(call: &mut Call<'_>) -> Result<String, String> {
     else {
         return Err("No session to play. Open AudioRouter and create one.".into());
     };
+    play_session(call, &session_id)
+}
+
+/// Play one saved session, as the window's Play does: prepare every path,
+/// then start it, and never leave a silent simulated run playing.
+pub fn play_session(call: &mut Call<'_>, session_id: &str) -> Result<String, String> {
+    let session_id = session_id.to_owned();
     if active_session_ids(call)?.contains(&session_id) {
         return Ok("Already playing".into());
     }
@@ -130,6 +137,45 @@ pub fn autoplay(
         }
     }
     Err("Autoplay failed: the audio engine did not start".into())
+}
+
+/// After the backend restarted once, play again the sessions that were
+/// playing without a recording (RES-2, STATE-10). Waits for the restarted
+/// backend like autoplay; each session is restored or skipped on its own.
+/// Privacy mute is stored in the database and is not touched here.
+pub fn restore_after_restart(
+    call: &mut Call<'_>,
+    session_ids: &[String],
+    attempts: u32,
+    delay: std::time::Duration,
+) -> Result<String, String> {
+    for attempt in 0..attempts {
+        if let Ok(status) = call("status.get", json!({})) {
+            if status
+                .get("quarantinedSessions")
+                .and_then(Value::as_array)
+                .is_some_and(|sessions| !sessions.is_empty())
+            {
+                return Err("Restore paused: unavailable saved sessions need recovery.".into());
+            }
+            let restored = session_ids
+                .iter()
+                .filter(|id| play_session(call, id).is_ok())
+                .count();
+            return if restored == session_ids.len() {
+                Ok("Playing again after a restart".into())
+            } else {
+                Err(short(&format!(
+                    "Restored {restored} of {} routes after a restart",
+                    session_ids.len()
+                )))
+            };
+        }
+        if attempt + 1 < attempts {
+            std::thread::sleep(delay);
+        }
+    }
+    Err("Restore failed: the audio engine did not start".into())
 }
 
 #[cfg(test)]
@@ -296,5 +342,32 @@ mod tests {
             std::time::Duration::ZERO,
         );
         assert!(never.unwrap_err().starts_with("Autoplay failed"));
+    }
+
+    #[test]
+    fn restore_plays_each_witnessed_session_and_reports_partial_failure() {
+        let mut backend = Backend::new();
+        let restored = restore_after_restart(
+            &mut |method: &str, params: Value| backend.call(method, params),
+            &["mine".into()],
+            3,
+            std::time::Duration::ZERO,
+        );
+        assert_eq!(restored.unwrap(), "Playing again after a restart");
+        assert!(backend.calls.contains(&"nativePaths.prepare".to_owned()));
+        assert!(backend.calls.contains(&"session.start".to_owned()));
+
+        let mut failing = Backend::new();
+        failing.prepare = Err("endpoint missing".into());
+        let partial = restore_after_restart(
+            &mut |method: &str, params: Value| failing.call(method, params),
+            &["mine".into()],
+            3,
+            std::time::Duration::ZERO,
+        );
+        assert_eq!(
+            partial.unwrap_err(),
+            "Restored 0 of 1 routes after a restart"
+        );
     }
 }

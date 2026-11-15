@@ -566,7 +566,9 @@ describe("VB-Cable endpoint selection", () => {
       };
     });
     await renderReady(<App backend={{ ...connectedPreviewBackend(), subscribe }} />);
-    const text = await screen.findByText(/audio device this route uses was disconnected.*press Stop and Play/i);
+    const text = await screen.findByText(
+      /audio device this route uses was disconnected.*restarts the route when the same device is back/i,
+    );
     // A lost device is a failure: red alert that stays, not a green check that
     // closed itself after 8 s (owner, 2026-11-07).
     const message = text.closest(".global-action-message")!;

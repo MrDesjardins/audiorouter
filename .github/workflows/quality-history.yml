@@ -1,0 +1,108 @@
+name: Quality history (daily)
+
+# The nightly quality workflow measures coverage, engine soak and startup on
+# main and keeps the accumulated table in the Actions cache. main requires a
+# pull request and the "Quality gate" check and gets no bypass, so the durable
+# daily history is published on the unprotected `quality-data` branch, the
+# same pattern as `code-stats-data` and `metrics-data`. README links to that
+# branch. Nothing here writes to main.
+on:
+  workflow_run:
+    workflows: ["AudioRouter quality (nightly)"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Quality workflow run to publish (defaults to the latest completed one)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-history
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish daily quality history
+    # The trend job records the rows even when a measurement job fails, so a
+    # failed nightly still publishes what it collected. Cancellation means the
+    # artifact is missing and is retried by the next run. Only main's nightly
+    # belongs in the durable history; a manual publisher run may name any run.
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.conclusion != 'cancelled') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+
+      - name: Install pinned Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.22.3
+          package-manager-cache: false
+
+      - name: Download the collected history
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REQUESTED_RUN: ${{ inputs.run_id }}
+          TRIGGER_RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          run_id="${REQUESTED_RUN:-${TRIGGER_RUN:-}}"
+          if [ -z "$run_id" ]; then
+            run_id=$(gh run list --repo "$REPO" --workflow quality.yml --branch main --status completed \
+              --limit 1 --json databaseId --jq '.[0].databaseId')
+          fi
+          if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
+            echo "::error::No completed quality workflow run to publish."
+            exit 1
+          fi
+          echo "Reading quality history from run $run_id." >> "$GITHUB_STEP_SUMMARY"
+          rm -rf collected
+          mkdir collected
+          gh run download "$run_id" --repo "$REPO" --name quality-history-collected --dir collected
+          test -s collected/quality-history.csv
+
+      - name: Merge and draw the history
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin quality-data >/dev/null; then
+            git fetch --depth=1 origin quality-data
+            git worktree add -B quality-data published FETCH_HEAD
+          else
+            git worktree add --detach published
+            git -C published switch --orphan quality-data
+          fi
+          mkdir -p published/docs
+          # A re-run or an evicted cache must not duplicate or truncate the
+          # durable rows already on the branch.
+          node tools/quality/quality-history-chart.mjs merge published/docs/quality-history.csv collected/quality-history.csv merged.csv
+          node tools/quality/quality-history-chart.mjs chart merged.csv published/docs/quality-history.svg
+          cp merged.csv published/docs/quality-history.csv
+
+      - name: Publish the quality-data branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd published
+          git add -- docs/quality-history.csv docs/quality-history.svg
+          if git diff --cached --quiet; then
+            echo "Quality history is already current." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "docs: record daily quality history"
+          git push origin quality-data
+          echo "Published the daily quality history to the quality-data branch." >> "$GITHUB_STEP_SUMMARY"

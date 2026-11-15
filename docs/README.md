@@ -40,6 +40,9 @@ Read 01–04 first, then the feature areas needed for a milestone. `MUST`/`shall
 
 ## Operational runbooks
 
+The [database recovery guide](operations/database-recovery.md) explains desktop
+backups, explicit corruption restoration, preserved originals and access reset.
+
 The [editor invariant catalog](operations/editor-invariants.md) records state
 ownership, layout/history rules and the executable regression coverage.
 The [production UI checks](operations/production-ui-tests.md) cover optimized

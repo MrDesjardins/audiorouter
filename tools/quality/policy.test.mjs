@@ -222,17 +222,24 @@ test('CI invokes the shared full inventory and gates every classified job', () =
   for (const area of [...areas, 'windows', 'rust']) assert.ok(workflow.includes(`${area}: \${{ steps.detect.outputs.${area} }}`), area);
 });
 
-test('nightly metrics use read-only permissions and artifacts instead of pushing main', () => {
+test('nightly measurements never write to main', () => {
   const workflow = readFileSync(new URL('../../.github/workflows/quality.yml', import.meta.url), 'utf8');
   assert.doesNotMatch(workflow, /contents: write|git push|git commit/);
-  assert.match(workflow, /name: quality-history-update/);
-  assert.match(workflow, /ref: \$\{\{ github.sha \}\}/);
+  assert.doesNotMatch(workflow, /quality-history-update|publish-readme-coverage/);
+});
+
+test('daily quality history is published to the unprotected data branch, never main', () => {
+  const workflow = readFileSync(new URL('../../.github/workflows/quality-history.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /workflows: \["AudioRouter quality \(nightly\)"\]/);
+  assert.match(workflow, /--name quality-history-collected/);
+  assert.match(workflow, /git push origin quality-data/);
+  assert.doesNotMatch(workflow, /push origin (main|HEAD:main)/);
+  assert.match(workflow, /permissions:\s+actions: read\s+contents: write/);
 });
 
 test('daily quality collection retains cumulative history outside the cache', () => {
   const workflow = readFileSync(new URL('../../.github/workflows/quality.yml', import.meta.url), 'utf8');
   assert.match(workflow, /cron: "17 3 \* \* \*"/);
-  assert.match(workflow, /name: quality-history-update[\s\S]*?retention-days: 90/);
   assert.match(workflow, /name: quality-history-collected\s+path: quality-history.csv\s+if-no-files-found: error\s+retention-days: 90/);
 });
 

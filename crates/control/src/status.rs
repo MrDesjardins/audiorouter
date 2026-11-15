@@ -2,6 +2,19 @@
 
 use super::*;
 
+/// Durations and plugin-start count of one live graph publication, reported
+/// by `graph.commit` so reuse is measurable rather than assumed (D7).
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct LivePublicationTiming {
+    pub(crate) prepare_micros: u64,
+    pub(crate) swap_micros: u64,
+    pub(crate) plugin_starts: usize,
+}
+
+pub(crate) fn elapsed_micros(started: Instant) -> u64 {
+    u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX)
+}
+
 impl ControlPlane {
     pub(crate) fn status_snapshot(&mut self) -> Result<Value, ControlError> {
         let mut active_session_ids = self
@@ -135,32 +148,80 @@ impl ControlPlane {
         None
     }
 
+    /// Whether every enabled plugin node of `session` already has a bridge
+    /// this route is playing. A flag-only republish reuses those bridges; a
+    /// missing one (a plugin just enabled while playing) must be prepared and
+    /// started through the ordinary path instead of failing the commit.
+    pub(crate) fn live_plugin_bridges_are_complete(
+        &self,
+        session_id: &EntityId,
+        session: &Session,
+    ) -> bool {
+        session
+            .nodes
+            .iter()
+            .filter(|node| node.enabled && node.kind == NodeKind::Plugin)
+            .all(|node| self.plugin_bridge(session_id, &node.id).is_ok())
+    }
+
+    /// Forget a stale-graph marker only after a publication prepared from the
+    /// saved session. A flag-only publication, including hold-to-compare,
+    /// reuses the playing bridges by node ID and cannot prove that a plugin
+    /// identity or saved state the user changed actually took effect.
+    pub(crate) fn record_live_publication(&mut self, session_id: &EntityId, live: LiveEdit) {
+        if live != LiveEdit::FlagsOnly {
+            self.live_graph_stale.remove(session_id);
+        }
+    }
+
+    /// The saved session as a reuse base for a flag-only publication that has no
+    /// committed previous session (hold-to-compare). A comparison only overlays
+    /// bypass, so plugin identity and saved state are unchanged; `None` here
+    /// makes the preparation start every plugin in the chain.
+    pub(crate) fn saved_reuse_base(
+        &self,
+        session_id: &EntityId,
+        previous: Option<&Session>,
+        live: LiveEdit,
+    ) -> Result<Option<Session>, ControlError> {
+        if previous.is_none() && live == LiveEdit::FlagsOnly {
+            Ok(Some(self.get_session(session_id)?.clone()))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub(crate) fn republish_running_native_graph(
         &mut self,
         session_id: &EntityId,
         generation: u64,
-        flags_only: bool,
-    ) -> Result<Option<&'static str>, ControlError> {
+        live: LiveEdit,
+        previous: Option<&Session>,
+    ) -> Result<Option<(&'static str, LivePublicationTiming)>, ControlError> {
         if self.native_endpoint_session_is_attached(session_id) {
             let sample_rate_hz = self
                 .native_endpoint_worker_for_session(session_id)
-                .expect("attached above")
+                .ok_or(ControlError::Internal("attached native worker missing"))?
                 .bridge()
                 .sample_rate_hz();
-            self.activate_native_graph_candidate_with_flags(
+            let timing = self.activate_native_graph_candidate_with_flags(
                 session_id,
                 generation,
                 sample_rate_hz,
                 None,
-                flags_only,
+                live,
+                previous,
             )?;
-            return Ok(Some(self.native_adapter_kind().unwrap_or("endpoint")));
+            return Ok(Some((
+                self.native_adapter_kind().unwrap_or("endpoint"),
+                timing,
+            )));
         }
         // The cable route compiles its graph once at start; the edit is saved
         // and applies at the next Play.
         #[cfg(windows)]
         if self.cable_route_running() && self.cable_route_session() == Some(session_id) {
-            return Err(ControlError::InvalidRequest(
+            return Err(ControlError::RestartRequired(
                 "changes to a cable-to-cable route apply after Stop and Play".into(),
             ));
         }
@@ -172,7 +233,7 @@ impl ControlPlane {
             let worker = self
                 .native_multi_input_worker
                 .as_ref()
-                .expect("attached above");
+                .ok_or(ControlError::Internal("attached native worker missing"))?;
             let current = self.get_session(session_id)?;
             for (index, node_id) in worker.input_node_ids().iter().enumerate() {
                 if current.nodes.iter().any(|node| {
@@ -180,32 +241,42 @@ impl ControlPlane {
                         && node.kind == NodeKind::PhysicalInput
                         && node_spatial_options(node) != worker.capture_spatial_options(index)
                 }) {
-                    return Err(ControlError::InvalidRequest(
+                    return Err(ControlError::RestartRequired(
                         "surround settings changed; stop and press Play to apply".into(),
                     ));
                 }
             }
-            let mut session = if flags_only {
+            // Hold-to-compare publishes the saved graph with a bypass overlay
+            // and has no committed previous session. The saved session is the
+            // right reuse base: a comparison changes no plugin identity or
+            // saved state. Without it a missing plugin worker made the
+            // preparation start every plugin in the chain.
+            let saved_reuse_base = self.saved_reuse_base(session_id, previous, live)?;
+            let previous = previous.or(saved_reuse_base.as_ref());
+            let mut session = if live == LiveEdit::FlagsOnly {
                 self.adapt_native_paths_session(
                     self.with_comparison(self.get_session(session_id)?.clone()),
                 )?
             } else {
                 self.native_paths_session(session_id)?
             };
-            let mut bridge_flags = Vec::new();
-            let plugin_stages = if flags_only {
-                let mut stages: HashMap<EntityId, Arc<dyn RealtimePluginProcessor>> =
-                    HashMap::new();
+            if live == LiveEdit::FlagsOnly {
                 let worker = self
                     .native_multi_input_worker
                     .as_ref()
-                    .expect("attached above");
+                    .ok_or(ControlError::Internal("attached native worker missing"))?;
                 normalize_live_path_flags(
                     &mut session,
                     &worker.input_node_ids(),
                     &worker.output_node_ids(),
                 );
                 session = audiorouter_engine::prune_inactive_upstream(&session).into_owned();
+            }
+            let prepare_started = Instant::now();
+            let plugin_stages = if live == LiveEdit::FlagsOnly
+                && self.live_plugin_bridges_are_complete(session_id, &session)
+            {
+                let mut stages = crate::plugins::PluginStageSet::empty();
                 let guards = crate::plugins::plugin_unchanged_guards(&session);
                 for node in session
                     .nodes
@@ -215,7 +286,10 @@ impl ControlPlane {
                     let live = match self.plugin_live_bridge(session_id, &node.id) {
                         Ok(live) => live,
                         Err(_) if !node.enabled => continue,
-                        Err(error) => return Err(error),
+                        Err(_) => return Err(ControlError::RestartRequired(
+                            "a plugin changed while the route was preparing; stop and press Play"
+                                .into(),
+                        )),
                     };
                     live.set_silence_if_unchanged(guards.contains(&node.id));
                     let mut compiler_owns_flags = false;
@@ -240,7 +314,11 @@ impl ControlPlane {
                 }
                 stages
             } else {
-                self.prepare_plugin_stages(&session, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ)?
+                self.prepare_plugin_stages(
+                    &session,
+                    audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
+                    previous,
+                )?
             };
             let worker_generation = self
                 .native_multi_input_worker_generation
@@ -250,34 +328,57 @@ impl ControlPlane {
             let mut compiled = audiorouter_engine::compile_native_paths_with_plugins_and_audio(
                 &session,
                 RuntimeGeneration::new(worker_generation),
-                &plugin_stages,
+                &plugin_stages.stages,
                 &media,
             )
             .map_err(|error| {
                 ControlError::InvalidRequest(format!("multi-input graph rejected: {error:?}"))
             })?;
-            if flags_only {
-                compiled
-                    .retain_unchanged_source_transports(&self.source_transport_handles(session_id));
+            if let Some(handles) =
+                self.reusable_source_transports(&session, source_retention(live, previous))
+            {
+                compiled.retain_unchanged_source_transports(&handles);
             }
+            let prepare_micros = elapsed_micros(prepare_started);
+            let swap_started = Instant::now();
             self.native_multi_input_worker
                 .as_mut()
-                .expect("attached above")
+                .ok_or(ControlError::Internal("attached native worker missing"))?
                 .replace_path_set(compiled)
                 .map_err(|_| {
-                    ControlError::InvalidRequest(
+                    ControlError::RestartRequired(
                         "the route's sources or outputs changed; stop and press Play to apply"
                             .into(),
                     )
                 })?;
-            for (bridge, active) in bridge_flags {
-                bridge.set_processing_active(active);
+            // The swap succeeded: publish new handles and apply the deferred
+            // control changes to reused plugins.
+            if let Err(error) = plugin_stages.publish(self, session_id) {
+                // The saved graph is already playing. A rejected control
+                // update must not turn the commit into a reported failure,
+                // but the next commit must prepare the plugin again rather
+                // than trust a stale template.
+                self.live_graph_stale.insert(session_id.clone());
+                self.live_publication_warnings.insert(
+                    session_id.clone(),
+                    format!(
+                        "the route is playing, but a plugin control update was rejected: {}",
+                        control_error_message(&error)
+                    ),
+                );
+            } else {
+                self.record_live_publication(session_id, live);
             }
+            let timing = LivePublicationTiming {
+                prepare_micros,
+                swap_micros: elapsed_micros(swap_started),
+                plugin_starts: plugin_stages.started_count(),
+            };
             // The commit started a new runtime generation; the worker keeps
             // playing its prepared one and now serves both.
             self.native_multi_input_applied_generation = Some(generation);
             self.register_multi_input_generators(session_id);
-            return Ok(Some("multi-input"));
+            return Ok(Some(("multi-input", timing)));
         }
         Ok(None)
     }
