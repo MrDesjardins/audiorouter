@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { THEME_COLORS, type CustomTheme, type ThemeColor } from "./customTheme";
+import { SliderInput } from "./Slider";
 import { hexToHsv, hexToRgb, hsvToHex, hsvToRgb, type Hsv } from "./themeColor";
 import {
   contrastForRequirement,
@@ -321,16 +322,15 @@ export function ThemeColorPicker({
               aria-hidden="true"
             />
           </div>
-          <input
-            type="range"
+          <SliderInput
             className="theme-color-hue"
             aria-label={`${label} hue`}
+            aria-valuetext={`${Math.round(hue)} degrees`}
             min={0}
             max={359}
             step={1}
             value={Math.min(359, Math.round(hue))}
-            onChange={(event) => {
-              const next = Number(event.target.value);
+            onValue={(next) => {
               setHue(next);
               if (current.s > 0.001) onChange(hsvToHex(next, current.s, current.v));
             }}
