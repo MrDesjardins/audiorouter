@@ -1142,6 +1142,18 @@ fn method_output_schema_impl(name: &str) -> Value {
             "required": ["path", "sha256", "format", "buses"],
             "additionalProperties": false
         }),
+        "plugins.removeSidechainPort" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string" },
+                "nodeId": { "type": "string" },
+                "removed": { "type": "boolean" },
+                "revision": {},
+                "activation": {}
+            },
+            "required": ["sessionId", "nodeId", "removed"],
+            "additionalProperties": false
+        }),
         "plugins.addSidechainPort" => json!({
             "type": "object",
             "properties": {

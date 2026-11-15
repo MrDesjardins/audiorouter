@@ -158,6 +158,7 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "plugins.resume" => "Retry a plugin in a playing route that was silenced because it passed a recording device's audio through unchanged (for example an unlicensed plugin). Audio resumes only if the plugin has changed audio since; otherwise it stays silent and resumed is false.",
         "plugins.parameters" => "Load one currently scanned plugin in its isolated worker and return bounded parameter descriptors.",
         "plugins.buses" => "Load one currently scanned plugin in its isolated worker and return its exact audio input/output buses, including any declared auxiliary input that can become a sidechain port.",
+        "plugins.removeSidechainPort" => "Remove the sidechain port of a plugin node; refused while a connection still uses it.",
         "plugins.addSidechainPort" => "Give a VST3 plugin node its declared auxiliary input as a named sidechain port; no Mixer or connection is created.",
         "plugins.programs" => "List the bounded program names of a plugin node in a playing route (VST2 and VST3; VST3 lists are read-only).",
         "plugins.selectProgram" => "Select one bounded VST2 program by index on a plugin node in a playing route.",
@@ -743,6 +744,13 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
                 "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
             }),
             &["sessionId", "nodeId"],
+        ),
+        "plugins.removeSidechainPort" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
+            }),
+            &["nodeId"],
         ),
         "plugins.addSidechainPort" => object_schema(
             json!({

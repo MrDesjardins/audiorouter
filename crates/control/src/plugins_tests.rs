@@ -77,6 +77,89 @@ fn add_sidechain_port_refuses_unsupported_nodes_without_changing_the_session() {
     }
 }
 
+#[test]
+fn remove_sidechain_port_refuses_a_used_port_then_removes_a_free_one() {
+    use audiorouter_domain::{Edge, Port};
+    let mut plane = ControlPlane::default();
+    let mut original = session();
+    original.nodes.truncate(2);
+    original.edges.clear();
+    let source_id = original.nodes[0].id.clone();
+    let port = |name: &str, direction, channels| Port {
+        name: name.into(),
+        direction,
+        channels,
+    };
+    original.nodes[0].ports = vec![port("out", PortDirection::Output, 1)];
+    let plugin = &mut original.nodes[1];
+    plugin.kind = NodeKind::Plugin;
+    plugin.parameters = serde_json::from_value(json!({
+        "path": "C:\\VST3\\x.vst3", "format": "vst3",
+        "classId": "41347FD6FED64094AFBB12B7DBA1D441", "fingerprint": "a".repeat(64),
+    }))
+    .unwrap();
+    plugin.ports = vec![
+        port("in", PortDirection::Input, 2),
+        port("out", PortDirection::Output, 2),
+        port("sidechain", PortDirection::Input, 1),
+    ];
+    let plugin_id = plugin.id.clone();
+    // A commit re-checks every plugin against a current scan result.
+    plane.plugin_inventories.insert(
+        "C:\\VST3".into(),
+        json!({ "entries": [{
+            "path": "C:\\VST3\\x.vst3",
+            "identity": { "format": "vst3", "sha256": "a".repeat(64) },
+        }] }),
+    );
+    original.edges.push(Edge {
+        id: EntityId::new("key-edge"),
+        source_node: source_id,
+        source_port: "out".into(),
+        destination_node: plugin_id.clone(),
+        destination_port: "sidechain".into(),
+        matrix: vec![1.0],
+        enabled: true,
+    });
+    plane.insert_session(original.clone()).unwrap();
+    let remove = |plane: &mut ControlPlane| {
+        plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "plugins.removeSidechainPort".into(),
+            params: Some(json!({ "sessionId": original.id, "nodeId": plugin_id })),
+        })
+    };
+    // A used port is refused and nothing changes.
+    let refused = remove(&mut plane);
+    let message = refused.error.expect("a used port is refused").message;
+    assert!(message.contains("disconnect it first"), "{message}");
+    assert_eq!(plane.get_session(&original.id).unwrap(), &original);
+    // Without the connection it is removed in one revision.
+    let mut free = original.clone();
+    free.id = EntityId::new("free-sidechain");
+    free.edges.clear();
+    plane.insert_session(free.clone()).unwrap();
+    let reply = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(2)),
+        method: "plugins.removeSidechainPort".into(),
+        params: Some(json!({ "sessionId": free.id, "nodeId": plugin_id })),
+    });
+    assert!(reply.error.is_none(), "{:?}", reply.error);
+    let changed = plane.get_session(&free.id).unwrap();
+    assert_eq!(changed.revision, 1);
+    assert!(changed.nodes[1].plugin_sidechain_port().is_none());
+    // Nothing left to remove.
+    let again = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(3)),
+        method: "plugins.removeSidechainPort".into(),
+        params: Some(json!({ "sessionId": free.id, "nodeId": plugin_id })),
+    });
+    assert!(again.error.unwrap().message.contains("no sidechain port"));
+}
+
 #[cfg(windows)]
 #[test]
 #[ignore = "requires SDK AGain and a rebuilt native worker override"]

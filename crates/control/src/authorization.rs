@@ -351,6 +351,7 @@ pub(crate) fn validate_method_params(
         "plugins.buses" => &["path", "classId"],
         "plugins.prepareUpdate" => &["sessionId", "nodeId", "resetState"],
         "plugins.saveState" | "plugins.closeEditor" | "plugins.resume" => &["sessionId", "nodeId"],
+        "plugins.removeSidechainPort" => &["sessionId", "nodeId"],
         "plugins.addSidechainPort" => &["sessionId", "nodeId"],
         "plugins.programs" => &["sessionId", "nodeId"],
         "plugins.selectProgram" => &["sessionId", "nodeId", "program"],

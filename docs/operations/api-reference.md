@@ -153,6 +153,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `plugins.inspect` | `pluginScan` | read-only |
 | `plugins.parameters` | `pluginScan` | external operation; bounded descriptors from the exact revalidated plugin worker |
 | `plugins.buses` | `pluginScan` | read-only; exact VST2/VST3 audio bus discovery through a verified isolated worker; optional exact VST3 `classId`; no graph mutation |
+| `plugins.removeSidechainPort` | `sessionControl` | mutating; removes the `sidechain` port of a plugin node as one reversible graph commit; refused while any connection uses it |
 | `plugins.addSidechainPort` | `sessionControl` | mutating; adds the declared VST3 auxiliary input as the named `sidechain` port from a live, identity-checked worker, as one reversible graph commit; creates no Mixer and no connection |
 | `plugins.programs` | `pluginScan` | read-only; bounded program list for a plugin in a playing route (VST2 and VST3; VST3 is read-only); optional `sessionId`, `nodeId` is an ID or exact name |
 | `plugins.selectProgram` | `pluginScan` | mutating; selects a bounded VST2 program index on a playing plugin; optional `sessionId`, `nodeId` is an ID or exact name |

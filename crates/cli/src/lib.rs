@@ -2473,6 +2473,7 @@ const DEFAULT_MCP_TOOLS: &[&str] = &[
     "list_plugin_programs",
     "list_plugin_buses",
     "add_plugin_sidechain_port",
+    "remove_plugin_sidechain_port",
     "select_plugin_program",
     "apply_plugin_preset",
     "prepare_plugin_update",
@@ -2820,6 +2821,7 @@ fn mcp_tools() -> Value {
         { "name": "resume_plugin", "description": "Retry a plugin that AudioRouter silenced because it passed the microphone through unchanged (get_levels shows plugin.silencedUnchanged), usually because it is not licensed or signed in. Ask the user to sign in to the plugin's licence app first. Returns resumed=false and keeps it silent while the plugin still passes audio through; then the user must stop and play the route.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Plugin node name or ID." } }, "required": ["node"], "additionalProperties": false } },
         { "name": "list_plugin_buses", "description": "List the exact audio input and output buses of a scanned plugin, including a declared auxiliary input that can become a sidechain port. Discovery only; it changes no route.", "inputSchema": { "type": "object", "properties": { "path": { "type": "string", "minLength": 1, "description": "Plugin binary path from list_plugins." }, "classId": { "type": "string", "minLength": 1, "description": "Optional VST3 class ID." } }, "required": ["path"], "additionalProperties": false } },
         { "name": "list_plugin_programs", "description": "List the bounded program names of a plugin in a playing route. VST3 lists are read-only; only VST2 programs can be selected.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Plugin node name or ID." } }, "required": ["node"], "additionalProperties": false } },
+        { "name": "remove_plugin_sidechain_port", "description": "Remove the sidechain port of a plugin node. Refused while a connection still uses it: disconnect_nodes first (toInput sidechain). Needs Editor access.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Plugin node name or ID." } }, "required": ["node"], "additionalProperties": false } },
         { "name": "add_plugin_sidechain_port", "description": "Give a VST3 plugin node its declared auxiliary (sidechain) input as a port named sidechain, after list_plugin_buses showed one. Creates no Mixer and no connection; connect a source to the port afterwards. Needs Editor access.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Plugin node name or ID." } }, "required": ["node"], "additionalProperties": false } },
         { "name": "select_plugin_program", "description": "Select one VST2 program by its index from list_plugin_programs on a plugin in a playing route.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Plugin node name or ID." }, "program": { "type": "integer", "minimum": 0, "maximum": 255 } }, "required": ["node", "program"], "additionalProperties": false } },
         { "name": "apply_plugin_preset", "description": "Apply a VST2 .fxp or .fxb preset file that is in the plugin binary's own directory to a plugin in a playing route.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Plugin node name or ID." }, "presetPath": { "type": "string", "minLength": 1 } }, "required": ["node", "presetPath"], "additionalProperties": false } },
@@ -3009,6 +3011,10 @@ fn mcp_tool_call(
         "resume_plugin" => ("plugins.resume", Some(mcp_node_params(arguments))),
         "list_plugin_programs" => ("plugins.programs", Some(mcp_node_params(arguments))),
         "list_plugin_buses" => ("plugins.buses", Some(arguments)),
+        "remove_plugin_sidechain_port" => (
+            "plugins.removeSidechainPort",
+            Some(mcp_node_params(arguments)),
+        ),
         "add_plugin_sidechain_port" => {
             ("plugins.addSidechainPort", Some(mcp_node_params(arguments)))
         }
@@ -6445,7 +6451,7 @@ mod tests {
         let transition_content = transition["result"]["content"][0]["text"].as_str().unwrap();
         let transition_payload: Value = serde_json::from_str(transition_content).unwrap();
         assert_eq!(transition_payload["result"]["transition"], "lock");
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 106);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 107);
         // The default list is the task-level subset; every default name is a
         // real tool and every tool the recipes mention is in it.
         let all = mcp_tools();

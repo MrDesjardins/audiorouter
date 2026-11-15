@@ -945,7 +945,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 155] = [
+pub const API_METHODS: [ApiMethodSpec; 156] = [
     ApiMethodSpec {
         name: "meters.reset",
         permission: PermissionScope::SessionControl,
@@ -1454,6 +1454,11 @@ pub const API_METHODS: [ApiMethodSpec; 155] = [
         name: "plugins.buses",
         permission: PermissionScope::PluginScan,
         side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "plugins.removeSidechainPort",
+        permission: PermissionScope::SessionControl,
+        side_effect: SideEffectClass::Mutating,
     },
     ApiMethodSpec {
         name: "plugins.addSidechainPort",

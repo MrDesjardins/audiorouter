@@ -2712,6 +2712,51 @@ impl ControlPlane {
         }))
     }
 
+    /// `plugins.removeSidechainPort`: take the named `sidechain` port off a
+    /// plugin node. Refused while a connection uses it, so no edge is ever
+    /// dropped silently; one reversible graph commit.
+    pub(crate) fn dispatch_plugins_remove_sidechain_port(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let (session_id, node_id) = Self::plugin_node_request(&params)?;
+        self.ensure_session_loaded(&session_id)?;
+        let session = self.get_session(&session_id)?.clone();
+        let mut candidate = session.clone();
+        let node = candidate
+            .nodes
+            .iter_mut()
+            .find(|node| node.id == node_id)
+            .ok_or_else(|| ControlError::InvalidRequest("plugin node was not found".into()))?;
+        if node.kind != NodeKind::Plugin || node.plugin_sidechain_port().is_none() {
+            return Err(ControlError::InvalidRequest(format!(
+                "\"{}\" has no sidechain port to remove",
+                node.name
+            )));
+        }
+        let name = node.name.clone();
+        node.ports.retain(|port| port.name != "sidechain");
+        if session
+            .edges
+            .iter()
+            .any(|edge| edge.destination_node == node_id && edge.destination_port == "sidechain")
+        {
+            return Err(ControlError::InvalidRequest(format!(
+                "\"{name}\" still has a connection into its sidechain port; disconnect it first"
+            )));
+        }
+        let plan = self.plan_graph(&session_id, session.revision, candidate)?;
+        let key = format!("plugins.removeSidechainPort:{}", plan.as_str());
+        let commit = self.commit_graph_scoped(&plan, session.revision, &key, &key)?;
+        Ok(json!({
+            "sessionId": session_id,
+            "nodeId": node_id,
+            "removed": true,
+            "revision": commit.get("revision").cloned().unwrap_or(Value::Null),
+            "activation": commit.get("activation").cloned().unwrap_or(Value::Null),
+        }))
+    }
+
     /// `plugins.addSidechainPort`: give a plugin node its declared auxiliary
     /// input as the named `sidechain` port. The binding comes from the live,
     /// identity-checked worker, never from request JSON; the edit is one

@@ -1545,6 +1545,7 @@ export type ImplementedMethod =
   | "plugins.resume"
   | "plugins.buses"
   | "plugins.addSidechainPort"
+  | "plugins.removeSidechainPort"
   | "plugins.programs"
   | "plugins.selectProgram"
   | "plugins.applyPreset"
@@ -1757,6 +1758,7 @@ export type MethodParams = {
   "plugins.resume": { sessionId?: EntityId; nodeId: EntityId };
   "plugins.buses": { path: string; classId?: string };
   "plugins.addSidechainPort": { sessionId?: EntityId; nodeId: EntityId };
+  "plugins.removeSidechainPort": { sessionId?: EntityId; nodeId: EntityId };
   "plugins.programs": { sessionId?: EntityId; nodeId: EntityId };
   "plugins.selectProgram": { sessionId?: EntityId; nodeId: EntityId; program: number };
   "plugins.applyPreset": { sessionId?: EntityId; nodeId: EntityId; presetPath: string };
@@ -1979,6 +1981,7 @@ export type MethodResult = {
   "plugins.closeEditor": { sessionId: EntityId; nodeId: EntityId; state: "open" | "closed" };
   "plugins.resume": { sessionId: EntityId; nodeId: EntityId; resumed: boolean };
   "plugins.buses": { path: string; sha256: string; format: "vst2" | "vst3" | "unknown"; buses: { inputs: { nativeIndex: number; name: string; channels: number; role: "main" | "auxiliary" }[]; outputs: { nativeIndex: number; name: string; channels: number; role: "main" | "auxiliary" }[] } };
+  "plugins.removeSidechainPort": { sessionId: EntityId; nodeId: EntityId; removed: boolean; revision?: unknown; activation?: unknown };
   "plugins.addSidechainPort": { sessionId: EntityId; nodeId: EntityId; port: string; channels: number; revision?: unknown; activation?: unknown };
   "plugins.programs": { sessionId: EntityId; nodeId: EntityId; programs: { id: number; name: string }[] };
   "plugins.selectProgram": { sessionId: EntityId; nodeId: EntityId; program: number };
