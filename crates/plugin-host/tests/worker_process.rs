@@ -744,7 +744,138 @@ fn supervised_bus_worker_loop_bridges_bounded_scheduler_without_callback_waits()
         audiorouter_engine::RuntimeBusProcessOutcome::Processed
     );
     assert_eq!(output.channel(0).unwrap(), &[0.25; 4]);
+    exercise_sidechain_stage(Arc::clone(&scheduler), generation, &mut main, &sidechain);
     assert!(loop_owner.stop());
+}
+
+#[cfg(feature = "test-fixtures")]
+#[test]
+fn supervised_bus_loop_silences_protected_unchanged_audio_until_resume() {
+    let hash = "b".repeat(64);
+    let worker_layout = WorkerAudioBusLayout::new(&[2, 1], &[2]).unwrap();
+    let identity = PluginIdentity {
+        path: PathBuf::from("effect.vst3"),
+        binary_path: PathBuf::from("effect.vst3"),
+        format: PluginFormat::Vst3,
+        architecture: PeArchitecture::X64,
+        file_bytes: 1,
+        sha256: hash,
+        metadata: Default::default(),
+    };
+    let scheduler = Arc::new(
+        audiorouter_engine::RuntimeBusScheduler::new(
+            8,
+            audiorouter_engine::RuntimeBusLayout::new(vec![2, 1], vec![2]).unwrap(),
+            audiorouter_engine::RuntimeBusLayout::new(vec![2, 1], vec![2]).unwrap(),
+            4,
+        )
+        .unwrap(),
+    );
+    let worker = SupervisedWorkerProcess::spawn_multi_bus_fixture(
+        fixture_worker_path(),
+        &identity,
+        &worker_layout,
+        Instant::now(),
+    )
+    .expect("spawn supervised loop worker");
+    // A zero rate makes the unchanged window one quantum, so a single loud
+    // unchanged quantum is enough to latch the protected-path silence.
+    let loop_owner = SupervisedBusWorkerLoop::spawn_with_restart_policy_and_rate(
+        worker,
+        Arc::clone(&scheduler),
+        Vec::new(),
+        0,
+        0,
+        0,
+    )
+    .unwrap();
+    loop_owner.set_silence_if_unchanged(true);
+    let generation = audiorouter_engine::RuntimeGeneration::new(13);
+
+    let identity = audiorouter_engine::RuntimeBusQuantumIdentity::new(
+        1,
+        worker_clock_tick().saturating_add(10_000),
+        4,
+    )
+    .unwrap();
+    let mut main = audiorouter_engine::AudioBlock::new(2, 4).unwrap();
+    main.channel_mut(0).unwrap().fill(0.25);
+    main.channel_mut(1).unwrap().fill(-0.25);
+    let sidechain = audiorouter_engine::AudioBlock::new(1, 4).unwrap();
+    scheduler
+        .try_submit_inputs(generation, identity, &[&main, &sidechain])
+        .unwrap();
+    for _ in 0..500 {
+        if scheduler.output_ready() != 0 {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let mut output = audiorouter_engine::AudioBlock::new(2, 4).unwrap();
+    let mut destinations = [&mut output];
+    scheduler
+        .try_publish_output(generation, identity, &mut destinations)
+        .unwrap();
+    // The fixture passes the loud main input through unchanged, so the
+    // protected path must latch a silence on that same quantum.
+    assert!(loop_owner.passes_audio_unchanged());
+    assert!(loop_owner.silenced_for_unchanged_audio());
+    assert!(output
+        .channel(0)
+        .unwrap()
+        .iter()
+        .all(|sample| *sample == 0.0));
+    assert!(
+        !loop_owner.resume_after_unchanged(),
+        "a plugin still passing audio unchanged must stay silenced"
+    );
+    assert!(loop_owner.stop());
+}
+
+#[cfg(feature = "test-fixtures")]
+fn exercise_sidechain_stage(
+    scheduler: Arc<audiorouter_engine::RuntimeBusScheduler>,
+    generation: audiorouter_engine::RuntimeGeneration,
+    main: &mut audiorouter_engine::AudioBlock,
+    sidechain: &audiorouter_engine::AudioBlock,
+) {
+    let stage =
+        audiorouter_engine::sidechain::SidechainStage::new(Arc::clone(&scheduler), generation, 4)
+            .unwrap();
+    main.channel_mut(0).unwrap().fill(0.1);
+    main.channel_mut(1).unwrap().fill(-0.1);
+    let first = audiorouter_engine::RuntimeBusQuantumIdentity::new(
+        100,
+        worker_clock_tick().saturating_add(10_000),
+        4,
+    )
+    .unwrap();
+    stage.process(first, main, None);
+    assert_eq!(main.channel(0).unwrap(), &[0.0; 4]);
+    for _ in 0..500 {
+        if scheduler.output_ready() != 0 {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    main.channel_mut(0).unwrap().fill(0.1);
+    let second = audiorouter_engine::RuntimeBusQuantumIdentity::new(
+        101,
+        worker_clock_tick().saturating_add(10_000),
+        4,
+    )
+    .unwrap();
+    stage.process(second, main, Some(sidechain));
+    assert!(main
+        .channel(0)
+        .unwrap()
+        .iter()
+        .all(|sample| sample.is_finite()));
+    assert!(main
+        .channel(0)
+        .unwrap()
+        .iter()
+        .any(|sample| sample.abs() > 0.0));
 }
 
 #[cfg(feature = "test-fixtures")]
@@ -1576,6 +1707,8 @@ fn verified_native_vst3_worker_processes_an_opt_in_multi_bus_fixture() {
         .to_path_buf();
     let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root))
         .expect("inspect VST3 fixture without loading it");
+    let mut identity = identity;
+    identity.metadata.class_ids = vec!["41347FD6FED64094AFBB12B7DBA1D441".into()];
     let layout = WorkerAudioBusLayout::new(&[2, 1], &[2]).expect("side-chain layout");
     let sample_rate_hz = std::env::var("AUDIOROUTER_VST3_SAMPLE_RATE")
         .ok()
@@ -1595,6 +1728,15 @@ fn verified_native_vst3_worker_processes_an_opt_in_multi_bus_fixture() {
             Instant::now(),
         )
         .expect("launch native VST3 multi-bus worker");
+    let discovered = worker
+        .describe_buses(Instant::now())
+        .expect("discover native auxiliary bus");
+    assert_eq!(discovered.processing_layout().unwrap(), layout);
+    assert_eq!(discovered.inputs[1].native_index, 1);
+    assert_eq!(
+        discovered.inputs[1].role,
+        audiorouter_plugin_host::bus_discovery::AudioBusRole::Auxiliary
+    );
     let main = WorkerFrame::new(
         1,
         worker_clock_tick().saturating_add(10_000),
@@ -1665,6 +1807,8 @@ fn verified_native_vst3_async_bus_worker_bridges_the_graph_scheduler() {
         .to_path_buf();
     let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root))
         .expect("inspect VST3 fixture without loading it");
+    let mut identity = identity;
+    identity.metadata.class_ids = vec!["41347FD6FED64094AFBB12B7DBA1D441".into()];
     let worker_layout = WorkerAudioBusLayout::new(&[2, 1], &[2]).unwrap();
     let scheduler = Arc::new(
         audiorouter_engine::RuntimeBusScheduler::new(
@@ -1746,6 +1890,7 @@ fn verified_native_vst3_async_bus_worker_bridges_the_graph_scheduler() {
         .iter()
         .zip([0.1; 4])
         .any(|(actual, input)| (actual - input).abs() > 1.0e-5));
+    exercise_sidechain_stage(Arc::clone(&scheduler), generation, &mut main, &sidechain);
     assert!(loop_owner.stop());
 }
 

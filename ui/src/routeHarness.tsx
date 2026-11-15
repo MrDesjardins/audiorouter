@@ -560,6 +560,22 @@ const previewBackend: UiBackend = {
   async resumePlugin(sessionId: string, nodeId: string) {
     return { sessionId, nodeId, resumed: false };
   },
+  async listPluginPrograms(sessionId: string, nodeId: string) {
+    return {
+      sessionId,
+      nodeId,
+      programs: [
+        { id: 0, name: "Init" },
+        { id: 1, name: "Bright" },
+      ],
+    };
+  },
+  async selectPluginProgram(sessionId: string, nodeId: string, program: number) {
+    return { sessionId, nodeId, program };
+  },
+  async applyPluginPreset(sessionId: string, nodeId: string, presetPath: string) {
+    return { sessionId, nodeId, presetPath };
+  },
   ...(injected.__routeFixtureSoundboardStatus
     ? {
         async soundboardStatus(sessionId: string, nodeId: string) {

@@ -1,6 +1,6 @@
 # MIDI input and instrument plugins: design (phase P8b)
 
-Status: steps 1-4 built and tested (2026-11-13); steps 5-9 open. Part of the
+Status: software steps 1-8 built and tested (2026-11-13/14); hardware MIDI and attended shell checks open. Part of the
 [full VST compatibility plan](vst-full-compatibility.md); owner decision D1
 (2026-11-13): instruments and MIDI are in scope. The rules in AGENTS.md (every
 source works in every layout, REST and MCP kept current, guides for new tools)

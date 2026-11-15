@@ -4,6 +4,8 @@
 //! `AudioBlock` exists, the operations below reuse its storage and perform no
 //! heap allocation, locking, I/O, or logging.
 
+pub mod sidechain;
+
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -1019,6 +1021,12 @@ impl AudioTap for AudioBlockRingTap {
 /// the realtime callback must never perform plugin IPC itself.
 pub trait RealtimePluginProcessor: Send + Sync + std::fmt::Debug {
     fn process(&self, block: &mut AudioBlock);
+
+    /// Explicit auxiliary-input entry point. A legacy single-stream adapter
+    /// must fail closed here rather than process dry main or sum the key.
+    fn process_with_sidechain(&self, main: &mut AudioBlock, _key: Option<&AudioBlock>) {
+        main.clear();
+    }
 
     /// Reset state at a stopped-stream or graph activation boundary. Returning
     /// false reports that the stage could not obtain its nonblocking ownership.
@@ -2128,6 +2136,7 @@ impl RuntimeBusQuantum {
 pub struct RuntimeBusScheduler {
     input_layout: RuntimeBusLayout,
     output_layout: RuntimeBusLayout,
+    frames: usize,
     input_free: crossbeam_queue::ArrayQueue<RuntimeBusQuantum>,
     input_ready: crossbeam_queue::ArrayQueue<RuntimeBusQuantum>,
     output_free: crossbeam_queue::ArrayQueue<RuntimeBusQuantum>,
@@ -2165,11 +2174,17 @@ impl RuntimeBusScheduler {
         Ok(Self {
             input_layout,
             output_layout,
+            frames,
             input_free,
             input_ready,
             output_free,
             output_ready,
         })
+    }
+
+    /// Frames per quantum this scheduler stages.
+    pub fn frames(&self) -> usize {
+        self.frames
     }
 
     pub fn input_layout(&self) -> &RuntimeBusLayout {
@@ -2739,6 +2754,9 @@ pub enum ProcessingStage {
     Plugin {
         processor: std::sync::Arc<dyn RealtimePluginProcessor>,
     },
+    SidechainPlugin {
+        processor: std::sync::Arc<dyn RealtimePluginProcessor>,
+    },
 }
 
 /// Existing source handles for a flag-only graph replacement. The caller
@@ -3240,6 +3258,7 @@ impl OutputProcessorChain {
             ready: AtomicBool::new(false),
             convergence: None,
             gate: Some(gate),
+            sidechain: None,
         })
     }
 }
@@ -3247,6 +3266,7 @@ impl OutputProcessorChain {
 /// Each authored branch processor is prepared once, in dependency order.
 /// Its output is cached for all children; stateful tools never run per sink.
 struct OutputProcessorChain {
+    sidechain: Option<CachedSidechain>,
     source: OutputBranchSource,
     entry_matrix: Vec<f32>,
     graph: RuntimeGraph,
@@ -3260,6 +3280,12 @@ struct OutputProcessorChain {
     /// gain applied, so every tool, Meter and Mixer after the side sees the
     /// gated signal rather than only the final sink.
     gate: Option<OutputSwitchGate>,
+}
+
+struct CachedSidechain {
+    source: Option<OutputBranchSource>,
+    matrix: Vec<f32>,
+    block: RealtimeDsp<AudioBlock>,
 }
 
 struct CachedConvergence {
@@ -3990,14 +4016,39 @@ impl CompiledMixerFanoutGraph {
                     convergence.meter.observe(block);
                     return Some(Ok::<_, BlockError>(()));
                 }
-                self.with_output_source(chain.source, mixed, |source| {
-                    block.map_from(source, &chain.entry_matrix)?;
-                    chain.graph.process(block);
-                    if let Some(gate) = &chain.gate {
-                        self.apply_switch_gate(gate, block);
+                let mapped = self.with_output_source(chain.source, mixed, |source| {
+                    block.map_from(source, &chain.entry_matrix)
+                })?;
+                if let Err(error) = mapped {
+                    return Some(Err(error));
+                }
+                if let Some(key) = &chain.sidechain {
+                    let processed = key.block.try_with(|key_block| {
+                        key_block.clear();
+                        if let Some(source) = key.source {
+                            let Some(result) = self.with_output_source(source, mixed, |source| {
+                                key_block.map_from(source, &key.matrix)
+                            }) else {
+                                block.clear();
+                                return Ok(());
+                            };
+                            result?;
+                        }
+                        chain.graph.process_with_sidechain(block, Some(key_block));
+                        Ok::<(), BlockError>(())
+                    });
+                    match processed {
+                        Some(Ok(())) => {}
+                        Some(Err(error)) => return Some(Err(error)),
+                        None => block.clear(),
                     }
-                    Ok::<(), BlockError>(())
-                })
+                } else {
+                    chain.graph.process(block);
+                }
+                if let Some(gate) = &chain.gate {
+                    self.apply_switch_gate(gate, block);
+                }
+                Some(Ok::<(), BlockError>(()))
             });
             if let Some(Some(result)) = processed {
                 result?;
@@ -7498,6 +7549,7 @@ impl OutputBranchCompiler<'_> {
             ready: AtomicBool::new(false),
             convergence: None,
             gate: None,
+            sidechain: None,
         });
         for child in children {
             self.compile(
@@ -8409,7 +8461,12 @@ pub fn compile_native_paths_with_plugins_and_audio(
             .iter()
             .filter(|node| matches!(node.kind, NodeKind::Mixer | NodeKind::InputSwitch))
             .count();
-        if convergence_count > 1 {
+        if convergence_count > 1
+            || component
+                .nodes
+                .iter()
+                .any(|node| node.plugin_sidechain_port().is_some())
+        {
             paths.push(
                 connected_mixers::compile(component, generation, plugins, audio_media).map_err(
                     |error| match error {
@@ -8560,7 +8617,12 @@ fn compile_processor_chain(
             PortDirection::Output,
         )]
     };
-    nodes.extend(processing_nodes.iter().cloned());
+    nodes.extend(processing_nodes.iter().cloned().map(|mut node| {
+        // This synthetic chain carries main only. The connected schedule owns
+        // the separate key edge and restores its explicit instruction below.
+        node.ports.retain(|port| port.name != "sidechain");
+        node
+    }));
     nodes.push(endpoint(
         "sink",
         NodeKind::PhysicalOutput,
@@ -8594,7 +8656,7 @@ fn compile_processor_chain(
             enabled: true,
         });
     }
-    compile_session_at_sample_rate_with_plugins_and_audio(
+    let mut graph = compile_session_at_sample_rate_with_plugins_and_audio(
         &audiorouter_domain::Session {
             // Named after the real session so shared per-node state (Time
             // Shift) is found; a plain label when that would be too long.
@@ -8616,7 +8678,20 @@ fn compile_processor_chain(
         INTERNAL_SAMPLE_RATE_HZ,
         plugins,
         audio_media,
-    )
+    )?;
+    for (stage, id) in graph.stages.iter_mut().zip(&graph.stage_node_ids) {
+        if processing_nodes
+            .iter()
+            .any(|node| &node.id == id && node.plugin_sidechain_port().is_some())
+        {
+            if let ProcessingStage::Plugin { processor } = stage {
+                *stage = ProcessingStage::SidechainPlugin {
+                    processor: Arc::clone(processor),
+                };
+            }
+        }
+    }
+    Ok(graph)
 }
 
 /// Builds the Soundboard for a node from its slot parameters. A slot whose
@@ -10104,7 +10179,10 @@ impl RuntimeGraph {
             .enumerate()
             .find_map(|(stage_index, candidate)| {
                 (candidate == node_id).then(|| match self.stages.get(stage_index) {
-                    Some(ProcessingStage::Plugin { processor }) => Some(processor.health()),
+                    Some(
+                        ProcessingStage::Plugin { processor }
+                        | ProcessingStage::SidechainPlugin { processor },
+                    ) => Some(processor.health()),
                     _ => None,
                 })?
             })
@@ -10214,7 +10292,8 @@ impl RuntimeGraph {
                         }
                     }
                 }
-                ProcessingStage::Plugin { processor } => {
+                ProcessingStage::Plugin { processor }
+                | ProcessingStage::SidechainPlugin { processor } => {
                     if !processor.reset() {
                         success = false;
                     }
@@ -10277,16 +10356,27 @@ impl RuntimeGraph {
     }
 
     pub fn process(&self, block: &mut AudioBlock) -> usize {
-        self.process_inner(block, None)
+        self.process_inner(block, None, None)
+    }
+
+    /// Execute a prepared plugin chain with its separate, graph-owned key
+    /// block. Ordinary plugin instructions do not receive this input.
+    pub fn process_with_sidechain(&self, main: &mut AudioBlock, key: Option<&AudioBlock>) -> usize {
+        self.process_inner(main, None, key)
     }
 
     /// Process one quantum and update optional atomic callback counters. The
     /// counters never allocate, lock, log, or perform I/O.
     pub fn process_instrumented(&self, block: &mut AudioBlock, metrics: &CallbackMetrics) -> usize {
-        self.process_inner(block, Some(metrics))
+        self.process_inner(block, Some(metrics), None)
     }
 
-    fn process_inner(&self, block: &mut AudioBlock, metrics: Option<&CallbackMetrics>) -> usize {
+    fn process_inner(
+        &self,
+        block: &mut AudioBlock,
+        metrics: Option<&CallbackMetrics>,
+        key: Option<&AudioBlock>,
+    ) -> usize {
         // A stage is timed from its start to the start of the next one, so
         // the stages that end with `continue` are timed too.
         let mut timed: Option<(usize, std::time::Instant)> = None;
@@ -10722,6 +10812,9 @@ impl RuntimeGraph {
                     }
                 }
                 ProcessingStage::Plugin { processor } => processor.process(block),
+                ProcessingStage::SidechainPlugin { processor } => {
+                    processor.process_with_sidechain(block, key)
+                }
             }
         }
         if let Some((index, started)) = timed {
@@ -10759,7 +10852,11 @@ impl RuntimeGraph {
             entry.processing_ns_max = entry
                 .processing_ns_max
                 .max(counters.ns_max.load(Ordering::Relaxed));
-            if let Some(ProcessingStage::Plugin { processor }) = self.stages.get(index) {
+            if let Some(
+                ProcessingStage::Plugin { processor }
+                | ProcessingStage::SidechainPlugin { processor },
+            ) = self.stages.get(index)
+            {
                 entry.plugin_latency_samples = Some(processor.latency_samples());
             }
         }

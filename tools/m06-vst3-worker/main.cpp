@@ -817,9 +817,9 @@ public:
         if (!factory_) throw std::runtime_error("VST3 factory is null");
         // The requested class comes from the bundle's moduleinfo.json, which
         // is not part of the verified binary and may be stale or written in
-        // the other byte order. Accept both spellings; when no class of this
-        // binary matches at all, load its first usable effect as before
-        // rather than refuse a plugin that used to work.
+        // the other byte order. Accept both spellings, but never replace an
+        // explicitly requested class with another effect: its parameters,
+        // state and audio buses can have entirely different meanings.
         std::string requested_class = class_id;
         if (!requested_class.empty()) {
             bool listed = false;
@@ -832,9 +832,8 @@ public:
                 }
             }
             if (!listed) {
-                std::cerr << "VST3 class " << requested_class
-                          << " is not in this binary; using its first usable effect\n";
-                requested_class.clear();
+                throw std::runtime_error("Requested VST3 class " + requested_class +
+                                         " is not in this binary; scan the plugin again and select its class");
             }
         }
         std::ostringstream class_failures;
@@ -1009,7 +1008,15 @@ public:
         setup.symbolicSampleSize = Vst::kSample32;
         setup.maxSamplesPerBlock = static_cast<int32>(kMaxFrames);
         setup.sampleRate = sample_rate;
-        require_result("setupProcessing", processor_->setupProcessing(setup));
+        // AudioRouter processes 32-bit float only. A plugin that requires
+        // 64-bit samples must be refused with a plain reason instead of a
+        // generic VST3 result, and never silently converted.
+        const auto setup_result = processor_->setupProcessing(setup);
+        if (setup_result != kResultOk && setup_result != kNotImplemented) {
+            throw std::runtime_error(
+                "sampleFormatUnsupported: the plugin does not accept the 32-bit sample format "
+                "AudioRouter uses");
+        }
         require_result("component activation", component_->setActive(true));
         active_ = true;
         require_notification("processor activation", processor_->setProcessing(true));
@@ -1283,6 +1290,7 @@ public:
     }
 
     Vst::IEditController* controller() const { return controller_; }
+    Vst::IComponent* component() const { return component_; }
 
     uint32_t latency_samples() const { return processor_ ? processor_->getLatencySamples() : 0; }
 
@@ -1721,6 +1729,36 @@ static std::string quote_vst3_title(const Vst::String128& title) {
     }
     if (value.empty()) value = "Parameter";
     return quote_json(value);
+}
+
+static std::string bus_descriptors_message(Vst::IComponent* component) {
+    std::ostringstream output;
+    output << "{\"type\":\"Buses\",\"payload\":{";
+    for (const auto direction : {Vst::kInput, Vst::kOutput}) {
+        output << (direction == Vst::kInput ? "\"inputs\":[" : ",\"outputs\":[");
+        const auto count = component->getBusCount(Vst::kAudio, direction);
+        if (count < 1 || count > 4) throw protocol_error("unsupported VST3 audio bus count");
+        bool first = true;
+        for (int32 index = 0; index < count; ++index) {
+            Vst::BusInfo info{};
+            require_result("discovered bus info", component->getBusInfo(Vst::kAudio, direction, index, info));
+            // Additional main buses are not sidechains. Keep native indices
+            // even when an unsupported bus is omitted from this description.
+            if (index > 0 && (direction == Vst::kOutput || info.busType != Vst::kAux)) continue;
+            if ((index == 0 && info.busType != Vst::kMain) ||
+                info.channelCount < 1 || info.channelCount > 2) {
+                throw protocol_error("unsupported VST3 audio bus role or channel count");
+            }
+            if (!first) output << ',';
+            first = false;
+            output << "{\"nativeIndex\":" << index << ",\"name\":" << quote_vst3_title(info.name)
+                   << ",\"channels\":" << info.channelCount << ",\"role\":\""
+                   << (index == 0 ? "main" : "auxiliary") << "\"}";
+        }
+        output << ']';
+    }
+    output << "}}";
+    return output.str();
 }
 
 static std::string parameter_descriptors_message(Vst::IEditController* controller) {
@@ -2173,6 +2211,9 @@ static std::string handle_ui_request(const std::string& json, bool& shutdown) {
         return {};
     }
     if (json == "{\"type\":\"DescribeEditor\"}") return editor.describe();
+    if (json == "{\"type\":\"DescribeBuses\"}") {
+        return bus_descriptors_message(effect.component());
+    }
     if (json == "{\"type\":\"DescribeParameters\"}") {
         return parameter_descriptors_message(effect.controller());
     }
@@ -2320,15 +2361,15 @@ static int audio_thread_main(const Arguments& arguments, const std::vector<uint1
         const auto payload = read_frame();
         const std::string json(payload.begin(), payload.end());
         if (is_midi_message(json)) {
-            // No reply. An effect worker drops the events; an instrument
-            // keeps the newest ones so a backlog cannot build up.
+            // No reply. An effect worker drops the events. An instrument
+            // rejects overflow rather than evicting note-offs and risking a
+            // stuck note.
             if (arguments.instrument) {
                 auto more = parse_midi_events(json);
-                pending_midi.insert(pending_midi.end(), more.begin(), more.end());
-                if (pending_midi.size() > kMaxMidiEvents) {
-                    pending_midi.erase(pending_midi.begin(),
-                                       pending_midi.end() - static_cast<std::ptrdiff_t>(kMaxMidiEvents));
+                if (more.size() > kMaxMidiEvents - std::min(kMaxMidiEvents, pending_midi.size())) {
+                    throw protocol_error("pending MIDI event backlog exceeds the bounded contract");
                 }
+                pending_midi.insert(pending_midi.end(), more.begin(), more.end());
             }
             continue;
         }

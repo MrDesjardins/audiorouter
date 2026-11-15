@@ -690,7 +690,7 @@ export function PluginNodeInspector({
   disabled: boolean;
   onUnload: () => void;
   snapshot: import("@audiorouter/contracts").DiagnosticsSnapshot | null;
-  backend?: Pick<UiBackend, "resumePlugin">;
+  backend?: Pick<UiBackend, "resumePlugin" | "listPluginPrograms" | "selectPluginProgram" | "applyPluginPreset">;
   sessionId?: string;
   onChange?: (name: string, value: boolean) => void;
   /** Remove settings from the node; "off" removes the key so older builds can still load the route. */
@@ -705,6 +705,49 @@ export function PluginNodeInspector({
   const silenced = health?.silencedUnchanged === true;
   const healthAlert = health?.state === "failed" || health?.state === "quarantined";
   const passThroughAllowed = node.parameters.passThroughAllowed === true;
+  const isVst2 = format === "vst2";
+  const [programs, setPrograms] = useState<{ id: number; name: string }[] | null>(null);
+  const [selectedProgram, setSelectedProgram] = useState("");
+  const [programBusy, setProgramBusy] = useState(false);
+  const [programError, setProgramError] = useState<string | null>(null);
+  const [presetPath, setPresetPath] = useState("");
+  const loadPrograms = async () => {
+    if (!backend?.listPluginPrograms || !sessionId) return;
+    setProgramBusy(true);
+    setProgramError(null);
+    try {
+      const result = await backend.listPluginPrograms(sessionId, node.id);
+      setPrograms(result.programs);
+      setSelectedProgram(result.programs.length > 0 ? String(result.programs[0].id) : "");
+    } catch (error) {
+      setProgramError(formatUiError(error, "Programs could not be listed."));
+    } finally {
+      setProgramBusy(false);
+    }
+  };
+  const chooseProgram = async (raw: string) => {
+    if (!backend?.selectPluginProgram || !sessionId) return;
+    const program = Number(raw);
+    setSelectedProgram(raw);
+    setProgramError(null);
+    try {
+      await backend.selectPluginProgram(sessionId, node.id, program);
+    } catch (error) {
+      setProgramError(formatUiError(error, "The program could not be selected."));
+    }
+  };
+  const applyPreset = async () => {
+    if (!backend?.applyPluginPreset || !sessionId || presetPath.trim() === "") return;
+    setProgramBusy(true);
+    setProgramError(null);
+    try {
+      await backend.applyPluginPreset(sessionId, node.id, presetPath.trim());
+    } catch (error) {
+      setProgramError(formatUiError(error, "The preset could not be imported."));
+    } finally {
+      setProgramBusy(false);
+    }
+  };
   // The result of the last Retry while this plugin stays silenced.
   const [retry, setRetry] = useState<{ pending: boolean; refused: boolean; error: string | null }>({
     pending: false,
@@ -755,6 +798,56 @@ export function PluginNodeInspector({
         SHA-256 fingerprint
         <input aria-label="Plugin fingerprint" value={fingerprint} readOnly />
       </label>
+      {isVst2 ? (
+        <section className="plugin-programs" aria-label="VST2 programs and presets">
+          <span className="eyebrow">VST2 programs</span>
+          <button
+            type="button"
+            disabled={programBusy || !backend?.listPluginPrograms || !sessionId}
+            onClick={() => void loadPrograms()}
+          >
+            {programBusy ? "Reading programs..." : "Load programs"}
+          </button>
+          {programs ? (
+            programs.length === 0 ? (
+              <small>This plugin reports no programs.</small>
+            ) : (
+              <label>
+                Program
+                <select
+                  aria-label="VST2 program"
+                  value={selectedProgram}
+                  disabled={!backend?.selectPluginProgram || !sessionId}
+                  onChange={(event) => void chooseProgram(event.target.value)}
+                >
+                  {programs.map((program) => (
+                    <option key={program.id} value={String(program.id)}>
+                      {program.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )
+          ) : null}
+          <label>
+            Preset file (.fxp or .fxb, beside the plugin)
+            <input
+              aria-label="VST2 preset path"
+              value={presetPath}
+              onChange={(event) => setPresetPath(event.target.value)}
+              placeholder="Full path to the preset file"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={programBusy || !backend?.applyPluginPreset || !sessionId || presetPath.trim() === ""}
+            onClick={() => void applyPreset()}
+          >
+            Import preset
+          </button>
+          {programError ? <small role="alert">{programError}</small> : null}
+        </section>
+      ) : null}
       <section
         className={`plugin-voice-guard${silenced ? " is-alert" : ""}`}
         role={silenced ? "alert" : undefined}

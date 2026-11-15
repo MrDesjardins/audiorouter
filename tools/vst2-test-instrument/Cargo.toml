@@ -9,6 +9,14 @@ description = "A tiny VST2 instrument used only by AudioRouter's tests (no third
 # load through the real worker.
 [workspace]
 
+[features]
+# Metadata-only effect variant: four input pins; parameter 0 chooses whether
+# the extra pair is explicitly labeled Key or unlabeled surround channels.
+bus-fixture = []
+# Shell variant: one DLL that presents three named sub-effects through
+# `effGetPlugCategory` and `effShellGetNextPlugin`.
+shell-fixture = []
+
 [lib]
 name = "ar_test_instrument"
 crate-type = ["cdylib", "rlib"]

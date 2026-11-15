@@ -685,3 +685,11 @@ graph with `running` worker health, zero failures, unchanged SHA-256
 500/500 pairs at 124.283 ms p95. That adds a second local binary-specific
 integration result; it is not an unrestricted compatibility claim for the
 remaining VST2/VST3 inventory.
+
+## Selecting an effect in a VST3 module
+
+When a saved plugin selects a class ID, AudioRouter requires that class to
+exist in the installed binary. It refuses a missing class rather than loading
+another effect from the module. Scan the plugin again and select its current
+class; review its settings before playing. A replacement effect may have
+different parameters, saved state and input buses.

@@ -2470,6 +2470,10 @@ const DEFAULT_MCP_TOOLS: &[&str] = &[
     "control_time_shift",
     "reset_meter",
     "resume_plugin",
+    "list_plugin_programs",
+    "list_plugin_buses",
+    "select_plugin_program",
+    "apply_plugin_preset",
     "prepare_plugin_update",
     "undo_last_change",
     "duplicate_session",
@@ -2742,6 +2746,8 @@ fn mcp_tool_annotations(name: &str) -> Value {
             | "list_sounds"
             | "get_soundboard_status"
             | "list_midi_devices"
+            | "list_plugin_programs"
+            | "list_plugin_buses"
             | "list_presets"
             | "list_goals"
             | "list_saved_versions"
@@ -2811,6 +2817,10 @@ fn mcp_tools() -> Value {
         { "name": "control_time_shift", "description": "Pause, resume, jump back or forward 10 s, or return to live on a Time Shift node while audio plays; status reads its buffer.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Time Shift node name or ID." }, "action": { "type": "string", "enum": ["pause", "resume", "back", "forward", "live", "status"] } }, "required": ["node", "action"], "additionalProperties": false } },
         { "name": "reset_meter", "description": "Clear the held peak and clipping count of a Meter node while audio plays.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Meter node name or ID." } }, "required": ["node"], "additionalProperties": false } },
         { "name": "resume_plugin", "description": "Retry a plugin that AudioRouter silenced because it passed the microphone through unchanged (get_levels shows plugin.silencedUnchanged), usually because it is not licensed or signed in. Ask the user to sign in to the plugin's licence app first. Returns resumed=false and keeps it silent while the plugin still passes audio through; then the user must stop and play the route.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Plugin node name or ID." } }, "required": ["node"], "additionalProperties": false } },
+        { "name": "list_plugin_buses", "description": "List the exact audio input and output buses of a scanned plugin, including a declared auxiliary input that can become a sidechain port. Discovery only; it changes no route.", "inputSchema": { "type": "object", "properties": { "path": { "type": "string", "minLength": 1, "description": "Plugin binary path from list_plugins." }, "classId": { "type": "string", "minLength": 1, "description": "Optional VST3 class ID." } }, "required": ["path"], "additionalProperties": false } },
+        { "name": "list_plugin_programs", "description": "List the bounded VST2 programs of a plugin in a playing route.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Plugin node name or ID." } }, "required": ["node"], "additionalProperties": false } },
+        { "name": "select_plugin_program", "description": "Select one VST2 program by its index from list_plugin_programs on a plugin in a playing route.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Plugin node name or ID." }, "program": { "type": "integer", "minimum": 0, "maximum": 255 } }, "required": ["node", "program"], "additionalProperties": false } },
+        { "name": "apply_plugin_preset", "description": "Apply a VST2 .fxp or .fxb preset file that is in the plugin binary's own directory to a plugin in a playing route.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Plugin node name or ID." }, "presetPath": { "type": "string", "minLength": 1 } }, "required": ["node", "presetPath"], "additionalProperties": false } },
         { "name": "undo_last_change", "description": "Undo the most recent saved change to the session (a tool added, removed, connected or changed), like Undo in the window. Applied live and saved.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": [], "additionalProperties": false } },
         { "name": "list_saved_versions", "description": "List a session's saved versions: when each was saved, how many tools it has, and which client saved it (null when not known; never guess a person).", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Session; defaults to the open one." } }, "required": [], "additionalProperties": false } },
         { "name": "go_back_to_version", "description": "Return a session to a saved version from list_saved_versions. It saves a new version, so later ones are kept. If the route is playing, the sound changes at once; tell the user first.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Session; defaults to the open one." }, "revision": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["revision"], "additionalProperties": false } },
@@ -2995,6 +3005,10 @@ fn mcp_tool_call(
         "control_time_shift" => ("timeShift.transport", Some(mcp_node_params(arguments))),
         "reset_meter" => ("meters.reset", Some(mcp_node_params(arguments))),
         "resume_plugin" => ("plugins.resume", Some(mcp_node_params(arguments))),
+        "list_plugin_programs" => ("plugins.programs", Some(mcp_node_params(arguments))),
+        "list_plugin_buses" => ("plugins.buses", Some(arguments)),
+        "select_plugin_program" => ("plugins.selectProgram", Some(mcp_node_params(arguments))),
+        "apply_plugin_preset" => ("plugins.applyPreset", Some(mcp_node_params(arguments))),
         "prepare_plugin_update" => ("plugins.prepareUpdate", Some(mcp_node_params(arguments))),
         "duplicate_session" => {
             let source = arguments["sessionId"].as_str().unwrap_or_default();
@@ -6426,7 +6440,7 @@ mod tests {
         let transition_content = transition["result"]["content"][0]["text"].as_str().unwrap();
         let transition_payload: Value = serde_json::from_str(transition_content).unwrap();
         assert_eq!(transition_payload["result"]["transition"], "lock");
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 101);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 105);
         // The default list is the task-level subset; every default name is a
         // real tool and every tool the recipes mention is in it.
         let all = mcp_tools();

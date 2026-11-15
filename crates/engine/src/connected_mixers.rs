@@ -124,6 +124,7 @@ pub(super) fn compile(
                 ready: AtomicBool::new(false),
                 convergence: None,
                 gate: None,
+                sidechain: None,
             });
             source_ref = OutputBranchSource::Chain(chain_index);
         }
@@ -142,7 +143,15 @@ pub(super) fn compile(
             })
             .ok_or_else(unsupported)?;
         let node = pending.remove(position);
-        let feeds = incoming(&node.id);
+        let all_feeds = incoming(&node.id);
+        let key_feed = all_feeds
+            .iter()
+            .find(|edge| edge.destination_port == "sidechain")
+            .copied();
+        let feeds = all_feeds
+            .into_iter()
+            .filter(|edge| edge.destination_port != "sidechain")
+            .collect::<Vec<_>>();
         // Each Output Switch side is gated where it leaves the switch (its
         // side chain), so a Mixer can sum it with other feeds. A sink also
         // re-applies the gates that every path to it passes through, which
@@ -209,7 +218,7 @@ pub(super) fn compile(
         let input = node
             .ports
             .iter()
-            .find(|port| port.direction == PortDirection::Input)
+            .find(|port| port.direction == PortDirection::Input && port.name != "sidechain")
             .ok_or_else(unsupported)?;
         let output_ports = node
             .ports
@@ -344,6 +353,20 @@ pub(super) fn compile(
             audio_media,
         )?;
         graph.output_chains.push(OutputProcessorChain {
+            sidechain: node
+                .plugin_sidechain_port()
+                .filter(|_| node.enabled && !node.bypass)
+                .map(|port| {
+                    Ok::<_, GraphCompileError>(CachedSidechain {
+                        source: key_feed.map(source_of),
+                        matrix: key_feed.map_or_else(Vec::new, |edge| edge.matrix.clone()),
+                        block: RealtimeDsp::new(
+                            AudioBlock::new(usize::from(port.channels), PROCESSING_QUANTUM_FRAMES)
+                                .map_err(|_| unsupported())?,
+                        ),
+                    })
+                })
+                .transpose()?,
             source: source_of(feeds[0]),
             entry_matrix: feeds[0].matrix.clone(),
             graph: runtime,
@@ -370,6 +393,128 @@ pub(super) fn compile(
 mod tests {
     use super::*;
     use audiorouter_domain::{Edge, Node, Port};
+
+    #[test]
+    fn sidechain_compiles_as_a_separate_cached_branch_with_main_only_bypass() {
+        #[derive(Debug)]
+        struct Keyed(AtomicU64);
+        impl RealtimePluginProcessor for Keyed {
+            fn process(&self, block: &mut AudioBlock) {
+                block.clear();
+            }
+            fn process_with_sidechain(&self, main: &mut AudioBlock, key: Option<&AudioBlock>) {
+                self.0.fetch_add(1, Ordering::Relaxed);
+                let active = key
+                    .and_then(|block| block.channel(0))
+                    .is_some_and(|samples| samples.iter().any(|sample| sample.abs() > 0.0));
+                main.apply_gain(if active { 0.5 } else { 1.0 });
+            }
+        }
+        // The key can be a source already feeding main, a processed source,
+        // or an authored Mixer whose output also feeds other destinations.
+        for (key_source, key_width) in [
+            ("mic", 1),
+            ("mic", 2),
+            ("game-eq", 1),
+            ("game-eq", 2),
+            ("game-mix", 1),
+            ("game-mix", 2),
+        ] {
+            for connected in [false, true] {
+                for (enabled, bypass) in [(true, false), (true, true), (false, false)] {
+                    let mut session = fixture();
+                    let plugin = session
+                        .nodes
+                        .iter_mut()
+                        .find(|node| node.id.as_str() == "voice-eq")
+                        .unwrap();
+                    plugin.kind = NodeKind::Plugin;
+                    plugin.enabled = enabled;
+                    plugin.bypass = bypass;
+                    plugin.parameters = serde_json::from_value(serde_json::json!({ "path": "fixture.dll", "format": "vst2", "fingerprint": "a".repeat(64) })).unwrap();
+                    plugin.ports.push(Port {
+                        name: "sidechain".into(),
+                        direction: PortDirection::Input,
+                        channels: key_width,
+                    });
+                    plugin.ports.rotate_right(1); // Port order does not identify main.
+                    if connected {
+                        session.edges.push(Edge {
+                            id: EntityId::new("key-edge"),
+                            source_node: EntityId::new(key_source),
+                            source_port: "out".into(),
+                            destination_node: EntityId::new("voice-eq"),
+                            destination_port: "sidechain".into(),
+                            matrix: if key_width == 1 {
+                                if key_source == "mic" {
+                                    vec![1.0]
+                                } else {
+                                    vec![0.5, 0.5]
+                                }
+                            } else if key_source == "mic" {
+                                vec![1.0, 1.0]
+                            } else {
+                                vec![1.0, 0.0, 0.0, 1.0]
+                            },
+                            enabled: true,
+                        });
+                    }
+                    if key_source == "mic" && key_width == 1 {
+                        // No Mixer at all: the same compiler entry must route
+                        // a mono source to main and key without a hidden mix.
+                        session.nodes.retain(|node| {
+                            matches!(node.id.as_str(), "mic" | "voice-eq" | "voice-output")
+                        });
+                        session.edges.retain(|edge| {
+                            edge.source_node.as_str() == "mic"
+                                && edge.destination_node.as_str() == "voice-eq"
+                        });
+                        session.edges.push(Edge {
+                            id: EntityId::new("direct-plugin-output"),
+                            source_node: EntityId::new("voice-eq"),
+                            source_port: "out".into(),
+                            destination_node: EntityId::new("voice-output"),
+                            destination_port: "in".into(),
+                            matrix: vec![1.0, 0.0, 0.0, 1.0],
+                            enabled: true,
+                        });
+                    }
+                    let processor = Arc::new(Keyed(AtomicU64::new(0)));
+                    let plugins = [(
+                        EntityId::new("voice-eq"),
+                        processor.clone() as Arc<dyn RealtimePluginProcessor>,
+                    )]
+                    .into_iter()
+                    .collect();
+                    let set = compile_native_paths_with_plugins_and_audio(
+                        &session,
+                        RuntimeGeneration::new(5),
+                        &plugins,
+                        &HashMap::new(),
+                    )
+                    .unwrap();
+                    let graph = &set.paths[0];
+                    let levels = run(graph);
+                    let expected = if enabled && !bypass && connected {
+                        0.05
+                    } else {
+                        0.1
+                    };
+                    assert!(
+                        (levels["voice-output"] - expected).abs() < 1e-6,
+                        "{key_source}/{enabled}/{bypass}/{connected}: {levels:?}"
+                    );
+                    if let Some(game) = levels.get("game-output") {
+                        assert!((game - 0.5).abs() < 1e-6);
+                    }
+                    assert_eq!(
+                        processor.0.load(Ordering::Relaxed),
+                        u64::from(enabled && !bypass)
+                    );
+                }
+            }
+        }
+    }
 
     fn fixture() -> Session {
         let node = |id: &str, kind: NodeKind, width: u8| Node {

@@ -3,6 +3,183 @@
 use super::*;
 use crate::test_support::*;
 
+#[cfg(windows)]
+#[test]
+#[ignore = "requires SDK AGain and a rebuilt native worker override"]
+fn plugins_buses_reports_the_real_again_auxiliary_input() {
+    let path = std::path::PathBuf::from(std::env::var("AUDIOROUTER_VST3_FIXTURE").unwrap());
+    let root = path.parent().unwrap().to_path_buf();
+    let mut plane = ControlPlane::default();
+    let scan = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "plugins.scan".into(),
+        params: Some(json!({ "directory": root })),
+    });
+    assert!(scan.error.is_none(), "{:?}", scan.error);
+    let buses = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(2)),
+        method: "plugins.buses".into(),
+        params: Some(json!({
+            "path": path,
+            "classId": "41347FD6FED64094AFBB12B7DBA1D441",
+        })),
+    });
+    assert!(buses.error.is_none(), "{:?}", buses.error);
+    let buses = buses.result.unwrap();
+    assert_eq!(buses["format"], "vst3");
+    assert_eq!(buses["buses"]["inputs"].as_array().unwrap().len(), 2);
+    assert_eq!(buses["buses"]["inputs"][0]["role"], "main");
+    assert_eq!(buses["buses"]["inputs"][1]["role"], "auxiliary");
+    assert_eq!(buses["buses"]["inputs"][1]["nativeIndex"], 1);
+    assert_eq!(buses["buses"]["outputs"][0]["role"], "main");
+}
+
+#[cfg(windows)]
+#[test]
+#[ignore = "requires SDK AGain and rebuilt native worker overrides"]
+fn backend_prepares_a_verified_sidechain_for_the_real_compiled_route() {
+    use audiorouter_domain::{Edge, Node, Port};
+    let path = std::path::PathBuf::from(std::env::var("AUDIOROUTER_VST3_FIXTURE").unwrap());
+    let root = path.parent().unwrap().to_path_buf();
+    let identity =
+        audiorouter_plugin_host::inspect_binary(&path, std::slice::from_ref(&root)).unwrap();
+    let make = |id: &str, kind, widths: &[(&str, PortDirection, u8)]| Node {
+        id: EntityId::new(id),
+        name: id.into(),
+        kind,
+        type_version: 1,
+        enabled: true,
+        bypass: false,
+        parameters: Default::default(),
+        ports: widths
+            .iter()
+            .map(|(name, direction, channels)| Port {
+                name: (*name).into(),
+                direction: *direction,
+                channels: *channels,
+            })
+            .collect(),
+    };
+    let mut plugin = make(
+        "effect",
+        NodeKind::Plugin,
+        &[
+            ("sidechain", PortDirection::Input, 1),
+            ("in", PortDirection::Input, 2),
+            ("out", PortDirection::Output, 2),
+        ],
+    );
+    plugin.parameters = serde_json::from_value(json!({ "path": path, "format": "vst3", "classId": "41347FD6FED64094AFBB12B7DBA1D441", "fingerprint": identity.sha256 })).unwrap();
+    let edge = |id: &str, from: &str, to: &str, port: &str, matrix: Vec<f32>| Edge {
+        id: EntityId::new(id),
+        source_node: EntityId::new(from),
+        source_port: "out".into(),
+        destination_node: EntityId::new(to),
+        destination_port: port.into(),
+        matrix,
+        enabled: true,
+    };
+    let mut session = Session {
+        id: EntityId::new("prepared-sidechain"),
+        name: "prepared sidechain".into(),
+        schema_version: 1,
+        revision: 0,
+        nodes: vec![
+            make(
+                "main",
+                NodeKind::PhysicalInput,
+                &[("out", PortDirection::Output, 2)],
+            ),
+            make(
+                "key",
+                NodeKind::PhysicalInput,
+                &[("out", PortDirection::Output, 1)],
+            ),
+            plugin,
+            make(
+                "sink",
+                NodeKind::PhysicalOutput,
+                &[("in", PortDirection::Input, 2)],
+            ),
+        ],
+        edges: vec![
+            edge("main-in", "main", "effect", "in", vec![1.0, 0.0, 0.0, 1.0]),
+            edge("key-in", "key", "effect", "sidechain", vec![1.0]),
+            edge("output", "effect", "sink", "in", vec![1.0, 0.0, 0.0, 1.0]),
+        ],
+    };
+    let request = || PluginStageRequest {
+        node_id: EntityId::new("effect"),
+        scanned_path: path.clone(),
+        configured_root: root.clone(),
+        fingerprint: identity.sha256.clone(),
+        channels: 2,
+        state: None,
+        parameters: vec![audiorouter_plugin_host::ParameterEvent::new(0, 0.75, 0).unwrap()],
+    };
+    // Same binary, wrong class: discovery must refuse the absent aux input.
+    session.nodes[2]
+        .parameters
+        .insert("classId".into(), json!("84E8DE5F92554F5396FAE4133C935A18"));
+    assert!(start_plugin_bridges(&session, vec![request()], 48_000).is_err());
+    session.nodes[2]
+        .parameters
+        .insert("classId".into(), json!("41347FD6FED64094AFBB12B7DBA1D441"));
+    let prepared = start_plugin_bridges(&session, vec![request()], 48_000).unwrap();
+    let processors = prepared
+        .into_iter()
+        .map(|(id, bridge)| (id, bridge.processor()))
+        .collect();
+    let set = audiorouter_engine::compile_native_paths_with_plugins_and_audio(
+        &session,
+        RuntimeGeneration::new(2),
+        &processors,
+        &HashMap::new(),
+    )
+    .unwrap();
+    let graph = &set.paths()[0];
+    let inputs = graph
+        .input_node_ids()
+        .iter()
+        .map(|id| {
+            let mut block = AudioBlock::new(
+                if id.as_str() == "main" { 2 } else { 1 },
+                audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+            )
+            .unwrap();
+            for channel in 0..block.channels() {
+                block
+                    .channel_mut(channel)
+                    .unwrap()
+                    .fill(if id.as_str() == "main" { 0.1 } else { 0.2 });
+            }
+            block
+        })
+        .collect::<Vec<_>>();
+    let mut scratch = AudioBlock::new(2, audiorouter_engine::PROCESSING_QUANTUM_FRAMES).unwrap();
+    let mut output = AudioBlock::new(2, audiorouter_engine::PROCESSING_QUANTUM_FRAMES).unwrap();
+    let mut heard = false;
+    for _ in 0..40 {
+        graph
+            .process(&inputs, &mut scratch, &mut [&mut output])
+            .unwrap();
+        heard |= output
+            .channel(0)
+            .unwrap()
+            .iter()
+            .any(|sample| sample.abs() > 0.0);
+        assert!(output
+            .channel(0)
+            .unwrap()
+            .iter()
+            .all(|sample| sample.is_finite()));
+        std::thread::sleep(Duration::from_millis(3));
+    }
+    assert!(heard, "compiled route must receive prepared worker output");
+}
+
 #[test]
 fn plugin_update_preparation_preserves_state_and_wiring_through_dispatch() {
     let root = std::env::temp_dir().join(format!(
@@ -909,6 +1086,9 @@ fn an_instrument_node_starts_a_worker_and_plays_midi() {
     let started = start_plugin_bridges(&session, vec![request("piano")], 48_000).unwrap();
     assert_eq!(started.len(), 1);
     let (id, bridge) = &started[0];
+    let bridge = bridge
+        .standard()
+        .expect("instrument uses its MIDI-capable standard bridge");
     assert_eq!(id.as_str(), "piano");
     let peak = |quanta: usize| {
         let mut peak = 0.0_f32;

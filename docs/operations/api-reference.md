@@ -32,7 +32,7 @@ Encoder reply waits share one shutdown deadline. A timed-out writer is
 reported failed/recoverable; its thread keeps the file until the I/O returns,
 and shutdown does not wait indefinitely for that thread to exit.
 
-The current catalog contains 150 methods, including backend-owned quit/finalize,
+The current catalog contains 154 methods, including backend-owned quit/finalize,
 session portability, bounded WAV/MP3 media import, source transport, recorder
 lifecycle, plugin inventory/retry, and startup plan/apply methods.
 
@@ -152,6 +152,10 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `plugins.retry` | `pluginScan` | mutating; requires an idempotency key |
 | `plugins.inspect` | `pluginScan` | read-only |
 | `plugins.parameters` | `pluginScan` | external operation; bounded descriptors from the exact revalidated plugin worker |
+| `plugins.buses` | `pluginScan` | read-only; exact VST2/VST3 audio bus discovery through a verified isolated worker; optional exact VST3 `classId`; no graph mutation |
+| `plugins.programs` | `pluginScan` | read-only; bounded VST2 program list for a plugin in a playing route; optional `sessionId`, `nodeId` is an ID or exact name |
+| `plugins.selectProgram` | `pluginScan` | mutating; selects a bounded VST2 program index on a playing plugin; optional `sessionId`, `nodeId` is an ID or exact name |
+| `plugins.applyPreset` | `pluginScan` | external operation; applies a bounded VST2 `.fxp`/`.fxb` file from the plugin's own directory to a playing plugin; optional `sessionId`, `nodeId` is an ID or exact name |
 | `virtualDevices.list` | `read` | read-only |
 | `virtualDevices.plan` | `deviceAdministration` | plan-only |
 | `virtualDevices.apply` | `deviceAdministration` | mutating; requires an idempotency key |

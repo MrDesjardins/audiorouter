@@ -255,6 +255,20 @@ export interface UiBackend {
   ): Promise<MethodResult["midi.sendEvents"]>;
   /** Retry a plugin silenced for passing a recording device's audio through unchanged. */
   resumePlugin?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.resume"]>;
+  /** Bounded VST2 programs of a plugin in a playing route. */
+  listPluginPrograms?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.programs"]>;
+  /** Select one VST2 program by its bounded index. */
+  selectPluginProgram?(
+    sessionId: string,
+    nodeId: string,
+    program: number,
+  ): Promise<MethodResult["plugins.selectProgram"]>;
+  /** Apply a VST2 .fxp or .fxb preset from the plugin's own directory. */
+  applyPluginPreset?(
+    sessionId: string,
+    nodeId: string,
+    presetPath: string,
+  ): Promise<MethodResult["plugins.applyPreset"]>;
   soundLibraryList?(): Promise<MethodResult["soundLibrary.list"]>;
   soundLibraryRead?(id: string): Promise<MethodResult["soundLibrary.read"]>;
   transportTimeShift?(
@@ -925,6 +939,15 @@ export function createLiveBackend(
     },
     async resumePlugin(currentSessionId, nodeId) {
       return client.request("plugins.resume", { sessionId: currentSessionId, nodeId });
+    },
+    async listPluginPrograms(currentSessionId, nodeId) {
+      return client.request("plugins.programs", { sessionId: currentSessionId, nodeId });
+    },
+    async selectPluginProgram(currentSessionId, nodeId, program) {
+      return client.request("plugins.selectProgram", { sessionId: currentSessionId, nodeId, program });
+    },
+    async applyPluginPreset(currentSessionId, nodeId, presetPath) {
+      return client.request("plugins.applyPreset", { sessionId: currentSessionId, nodeId, presetPath });
     },
     async soundLibraryList() {
       return client.request("soundLibrary.list", undefined);

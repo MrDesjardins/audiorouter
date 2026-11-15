@@ -19,6 +19,47 @@ use serde_json::json;
 
 const FRAMES: usize = 128;
 
+#[test]
+fn sidechain_handoff_never_allocates_for_ready_late_or_full_queues() {
+    use audiorouter_engine::{RuntimeBusLayout, RuntimeBusQuantumIdentity, RuntimeBusScheduler};
+    let layout = RuntimeBusLayout::new(vec![2, 1], vec![2]).unwrap();
+    let scheduler =
+        std::sync::Arc::new(RuntimeBusScheduler::new(4, layout.clone(), layout, FRAMES).unwrap());
+    let generation = RuntimeGeneration::new(1);
+    let stage =
+        audiorouter_engine::sidechain::SidechainStage::new(scheduler.clone(), generation, FRAMES)
+            .unwrap();
+    let mut main = AudioBlock::new(2, FRAMES).unwrap();
+    let key = AudioBlock::new(1, FRAMES).unwrap();
+    let mut output = AudioBlock::new(2, FRAMES).unwrap();
+    output.channel_mut(0).unwrap().fill(0.25);
+    for sequence in 1..=64 {
+        let identity = RuntimeBusQuantumIdentity::new(sequence, 10_000, FRAMES).unwrap();
+        let key = (sequence % 2 == 0).then_some(&key);
+        assert_eq!(
+            allocations_during(|| stage.process(identity, &mut main, key)),
+            0
+        );
+        if sequence > 1 {
+            assert_eq!(main.channel(0).unwrap(), &[0.25; FRAMES]);
+        }
+        let input = scheduler.try_take_input().unwrap();
+        scheduler.recycle_input(input);
+        scheduler
+            .try_submit_outputs(generation, identity, &[&output])
+            .unwrap();
+    }
+    // Stop servicing inputs: overflow and missing results still cannot allocate.
+    for sequence in 65..=96 {
+        let identity = RuntimeBusQuantumIdentity::new(sequence, 10_000, FRAMES).unwrap();
+        assert_eq!(
+            allocations_during(|| stage.process(identity, &mut main, None)),
+            0
+        );
+    }
+    assert_eq!(main.channel(0).unwrap(), &[0.0; FRAMES]);
+}
+
 /// Every built-in one-in/one-out tool a chain may contain.
 const TOOLS: &[NodeKind] = &[
     NodeKind::Meter,

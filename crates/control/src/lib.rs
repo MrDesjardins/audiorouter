@@ -379,6 +379,16 @@ pub struct ControlPlane {
             std::sync::Weak<audiorouter_plugin_host::PluginRuntimeBridge>,
         >,
     >,
+    /// Live sidechain (multi-bus) bridges by (session, node). Weak: a bridge
+    /// lives only as long as its graph, and this map only serves state,
+    /// editor and recovery control, never audio.
+    #[cfg(windows)]
+    sidechain_bridges: std::sync::Mutex<
+        HashMap<
+            (EntityId, EntityId),
+            std::sync::Weak<audiorouter_plugin_host::sidechain_bridge::SidechainRuntimeBridge>,
+        >,
+    >,
     /// MIDI devices feeding running instruments, by (session, node). Closed
     /// when the instrument's bridge is gone.
     instrument_midi: std::sync::Mutex<HashMap<(EntityId, EntityId), midi::InstrumentMidiInputs>>,
@@ -572,6 +582,8 @@ impl ControlPlane {
             tool_presets: Vec::new(),
             plugin_inventories: HashMap::new(),
             plugin_bridges: Default::default(),
+            #[cfg(windows)]
+            sidechain_bridges: Default::default(),
             instrument_midi: Default::default(),
             editor_only_plugins: Default::default(),
             plugin_inventory_order: VecDeque::new(),

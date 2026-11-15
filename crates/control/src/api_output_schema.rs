@@ -1103,6 +1103,87 @@ fn method_output_schema_impl(name: &str) -> Value {
             "required": ["sessionId", "nodeId", "stateId", "sizeBytes"],
             "additionalProperties": false
         }),
+        "plugins.buses" => json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string" },
+                "sha256": { "type": "string" },
+                "format": { "type": "string", "enum": ["vst2", "vst3", "unknown"] },
+                "buses": {
+                    "type": "object",
+                    "properties": {
+                        "inputs": { "type": "array", "maxItems": 8, "items": {
+                            "type": "object",
+                            "properties": {
+                                "nativeIndex": { "type": "integer", "minimum": 0 },
+                                "name": { "type": "string" },
+                                "channels": { "type": "integer", "minimum": 1, "maximum": 2 },
+                                "role": { "type": "string", "enum": ["main", "auxiliary"] }
+                            },
+                            "required": ["nativeIndex", "name", "channels", "role"],
+                            "additionalProperties": false
+                        } },
+                        "outputs": { "type": "array", "maxItems": 8, "items": {
+                            "type": "object",
+                            "properties": {
+                                "nativeIndex": { "type": "integer", "minimum": 0 },
+                                "name": { "type": "string" },
+                                "channels": { "type": "integer", "minimum": 1, "maximum": 2 },
+                                "role": { "type": "string", "enum": ["main", "auxiliary"] }
+                            },
+                            "required": ["nativeIndex", "name", "channels", "role"],
+                            "additionalProperties": false
+                        } }
+                    },
+                    "required": ["inputs", "outputs"],
+                    "additionalProperties": false
+                }
+            },
+            "required": ["path", "sha256", "format", "buses"],
+            "additionalProperties": false
+        }),
+        "plugins.programs" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string" },
+                "nodeId": { "type": "string" },
+                "programs": {
+                    "type": "array",
+                    "maxItems": 256,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": { "type": "integer", "minimum": 0 },
+                            "name": { "type": "string", "minLength": 1, "maxLength": 128 }
+                        },
+                        "required": ["id", "name"],
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "required": ["sessionId", "nodeId", "programs"],
+            "additionalProperties": false
+        }),
+        "plugins.selectProgram" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string" },
+                "nodeId": { "type": "string" },
+                "program": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["sessionId", "nodeId", "program"],
+            "additionalProperties": false
+        }),
+        "plugins.applyPreset" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string" },
+                "nodeId": { "type": "string" },
+                "presetPath": { "type": "string" }
+            },
+            "required": ["sessionId", "nodeId", "presetPath"],
+            "additionalProperties": false
+        }),
         "plugins.prepareUpdate" => json!({
             "type": "object", "properties": {
                 "sessionId": { "type": "string" }, "nodeId": { "type": "string" },

@@ -157,6 +157,10 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "plugins.closeEditor" => "Close a plugin node editor. The editor shows the instance that processes audio, so edits already apply live.",
         "plugins.resume" => "Retry a plugin in a playing route that was silenced because it passed a recording device's audio through unchanged (for example an unlicensed plugin). Audio resumes only if the plugin has changed audio since; otherwise it stays silent and resumed is false.",
         "plugins.parameters" => "Load one currently scanned plugin in its isolated worker and return bounded parameter descriptors.",
+        "plugins.buses" => "Load one currently scanned plugin in its isolated worker and return its exact audio input/output buses, including any declared auxiliary input that can become a sidechain port.",
+        "plugins.programs" => "List the bounded VST2 programs of a plugin node in a playing route.",
+        "plugins.selectProgram" => "Select one bounded VST2 program by index on a plugin node in a playing route.",
+        "plugins.applyPreset" => "Apply a bounded VST2 .fxp or .fxb preset file from the plugin's own directory to a plugin node in a playing route.",
         "plugins.prepareUpdate" => "Prepare replacement node parameters from a current scan after a vendor update, retaining the old state asset. Does not change a route or start audio: apply the returned parameters through graph plan/commit. resetState deliberately starts from defaults instead.",
         "virtualDevices.list" => "List managed virtual bus desired state without activating endpoints.",
         "virtualDevices.plan" => "Validate a managed virtual bus lifecycle change without applying it.",
@@ -704,6 +708,13 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
             }),
             &["path"],
         ),
+        "plugins.buses" => object_schema(
+            json!({
+                "path": { "type": "string", "minLength": 1 },
+                "classId": { "type": "string", "minLength": 1 }
+            }),
+            &["path"],
+        ),
         "plugins.parameters" => object_schema(
             json!({
                 "path": { "type": "string", "minLength": 1 },
@@ -731,6 +742,29 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
                 "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
             }),
             &["sessionId", "nodeId"],
+        ),
+        "plugins.programs" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
+            }),
+            &["nodeId"],
+        ),
+        "plugins.selectProgram" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "program": { "type": "integer", "minimum": 0, "maximum": 255 }
+            }),
+            &["nodeId", "program"],
+        ),
+        "plugins.applyPreset" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "presetPath": { "type": "string", "minLength": 1, "maxLength": 32767 }
+            }),
+            &["nodeId", "presetPath"],
         ),
         "plugins.openEditor" => object_schema(
             json!({

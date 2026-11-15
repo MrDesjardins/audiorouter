@@ -212,14 +212,25 @@ impl ControlPlane {
                     .iter_mut()
                     .filter(|node| audiorouter_engine::hosts_plugin_worker(node.kind))
                 {
-                    let bridge = match self.plugin_bridge(session_id, &node.id) {
-                        Ok(bridge) => bridge,
+                    let live = match self.plugin_live_bridge(session_id, &node.id) {
+                        Ok(live) => live,
                         Err(_) if !node.enabled => continue,
                         Err(error) => return Err(error),
                     };
-                    bridge.set_silence_if_unchanged(guards.contains(&node.id));
-                    bridge_flags.push((Arc::clone(&bridge), node.enabled && !node.bypass));
-                    stages.insert(node.id.clone(), bridge);
+                    live.set_silence_if_unchanged(guards.contains(&node.id));
+                    match live {
+                        crate::plugins::LivePluginBridge::Standard(bridge) => {
+                            bridge_flags.push((Arc::clone(&bridge), node.enabled && !node.bypass));
+                            stages.insert(node.id.clone(), bridge);
+                        }
+                        #[cfg(windows)]
+                        crate::plugins::LivePluginBridge::Sidechain(bridge) => {
+                            // Multi-bus bypass is compiled from the session
+                            // flags; the live flag list only drives the
+                            // ordinary bridge's processing switch.
+                            stages.insert(node.id.clone(), bridge);
+                        }
+                    }
                     node.enabled = true;
                     node.bypass = false;
                 }

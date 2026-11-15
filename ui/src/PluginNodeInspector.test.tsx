@@ -230,6 +230,42 @@ describe("PluginEditorControls before Play", () => {
     }
   });
 
+  it("lists and selects VST2 programs and imports a preset from the plugin directory", async () => {
+    const listPluginPrograms = vi.fn().mockResolvedValue({
+      sessionId: "s",
+      nodeId: "plugin-1",
+      programs: [
+        { id: 0, name: "Init" },
+        { id: 1, name: "Bright" },
+      ],
+    });
+    const selectPluginProgram = vi.fn().mockResolvedValue({ sessionId: "s", nodeId: "plugin-1", program: 1 });
+    const applyPluginPreset = vi.fn().mockResolvedValue({
+      sessionId: "s",
+      nodeId: "plugin-1",
+      presetPath: "C:\\VST2\\Lead.fxp",
+    });
+    render(
+      <PluginNodeInspector
+        node={plugin({ path: "C:\\VST2\\TDR Nova.dll", format: "vst2" })}
+        disabled={false}
+        onUnload={() => {}}
+        snapshot={null}
+        backend={{ listPluginPrograms, selectPluginProgram, applyPluginPreset }}
+        sessionId="s"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Load programs" }));
+    await waitFor(() => expect(listPluginPrograms).toHaveBeenCalledWith("s", "plugin-1"));
+    fireEvent.change(screen.getByLabelText("VST2 program"), { target: { value: "1" } });
+    await waitFor(() => expect(selectPluginProgram).toHaveBeenCalledWith("s", "plugin-1", 1));
+    fireEvent.change(screen.getByLabelText("VST2 preset path"), {
+      target: { value: "C:\\VST2\\Lead.fxp" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Import preset" }));
+    await waitFor(() => expect(applyPluginPreset).toHaveBeenCalledWith("s", "plugin-1", "C:\\VST2\\Lead.fxp"));
+  });
+
   it("still needs the desktop app, because the window belongs to the shell", () => {
     render(
       <PluginEditorControls

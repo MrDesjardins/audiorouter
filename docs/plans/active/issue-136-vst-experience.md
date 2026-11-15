@@ -105,6 +105,20 @@ Decisions required before source work:
 - Keep PLUG-01/07 boundaries and SEC-07 limits. Compatibility, sandbox,
   auto-restart, or rights expansion needs a separate explicit decision.
 
+### Decision update (owner, 2026-11-14)
+
+- **Visible occupied-input Mixer proposal accepted.** Keep the existing
+  previewable, undoable Mixer for explicit summation; serial VST insertion is
+  the separate "Insert processor" operation.
+- **VST2 sidechain is in scope only with explicit pin labels.** VST2 has no
+  VST3-style named auxiliary bus. Expose a sidechain only when the plugin's
+  input-pin metadata explicitly labels that pin as sidechain/key; never infer it
+  from a surround or extra-input count. VST3 auxiliary buses follow the named
+  bus contract.
+- These decisions resolve the earlier open questions but do not by themselves
+  implement the graph/runtime auxiliary path; the implementation and native
+  editor evidence below remain required.
+
 If decisions alter requirements, update affected specs, generated contracts,
 catalogs, tests and this plan together before implementation. Likely sections:
 `docs/spec/07-processing.md` (PLUG-03/04/07, DSP-19, multi-bus status),

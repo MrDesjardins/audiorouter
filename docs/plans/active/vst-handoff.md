@@ -1,11 +1,24 @@
 # VST work: handoff for the next agent (2026-11-14)
 
 Read this page first, then [the plan](vst-full-compatibility.md) (decisions,
-phase definitions, evidence so far) and
+phase definitions, evidence so far), the
+[completion work plan](vst-completion-work.md) (ordered remaining tasks) and
 [the instrument design](vst-midi-instruments-design.md). `AGENTS.md` rules
 apply in full; the ones that bit this work are repeated under "Rules" below.
 
 ## Where the work is
+
+Latest completion audit (2026-11-14): **not all work is complete**. P2
+programs/shell/preset import, P3 units/programs/multi-class qualification,
+P5 sidechain graph execution, P6 editor qualification and P9 release gates
+remain open. The metadata groundwork and real VST3/VST2 `DescribeBuses` worker paths
+are now implemented and tested; see the checkpoint in the
+[completion work plan](vst-completion-work.md). These do not finish P5.
+The checkout has uncommitted review and discovery work; the older clean-tree
+and head statements below are historical. The requested
+`C:/code/audiorouter/docs/plans/active/vst-full-compatibility.md` does not
+exist in the main checkout; the plan is in this VST worktree. Do not copy it
+into the unrelated resilience branch to make that path exist.
 
 - Worktree: `C:\Users\miste\.t3\worktrees\audiorouter\feature-vst-plugin-expe-f8a7ad7c0183990c`
 - Branch: `feature/vst-plugin-experience`, 45 commits ahead of `main`, head
@@ -60,10 +73,38 @@ apply in full; the ones that bit this work are repeated under "Rules" below.
 - The release build (`tools/build-desktop.ps1`, with the six workers) and the
   `fresh_install_shell` run are redone in this session. The built exe is the
   one to try; nothing is pushed and there is still no PR.
-- Still open, unchanged: sidechain (E/P5), the automatic Mixer on an occupied
-  plugin input, resizable editors and keyboard/DPI work (F/P6).
+- Still open, unchanged: sidechain (E/P5), resizable editors and keyboard/DPI
+  work (F/P6). The owner accepted the visible occupied-input Mixer proposal on
+  2026-11-14; it stays. VST2 sidechain is in scope only for pins whose metadata
+  explicitly labels them sidechain/key, never by extra-input count.
 
-## What is open, in the order to do itEach item says what "done" needs. Items marked **owner** cannot be finished
+## Review pass 2 (2026-11-14, later)
+
+Code review found and fixed MIDI stuck-note paths: queue overflow could evict a
+note-off after clearing its held bit; panic did not lift sustain/sostenuto;
+both workers evicted the oldest MIDI event on backlog; `midi.sendEvents` did
+not use the shared optional-session/exact-name resolver; and `midi.devices`
+reported a device connected without an open connection or released notes on
+unplug. The queue now prioritizes releases and recovery controls, invalidates
+scheduled note sequences on panic/overflow, and the workers reject overflow.
+New regressions cover these cases. Full `cargo test --workspace` now passes
+(including the updated VST2 queue integration test), as do both format checks,
+both Clippy runs, contract drift and docs validation. Real debug-worker checks
+opened/closed Dragonfly Plate Reverb's editor in a stopped session and played
+Surge XT midi through the instrument bridge. The rebuilt release package is at
+`src-tauri/target/release` (shell `6ADE13D9...3A306`); `fresh_install_shell` is
+blocked because the owner's main-checkout shell is running, and it was not
+stopped.
+
+The plan is still **not complete**: P5 graph/runtime sidechain, P6 resizable
+editors/keyboard/DPI, P2 programs/shell/`.fxp`/`.fxb`, P3 units/programs/
+multi-class/Steinberg validation, and P9 installer/compatibility/live-ear gates
+remain unimplemented or unqualified. Do not describe this branch as completing
+"all VST2 and VST3" yet.
+
+## What is open, in the order to do it
+
+Each item says what "done" needs. Items marked **owner** cannot be finished
 without the owner; prepare everything else and then ask once, with one list.
 
 ### A. Must fix before any PR (small, no audio, no popups)

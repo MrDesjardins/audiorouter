@@ -4,7 +4,9 @@ Status: **approved 2026-11-13, in progress.** Owner request: "support ALL VST2
 and 3".
 
 **Taking over this work? Start with [the handoff page](vst-handoff.md):** what
-is done, what is open in order, how to check, and what needs the owner.
+is done, what is open in order, how to check, and what needs the owner. The
+ordered implementation work for the remaining items is in the
+[completion work plan](vst-completion-work.md).
 
 ## Decision record (owner, 2026-11-13)
 
@@ -42,11 +44,15 @@ not run.
 | --- | --- |
 | #136 fixes + chain matrix | committed `268fa0146` |
 | Spec revision (D3) | done in the same change as this page |
-| P1 instrument detection | load-time refusal done (`effFlagsIsSynth`, unit tests pass, Clippy clean); not run against the real BC Synth (demo popup); scan-time classification via a per-fingerprint cache and the VST3 worker unchanged |
-| P8a 32-bit | done: VST2 and VST3 exercised with real 32-bit plugins (ReaPlugs, Pitchproof, Dragonfly); release exe/installer not rebuilt |
-| P0 census | tool written; first corpus run (Dragonfly, ReaPlugs, Pitchproof, UADx) all pass; wider corpus pending |
-| P8b instruments and MIDI | engine, control plane, API and MCP, scan flip, UI picker and Properties keyboard committed on this branch; see [the design](vst-midi-instruments-design.md). Not yet run with a real hardware keyboard, a rebuilt exe, or recorded guides |
-| everything else | not started (see the open list below) |
+| P1 instrument detection | VST2 load-time (`effFlagsIsSynth`), VST3 from metadata or the Instrument category string at scan; learned refusals persist; BC Synth still not run (demo) |
+| P8a 32-bit | done and exercised with real 32-bit VST2/VST3 plugins; packaged shell rebuilt in this review |
+| P0 census | three runs, including the wide 343-file corpus with instrument playback; results published in [plugin-census.md](../../operations/plugin-census.md) |
+| P8b instruments and MIDI | done for the software path: both workers, MIDI API/MCP, winmm input, UI keyboard, guide page; no hardware MIDI keyboard was exercised |
+| P2 (part) | host callback fixed/filled; start/stop process, `ioChanged`, `effCanDo`; old `process` refusal has its own reason. Programs, shell plugins and `.fxp/.fxb` remain open |
+| P3 (part) | `ARST2` state fallback and `IComponentHandler2`/restart flags; units/programs, multi-class modules and the Steinberg validator remain open |
+| P4 | done: mono/stereo adaptation and multichannel refusal verified through the census and combination tests |
+| P6 (part) | editor opens and closes on a stopped session (real Dragonfly VST3 check); resize, keyboard focus and monitor/DPI remain open |
+| P5/P7/P9 | P5 sidechain and P9 release gates open; P7 deliberately deferred with a recorded decision |
 
 Related: [issue #136 plan](issue-136-vst-experience.md),
 [chain matrix](issue-136-vst2-chain-matrix.md). Requirements touched:
@@ -181,7 +187,11 @@ census is test-only code.
 
 ## Next action
 
-Owner answers D1-D4. Then start phase 0 on a new branch.
+Owner decisions D1-D4 are recorded. P0-P4, P8a/P8b and the stopped-editor
+path are implemented; the next work is the P5 graph/runtime sidechain contract and
+P6 resize/focus/DPI acceptance, followed by P2/P3 conformance remainder and
+P9 release gates. Do not mark the full compatibility plan complete until those
+items have code, regressions and the listed evidence.
 
 ## P8a audit: is the worker protocol bitness-neutral? (2026-11-13, read-only)
 
@@ -562,3 +572,69 @@ RipplerX, Surge XT); Blue Cat skipped as always. The 18 recorded effect rows:
 - Not done: sidechain (P5) and the automatic Mixer when a second source is
   connected to an occupied plugin input both remain as the issue plan
   describes; the work here fixes hosting, the editor lifecycle and instruments.
+
+## Review pass 2 (2026-11-14): MIDI recovery and plan reconciliation
+
+Code review found and fixed three MIDI defects that could leave an instrument
+sounding after its note-off was lost:
+
+- **Queue overflow could discard a note-off.** `MidiQueue` cleared a note's held
+  bit when a note-off was accepted, then evicted the oldest event on overflow;
+  the evicted note-off left the plugin sounding. Overflow now releases every
+  held/sounding note through a priority release set, lifts sustain and
+  sostenuto, and invalidates ordered note sequences (`schedule_generation`).
+- **Panic could leave a sustained note.** `allNotesOff` now emits sustain off
+  (CC64), sostenuto off (CC66) and all-notes-off (CC123) before explicit
+  note-offs, and cancels future scheduled messages. The same recovery is used
+  for overflow and for a device that disappears.
+- **Worker backlog eviction had the same risk.** Both plugin workers rejected an
+  overflow instead of dropping the oldest MIDI event, so a note-off cannot be
+  discarded silently.
+
+Also repaired: `midi.sendEvents` now follows the shared node-target convention
+(optional active session, executable node name or ID) and rejects fields that do
+not apply to its event type; `midi.devices` reports `connected` only when the
+requested device(s) are actually open, and releases held notes once a device
+disappears. Regressions: five `midi_queue_tests`, the MIDI control tests, and
+worker overflow changes.
+
+Validation in this pass: `cargo test -p audiorouter-plugin-host --lib` 108
+passed; `cargo test -p audiorouter-control --lib` 401 passed, 17 ignored; full
+`cargo test --workspace` passed after updating the pre-existing VST2 queue
+integration test to the safer refusal semantics; both format checks, both Clippy
+runs, contract drift (150 methods, 38 kinds) and documentation validation (270
+files, 1,505 links) pass. Real-plugin checks with debug workers: the stopped
+session editor opened and closed Dragonfly Plate Reverb (VST3), and Surge XT
+played MIDI through the instrument bridge.
+
+`tools/build-desktop.ps1` rebuilt the shell, CLI and four workers after the
+review fixes (shell `6ADE13D9...3A306`, x86 pair included); the shell is newer
+than `ui/dist` and contains the current UI bundle. `fresh_install_shell` could not run because another
+AudioRouter shell (the main checkout's release build) was already running; it
+was not stopped. That gate remains open.
+
+## Decisions after review (2026-11-14)
+
+- **Visible mixer proposal accepted.** Connecting a second source to an occupied
+  ordinary input may keep proposing a previewable, undoable Mixer; serial VST
+  insertion remains the explicit "Insert processor" path.
+- **VST2 sidechain scope.** VST2 has no VST3-style named auxiliary bus. A VST2
+  sidechain is exposed only when input-pin metadata explicitly labels the pin
+  as sidechain/key; otherwise the effect stays single-stream. This avoids
+  treating surround inputs as sidechain audio.
+- **Still not implemented:** the graph-to-worker auxiliary-bus path (P5),
+  resizable VST3 editors and keyboard/DPI qualification (P6 remainder), VST2
+  programs/shell/`.fxp`/`.fxb` (P2 remainder), VST3 units/programs/multi-class
+  modules/Steinberg validation (P3 remainder), and the P9 release gate
+  (installer, compatibility page regeneration, live ear route). These are not
+  claimed complete by this review.
+
+## ReaControlMIDI crash on state restore (2026-11-14, found by the census)
+
+`reacontrolmidi-standalone.dll` (ReaPlugs, VST2) saves 407 bytes of state, then
+the worker exits with `0xC0000005` (access violation) when asked to restore it,
+at both widths. Checked against the older release worker from the main checkout
+(built before the P2 changes): same crash, so it is not caused by the
+`effStartProcess`/`effStopProcess` bracketing. The crash is isolated to the
+plugin worker, the app keeps running, and the supervisor reports the failure.
+Not yet diagnosed (chunk restore on a MIDI-only plugin is the first suspect).

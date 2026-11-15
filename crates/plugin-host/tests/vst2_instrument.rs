@@ -301,8 +301,10 @@ mod the_midi_queue {
         assert_eq!(queue.push(&[bad]), 0);
         let note = MidiEvent::new(0, 0x90, 60, 90).unwrap();
         let burst = vec![note; MidiQueue::CAPACITY * 2];
-        assert_eq!(queue.push(&burst), MidiQueue::CAPACITY * 2);
-        // Held-note tracking is unaffected by dropped events.
-        assert_eq!(queue.held_notes(), 1);
+        // An overflowing batch is refused instead of evicting an older
+        // note-off; the queue also clears its now-stale held state.
+        assert_eq!(queue.push(&burst), 0);
+        assert_eq!(queue.held_notes(), 0);
+        assert_eq!(queue.release_all_notes(), 0);
     }
 }

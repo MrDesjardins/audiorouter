@@ -945,7 +945,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 150] = [
+pub const API_METHODS: [ApiMethodSpec; 154] = [
     ApiMethodSpec {
         name: "meters.reset",
         permission: PermissionScope::SessionControl,
@@ -1451,6 +1451,26 @@ pub const API_METHODS: [ApiMethodSpec; 150] = [
         side_effect: SideEffectClass::Mutating,
     },
     ApiMethodSpec {
+        name: "plugins.buses",
+        permission: PermissionScope::PluginScan,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "plugins.programs",
+        permission: PermissionScope::PluginScan,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "plugins.selectProgram",
+        permission: PermissionScope::SessionControl,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "plugins.applyPreset",
+        permission: PermissionScope::SessionControl,
+        side_effect: SideEffectClass::ExternalOperation,
+    },
+    ApiMethodSpec {
         name: "virtualDevices.list",
         permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
@@ -1746,6 +1766,16 @@ pub struct Node {
 }
 
 impl Node {
+    /// Saved sidechain topology uses an ordinary named port, not a second
+    /// boolean/channel parameter that can disagree with it. This is desired
+    /// topology only; the backend must verify the plugin's discovered buses
+    /// before binding a worker. Missing ports preserve old-session behavior.
+    pub fn plugin_sidechain_port(&self) -> Option<&Port> {
+        (self.kind == NodeKind::Plugin)
+            .then(|| self.ports.iter().find(|port| port.name == "sidechain"))
+            .flatten()
+    }
+
     /// Stored audio owned by this node, including disabled/bypassed settings.
     /// Library references and category names refer to installed files rather
     /// than database rows. Keep this exhaustive when adding a node kind.
@@ -2173,6 +2203,33 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 errors.push(ValidationError::InvalidChannels {
                     path: format!("{path}.ports[{port_index}].channels"),
                     channels: port.channels,
+                });
+            }
+        }
+        if node.ports.iter().any(|port| port.name == "sidechain") {
+            let sidechain = node.plugin_sidechain_port();
+            let mut main_inputs = node
+                .ports
+                .iter()
+                .filter(|port| port.direction == PortDirection::Input && port.name != "sidechain");
+            let mut outputs = node
+                .ports
+                .iter()
+                .filter(|port| port.direction == PortDirection::Output);
+            let main_input = main_inputs.next();
+            let main_output = outputs.next();
+            if node.ports.len() != 3
+                || !sidechain.is_some_and(|port| {
+                    port.direction == PortDirection::Input && (1..=2).contains(&port.channels)
+                })
+                || main_inputs.next().is_some()
+                || outputs.next().is_some()
+                || main_input
+                    .zip(main_output)
+                    .is_none_or(|(input, output)| input.channels != output.channels)
+            {
+                errors.push(ValidationError::InvalidPortLayout {
+                    path: format!("{path}.ports"),
                 });
             }
         }
@@ -3919,6 +3976,86 @@ mod tests {
             ValidationError::InvalidParameter { path }
                 if path == "nodes[0].parameters.format"
         )));
+    }
+
+    fn sidechain_plugin() -> Node {
+        let mut plugin = node("plugin", NodeKind::Plugin, PortDirection::Input);
+        plugin.ports.extend([
+            Port {
+                name: "out".into(),
+                direction: PortDirection::Output,
+                channels: 1,
+            },
+            Port {
+                name: "sidechain".into(),
+                direction: PortDirection::Input,
+                channels: 1,
+            },
+        ]);
+        plugin
+    }
+
+    #[test]
+    fn sidechain_ports_and_edges_survive_saved_session_roundtrip() {
+        let mut key_edge = edge("key-edge", "key", "plugin");
+        key_edge.destination_port = "sidechain".into();
+        let saved = session(
+            vec![
+                node("source", NodeKind::TestSignal, PortDirection::Output),
+                node("key", NodeKind::TestSignal, PortDirection::Output),
+                sidechain_plugin(),
+            ],
+            vec![edge("main-edge", "source", "plugin"), key_edge],
+        );
+        validate_session(&saved).unwrap();
+        let encoded = serde_json::to_vec(&saved).unwrap();
+        let restored: Session = serde_json::from_slice(&encoded).unwrap();
+        assert_eq!(restored, saved);
+        validate_session(&restored).unwrap();
+        // The single-edge rule applies per port, so the key is not summed
+        // into the occupied ordinary input.
+        let mut wrong_port = restored;
+        wrong_port.edges[1].destination_port = "main".into();
+        assert!(validate_session(&wrong_port)
+            .unwrap_err()
+            .iter()
+            .any(|error| matches!(error, ValidationError::MultipleInputEdges { .. })));
+    }
+
+    #[test]
+    fn legacy_plugin_sessions_do_not_gain_a_sidechain_when_loaded() {
+        let mut plugin = sidechain_plugin();
+        plugin.ports.retain(|port| port.name != "sidechain");
+        let saved = session(vec![plugin], vec![]);
+        let bytes = serde_json::to_vec(&saved).unwrap();
+        let restored: Session = serde_json::from_slice(&bytes).unwrap();
+        validate_session(&restored).unwrap();
+        assert!(restored.nodes[0].plugin_sidechain_port().is_none());
+        assert_eq!(serde_json::to_vec(&restored).unwrap(), bytes);
+    }
+
+    #[test]
+    fn malformed_or_non_plugin_sidechain_ports_are_rejected() {
+        let good = sidechain_plugin();
+        for variant in 0..6 {
+            let mut plugin = good.clone();
+            match variant {
+                0 => plugin.ports.push(plugin.ports[2].clone()),
+                1 => plugin.ports[2].direction = PortDirection::Output,
+                2 => plugin.ports[2].channels = 3,
+                3 => plugin.kind = NodeKind::Gain,
+                4 => plugin.ports[1].channels = 2,
+                5 => {
+                    plugin.ports.remove(0);
+                }
+                _ => unreachable!(),
+            }
+            assert!(
+                validate_session(&session(vec![plugin], vec![])).is_err(),
+                "variant {variant}"
+            );
+        }
+        assert!(validate_session(&session(vec![good], vec![])).is_ok());
     }
 
     #[test]

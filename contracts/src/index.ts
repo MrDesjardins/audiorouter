@@ -1543,6 +1543,10 @@ export type ImplementedMethod =
   | "plugins.openEditor"
   | "plugins.closeEditor"
   | "plugins.resume"
+  | "plugins.buses"
+  | "plugins.programs"
+  | "plugins.selectProgram"
+  | "plugins.applyPreset"
   | "plugins.retry"
   | "plugins.inspect"
   | "plugins.parameters"
@@ -1750,6 +1754,10 @@ export type MethodParams = {
   "plugins.openEditor": { sessionId: EntityId; nodeId: EntityId; parentWindow: number; ownerProcessId: number };
   "plugins.closeEditor": { sessionId: EntityId; nodeId: EntityId };
   "plugins.resume": { sessionId?: EntityId; nodeId: EntityId };
+  "plugins.buses": { path: string; classId?: string };
+  "plugins.programs": { sessionId?: EntityId; nodeId: EntityId };
+  "plugins.selectProgram": { sessionId?: EntityId; nodeId: EntityId; program: number };
+  "plugins.applyPreset": { sessionId?: EntityId; nodeId: EntityId; presetPath: string };
   "plugins.retry": { directory: string; idempotencyKey: string };
   "plugins.inspect": { path: string };
   "plugins.parameters": { path: string; classId?: string; instrument?: boolean };
@@ -1968,6 +1976,10 @@ export type MethodResult = {
   "plugins.openEditor": { sessionId: EntityId; nodeId: EntityId; state: "open" | "closed" };
   "plugins.closeEditor": { sessionId: EntityId; nodeId: EntityId; state: "open" | "closed" };
   "plugins.resume": { sessionId: EntityId; nodeId: EntityId; resumed: boolean };
+  "plugins.buses": { path: string; sha256: string; format: "vst2" | "vst3" | "unknown"; buses: { inputs: { nativeIndex: number; name: string; channels: number; role: "main" | "auxiliary" }[]; outputs: { nativeIndex: number; name: string; channels: number; role: "main" | "auxiliary" }[] } };
+  "plugins.programs": { sessionId: EntityId; nodeId: EntityId; programs: { id: number; name: string }[] };
+  "plugins.selectProgram": { sessionId: EntityId; nodeId: EntityId; program: number };
+  "plugins.applyPreset": { sessionId: EntityId; nodeId: EntityId; presetPath: string };
   "plugins.retry": PluginScanResult;
   "plugins.inspect": PluginScanEntry;
   "plugins.parameters": PluginParametersResult;

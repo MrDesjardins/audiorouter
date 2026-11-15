@@ -14,7 +14,14 @@ auxiliary-bus vs. VST2 single-stream boundaries and concrete editor, stopped
 setup, serial-vs-sum, and sidechain acceptance. See the
 [issue #136 execution plan](issue-136-vst-experience.md) for decisions,
 test matrix, prerequisites, failure containment, rollback and the exact next
-action. No implementation or reproduction claim is made.
+action. No implementation or reproduction claim was made originally. Review pass 2
+(2026-11-14) fixed MIDI stuck-note recovery, worker backlog eviction, active
+session/exact-name targeting and MIDI device connection status, and recorded the
+owner's visible-Mixer and explicit-VST2-pin-label sidechain decisions. The full
+VST plan is still incomplete: P5 sidechain, P6 resize/focus/DPI, P2 programs/
+shell/.fxp, P3 units/multi-class/validator and P9 release gates remain. See
+[the plan](vst-full-compatibility.md), [handoff](vst-handoff.md) and the
+[completion work plan](vst-completion-work.md).
 
 ## CI speed — 2026-11-12
 

@@ -1050,7 +1050,12 @@ impl ControlPlane {
                                 "gateOpen": telemetry.gate_open,
                             })
                         });
+                let bridge_telemetry = self.plugin_bridge_telemetry(session_id, &node.id);
                 let plugin_health = processor.plugin_health_for_node(&node.id).map(|health| {
+                    let (output_misses, input_drops, unchanged, silenced, reason) =
+                        bridge_telemetry
+                            .clone()
+                            .unwrap_or((0, 0, false, false, None));
                     json!({
                         "state": match health.state {
                             audiorouter_engine::PluginWorkerState::Unknown => "unknown",
@@ -1060,17 +1065,23 @@ impl ControlPlane {
                             audiorouter_engine::PluginWorkerState::Quarantined => "quarantined",
                         },
                         "failureCount": health.failure_count,
-                        "outputMisses": self.plugin_bridge(session_id, &node.id).ok().map(|bridge| bridge.continuity_counts().0).unwrap_or(0),
-                        "inputDrops": self.plugin_bridge(session_id, &node.id).ok().map(|bridge| bridge.continuity_counts().1).unwrap_or(0),
-                        "unchangedAudio": self.plugin_bridge(session_id, &node.id).ok().is_some_and(|bridge| bridge.passes_audio_unchanged()),
-                        "silencedUnchanged": self.plugin_bridge(session_id, &node.id).ok().is_some_and(|bridge| bridge.silenced_for_unchanged_audio()),
-                        "failureReason": self.plugin_bridge(session_id, &node.id).ok().and_then(|bridge| bridge.failure_reason()),
+                        "outputMisses": output_misses,
+                        "inputDrops": input_drops,
+                        "unchangedAudio": unchanged,
+                        "silencedUnchanged": silenced,
+                        "failureReason": reason,
                     })
                 });
                 let noise_profile = processor.noise_profile_for_node(&node.id);
                 let spectrum = processor.spectrum_levels_for_node(&node.id);
                 let voice = voice_changer_telemetry(processor.voice_changer_for_node(&node.id));
-                if meter.is_none() && processor_telemetry.is_none() && plugin_health.is_none() && noise_profile.is_none() && spectrum.is_none() && voice.is_none() {
+                if meter.is_none()
+                    && processor_telemetry.is_none()
+                    && plugin_health.is_none()
+                    && noise_profile.is_none()
+                    && spectrum.is_none()
+                    && voice.is_none()
+                {
                     return None;
                 }
                 let mut item = json!({
@@ -1186,7 +1197,12 @@ impl ControlPlane {
                                 "gateOpen": telemetry.gate_open,
                             })
                         });
+                let bridge_telemetry = self.plugin_bridge_telemetry(session_id, &node.id);
                 let plugin_health = worker.plugin_health_for_node(&node.id).map(|health| {
+                    let (output_misses, input_drops, unchanged, silenced, reason) =
+                        bridge_telemetry
+                            .clone()
+                            .unwrap_or((0, 0, false, false, None));
                     json!({
                         "state": match health.state {
                             audiorouter_engine::PluginWorkerState::Unknown => "unknown",
@@ -1196,11 +1212,11 @@ impl ControlPlane {
                             audiorouter_engine::PluginWorkerState::Quarantined => "quarantined",
                         },
                         "failureCount": health.failure_count,
-                        "outputMisses": self.plugin_bridge(session_id, &node.id).ok().map(|bridge| bridge.continuity_counts().0).unwrap_or(0),
-                        "inputDrops": self.plugin_bridge(session_id, &node.id).ok().map(|bridge| bridge.continuity_counts().1).unwrap_or(0),
-                        "unchangedAudio": self.plugin_bridge(session_id, &node.id).ok().is_some_and(|bridge| bridge.passes_audio_unchanged()),
-                        "silencedUnchanged": self.plugin_bridge(session_id, &node.id).ok().is_some_and(|bridge| bridge.silenced_for_unchanged_audio()),
-                        "failureReason": self.plugin_bridge(session_id, &node.id).ok().and_then(|bridge| bridge.failure_reason()),
+                        "outputMisses": output_misses,
+                        "inputDrops": input_drops,
+                        "unchangedAudio": unchanged,
+                        "silencedUnchanged": silenced,
+                        "failureReason": reason,
                     })
                 });
                 let network = worker
@@ -1236,7 +1252,10 @@ impl ControlPlane {
                         telemetry
                     })
                     .or_else(|| {
-                        let index = worker.output_node_ids().iter().position(|id| *id == node.id)?;
+                        let index = worker
+                            .output_node_ids()
+                            .iter()
+                            .position(|id| *id == node.id)?;
                         worker.network_send_stats(index).map(|stats| {
                             let mut telemetry = json!({
                                 "direction": "send",

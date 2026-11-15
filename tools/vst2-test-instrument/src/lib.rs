@@ -21,6 +21,8 @@ const EFF_CLOSE: i32 = 1;
 const EFF_SET_SAMPLE_RATE: i32 = 10;
 const EFF_PROCESS_EVENTS: i32 = 25;
 const EFF_GET_PLUG_CATEGORY: i32 = 35;
+const EFF_SHELL_GET_NEXT_PLUGIN: i32 = 70;
+const PLUG_CATEGORY_SHELL: isize = 10;
 const EFF_GET_EFFECT_NAME: i32 = 45;
 const EFF_GET_VENDOR_STRING: i32 = 47;
 const EFF_GET_PRODUCT_STRING: i32 = 48;
@@ -171,7 +173,52 @@ unsafe extern "C" fn dispatch(
             }
             1
         }
-        EFF_GET_PLUG_CATEGORY => PLUG_CATEGORY_SYNTH,
+        #[cfg(feature = "bus-fixture")]
+        33 => {
+            if ptr.is_null() || !(0..4).contains(&_index) {
+                return 0;
+            }
+            // SAFETY: opcode 33 supplies a writable 128-byte pin-properties
+            // buffer; this call initializes its complete fixed-width layout.
+            // The effect remains open and is accessed serially by the worker.
+            unsafe {
+                std::ptr::write_bytes(ptr.cast::<u8>(), 0, 128);
+                let key = state_of(effect).volume >= 0.5;
+                let label = match (_index, key) {
+                    (0, _) => "Main L",
+                    (1, _) => "Main R",
+                    (2, true) => "Key L",
+                    (3, true) => "Key R",
+                    (2, false) => "Rear L",
+                    _ => "Rear R",
+                };
+                write_string(ptr, label);
+            }
+            1
+        }
+        EFF_GET_PLUG_CATEGORY => {
+            if cfg!(feature = "shell-fixture") {
+                PLUG_CATEGORY_SHELL
+            } else if cfg!(feature = "bus-fixture") {
+                1
+            } else {
+                PLUG_CATEGORY_SYNTH
+            }
+        }
+        EFF_SHELL_GET_NEXT_PLUGIN if cfg!(feature = "shell-fixture") => {
+            const SHELL: [(&str, i32); 3] = [
+                ("Shell Clean", i32::from_be_bytes(*b"SHC1")),
+                ("Shell Drive", i32::from_be_bytes(*b"SHD2")),
+                ("Shell Echo", i32::from_be_bytes(*b"SHE3")),
+            ];
+            let Some((name, id)) = SHELL.get(_index as usize) else {
+                return 0;
+            };
+            // SAFETY: the host passes a 64-byte string buffer for a shell
+            // sub-plugin name.
+            unsafe { write_string(ptr, name) };
+            *id as isize
+        }
         EFF_GET_EFFECT_NAME | EFF_GET_PRODUCT_STRING => {
             // SAFETY: the host passes a 64-byte string buffer for these.
             unsafe { write_string(ptr, "AR Test Instrument") };
@@ -293,9 +340,20 @@ pub unsafe extern "C" fn VSTPluginMain(_host: HostCallback) -> *mut AEffect {
         get_parameter: Some(get_parameter),
         num_programs: 1,
         num_params: 1,
-        num_inputs: 0,
+        num_inputs: if cfg!(feature = "bus-fixture") {
+            4
+        } else if cfg!(feature = "shell-fixture") {
+            2
+        } else {
+            0
+        },
         num_outputs: 2,
-        flags: FLAG_CAN_REPLACING | FLAG_IS_SYNTH,
+        flags: FLAG_CAN_REPLACING
+            | if cfg!(feature = "bus-fixture") || cfg!(feature = "shell-fixture") {
+                0
+            } else {
+                FLAG_IS_SYNTH
+            },
         reserved_1: 0,
         reserved_2: 0,
         initial_delay: 0,

@@ -92,6 +92,27 @@ pub(crate) fn parse_events(events: &Value) -> Result<Vec<ParsedEvent>, ControlEr
             .get("type")
             .and_then(Value::as_str)
             .ok_or_else(|| bad("every event needs a type"))?;
+        let allowed_fields: &[&str] = match kind {
+            "noteOn" => &["type", "channel", "afterMs", "durationMs", "note", "velocity"],
+            "noteOff" => &["type", "channel", "afterMs", "note"],
+            "controlChange" => &["type", "channel", "afterMs", "controller", "value"],
+            "pitchBend" => &["type", "channel", "afterMs", "bend"],
+            "aftertouch" => &["type", "channel", "afterMs", "value"],
+            "allNotesOff" => &["type"],
+            other => {
+                return Err(bad(format!(
+                    "unknown event type \"{other}\"; use noteOn, noteOff, controlChange, pitchBend, aftertouch or allNotesOff"
+                )))
+            }
+        };
+        if let Some(object) = event.as_object() {
+            if let Some(field) = object
+                .keys()
+                .find(|field| !allowed_fields.contains(&field.as_str()))
+            {
+                return Err(bad(format!("{field} is not valid for {kind}")));
+            }
+        }
         let channel = byte(event, "channel", 1, 16)?.unwrap_or(1) - 1;
         let after_ms = milliseconds(event, "afterMs")?.unwrap_or(0);
         let duration_ms = milliseconds(event, "durationMs")?;
@@ -101,6 +122,9 @@ pub(crate) fn parse_events(events: &Value) -> Result<Vec<ParsedEvent>, ControlEr
         };
         let (event, duration_ms) = match kind {
             "allNotesOff" => {
+                if events.len() != 1 {
+                    return Err(bad("allNotesOff must be the only event"));
+                }
                 parsed.push(ParsedEvent::AllNotesOff);
                 continue;
             }
@@ -119,6 +143,11 @@ pub(crate) fn parse_events(events: &Value) -> Result<Vec<ParsedEvent>, ControlEr
                     .ok_or_else(|| bad("controlChange needs a controller"))?;
                 let value = byte(event, "value", 0, 127)?
                     .ok_or_else(|| bad("controlChange needs a value"))?;
+                if matches!(controller, 120 | 123) && (events.len() != 1 || after_ms != 0) {
+                    return Err(bad(
+                        "all-sound-off and all-notes-off controllers must be sent alone and immediately",
+                    ));
+                }
                 (message(0xB0, controller, value)?, None)
             }
             "pitchBend" => {
@@ -145,6 +174,9 @@ pub(crate) fn parse_events(events: &Value) -> Result<Vec<ParsedEvent>, ControlEr
                 )))
             }
         };
+        if duration_ms.is_some() && kind != "noteOn" {
+            return Err(bad("durationMs is only valid for noteOn"));
+        }
         parsed.push(ParsedEvent::Message {
             event,
             after_ms,
@@ -154,69 +186,139 @@ pub(crate) fn parse_events(events: &Value) -> Result<Vec<ParsedEvent>, ControlEr
     Ok(parsed)
 }
 
-/// Pushes the immediate messages now and hands delayed ones (a later start or a
-/// note length) to one short-lived thread. Returns how many messages were
-/// accepted at once and how many were scheduled.
+struct ActiveSequenceGuard;
+
+impl Drop for ActiveSequenceGuard {
+    fn drop(&mut self) {
+        ACTIVE_SEQUENCES.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+/// Pushes immediate messages and hands delayed events to one bounded
+/// short-lived sequence. A sequence waits until the immediate batch is
+/// accepted, and its generation is canceled by panic/overflow/CC all-notes-off.
+/// Returns how many events were accepted immediately and how many scheduled.
 pub(crate) fn play_events(
     queue: &Arc<MidiQueue>,
     events: Vec<ParsedEvent>,
 ) -> Result<(usize, usize), ControlError> {
-    let mut now = Vec::new();
-    let mut later: Vec<(u64, MidiEvent)> = Vec::new();
-    let mut panic_now = false;
+    if matches!(events.as_slice(), [ParsedEvent::AllNotesOff]) {
+        queue.release_all_notes();
+        return Ok((1, 0));
+    }
+    if events
+        .iter()
+        .any(|event| matches!(event, ParsedEvent::AllNotesOff))
+    {
+        return Err(bad("allNotesOff must be sent by itself"));
+    }
+    // Capture the generation before any preparation or thread creation. If a
+    // concurrent MIDI panic happens during that work, both immediate and
+    // delayed messages from this request are rejected as stale.
+    let generation = queue
+        .schedule_generation()
+        .ok_or_else(|| bad("could not read instrument note queue state"))?;
+
+    let mut immediate = Vec::new();
+    let mut timeline: Vec<(u64, MidiEvent)> = Vec::new();
     for event in events {
         match event {
-            ParsedEvent::AllNotesOff => panic_now = true,
+            ParsedEvent::AllNotesOff => unreachable!("allNotesOff was handled above"),
             ParsedEvent::Message {
                 event,
                 after_ms,
                 duration_ms,
             } => {
+                let release = duration_ms
+                    .map(|length| {
+                        let due = after_ms
+                            .checked_add(length)
+                            .filter(|due| *due <= MAX_SCHEDULE_MS)
+                            .ok_or_else(|| bad("afterMs plus durationMs must be at most 30000"))?;
+                        MidiEvent::new(0, (event.status & 0x0F) | 0x80, event.data1, 0)
+                            .map(|release| (due, release))
+                            .map_err(|_| bad("invalid note release"))
+                    })
+                    .transpose()?;
                 if after_ms == 0 {
-                    now.push(event);
+                    immediate.push(event);
+                    if let Some((0, release)) = release {
+                        immediate.push(release);
+                    } else if let Some((due, release)) = release {
+                        timeline.push((due, release));
+                    }
                 } else {
-                    later.push((after_ms, event));
-                }
-                if let Some(length) = duration_ms {
-                    // The release of a note that lasts `length` ms.
-                    let release = MidiEvent::new(0, event.status & 0x0F | 0x80, event.data1, 0)
-                        .map_err(|_| bad("invalid note release"))?;
-                    later.push((after_ms + length, release));
+                    timeline.push((after_ms, event));
+                    if let Some((due, release)) = release {
+                        timeline.push((due, release));
+                    }
                 }
             }
         }
     }
-    if panic_now {
-        queue.release_all_notes();
-    }
-    let accepted = queue.push(&now);
-    let scheduled = later.len();
-    if !later.is_empty() {
-        if ACTIVE_SEQUENCES.fetch_add(1, Ordering::AcqRel) >= MAX_SEQUENCES {
-            ACTIVE_SEQUENCES.fetch_sub(1, Ordering::AcqRel);
-            return Err(bad(
-                "too many timed note sequences are playing; wait a moment",
-            ));
+
+    let scheduled = timeline.len();
+    let mut start_sequence = None;
+    if !timeline.is_empty() {
+        let mut active = ACTIVE_SEQUENCES.load(Ordering::Acquire);
+        loop {
+            if active >= MAX_SEQUENCES {
+                return Err(bad(
+                    "too many timed note sequences are playing; wait a moment",
+                ));
+            }
+            match ACTIVE_SEQUENCES.compare_exchange_weak(
+                active,
+                active + 1,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => break,
+                Err(current) => active = current,
+            }
         }
-        later.sort_by_key(|(at, _)| *at);
-        let queue = Arc::clone(queue);
-        std::thread::Builder::new()
+        let (start_sender, start_receiver) = std::sync::mpsc::sync_channel::<Option<u64>>(1);
+        let queue_for_thread = Arc::clone(queue);
+        let spawn = std::thread::Builder::new()
             .name("midi-sequence".into())
             .spawn(move || {
+                let _guard = ActiveSequenceGuard;
+                let Ok(Some(generation)) = start_receiver.recv() else {
+                    return;
+                };
+                // Stable ordering preserves note-on before its same-time
+                // release and caller order for simultaneous events.
+                timeline.sort_by_key(|(at, _)| *at);
                 let started = Instant::now();
-                for (at, event) in later {
+                for (at, event) in timeline {
                     let due = started + std::time::Duration::from_millis(at);
                     if let Some(wait) = due.checked_duration_since(Instant::now()) {
                         std::thread::sleep(wait);
                     }
-                    queue.push(&[event]);
+                    if queue_for_thread.push_scheduled(generation, &[event]) == 0 {
+                        break;
+                    }
                 }
-                ACTIVE_SEQUENCES.fetch_sub(1, Ordering::AcqRel);
-            })
-            .map_err(|_| {
-                ACTIVE_SEQUENCES.fetch_sub(1, Ordering::AcqRel);
-                bad("could not start the note sequence")
-            })?;
+            });
+        if let Err(error) = spawn {
+            ACTIVE_SEQUENCES.fetch_sub(1, Ordering::AcqRel);
+            return Err(bad(format!("could not start the note sequence: {error}")));
+        }
+        start_sequence = Some(start_sender);
+    }
+
+    let accepted = queue.push_for_generation(generation, &immediate);
+    if accepted != immediate.len() {
+        if let Some(start_sequence) = start_sequence {
+            let _ = start_sequence.send(None);
+        }
+        return Ok((accepted, 0));
+    }
+    if let Some(start_sequence) = start_sequence {
+        if start_sequence.send(Some(generation)).is_err() {
+            queue.release_all_notes();
+            return Err(bad("the note sequence stopped before it could start"));
+        }
     }
     Ok((accepted, scheduled))
 }
@@ -228,6 +330,26 @@ pub(crate) enum MidiSource {
     KeyboardOnly,
     All,
     Device(String),
+}
+
+fn midi_connection_is_open(
+    requested: &MidiSource,
+    opened_names: &[String],
+    available_names: &[String],
+) -> bool {
+    match requested {
+        MidiSource::KeyboardOnly => true,
+        MidiSource::All => {
+            !available_names.is_empty()
+                && available_names
+                    .iter()
+                    .all(|name| opened_names.iter().any(|opened| opened == name))
+        }
+        MidiSource::Device(name) => {
+            available_names.iter().any(|available| available == name)
+                && opened_names.iter().any(|opened| opened == name)
+        }
+    }
 }
 
 pub(crate) fn midi_source_of(node: &audiorouter_domain::Node) -> MidiSource {
@@ -244,6 +366,8 @@ pub(crate) fn midi_source_of(node: &audiorouter_domain::Node) -> MidiSource {
 pub(crate) struct InstrumentMidiInputs {
     bridge: std::sync::Weak<audiorouter_plugin_host::PluginRuntimeBridge>,
     requested: MidiSource,
+    opened_names: Vec<String>,
+    last_connected: bool,
     #[cfg(windows)]
     /// Held only to keep the devices open; dropping them closes the devices.
     _connections: Vec<audiorouter_windows_audio::MidiInputConnection>,
@@ -296,12 +420,29 @@ impl ControlPlane {
                 })
                 .collect::<Vec<_>>()
         };
+        #[cfg(windows)]
+        let opened_names = connections
+            .iter()
+            .map(|connection| connection.name().to_owned())
+            .collect::<Vec<String>>();
+        #[cfg(not(windows))]
+        let opened_names = Vec::new();
+        #[cfg(windows)]
+        let available_names = audiorouter_windows_audio::list_midi_input_devices()
+            .into_iter()
+            .map(|device| device.name)
+            .collect::<Vec<_>>();
+        #[cfg(not(windows))]
+        let available_names: Vec<String> = Vec::new();
+        let last_connected = midi_connection_is_open(&requested, &opened_names, &available_names);
         if let Ok(mut inputs) = self.instrument_midi.lock() {
             inputs.insert(
                 (session_id.clone(), node.id.clone()),
                 InstrumentMidiInputs {
                     bridge: Arc::downgrade(bridge),
                     requested,
+                    opened_names,
+                    last_connected,
                     #[cfg(windows)]
                     _connections: connections,
                 },
@@ -331,22 +472,17 @@ impl ControlPlane {
 
     /// The session and node of a running Instrument named by `params`.
     fn running_instrument_ids(&self, params: &Value) -> Result<(EntityId, EntityId), ControlError> {
-        let field = |name: &str| {
-            params
-                .get(name)
-                .and_then(Value::as_str)
-                .map(EntityId::new)
-                .ok_or_else(|| bad(format!("{name} is required")))
-        };
-        let (session_id, node_id) = (field("sessionId")?, field("nodeId")?);
-        let is_instrument = self
-            .get_session(&session_id)?
-            .nodes
-            .iter()
-            .any(|node| node.id == node_id && node.kind == NodeKind::Instrument);
-        if !is_instrument {
+        let session_id = self.simple_session_id(params)?;
+        let reference = params
+            .get("nodeId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| bad("nodeId is required"))?;
+        let node = simple::resolve_node(self.get_session(&session_id)?, reference)?;
+        if node.kind != NodeKind::Instrument {
             return Err(bad("nodeId must name an Instrument tool"));
         }
+        let node_id = node.id.clone();
         if !self
             .runtimes
             .get(&session_id)
@@ -374,15 +510,29 @@ impl ControlPlane {
         let instruments = self
             .instrument_midi
             .lock()
-            .map(|inputs| {
+            .map(|mut inputs| {
                 inputs
-                    .iter()
+                    .iter_mut()
                     .map(|((session_id, node_id), input)| {
-                        let (requested, connected) = match &input.requested {
-                            MidiSource::KeyboardOnly => ("keyboard".to_owned(), true),
-                            MidiSource::All => ("all".to_owned(), !devices.is_empty()),
-                            MidiSource::Device(name) => (name.clone(), devices.contains(name)),
+                        let requested = match &input.requested {
+                            MidiSource::KeyboardOnly => "keyboard".to_owned(),
+                            MidiSource::All => "all".to_owned(),
+                            MidiSource::Device(name) => name.clone(),
                         };
+                        let connected = midi_connection_is_open(
+                            &input.requested,
+                            &input.opened_names,
+                            &devices,
+                        );
+                        if input.last_connected && !connected {
+                            // No MIDI input means no more key-up will arrive.
+                            // Release every held note immediately when the
+                            // status read discovers the device disappeared.
+                            if let Some(bridge) = input.bridge.upgrade() {
+                                bridge.midi_queue().release_all_notes();
+                            }
+                        }
+                        input.last_connected = connected;
                         json!({
                             "sessionId": session_id,
                             "nodeId": node_id,
@@ -458,6 +608,22 @@ mod tests {
             (
                 json!([{ "type": "noteOn", "note": 60, "durationMs": 99999 }]),
                 "milliseconds",
+            ),
+            (
+                json!([{ "type": "noteOff", "note": 60, "velocity": 20 }]),
+                "not valid for noteOff",
+            ),
+            (
+                json!([{ "type": "noteOn", "note": 60, "controller": 1 }]),
+                "not valid for noteOn",
+            ),
+            (
+                json!([{ "type": "controlChange", "controller": 123, "value": 0, "afterMs": 10 }]),
+                "alone and immediately",
+            ),
+            (
+                json!([{ "type": "allNotesOff", "channel": 2 }]),
+                "not valid for allNotesOff",
             ),
             (json!([{ "type": "sysex" }]), "unknown event type"),
         ] {
@@ -572,6 +738,30 @@ mod tests {
     }
 
     #[test]
+    fn midi_send_events_uses_the_active_session_and_resolves_an_exact_node_name() {
+        let mut plane = ControlPlane::default();
+        let session = instrument_session();
+        plane.active_session_id = Some(session.id.clone());
+        plane.insert_session(session).unwrap();
+
+        // This test reaches the target resolver before the expected stopped
+        // route refusal; IDs remain what reaches the runtime bridge.
+        let response = call(
+            &mut plane,
+            "midi.sendEvents",
+            json!({ "nodeId": "PIANO", "events": [{ "type": "noteOn", "note": 60 }] }),
+        );
+        assert!(response.error.unwrap().message.contains("start the route"));
+
+        let response = call(
+            &mut plane,
+            "midi.sendEvents",
+            json!({ "nodeId": "absent", "events": [{ "type": "noteOn", "note": 60 }] }),
+        );
+        assert!(response.error.unwrap().message.contains("no node named"));
+    }
+
+    #[test]
     fn midi_devices_lists_hardware_and_never_fails_without_any() {
         let mut plane = ControlPlane::default();
         let response = call(&mut plane, "midi.devices", json!({}));
@@ -608,5 +798,40 @@ mod tests {
             midi_source_of(&node(Some("Launchkey 49"))),
             MidiSource::Device("Launchkey 49".into())
         );
+    }
+
+    #[test]
+    fn midi_device_status_requires_an_open_connection_and_all_requested_devices() {
+        let keyboard = MidiSource::KeyboardOnly;
+        assert!(midi_connection_is_open(&keyboard, &[], &[]));
+
+        let device = MidiSource::Device("Launchkey".into());
+        assert!(midi_connection_is_open(
+            &device,
+            &["Launchkey".into()],
+            &["Launchkey".into()]
+        ));
+        assert!(!midi_connection_is_open(
+            &device,
+            &[],
+            &["Launchkey".into()]
+        ));
+        assert!(!midi_connection_is_open(
+            &device,
+            &["Launchkey".into()],
+            &[]
+        ));
+
+        let all = MidiSource::All;
+        assert!(midi_connection_is_open(
+            &all,
+            &["Launchkey".into(), "Pad".into()],
+            &["Launchkey".into(), "Pad".into()]
+        ));
+        assert!(!midi_connection_is_open(
+            &all,
+            &["Launchkey".into()],
+            &["Launchkey".into(), "Pad".into()]
+        ));
     }
 }

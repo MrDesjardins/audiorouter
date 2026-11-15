@@ -438,13 +438,18 @@ fn run() -> Result<(), String> {
             }
             WorkerMessage::Midi { events } => {
                 // One-way. Only an instrument plays MIDI; for an effect the
-                // events are dropped, and a backlog never builds up.
+                // events are dropped. Never evict an older note event: that
+                // could discard a note-off and leave the instrument stuck.
                 if instrument {
+                    if events.len()
+                        > audiorouter_plugin_host::MAX_MIDI_EVENTS_PER_BLOCK
+                            .saturating_sub(pending_midi.len())
+                    {
+                        return Err(
+                            "pending MIDI event backlog exceeded the bounded contract".into()
+                        );
+                    }
                     pending_midi.extend(events);
-                    let excess = pending_midi
-                        .len()
-                        .saturating_sub(audiorouter_plugin_host::MAX_MIDI_EVENTS_PER_BLOCK);
-                    pending_midi.drain(..excess);
                 }
             }
             WorkerMessage::Process {
@@ -525,6 +530,27 @@ fn run() -> Result<(), String> {
                 write_worker_message(&mut writer, &WorkerMessage::Latency(latency))
                     .map_err(|error| format!("latency write failed: {error:?}"))?;
             }
+            WorkerMessage::DescribeBuses => {
+                #[cfg(windows)]
+                let response = if let Some(plugin) = vst2_plugins.get_mut(selected_instance) {
+                    match plugin.describe_buses() {
+                        Ok(buses) => WorkerMessage::Buses(buses),
+                        Err(_) => WorkerMessage::Failure {
+                            code: "unsupportedVst2BusLayout".into(),
+                        },
+                    }
+                } else {
+                    WorkerMessage::Failure {
+                        code: "busDiscoveryUnavailable".into(),
+                    }
+                };
+                #[cfg(not(windows))]
+                let response = WorkerMessage::Failure {
+                    code: "busDiscoveryUnavailable".into(),
+                };
+                write_worker_message(&mut writer, &response)
+                    .map_err(|error| format!("bus description write failed: {error:?}"))?;
+            }
             WorkerMessage::DescribeParameters => {
                 let fixture_descriptors = {
                     #[cfg(feature = "test-fixtures")]
@@ -559,6 +585,42 @@ fn run() -> Result<(), String> {
                 let descriptors = fixture_descriptors;
                 write_worker_message(&mut writer, &WorkerMessage::Parameters { descriptors })
                     .map_err(|error| format!("parameter description write failed: {error:?}"))?;
+            }
+            WorkerMessage::DescribePrograms => {
+                #[cfg(windows)]
+                let programs = if let Some(plugin) = vst2_plugins.get_mut(selected_instance) {
+                    plugin
+                        .programs()
+                        .map_err(|error| format!("VST2 program description failed: {error:?}"))?
+                } else {
+                    Vec::new()
+                };
+                #[cfg(not(windows))]
+                let programs = Vec::new();
+                write_worker_message(&mut writer, &WorkerMessage::Programs { programs })
+                    .map_err(|error| format!("program description write failed: {error:?}"))?;
+            }
+            WorkerMessage::SelectProgram { index } => {
+                #[cfg(windows)]
+                if let Some(plugin) = vst2_plugins.get_mut(selected_instance) {
+                    plugin
+                        .set_program(index)
+                        .map_err(|error| format!("VST2 program selection failed: {error:?}"))?;
+                }
+                write_worker_message(&mut writer, &WorkerMessage::ProgramSelected { index })
+                    .map_err(|error| format!("program selection write failed: {error:?}"))?;
+            }
+            WorkerMessage::ApplyPreset { bytes } => {
+                #[cfg(windows)]
+                if let Some(plugin) = vst2_plugins.get_mut(selected_instance) {
+                    let preset = audiorouter_plugin_host::vst2_preset::parse(&bytes)
+                        .map_err(|error| format!("VST2 preset rejected: {error}"))?;
+                    plugin
+                        .apply_preset(&preset)
+                        .map_err(|error| format!("VST2 preset apply failed: {error:?}"))?;
+                }
+                write_worker_message(&mut writer, &WorkerMessage::PresetApplied)
+                    .map_err(|error| format!("preset applied write failed: {error:?}"))?;
             }
             WorkerMessage::DescribeEditor => {
                 #[cfg(windows)]
@@ -793,6 +855,12 @@ fn run_multi_bus(
                     },
                 )
                 .map_err(|error| format!("multi-bus response write failed: {error:?}"))?;
+            }
+            // The owner polls the plugin's reported delay between quanta, as
+            // the real VST3 worker does; the fixture has no delay of its own.
+            WorkerMessage::Latency(latency) => {
+                write_worker_message(&mut writer, &WorkerMessage::Latency(latency))
+                    .map_err(|error| format!("multi-bus latency write failed: {error:?}"))?;
             }
             WorkerMessage::Shutdown => return Ok(()),
             _ => {

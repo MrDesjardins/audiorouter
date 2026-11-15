@@ -204,7 +204,7 @@ fn default_paths() -> Vec<(&'static str, PathBuf)> {
         ),
         (
             "PP",
-            PathBuf::from(r"C:\Program Files\Common Files\VST3\Pitchproof\pitchproof-x64.dll"),
+            PathBuf::from(r"C:\Program Files\Common Files\VST2\Pitchproof.dll"),
         ),
         (
             "RC",
@@ -575,11 +575,23 @@ fn run_combination(
             && sizes
                 .1
                 .is_some_and(|(width, height)| width > 1 && height > 1);
+        let host_fits_editor = sizes.0.zip(sizes.1).is_some_and(|(host, editor)| {
+            host.0.abs_diff(editor.0) <= 2 && host.1.abs_diff(editor.1) <= 2
+        });
         if !child_visible {
             fail(
                 &mut problems,
                 "editor",
                 format!("{} showed no editor window", member.key),
+            );
+        } else if !host_fits_editor {
+            fail(
+                &mut problems,
+                "editorSize",
+                format!(
+                    "{} host client {:?} does not fit editor client {:?}",
+                    member.key, sizes.0, sizes.1
+                ),
             );
         }
         if let Err(error) = &closed {
@@ -605,6 +617,7 @@ fn run_combination(
             "opened": true,
             "hostClient": sizes.0.map(|(w, h)| json!([w, h])),
             "editorClient": sizes.1.map(|(w, h)| json!([w, h])),
+            "hostFitsEditor": host_fits_editor,
             "appearedAfterMs": appeared_after.map(|time| time.as_millis() as u64),
             "windowLeftAfterClose": left_behind,
             "editorShown": child_visible,

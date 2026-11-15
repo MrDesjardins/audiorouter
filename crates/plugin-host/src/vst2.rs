@@ -20,6 +20,14 @@ use std::thread::{self, JoinHandle};
 #[cfg(windows)]
 use std::time::Duration;
 
+thread_local! {
+    /// The VST2 shell sub-plugin ID the current load selects. A shell asks
+    /// for it through `audioMasterCurrentId` while `VSTPluginMain` runs,
+    /// before `AEffect::user` exists, so it cannot travel through the host
+    /// context.
+    static SHELL_CURRENT_ID: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
 /// The VST2 `AEffect` magic (`'VstP'`) in little-endian form.
 pub const VST2_EFFECT_MAGIC: i32 = 0x5673_7450;
 /// `effFlagsCanReplacing`: the effect accepts the replacing process callback.
@@ -95,6 +103,9 @@ struct Vst2HostContext {
     /// The shell window the editor is shown in (0 while closed), so the
     /// plugin can ask for a new size (`audioMasterSizeWindow`).
     editor_parent: std::sync::atomic::AtomicUsize,
+    /// Owner PID authorized by the shell for this editor parent. The worker is
+    /// a different process, so its own PID must not be used for size requests.
+    editor_parent_process_id: std::sync::atomic::AtomicU32,
     /// Set when the plugin reported `audioMasterIOChanged` (its channel
     /// layout or latency changed); the worker re-reads both.
     io_changed: std::sync::atomic::AtomicBool,
@@ -108,6 +119,7 @@ impl Default for Vst2HostContext {
             block_size: std::sync::atomic::AtomicI32::new(128),
             sample_position: std::sync::atomic::AtomicU64::new(0),
             editor_parent: std::sync::atomic::AtomicUsize::new(0),
+            editor_parent_process_id: std::sync::atomic::AtomicU32::new(0),
             io_changed: std::sync::atomic::AtomicBool::new(false),
         }
     }
@@ -245,9 +257,180 @@ impl Vst2Effect {
     }
 }
 
+/// Fixed-width VST2 pin ABI (128 bytes on both x86 and x64). Labels are
+/// bounded byte arrays, not pointers owned by the plugin.
+#[repr(C)]
+#[derive(Clone)]
+#[cfg(any(windows, test))]
+struct Vst2PinProperties {
+    label: [u8; 64],
+    flags: i32,
+    arrangement_type: i32,
+    short_label: [u8; 8],
+    future: [u8; 48],
+}
+
+#[cfg(any(windows, test))]
+impl Default for Vst2PinProperties {
+    fn default() -> Self {
+        Self {
+            label: [0; 64],
+            flags: 0,
+            arrangement_type: 0,
+            short_label: [0; 8],
+            future: [0; 48],
+        }
+    }
+}
+
+#[cfg(any(windows, test))]
+const EFF_GET_INPUT_PROPERTIES: i32 = 33;
+const EFF_GET_PLUG_CATEGORY: i32 = 35;
+const EFF_SHELL_GET_NEXT_PLUGIN: i32 = 70;
+/// `kPlugCategShell`: one DLL that presents several effects.
+const PLUG_CATEGORY_SHELL: isize = 10;
+/// Bound on sub-plugins enumerated from one shell DLL.
+const MAX_SHELL_SUBPLUGINS: usize = 64;
+
+#[cfg(any(windows, test))]
+fn pin_text(bytes: &[u8]) -> String {
+    let end = bytes
+        .iter()
+        .position(|byte| *byte == 0)
+        .unwrap_or(bytes.len());
+    // The ABI uses vendor-encoded bytes. Keep the wire name bounded even for
+    // invalid UTF-8, without interpreting control bytes as display text.
+    bytes[..end]
+        .iter()
+        .map(|byte| {
+            if (32..=126).contains(byte) {
+                char::from(*byte)
+            } else {
+                '?'
+            }
+        })
+        .collect()
+}
+
+#[cfg(any(windows, test))]
+fn explicitly_key_pin(pin: &Vst2PinProperties) -> bool {
+    [pin_text(&pin.label), pin_text(&pin.short_label)]
+        .iter()
+        .any(|label| {
+            let lower = label.to_ascii_lowercase();
+            let words: Vec<_> = lower
+                .split(|c: char| !c.is_ascii_alphanumeric())
+                .filter(|s| !s.is_empty())
+                .collect();
+            words
+                .iter()
+                .any(|word| matches!(*word, "sidechain" | "key"))
+                || words.windows(2).any(|pair| pair == ["side", "chain"])
+        })
+}
+
+#[cfg(any(windows, test))]
+fn vst2_discovered_buses(
+    pins: &[Vst2PinProperties],
+    output_channels: usize,
+) -> Result<crate::bus_discovery::DiscoveredAudioBuses, crate::bus_discovery::BusDiscoveryError> {
+    use crate::bus_discovery::{
+        AudioBusRole, BusDiscoveryError, DiscoveredAudioBus, DiscoveredAudioBuses,
+    };
+    if pins.is_empty() || pins.len() > VST2_MAX_INPUT_CHANNELS as usize {
+        return Err(BusDiscoveryError::InvalidBusCount);
+    }
+    let main_count = pins
+        .iter()
+        .position(explicitly_key_pin)
+        .unwrap_or(pins.len());
+    let key_count = pins.len() - main_count;
+    if !(1..=2).contains(&main_count)
+        || key_count > 2
+        || !pins[main_count..].iter().all(explicitly_key_pin)
+        || !(1..=2).contains(&output_channels)
+    {
+        return Err(BusDiscoveryError::UnsupportedLayout);
+    }
+    let mut inputs = vec![DiscoveredAudioBus {
+        native_index: 0,
+        name: "Main input".into(),
+        channels: main_count as u16,
+        role: AudioBusRole::Main,
+    }];
+    if key_count > 0 {
+        inputs.push(DiscoveredAudioBus {
+            native_index: main_count as u16,
+            name: pin_text(&pins[main_count].label),
+            channels: key_count as u16,
+            role: AudioBusRole::Auxiliary,
+        });
+    }
+    let buses = DiscoveredAudioBuses {
+        inputs,
+        outputs: vec![DiscoveredAudioBus {
+            native_index: 0,
+            name: "Main output".into(),
+            channels: output_channels as u16,
+            role: AudioBusRole::Main,
+        }],
+    };
+    buses.processing_layout()?;
+    Ok(buses)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn labeled_pin(label: &str) -> Vst2PinProperties {
+        let mut pin = Vst2PinProperties::default();
+        pin.label[..label.len()].copy_from_slice(label.as_bytes());
+        pin
+    }
+
+    #[test]
+    fn pin_discovery_abi_and_opcode_are_fixed_width() {
+        assert_eq!(EFF_GET_INPUT_PROPERTIES, 33);
+        assert_eq!(std::mem::size_of::<Vst2PinProperties>(), 128);
+        assert_eq!(std::mem::offset_of!(Vst2PinProperties, flags), 64);
+        assert_eq!(std::mem::offset_of!(Vst2PinProperties, short_label), 72);
+        assert_eq!(std::mem::offset_of!(Vst2PinProperties, future), 80);
+    }
+
+    #[test]
+    fn only_explicit_key_labels_create_auxiliary_inputs() {
+        for label in ["Sidechain L", "Side-chain", "Key input", "SIDE CHAIN R"] {
+            assert!(explicitly_key_pin(&labeled_pin(label)), "{label}");
+        }
+        for label in ["Keyboard", "Monkey", "Surround", "Rear left", "Aux", ""] {
+            assert!(!explicitly_key_pin(&labeled_pin(label)), "{label}");
+        }
+        let pins = [
+            labeled_pin("Left"),
+            labeled_pin("Right"),
+            labeled_pin("Key L"),
+            labeled_pin("Key R"),
+        ];
+        let buses = vst2_discovered_buses(&pins, 2).unwrap();
+        assert_eq!(buses.processing_layout().unwrap().input_buses(), &[2, 2]);
+        assert_eq!(buses.inputs[1].native_index, 2);
+        assert!(vst2_discovered_buses(&[], 2).is_err());
+    }
+
+    #[test]
+    fn surround_and_interleaved_key_pins_are_refused() {
+        let surround = vec![Vst2PinProperties::default(); 6];
+        assert!(vst2_discovered_buses(&surround, 2).is_err());
+        let interleaved = [labeled_pin("Main"), labeled_pin("Key"), labeled_pin("Main")];
+        assert!(vst2_discovered_buses(&interleaved, 2).is_err());
+        let stereo = vec![Vst2PinProperties::default(); 2];
+        assert!(!vst2_discovered_buses(&stereo, 2)
+            .unwrap()
+            .processing_layout()
+            .unwrap()
+            .has_sidechain());
+    }
 
     unsafe extern "C" fn dispatcher(
         _: *mut Vst2Effect,
@@ -431,6 +614,10 @@ mod tests {
 const EFF_OPEN: i32 = 0;
 #[cfg(windows)]
 const EFF_CLOSE: i32 = 1;
+const EFF_SET_PROGRAM: i32 = 2;
+const EFF_GET_PROGRAM: i32 = 3;
+const EFF_GET_PROGRAM_NAME_INDEXED: i32 = 29;
+const EFF_GET_EFFECT_NAME: i32 = 45;
 #[cfg(windows)]
 const EFF_SET_SAMPLE_RATE: i32 = 10;
 #[cfg(windows)]
@@ -1322,6 +1509,49 @@ impl Vst2Library {
         })
     }
 
+    /// Load one sub-effect of a shell DLL by the ID that
+    /// `effShellGetNextPlugin` reported, answering `audioMasterCurrentId`
+    /// during load. Every other part of the load path is unchanged.
+    pub fn load_shell_sub_plugin_as(
+        path: &Path,
+        role: Vst2Role,
+        sub_plugin_id: u32,
+    ) -> Result<Self, Vst2LibraryError> {
+        SHELL_CURRENT_ID.with(|cell| cell.set(sub_plugin_id));
+        let result = Self::load_as(path, role);
+        SHELL_CURRENT_ID.with(|cell| cell.set(0));
+        result
+    }
+
+    /// The AEffect unique ID (the four-character plugin code).
+    pub fn unique_id(&self) -> u32 {
+        // SAFETY: this handle was validated at load, so the field is readable
+        // for its lifetime.
+        unsafe { (*self.effect).unique_id as u32 }
+    }
+
+    /// The plugin's display name from `effGetEffectName`.
+    pub fn effect_name(&mut self) -> String {
+        let mut name = [0_u8; 64];
+        // SAFETY: the dispatcher was validated at load; the buffer is
+        // caller-owned and bounded to the VST2 name contract.
+        unsafe {
+            ((*self.effect).dispatcher.expect("validated dispatcher"))(
+                self.effect,
+                EFF_GET_EFFECT_NAME,
+                0,
+                0,
+                name.as_mut_ptr().cast(),
+                0.0,
+            );
+        }
+        let end = name
+            .iter()
+            .position(|byte| *byte == 0)
+            .unwrap_or(name.len());
+        String::from_utf8_lossy(&name[..end]).trim().to_owned()
+    }
+
     /// Asks the plugin whether it supports a named feature (`effCanDo`).
     pub fn can_do(&mut self, feature: &std::ffi::CStr) -> Vst2CanDo {
         // SAFETY: the effect is owned by this handle; see `can_do`.
@@ -1400,6 +1630,33 @@ impl Vst2Library {
         unsafe { (*self.effect).num_parameters as usize }
     }
 
+    /// Query pins only in the isolated worker, between processing quanta.
+    pub fn describe_buses(
+        &mut self,
+    ) -> Result<crate::bus_discovery::DiscoveredAudioBuses, crate::bus_discovery::BusDiscoveryError>
+    {
+        let mut pins = vec![Vst2PinProperties::default(); self.input_channels()];
+        for (index, pin) in pins.iter_mut().enumerate() {
+            // SAFETY: the live library owns a validated effect/dispatcher;
+            // `pin` is a zeroed, correctly aligned 128-byte caller-owned ABI
+            // buffer, alive through this synchronous worker-thread call.
+            let supported = unsafe {
+                (*self.effect).dispatcher.expect("validated dispatcher")(
+                    self.effect,
+                    EFF_GET_INPUT_PROPERTIES,
+                    index as i32,
+                    0,
+                    (pin as *mut Vst2PinProperties).cast(),
+                    0.0,
+                )
+            };
+            if supported != 1 {
+                *pin = Vst2PinProperties::default();
+            }
+        }
+        vst2_discovered_buses(&pins, self.output_channels())
+    }
+
     pub fn set_parameter(&mut self, parameter_id: u32, value: f32) -> Result<(), Vst2LibraryError> {
         if !value.is_finite()
             || !(0.0..=1.0).contains(&value)
@@ -1471,6 +1728,176 @@ impl Vst2Library {
             );
         }
         Ok(descriptors)
+    }
+
+    /// Whether this DLL presents itself as a shell of several effects.
+    pub fn is_shell(&mut self) -> bool {
+        // SAFETY: the dispatcher was validated at load; opcode 35 has no
+        // pointer arguments.
+        unsafe {
+            ((*self.effect).dispatcher.expect("validated dispatcher"))(
+                self.effect,
+                EFF_GET_PLUG_CATEGORY,
+                0,
+                0,
+                ptr::null_mut(),
+                0.0,
+            ) == PLUG_CATEGORY_SHELL
+        }
+    }
+
+    /// Enumerate the sub-plugins of a shell DLL without loading one. Each
+    /// entry carries the plugin ID the shell expects back through
+    /// `audioMasterCurrentId` when that sub-plugin is loaded.
+    pub fn shell_sub_plugins(
+        &mut self,
+    ) -> Result<Vec<crate::ShellPluginDescriptor>, Vst2LibraryError> {
+        if !self.is_shell() {
+            return Ok(Vec::new());
+        }
+        // Hosts disagree on this opcode: some advance an internal cursor and
+        // want 0/0 on every call, others read the supplied index. Try the
+        // indexed form first, then the cursor form, accepting whichever
+        // returns a non-empty bounded list.
+        let indexed = self.walk_shell_sub_plugins(true);
+        if !indexed.is_empty() {
+            return Ok(indexed);
+        }
+        Ok(self.walk_shell_sub_plugins(false))
+    }
+
+    fn walk_shell_sub_plugins(&mut self, indexed: bool) -> Vec<crate::ShellPluginDescriptor> {
+        let mut plugins = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for step in 0..MAX_SHELL_SUBPLUGINS {
+            let mut name = [0_u8; 64];
+            // SAFETY: the dispatcher was validated at load; the buffer is
+            // caller-owned and bounded to the VST2 name contract.
+            let id = unsafe {
+                ((*self.effect).dispatcher.expect("validated dispatcher"))(
+                    self.effect,
+                    EFF_SHELL_GET_NEXT_PLUGIN,
+                    if indexed { step as i32 } else { 0 },
+                    0,
+                    name.as_mut_ptr().cast(),
+                    0.0,
+                )
+            };
+            if id == 0 {
+                break;
+            }
+            // A VST2 unique ID is a four-character code sign-extended into a
+            // pointer-sized integer; keep its low 32 bits.
+            let id = id as i32 as u32;
+            if !seen.insert(id) {
+                break;
+            }
+            let end = name
+                .iter()
+                .position(|byte| *byte == 0)
+                .unwrap_or(name.len());
+            let text = String::from_utf8_lossy(&name[..end]).trim().to_owned();
+            let text = if text.is_empty() {
+                format!("Shell plugin {}", plugins.len() + 1)
+            } else {
+                text
+            };
+            if let Ok(descriptor) = crate::ShellPluginDescriptor::new(id, text) {
+                plugins.push(descriptor);
+            }
+        }
+        plugins
+    }
+
+    /// The number of programs this plugin reports, bounded for display.
+    pub fn program_count(&self) -> usize {
+        // SAFETY: `self.effect` is a validated, non-null AEffect for this
+        // library's lifetime. Reading a plain count field does not call plugin
+        // code.
+        let count = unsafe { (*self.effect).num_programs };
+        usize::try_from(count.max(0))
+            .unwrap_or(0)
+            .min(crate::MAX_PROGRAMS)
+    }
+
+    /// The plugin's currently selected program index.
+    pub fn current_program(&mut self) -> Result<u32, Vst2LibraryError> {
+        // SAFETY: the dispatcher was validated at load; opcode 3 has no
+        // pointer arguments.
+        let current = unsafe {
+            ((*self.effect).dispatcher.expect("validated dispatcher"))(
+                self.effect,
+                EFF_GET_PROGRAM,
+                0,
+                0,
+                ptr::null_mut(),
+                0.0,
+            )
+        };
+        Ok(u32::try_from(current.max(0)).unwrap_or(0))
+    }
+
+    /// Bounded program names, in plugin order. A plugin that answers with an
+    /// empty or invalid name gets a positional placeholder rather than failing
+    /// the whole list.
+    pub fn programs(&mut self) -> Result<Vec<crate::ProgramDescriptor>, Vst2LibraryError> {
+        let count = self.program_count();
+        let mut programs = Vec::with_capacity(count);
+        for index in 0..count {
+            let mut name = [0_u8; 64];
+            // SAFETY: the dispatcher was validated at load; the buffer is
+            // caller-owned and bounded to the VST2 program-name contract.
+            let returned = unsafe {
+                ((*self.effect).dispatcher.expect("validated dispatcher"))(
+                    self.effect,
+                    EFF_GET_PROGRAM_NAME_INDEXED,
+                    index as i32,
+                    0,
+                    name.as_mut_ptr().cast(),
+                    0.0,
+                )
+            };
+            let text = if returned != 0 {
+                let end = name
+                    .iter()
+                    .position(|byte| *byte == 0)
+                    .unwrap_or(name.len());
+                String::from_utf8_lossy(&name[..end]).trim().to_owned()
+            } else {
+                String::new()
+            };
+            let text = if text.is_empty() {
+                format!("Program {}", index + 1)
+            } else {
+                text
+            };
+            programs.push(
+                crate::ProgramDescriptor::new(index as u32, text)
+                    .map_err(|_| Vst2LibraryError::InvalidParameter)?,
+            );
+        }
+        Ok(programs)
+    }
+
+    /// Select one program by its bounded index. Out-of-range values are
+    /// refused without calling plugin code.
+    pub fn set_program(&mut self, index: u32) -> Result<(), Vst2LibraryError> {
+        if index as usize >= self.program_count() {
+            return Err(Vst2LibraryError::InvalidParameter);
+        }
+        // SAFETY: the dispatcher was validated at load; opcode 2 has no
+        // pointer arguments.
+        unsafe {
+            ((*self.effect).dispatcher.expect("validated dispatcher"))(
+                self.effect,
+                EFF_SET_PROGRAM,
+                index as i32,
+                0,
+                ptr::null_mut(),
+                0.0,
+            );
+        }
+        Ok(())
     }
 
     /// A plugin without chunk support (for example ReaComp, ReaGate) is
@@ -1569,6 +1996,16 @@ impl Vst2Library {
         if bytes.starts_with(PARAMETER_BANK_MAGIC) {
             return self.restore_parameter_bank(bytes);
         }
+        self.restore_chunk(bytes, 0)
+    }
+
+    /// Apply an opaque program (`index=0`) or bank (`index=1`) chunk through
+    /// the VST2 ABI. The caller keeps the checked byte slice alive for the
+    /// synchronous dispatcher call.
+    fn restore_chunk(&mut self, bytes: &[u8], index: i32) -> Result<(), Vst2LibraryError> {
+        if bytes.len() > MAX_VST2_STATE_BYTES {
+            return Err(Vst2LibraryError::StateTooLarge);
+        }
         if !self.supports_state() {
             return Err(Vst2LibraryError::StateUnsupported);
         }
@@ -1578,7 +2015,7 @@ impl Vst2Library {
             (*self.effect).dispatcher.expect("validated dispatcher")(
                 self.effect,
                 EFF_SET_CHUNK,
-                0,
+                index,
                 bytes.len() as isize,
                 bytes.as_ptr().cast_mut().cast(),
                 0.0,
@@ -1586,6 +2023,85 @@ impl Vst2Library {
         };
         if result < 0 {
             return Err(Vst2LibraryError::InvalidState);
+        }
+        Ok(())
+    }
+
+    /// Apply a parsed `.fxp`/`.fxb` body to the open plugin. Parameter programs
+    /// set the overlapping normalized values; chunk programs use the plugin's own
+    /// chunk interface; banks apply each program onto an existing program slot,
+    /// bounded by the plugin's own count.
+    pub fn apply_preset(
+        &mut self,
+        preset: &crate::vst2_preset::Vst2Preset,
+    ) -> Result<(), Vst2LibraryError> {
+        // SAFETY: this handle was validated at load, so its identity is
+        // readable for its lifetime.
+        let unique_id = unsafe { (*self.effect).unique_id };
+        if preset.fx_id != 0 && preset.fx_id != u32::from_ne_bytes(unique_id.to_ne_bytes()) {
+            return Err(Vst2LibraryError::InvalidState);
+        }
+        // Preset application is a live mutation. Capture the previous state
+        // first and roll it back if any program/chunk operation fails, so a
+        // malformed plugin response cannot leave a half-applied bank.
+        let previous_program = self.current_program().ok();
+        let before = self.save_state()?;
+        let result = self.apply_preset_body(&preset.body);
+        if let Err(error) = result {
+            let program_restored =
+                previous_program.is_none_or(|index| self.set_program(index).is_ok());
+            if !program_restored || self.restore_state(&before).is_err() {
+                return Err(Vst2LibraryError::InvalidState);
+            }
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn apply_preset_body(
+        &mut self,
+        body: &crate::vst2_preset::Vst2PresetBody,
+    ) -> Result<(), Vst2LibraryError> {
+        match body {
+            crate::vst2_preset::Vst2PresetBody::ProgramParameters { parameters, .. } => {
+                self.apply_parameter_values(parameters)
+            }
+            crate::vst2_preset::Vst2PresetBody::ProgramChunk { chunk, .. } => {
+                self.restore_chunk(chunk, 0)
+            }
+            crate::vst2_preset::Vst2PresetBody::Bank {
+                current_program,
+                programs,
+            } => {
+                if self.program_count() == 0 || programs.len() > self.program_count() {
+                    return Err(Vst2LibraryError::InvalidState);
+                }
+                let count = self.program_count().min(programs.len());
+                for (index, program) in programs.iter().take(count).enumerate() {
+                    self.set_program(index as u32)?;
+                    match program {
+                        crate::vst2_preset::Vst2BankProgram::Parameters { parameters, .. } => {
+                            self.apply_parameter_values(parameters)?;
+                        }
+                        crate::vst2_preset::Vst2BankProgram::Chunk { chunk, .. } => {
+                            self.restore_chunk(chunk, 0)?
+                        }
+                    }
+                }
+                self.set_program(*current_program)?;
+                Ok(())
+            }
+            crate::vst2_preset::Vst2PresetBody::BankChunk { chunk, .. } => {
+                self.restore_chunk(chunk, 1)
+            }
+        }
+    }
+
+    fn apply_parameter_values(&mut self, values: &[f32]) -> Result<(), Vst2LibraryError> {
+        for (index, value) in values.iter().take(self.parameter_count()).enumerate() {
+            // A preset may come from another revision of the plugin; values
+            // are already bounded and normalization is the VST2 contract.
+            self.set_parameter(index as u32, value.clamp(0.0, 1.0))?;
         }
         Ok(())
     }
@@ -1899,9 +2415,14 @@ unsafe extern "C" fn host_callback(
                     .editor_parent
                     .load(std::sync::atomic::Ordering::Acquire)
             });
-            match (i32::try_from(value), parent) {
-                (Ok(height), parent) if parent != 0 => {
-                    isize::from(fit_parent_window(parent, index, height))
+            let owner = context.map_or(0, |context| {
+                context
+                    .editor_parent_process_id
+                    .load(std::sync::atomic::Ordering::Acquire)
+            });
+            match (i32::try_from(value), parent, owner) {
+                (Ok(height), parent, owner) if parent != 0 && owner != 0 => {
+                    isize::from(fit_parent_window(parent, owner, index, height))
                 }
                 _ => 0,
             }
@@ -1949,7 +2470,7 @@ unsafe extern "C" fn host_callback(
         // (0) is "not supported", which several plugins treat as a reason to
         // skip features or to assume 44.1 kHz.
         AUDIO_MASTER_AUTOMATE | AUDIO_MASTER_IDLE | AUDIO_MASTER_NEED_IDLE => 0,
-        AUDIO_MASTER_CURRENT_ID => 0,
+        AUDIO_MASTER_CURRENT_ID => SHELL_CURRENT_ID.with(std::cell::Cell::get) as isize,
         // 0 means "connected" for the deprecated pin query.
         AUDIO_MASTER_PIN_CONNECTED => 0,
         AUDIO_MASTER_WANT_MIDI => 1,
@@ -2082,7 +2603,7 @@ unsafe fn host_context_of<'a>(effect: *mut Vst2Effect) -> Option<&'a Vst2HostCon
 /// (`SWP_ASYNCWINDOWPOS`): the window belongs to another process whose
 /// thread may be busy. Returns whether the request was made.
 #[cfg(windows)]
-fn fit_parent_window(parent: usize, width: i32, height: i32) -> bool {
+fn fit_parent_window(parent: usize, owner_process_id: u32, width: i32, height: i32) -> bool {
     const GWL_STYLE: i32 = -16;
     const GWL_EXSTYLE: i32 = -20;
     const SWP_NOMOVE: u32 = 0x0002;
@@ -2092,7 +2613,8 @@ fn fit_parent_window(parent: usize, width: i32, height: i32) -> bool {
     if !(1..=MAX_EDITOR_SIDE).contains(&width)
         || !(1..=MAX_EDITOR_SIDE).contains(&height)
         || !is_window_handle(parent)
-        || window_owner_process_id(parent) != Some(std::process::id())
+        || owner_process_id == 0
+        || window_owner_process_id(parent) != Some(owner_process_id)
     {
         return false;
     }
@@ -2353,39 +2875,42 @@ impl Vst2EditorAccess {
     }
 
     /// Tell the host callback which window the editor is in (0: none).
-    fn set_editor_parent(&self, parent: usize) {
+    fn set_editor_parent(&self, parent: usize, owner_process_id: u32) {
         // SAFETY: the effect is live for the access lifetime; see
         // `host_context_of` for its host field.
         if let Some(context) = unsafe { host_context_of(self.effect) } {
             context
                 .editor_parent
                 .store(parent, std::sync::atomic::Ordering::Release);
+            context
+                .editor_parent_process_id
+                .store(owner_process_id, std::sync::atomic::Ordering::Release);
         }
     }
 
     /// Open the editor in `parent` and size that window to it.
-    fn open_in(&self, parent: usize) -> bool {
+    fn open_in(&self, parent: usize, owner_process_id: u32) -> bool {
         // Size the window before the editor appears where the plugin already
         // knows its size, and again after: the size can change on opening.
         let before = self.editor_size();
         if let Some((width, height)) = before {
-            fit_parent_window(parent, width, height);
+            fit_parent_window(parent, owner_process_id, width, height);
         }
-        self.set_editor_parent(parent);
+        self.set_editor_parent(parent, owner_process_id);
         if self.dispatch(EFF_EDIT_OPEN, parent as *mut c_void) < 0 {
-            self.set_editor_parent(0);
+            self.set_editor_parent(0, 0);
             return false;
         }
         let after = self.editor_size();
         if let Some((width, height)) = after.filter(|size| Some(*size) != before) {
-            fit_parent_window(parent, width, height);
+            fit_parent_window(parent, owner_process_id, width, height);
         }
         true
     }
 
     fn close(&self) {
         self.dispatch(EFF_EDIT_CLOSE, ptr::null_mut());
-        self.set_editor_parent(0);
+        self.set_editor_parent(0, 0);
     }
 }
 
@@ -2550,7 +3075,7 @@ fn editor_thread_main(access: Vst2EditorAccess, receiver: Receiver<EditorThreadC
                     && open_in.is_none()
                     && is_window_handle(parent)
                     && window_owner_process_id(parent) == Some(owner_pid)
-                    && access.open_in(parent)
+                    && access.open_in(parent, owner_pid)
                 {
                     open_in = Some(parent);
                 }
