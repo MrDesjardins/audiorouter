@@ -325,7 +325,7 @@ pub(crate) fn play_events(
 
 /// What an instrument asks of MIDI hardware: nothing (the on-screen keyboard
 /// and the API only), every connected device, or one device by name.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum MidiSource {
     KeyboardOnly,
     All,
@@ -341,9 +341,10 @@ fn midi_connection_is_open(
         MidiSource::KeyboardOnly => true,
         MidiSource::All => {
             !available_names.is_empty()
+                && opened_names.len() == available_names.len()
                 && available_names
                     .iter()
-                    .all(|name| opened_names.iter().any(|opened| opened == name))
+                    .all(|available| opened_names.iter().any(|opened| opened == available))
         }
         MidiSource::Device(name) => {
             available_names.iter().any(|available| available == name)
@@ -365,15 +366,183 @@ pub(crate) fn midi_source_of(node: &audiorouter_domain::Node) -> MidiSource {
 /// is gone.
 pub(crate) struct InstrumentMidiInputs {
     bridge: std::sync::Weak<audiorouter_plugin_host::PluginRuntimeBridge>,
+    queue: std::sync::Weak<audiorouter_plugin_host::MidiQueue>,
     requested: MidiSource,
     opened_names: Vec<String>,
     last_connected: bool,
+    lost_opened_names: std::collections::HashSet<String>,
     #[cfg(windows)]
     /// Held only to keep the devices open; dropping them closes the devices.
     _connections: Vec<audiorouter_windows_audio::MidiInputConnection>,
 }
 
+/// Reconcile one instrument with the current device inventory. When its last
+/// requested hardware connection disappears, invalidate queued notes and
+/// release notes already sounding; a later device reconnect cannot inherit
+/// those held notes.
+fn update_midi_connection(
+    last_connected: &mut bool,
+    lost_opened_names: &mut std::collections::HashSet<String>,
+    requested: &MidiSource,
+    opened_names: &[String],
+    available: &[String],
+    mut release_notes: impl FnMut(),
+) -> bool {
+    let connected = midi_connection_is_open(requested, opened_names, available);
+    for opened in opened_names {
+        let device_is_available = available.iter().any(|available| available == opened);
+        if device_is_available {
+            lost_opened_names.remove(opened);
+        } else if lost_opened_names.insert(opened.clone()) {
+            // An "All" source may already be reported disconnected because
+            // one requested device failed to open. Still release notes when
+            // any successfully opened device disappears later.
+            release_notes();
+        }
+    }
+    *last_connected = connected;
+    connected
+}
+
+fn refresh_instrument_midi_inputs(
+    inputs: &std::sync::Mutex<HashMap<(EntityId, EntityId), InstrumentMidiInputs>>,
+    available: &[String],
+) -> Vec<(EntityId, EntityId, MidiSource, bool)> {
+    let snapshots = inputs
+        .lock()
+        .map(|inputs| {
+            inputs
+                .iter()
+                .map(|(key, input)| {
+                    (
+                        key.clone(),
+                        input.requested.clone(),
+                        input.opened_names.clone(),
+                        input.last_connected,
+                        input.lost_opened_names.clone(),
+                        input.queue.clone(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let updates = snapshots
+        .into_iter()
+        .map(
+            |(key, requested, opened_names, last_connected, mut lost, queue)| {
+                let mut connected = last_connected;
+                let now_connected = update_midi_connection(
+                    &mut connected,
+                    &mut lost,
+                    &requested,
+                    &opened_names,
+                    available,
+                    || {
+                        if let Some(queue) = queue.upgrade() {
+                            queue.release_all_notes();
+                        }
+                    },
+                );
+                (key, requested, opened_names, connected, lost, now_connected)
+            },
+        )
+        .collect::<Vec<_>>();
+    if let Ok(mut inputs) = inputs.lock() {
+        for (key, requested, opened_names, connected, lost, _) in &updates {
+            if let Some(input) = inputs.get_mut(key).filter(|input| {
+                &input.requested == requested && &input.opened_names == opened_names
+            }) {
+                input.last_connected = *connected;
+                input.lost_opened_names.clone_from(lost);
+            }
+        }
+    }
+    updates
+        .into_iter()
+        .map(|((session_id, node_id), requested, _, _, _, connected)| {
+            (session_id, node_id, requested, connected)
+        })
+        .collect()
+}
+
+fn service_midi_device_inventory(
+    last_check: &mut Option<std::time::Instant>,
+    pending: &mut Option<std::sync::mpsc::Receiver<Vec<String>>>,
+    inputs: &std::sync::Mutex<HashMap<(EntityId, EntityId), InstrumentMidiInputs>>,
+    now: std::time::Instant,
+    enumerate: impl FnOnce() -> Vec<String> + Send + 'static,
+) {
+    if let Some(receiver) = pending.take() {
+        match receiver.try_recv() {
+            Ok(devices) => {
+                refresh_instrument_midi_inputs(inputs, &devices);
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => {
+                *pending = Some(receiver);
+                return;
+            }
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {}
+        }
+    }
+    let has_hardware_inputs = inputs.lock().is_ok_and(|inputs| {
+        inputs
+            .values()
+            .any(|input| !matches!(input.requested, MidiSource::KeyboardOnly))
+    });
+    if !has_hardware_inputs {
+        *last_check = Some(now);
+        return;
+    }
+    if last_check
+        .is_some_and(|checked| now.saturating_duration_since(checked) < MIDI_DEVICE_POLL_INTERVAL)
+    {
+        return;
+    }
+    *last_check = Some(now);
+    let (sender, receiver) = std::sync::mpsc::channel();
+    *pending = Some(receiver);
+    if std::thread::Builder::new()
+        .name("audiorouter-midi-device-inventory".into())
+        .spawn(move || {
+            let _ = sender.send(enumerate());
+        })
+        .is_err()
+    {
+        *pending = None;
+    }
+}
+
 impl ControlPlane {
+    /// Periodically reconcile opened MIDI inputs with Windows' current device
+    /// list. This service-owned check makes note release independent of UI or
+    /// client polling `midi.devices`.
+    pub(crate) fn service_instrument_midi_connections(&mut self, now: std::time::Instant) {
+        if self.last_midi_inventory_check.is_none_or(|checked| {
+            now.saturating_duration_since(checked) >= MIDI_DEVICE_POLL_INTERVAL
+        }) {
+            self.prune_instrument_midi();
+        }
+        service_midi_device_inventory(
+            &mut self.last_midi_inventory_check,
+            &mut self.midi_inventory_worker,
+            &self.instrument_midi,
+            now,
+            || {
+                #[cfg(windows)]
+                {
+                    audiorouter_windows_audio::list_midi_input_devices()
+                        .into_iter()
+                        .map(|device| device.name)
+                        .collect::<Vec<_>>()
+                }
+                #[cfg(not(windows))]
+                {
+                    Vec::new()
+                }
+            },
+        );
+    }
+
     /// Closes MIDI devices whose instrument has stopped playing.
     pub(crate) fn prune_instrument_midi(&self) {
         if let Ok(mut inputs) = self.instrument_midi.lock() {
@@ -440,9 +609,11 @@ impl ControlPlane {
                 (session_id.clone(), node.id.clone()),
                 InstrumentMidiInputs {
                     bridge: Arc::downgrade(bridge),
+                    queue: Arc::downgrade(&bridge.midi_queue()),
                     requested,
                     opened_names,
                     last_connected,
+                    lost_opened_names: Default::default(),
                     #[cfg(windows)]
                     _connections: connections,
                 },
@@ -507,42 +678,22 @@ impl ControlPlane {
             .collect::<Vec<_>>();
         #[cfg(not(windows))]
         let devices: Vec<String> = Vec::new();
-        let instruments = self
-            .instrument_midi
-            .lock()
-            .map(|mut inputs| {
-                inputs
-                    .iter_mut()
-                    .map(|((session_id, node_id), input)| {
-                        let requested = match &input.requested {
-                            MidiSource::KeyboardOnly => "keyboard".to_owned(),
-                            MidiSource::All => "all".to_owned(),
-                            MidiSource::Device(name) => name.clone(),
-                        };
-                        let connected = midi_connection_is_open(
-                            &input.requested,
-                            &input.opened_names,
-                            &devices,
-                        );
-                        if input.last_connected && !connected {
-                            // No MIDI input means no more key-up will arrive.
-                            // Release every held note immediately when the
-                            // status read discovers the device disappeared.
-                            if let Some(bridge) = input.bridge.upgrade() {
-                                bridge.midi_queue().release_all_notes();
-                            }
-                        }
-                        input.last_connected = connected;
-                        json!({
-                            "sessionId": session_id,
-                            "nodeId": node_id,
-                            "midiInput": requested,
-                            "connected": connected
-                        })
-                    })
-                    .collect::<Vec<_>>()
+        let instruments = refresh_instrument_midi_inputs(&self.instrument_midi, &devices)
+            .into_iter()
+            .map(|(session_id, node_id, requested, connected)| {
+                let requested = match requested {
+                    MidiSource::KeyboardOnly => "keyboard".to_owned(),
+                    MidiSource::All => "all".to_owned(),
+                    MidiSource::Device(name) => name,
+                };
+                json!({
+                    "sessionId": session_id,
+                    "nodeId": node_id,
+                    "midiInput": requested,
+                    "connected": connected
+                })
             })
-            .unwrap_or_default();
+            .collect::<Vec<_>>();
         Ok(json!({ "devices": devices, "instruments": instruments }))
     }
 }
@@ -660,6 +811,172 @@ mod tests {
         // The panic button releases the rest explicitly.
         play_events(&queue, parsed(json!([{ "type": "allNotesOff" }]))).unwrap();
         assert_eq!(queue.held_notes(), 0);
+    }
+
+    #[test]
+    fn device_disconnect_releases_held_notes_without_a_status_request() {
+        let queue = Arc::new(MidiQueue::default());
+        let note_on = MidiEvent::new(0, 0x90, 60, 100).unwrap();
+        assert_eq!(queue.push(&[note_on]), 1);
+        assert_eq!(queue.held_notes(), 1);
+        let queue_for_loss = Arc::downgrade(&queue);
+        let mut connected = true;
+        let mut lost_opened_names = std::collections::HashSet::new();
+        let next = update_midi_connection(
+            &mut connected,
+            &mut lost_opened_names,
+            &MidiSource::Device("USB Keyboard".into()),
+            &["USB Keyboard".into()],
+            &[],
+            || {
+                queue_for_loss
+                    .upgrade()
+                    .expect("instrument bridge still owns the queue")
+                    .release_all_notes();
+            },
+        );
+        assert!(!next);
+        assert!(!connected);
+        assert_eq!(
+            queue.held_notes(),
+            0,
+            "lost input must enqueue note release"
+        );
+        // Repeated polling while disconnected must not enqueue duplicate panic
+        // transitions; reconnect is reported, and a subsequent loss is handled.
+        let mut releases = 0;
+        update_midi_connection(
+            &mut connected,
+            &mut lost_opened_names,
+            &MidiSource::Device("USB Keyboard".into()),
+            &["USB Keyboard".into()],
+            &[],
+            || releases += 1,
+        );
+        assert_eq!(releases, 0);
+        assert!(update_midi_connection(
+            &mut connected,
+            &mut lost_opened_names,
+            &MidiSource::Device("USB Keyboard".into()),
+            &["USB Keyboard".into()],
+            &["USB Keyboard".into()],
+            || releases += 1,
+        ));
+        assert!(!update_midi_connection(
+            &mut connected,
+            &mut lost_opened_names,
+            &MidiSource::Device("USB Keyboard".into()),
+            &["USB Keyboard".into()],
+            &[],
+            || releases += 1,
+        ));
+        assert_eq!(releases, 1);
+    }
+
+    #[test]
+    fn all_devices_disconnect_releases_each_opened_device_even_if_already_partial() {
+        let mut connected = false; // "All" was already partial (one device failed to open).
+        let opened = ["Launchkey".into()];
+        let mut lost = std::collections::HashSet::new();
+        let mut releases = 0;
+        assert!(!update_midi_connection(
+            &mut connected,
+            &mut lost,
+            &MidiSource::All,
+            &opened,
+            &["Launchkey".into(), "Pad".into()],
+            || releases += 1,
+        ));
+        assert_eq!(releases, 0);
+        assert!(!update_midi_connection(
+            &mut connected,
+            &mut lost,
+            &MidiSource::All,
+            &opened,
+            &["Pad".into()],
+            || releases += 1,
+        ));
+        assert_eq!(
+            releases, 1,
+            "the opened keyboard disappearing releases notes"
+        );
+        update_midi_connection(
+            &mut connected,
+            &mut lost,
+            &MidiSource::All,
+            &opened,
+            &["Pad".into()],
+            || releases += 1,
+        );
+        assert_eq!(releases, 1, "one disconnect edge releases once");
+    }
+
+    #[test]
+    fn audio_service_enumerates_devices_and_releases_notes_outside_status_calls() {
+        let queue = Arc::new(MidiQueue::default());
+        let note_on = MidiEvent::new(0, 0x90, 60, 100).unwrap();
+        queue.push(&[note_on]);
+        let key = (EntityId::new("session"), EntityId::new("instrument"));
+        let inputs = std::sync::Mutex::new(HashMap::from([(
+            key,
+            InstrumentMidiInputs {
+                bridge: std::sync::Weak::new(),
+                queue: Arc::downgrade(&queue),
+                requested: MidiSource::Device("USB Keyboard".into()),
+                opened_names: vec!["USB Keyboard".into()],
+                last_connected: true,
+                lost_opened_names: Default::default(),
+                #[cfg(windows)]
+                _connections: Vec::new(),
+            },
+        )]));
+        let start = Instant::now();
+        let mut checked = None;
+        let mut pending = None;
+        let enumerations = Arc::new(AtomicUsize::new(0));
+        let started = Arc::clone(&enumerations);
+        service_midi_device_inventory(&mut checked, &mut pending, &inputs, start, move || {
+            started.fetch_add(1, Ordering::Relaxed);
+            Vec::new()
+        });
+        let deadline = Instant::now() + std::time::Duration::from_secs(2);
+        while pending.is_some() && Instant::now() < deadline {
+            service_midi_device_inventory(&mut checked, &mut pending, &inputs, start, Vec::new);
+            std::thread::yield_now();
+        }
+        assert!(pending.is_none(), "inventory worker must complete");
+        assert_eq!(enumerations.load(Ordering::Relaxed), 1);
+        assert_eq!(queue.held_notes(), 0);
+        assert!(
+            !inputs
+                .lock()
+                .unwrap()
+                .values()
+                .next()
+                .unwrap()
+                .last_connected
+        );
+
+        service_midi_device_inventory(
+            &mut checked,
+            &mut pending,
+            &inputs,
+            start + MIDI_DEVICE_POLL_INTERVAL / 2,
+            Vec::new,
+        );
+        assert_eq!(
+            enumerations.load(Ordering::Relaxed),
+            1,
+            "device enumeration is bounded by cadence"
+        );
+        service_midi_device_inventory(
+            &mut checked,
+            &mut pending,
+            &inputs,
+            start + MIDI_DEVICE_POLL_INTERVAL,
+            Vec::new,
+        );
+        assert!(pending.is_some());
     }
 
     fn call(plane: &mut ControlPlane, method: &str, params: Value) -> JsonRpcResponse {

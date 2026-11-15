@@ -339,3 +339,73 @@ Owner reports, reproduced from the owner's saved session ("PD200X Radio Voice": 
 4. **UI:** plugin Properties lead with "Adjust this plugin", "Open plugin window" and the plugin's sliders (were at the bottom); recovery moved into a closed "After a plugin update" section; "Press Play" replaces "Start the route". Compare by ear: "Hold: without all N tools in this line" plus a reserved line naming them in route order. Apps cards show the Discord and OBS Studio marks (Simple Icons 13.21.0, CC0) instead of letters.
 
 Not done: guide videos for the plugin panel's new layout, three-theme screenshots of the changed panels.
+
+### Four VST code-review repairs — 2026-11-15
+
+Owner requested fixes for four actionable findings on the isolated VST feature
+branch (PLUG-03/04/05/07): public sidechain playback rejection, duplicate
+VST3 factory2 release, reversed VST2 chunk scope indices, and MIDI note release
+that depended on `midi.devices` polling.
+
+Repairs: normal plugin-stage preparation now passes a sidechain node to the
+verified bus-binding/bridge path instead of refusing it by port presence;
+flags-only refresh paths retain the sidechain bridge and leave Enabled/Bypass
+semantics to the compiler. `IPluginFactory2/3` queried references now have one
+typed RAII deleter and no explicit second release; the worker self-test checks
+the deleter runs once. VST2 chunk scope is typed: program/preset chunks use
+index 1, bank chunks index 0, and parameter banks continue to use parameter
+events. MIDI device enumeration is scheduled off the backend audio-service
+thread at a bounded 250 ms cadence; completed snapshots release queued/sounding
+notes on a connection-loss transition independently of status reads.
+
+Regression coverage: sidechain preparation refuses an unscanned identity for
+the scan-boundary reason rather than a topology gate; the opt-in Windows AGain
+route test now goes through `ControlPlane::prepare_plugin_stages` and the normal
+compiled path; engine tests cover sidechain stage scheduling/fail-closed
+behavior. MIDI tests cover note release on disconnect, transition deduplication,
+and off-thread inventory cadence. The VST2 acceptance fixture now rejects the
+wrong program/bank index and the new FBCh test verifies bank scope through the
+isolated worker.
+
+Windows validation so far: `cargo test -p audiorouter-control --lib
+midi::tests --locked` passes 12/12; the sidechain scan-identity guard passes
+1/1; engine sidechain tests pass 6/6; plugin-host library tests pass 126/126;
+`tools/m06-vst3-worker/build.ps1` and the rebuilt worker's `--self-test-host`
+pass; `tests/acceptance/m06-vst2-state-fixture.ps1` passes program chunk state
+and the bank-chunk regression, plus its existing parameter/nonfinite/fault
+cases. Both Rust formatting checks and `git diff --check` are clean.
+
+Windows results: `cargo test -p audiorouter-control --locked` passes 408, 22
+ignored; `cargo test -p audiorouter-plugin-host --lib --locked` passes 126;
+`cargo test -p audiorouter-plugin-host --test worker_process --locked` passes
+13; engine sidechain tests pass 6. Strict Clippy for control/plugin-host
+(`--all-targets --all-features -D warnings`), both Rust format checks, docs
+acceptance (271 files / 1,515 local links), and diff checks pass. The VST3
+worker built for x64 and x86 and `--self-test-host` passes for both release
+executables. The complete VST2 acceptance script passes, including program-preset
+chunk import, bank-chunk index regression, state restore at three rates, and
+fault controls.
+
+Requested local release desktop build passed using `tools/build-desktop.ps1
+-Profile release`; artifact directory:
+`src-tauri/target/release`. Final SHA-256: shell
+`06D98A22FB1D97EE24A134478524C827FD5BA3ADA8E2B50A0EC041981B19CDC1`, VST2 x64
+`AA58B6D6C3A38966C343028E27D919995106D2C47CF3A4E47473388E7EB8E35C`, VST3 x64
+`9521E826836A53549FBC5B3C65F888F61F1E879F6BBB490966ED0DF8E5778B57`, VST2 x86
+`2499B70816C6991611DA9D41CE5EB95D3F4ABEA079D897B0D0FB2E3FF1033529`, VST3 x86
+`D98FBBC9CD930A918AD65989362ADFBC6D567A02E533068F4562389BE4B62522`, CLI
+`E4E156BE52F7BC923BEC3F985A5D9FACC288BDFB9579D1CEF35A07D2D2C2EBD5`. The UI
+typecheck/build and MCP CLI staging completed. `fresh_install_shell` passed
+against the final shell with a disposable database/profile (backend ready in
+66 ms on the final rebuild; expected raw-client permission denial); no audio device opened. Both x64
+and x86 release VST3 workers pass `--self-test-host`. The release UI build
+reports the existing >500 kB chunk advisory.
+
+The opt-in route test that uses real SDK AGain/worker overrides was compiled but
+not executed because its bundle is absent. No endpoint playback, attended
+customer plugin/editor run, interactive release shell check, install smoke, or
+release qualification was performed. Owner now requested a PR: next, push this
+branch and open the VST feature PR. The base has advanced since this branch was
+created; GitHub mergeability/current-main integration, hosted checks, and owner
+review remain pending. The isolated AGain sidechain route can be exercised when
+its SDK fixture is available. No release is authorized.

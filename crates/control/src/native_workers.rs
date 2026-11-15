@@ -619,12 +619,24 @@ impl ControlPlane {
                 .iter_mut()
                 .filter(|node| audiorouter_engine::hosts_plugin_worker(node.kind))
             {
-                let bridge = self.plugin_bridge(session_id, &node.id)?;
-                bridge.set_silence_if_unchanged(guards.contains(&node.id));
-                bridge_flags.push((Arc::clone(&bridge), node.enabled && !node.bypass));
-                stages.insert(node.id.clone(), bridge);
-                node.enabled = true;
-                node.bypass = false;
+                let mut compiler_owns_flags = false;
+                match self.plugin_live_bridge(session_id, &node.id)? {
+                    crate::plugins::LivePluginBridge::Standard(bridge) => {
+                        bridge.set_silence_if_unchanged(guards.contains(&node.id));
+                        bridge_flags.push((Arc::clone(&bridge), node.enabled && !node.bypass));
+                        stages.insert(node.id.clone(), bridge);
+                    }
+                    #[cfg(windows)]
+                    crate::plugins::LivePluginBridge::Sidechain(bridge) => {
+                        bridge.set_silence_if_unchanged(guards.contains(&node.id));
+                        stages.insert(node.id.clone(), bridge);
+                        compiler_owns_flags = true;
+                    }
+                }
+                if !compiler_owns_flags {
+                    node.enabled = true;
+                    node.bypass = false;
+                }
             }
             stages
         } else {

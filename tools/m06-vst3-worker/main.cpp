@@ -688,6 +688,13 @@ static bool restart_needs_reactivation(int32 flags) {
     return (flags & (Vst::kLatencyChanged | Vst::kIoChanged | Vst::kReloadComponent)) != 0;
 }
 
+template <typename Interface>
+struct PluginInterfaceReleaser {
+    void operator()(Interface* value) const noexcept {
+        if (value) value->release();
+    }
+};
+
 class ComponentHandler final : public Vst::IComponentHandler, public Vst::IComponentHandler2,
                                public Vst::IComponentHandler3 {
 public:
@@ -829,15 +836,12 @@ public:
         if (!factory_) throw std::runtime_error("VST3 factory is null");
         IPluginFactory2* factory2 = nullptr;
         factory_->queryInterface(IPluginFactory2_iid, reinterpret_cast<void**>(&factory2));
-        const auto release_factory_interface = [](auto* value) {
-            if (value) value->release();
-        };
-        const std::unique_ptr<IPluginFactory2, decltype(release_factory_interface)> factory2_owner(
-            factory2, release_factory_interface);
+        const std::unique_ptr<IPluginFactory2, PluginInterfaceReleaser<IPluginFactory2>> factory2_owner(
+            factory2);
         IPluginFactory3* factory3 = nullptr;
         factory_->queryInterface(IPluginFactory3_iid, reinterpret_cast<void**>(&factory3));
-        const std::unique_ptr<IPluginFactory3, decltype(release_factory_interface)> factory3_owner(
-            factory3, release_factory_interface);
+        const std::unique_ptr<IPluginFactory3, PluginInterfaceReleaser<IPluginFactory3>> factory3_owner(
+            factory3);
         auto get_class_info = [&](int32 index, PClassInfo& info) {
             if (factory_->getClassInfo(index, &info) == kResultOk) return true;
             if (factory3) {
@@ -936,7 +940,6 @@ public:
             }
             break;
         }
-        if (factory2) factory2->release();
         if (!component_) {
             if (instrument && !found_instrument) {
                 throw std::runtime_error(found_audio_class
@@ -2659,6 +2662,22 @@ static int audio_thread_main(const Arguments& arguments, const std::vector<uint1
 
 static int self_test_host() {
     HostApplication host;
+    struct ReleaseProbe {
+        int* releases;
+        uint32 PLUGIN_API release() {
+            ++*releases;
+            return 1;
+        }
+    } release_probe{};
+    int factory_interface_releases = 0;
+    release_probe.releases = &factory_interface_releases;
+    {
+        const std::unique_ptr<ReleaseProbe, PluginInterfaceReleaser<ReleaseProbe>> owner(
+            &release_probe);
+    }
+    if (factory_interface_releases != 1) {
+        throw std::runtime_error("factory interface ownership regression");
+    }
     void* queried = nullptr;
     if (host.queryInterface(Vst::IHostApplication_iid, &queried) != kResultOk || !queried) throw std::runtime_error("host QI regression");
     auto* application = static_cast<Vst::IHostApplication*>(queried);

@@ -432,7 +432,7 @@ fn plugins_programs_dispatches_real_vst3_unit_hierarchy() {
 #[cfg(windows)]
 #[test]
 #[ignore = "requires SDK AGain and rebuilt native worker overrides"]
-fn backend_prepares_a_verified_sidechain_for_the_real_compiled_route() {
+fn backend_plugin_stage_path_prepares_and_compiles_a_verified_sidechain_route() {
     use audiorouter_domain::{Edge, Node, Port};
     let path = std::path::PathBuf::from(std::env::var("AUDIOROUTER_VST3_FIXTURE").unwrap());
     let root = path.parent().unwrap().to_path_buf();
@@ -520,11 +520,15 @@ fn backend_prepares_a_verified_sidechain_for_the_real_compiled_route() {
     session.nodes[2]
         .parameters
         .insert("classId".into(), json!("41347FD6FED64094AFBB12B7DBA1D441"));
-    let prepared = start_plugin_bridges(&session, vec![request()], 48_000).unwrap();
-    let processors = prepared
-        .into_iter()
-        .map(|(id, bridge)| (id, bridge.processor()))
-        .collect();
+    let mut plane = ControlPlane::default();
+    plane.insert_plugin_inventory(
+        root.to_string_lossy().into_owned(),
+        json!({
+            "directory": root,
+            "entries": [{ "path": path, "identity": { "sha256": identity.sha256 } }]
+        }),
+    );
+    let processors = plane.prepare_plugin_stages(&session, 48_000).unwrap();
     let set = audiorouter_engine::compile_native_paths_with_plugins_and_audio(
         &session,
         RuntimeGeneration::new(2),

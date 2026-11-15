@@ -999,24 +999,28 @@ mod plugin_chain_group_tests {
     }
 
     #[test]
-    fn saved_sidechain_topology_cannot_start_a_legacy_plugin_bridge() {
+    fn sidechain_plugins_require_scan_identity_but_are_not_rejected_by_topology() {
         let mut session = graph();
         let node = &mut session.nodes[0];
-        let id = node.id.clone();
-        let name = node.name.clone();
+        node.parameters = serde_json::from_value(json!({
+            "path": "C:\\fixture\\effect.vst3",
+            "fingerprint": "a".repeat(64),
+            "format": "vst3"
+        }))
+        .unwrap();
         node.ports.push(audiorouter_domain::Port {
             name: "sidechain".into(),
             direction: audiorouter_domain::PortDirection::Input,
             channels: 1,
         });
         let mut plane = ControlPlane::default();
-        let error = match plane.prepare_plugin_stages_for(&session, 48_000, Some(&id)) {
-            Err(error) => error,
-            Ok(_) => panic!("unbound sidechain must refuse before worker launch"),
-        };
+        let error = plane
+            .prepare_plugin_stages(&session, 48_000)
+            .expect_err("unscanned plugin identity must not be loaded");
         assert!(
-            matches!(error, ControlError::NodeNotReady { node_id, message }
-            if node_id == id.as_str() && message.contains(&name) && message.contains("sidechain"))
+            matches!(&error, ControlError::InvalidRequest(message)
+            if message.contains("matching scan identity")),
+            "{error:?}"
         );
     }
 
@@ -1419,16 +1423,6 @@ impl ControlPlane {
         }
         let mut requests = Vec::new();
         for node in session.nodes.iter().filter(wanted) {
-            // A saved named port is desired topology, never proof that the
-            // current binary supports it. Public playback stays gated until
-            // sidechain editor/control and protected-path behavior use the
-            // prepared auxiliary bridge, instead of the legacy registry.
-            if node.plugin_sidechain_port().is_some() {
-                return Err(ControlError::NodeNotReady {
-                    node_id: node.id.as_str().to_owned(),
-                    message: format!("\"{}\" cannot play: sidechain playback is awaiting editor/control and protected-path integration in this build", node.name),
-                });
-            }
             let path = node
                 .parameters
                 .get("path")

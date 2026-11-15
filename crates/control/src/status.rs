@@ -218,6 +218,7 @@ impl ControlPlane {
                         Err(error) => return Err(error),
                     };
                     live.set_silence_if_unchanged(guards.contains(&node.id));
+                    let mut compiler_owns_flags = false;
                     match live {
                         crate::plugins::LivePluginBridge::Standard(bridge) => {
                             bridge_flags.push((Arc::clone(&bridge), node.enabled && !node.bypass));
@@ -229,10 +230,13 @@ impl ControlPlane {
                             // flags; the live flag list only drives the
                             // ordinary bridge's processing switch.
                             stages.insert(node.id.clone(), bridge);
+                            compiler_owns_flags = true;
                         }
                     }
-                    node.enabled = true;
-                    node.bypass = false;
+                    if !compiler_owns_flags {
+                        node.enabled = true;
+                        node.bypass = false;
+                    }
                 }
                 stages
             } else {

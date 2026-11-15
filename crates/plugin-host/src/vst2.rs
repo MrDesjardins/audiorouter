@@ -649,6 +649,34 @@ const EFF_STOP_PROCESS: i32 = 72;
 const EFF_GET_CHUNK: i32 = 23;
 #[cfg(windows)]
 const EFF_SET_CHUNK: i32 = 24;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Vst2ChunkScope {
+    Program,
+    Bank,
+}
+
+impl Vst2ChunkScope {
+    /// VST2 `effSetChunk` uses index 1 for a program/preset and index 0 for a
+    /// bank. `effGetChunk` uses the same convention.
+    const fn dispatcher_index(self) -> i32 {
+        match self {
+            Self::Program => 1,
+            Self::Bank => 0,
+        }
+    }
+}
+
+#[cfg(test)]
+mod chunk_scope_tests {
+    use super::Vst2ChunkScope;
+
+    #[test]
+    fn program_and_bank_chunks_use_the_vst2_dispatcher_indices() {
+        assert_eq!(Vst2ChunkScope::Program.dispatcher_index(), 1);
+        assert_eq!(Vst2ChunkScope::Bank.dispatcher_index(), 0);
+    }
+}
 #[cfg(windows)]
 /// `kVstMidiType` and `kVstMidiEventIsRealtime` of the public aeffectx.h.
 const VST_MIDI_EVENT_TYPE: i32 = 1;
@@ -800,6 +828,8 @@ mod opcode_tests {
         assert_eq!(EFF_EDIT_IDLE, 19);
         assert_eq!(EFF_GET_CHUNK, 23);
         assert_eq!(EFF_SET_CHUNK, 24);
+        assert_eq!(Vst2ChunkScope::Program.dispatcher_index(), 1);
+        assert_eq!(Vst2ChunkScope::Bank.dispatcher_index(), 0);
         assert_eq!(EFF_START_PROCESS, 71);
         assert_eq!(EFF_STOP_PROCESS, 72);
     }
@@ -1965,8 +1995,8 @@ impl Vst2Library {
             (*self.effect).dispatcher.expect("validated dispatcher")(
                 self.effect,
                 EFF_GET_CHUNK,
+                Vst2ChunkScope::Program.dispatcher_index(),
                 0,
-                1,
                 (&mut data as *mut *mut c_void).cast(),
                 0.0,
             )
@@ -1996,13 +2026,17 @@ impl Vst2Library {
         if bytes.starts_with(PARAMETER_BANK_MAGIC) {
             return self.restore_parameter_bank(bytes);
         }
-        self.restore_chunk(bytes, 0)
+        self.restore_chunk(bytes, Vst2ChunkScope::Program)
     }
 
-    /// Apply an opaque program (`index=0`) or bank (`index=1`) chunk through
+    /// Apply an opaque program (`index=1`) or bank (`index=0`) chunk through
     /// the VST2 ABI. The caller keeps the checked byte slice alive for the
     /// synchronous dispatcher call.
-    fn restore_chunk(&mut self, bytes: &[u8], index: i32) -> Result<(), Vst2LibraryError> {
+    fn restore_chunk(
+        &mut self,
+        bytes: &[u8],
+        scope: Vst2ChunkScope,
+    ) -> Result<(), Vst2LibraryError> {
         if bytes.len() > MAX_VST2_STATE_BYTES {
             return Err(Vst2LibraryError::StateTooLarge);
         }
@@ -2015,7 +2049,7 @@ impl Vst2Library {
             (*self.effect).dispatcher.expect("validated dispatcher")(
                 self.effect,
                 EFF_SET_CHUNK,
-                index,
+                scope.dispatcher_index(),
                 bytes.len() as isize,
                 bytes.as_ptr().cast_mut().cast(),
                 0.0,
@@ -2067,7 +2101,7 @@ impl Vst2Library {
                 self.apply_parameter_values(parameters)
             }
             crate::vst2_preset::Vst2PresetBody::ProgramChunk { chunk, .. } => {
-                self.restore_chunk(chunk, 0)
+                self.restore_chunk(chunk, Vst2ChunkScope::Program)
             }
             crate::vst2_preset::Vst2PresetBody::Bank {
                 current_program,
@@ -2084,7 +2118,7 @@ impl Vst2Library {
                             self.apply_parameter_values(parameters)?;
                         }
                         crate::vst2_preset::Vst2BankProgram::Chunk { chunk, .. } => {
-                            self.restore_chunk(chunk, 0)?
+                            self.restore_chunk(chunk, Vst2ChunkScope::Program)?
                         }
                     }
                 }
@@ -2092,7 +2126,7 @@ impl Vst2Library {
                 Ok(())
             }
             crate::vst2_preset::Vst2PresetBody::BankChunk { chunk, .. } => {
-                self.restore_chunk(chunk, 1)
+                self.restore_chunk(chunk, Vst2ChunkScope::Bank)
             }
         }
     }

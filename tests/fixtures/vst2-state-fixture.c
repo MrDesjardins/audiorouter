@@ -85,11 +85,21 @@ static intptr_t dispatch(AEffect *self, int32_t opcode, int32_t index,
         }
         return 1;
     case EFF_GET_CHUNK:
+#ifdef VST2_FIXTURE_BANK_CHUNK
+        if (index != 0) return 0;
+#else
+        if (index != 1) return 0;
+#endif
         if (ptr != 0) {
             *(void **)ptr = &mix;
         }
         return (intptr_t)sizeof(mix);
     case EFF_SET_CHUNK:
+#ifdef VST2_FIXTURE_BANK_CHUNK
+        if (index != 0) return 0;
+#else
+        if (index != 1) return 0;
+#endif
         if (ptr != 0 && value == (intptr_t)sizeof(mix)) {
             copy_bytes(&mix, ptr, sizeof(mix));
             return 1;

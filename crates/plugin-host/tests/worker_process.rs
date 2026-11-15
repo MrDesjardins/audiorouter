@@ -2108,6 +2108,124 @@ fn verified_worker_applies_restored_vst2_chunk_state() {
 
 #[cfg(all(windows, feature = "test-fixtures"))]
 #[test]
+#[ignore = "requires the repository-owned VST2 bank-chunk fixture"]
+fn verified_worker_applies_vst2_bank_chunk_with_bank_scope_index() {
+    let plugin_path = PathBuf::from(
+        std::env::var("AUDIOROUTER_VST2_FIXTURE")
+            .expect("set AUDIOROUTER_VST2_FIXTURE for the VST2 bank-state acceptance"),
+    );
+    assert_eq!(
+        plugin_path.file_name().and_then(|name| name.to_str()),
+        Some("audiorouter-vst2-bank-fixture.dll")
+    );
+    let root = plugin_path.parent().expect("fixture parent").to_path_buf();
+    let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root)).unwrap();
+    let mut worker = SupervisedWorkerProcess::spawn_verified_with_sample_rate(
+        fixture_worker_path(),
+        &identity,
+        std::slice::from_ref(&root),
+        2,
+        48_000,
+        Instant::now(),
+    )
+    .expect("start bank chunk fixture worker");
+
+    // FBCh: version-2 bank header (zero indexed/current plus reserved bytes),
+    // then a four-byte plugin-owned bank chunk holding normalized mix=0.75.
+    let mut body = Vec::new();
+    body.extend_from_slice(b"FBCh");
+    body.extend_from_slice(&2_u32.to_be_bytes());
+    body.extend_from_slice(&0x4152_5354_u32.to_be_bytes());
+    body.extend_from_slice(&1_u32.to_be_bytes());
+    body.extend_from_slice(&0_u32.to_be_bytes());
+    body.extend_from_slice(&0_u32.to_be_bytes());
+    body.extend_from_slice(&[0_u8; 124]);
+    body.extend_from_slice(&4_u32.to_be_bytes());
+    body.extend_from_slice(&0.75_f32.to_ne_bytes());
+    let mut preset = b"CcnK".to_vec();
+    preset.extend_from_slice(&(body.len() as u32).to_be_bytes());
+    preset.extend_from_slice(&body);
+    worker
+        .apply_preset(&preset, Instant::now())
+        .expect("bank chunk must dispatch with index zero");
+    let output = worker
+        .process(
+            WorkerFrame::new(
+                1,
+                worker_clock_tick().saturating_add(10_000),
+                2,
+                vec![1.0, -1.0, 0.0, 0.0],
+            )
+            .unwrap(),
+            Vec::new(),
+            Instant::now(),
+        )
+        .expect("process restored bank chunk");
+    assert!((output.samples[0] - 0.75).abs() < f32::EPSILON);
+    assert!(worker.shutdown().unwrap().success());
+}
+
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
+#[ignore = "requires the repository-owned VST2 program-chunk fixture"]
+fn verified_worker_imports_vst2_program_chunk_with_program_scope_index() {
+    let plugin_path = PathBuf::from(
+        std::env::var("AUDIOROUTER_VST2_FIXTURE")
+            .expect("set AUDIOROUTER_VST2_FIXTURE for the VST2 preset acceptance"),
+    );
+    assert_eq!(
+        plugin_path.file_name().and_then(|name| name.to_str()),
+        Some("audiorouter-vst2-state-fixture.dll")
+    );
+    let root = plugin_path.parent().expect("fixture parent").to_path_buf();
+    let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root)).unwrap();
+    let mut worker = SupervisedWorkerProcess::spawn_verified_with_sample_rate(
+        fixture_worker_path(),
+        &identity,
+        std::slice::from_ref(&root),
+        2,
+        48_000,
+        Instant::now(),
+    )
+    .expect("start program chunk fixture worker");
+
+    // FPCh program preset with a plugin-owned native-endian float chunk.
+    let mut body = Vec::new();
+    body.extend_from_slice(b"FPCh");
+    body.extend_from_slice(&1_u32.to_be_bytes());
+    body.extend_from_slice(&0x4152_5354_u32.to_be_bytes());
+    body.extend_from_slice(&1_u32.to_be_bytes());
+    body.extend_from_slice(&1_u32.to_be_bytes());
+    let mut name = [0_u8; 28];
+    name[..12].copy_from_slice(b"Program test");
+    body.extend_from_slice(&name);
+    body.extend_from_slice(&4_u32.to_be_bytes());
+    body.extend_from_slice(&0.75_f32.to_ne_bytes());
+    let mut preset = b"CcnK".to_vec();
+    preset.extend_from_slice(&(body.len() as u32).to_be_bytes());
+    preset.extend_from_slice(&body);
+    worker
+        .apply_preset(&preset, Instant::now())
+        .expect("program preset must dispatch with index one");
+    let output = worker
+        .process(
+            WorkerFrame::new(
+                1,
+                worker_clock_tick().saturating_add(10_000),
+                2,
+                vec![1.0, -1.0, 0.0, 0.0],
+            )
+            .unwrap(),
+            Vec::new(),
+            Instant::now(),
+        )
+        .expect("process restored program chunk");
+    assert!((output.samples[0] - 0.75).abs() < f32::EPSILON);
+    assert!(worker.shutdown().unwrap().success());
+}
+
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
 #[ignore = "requires an editor-capable local VST2 DLL and a Windows desktop"]
 fn vst2_editor_shows_the_processing_instance_without_blocking_its_caller() {
     let plugin_path = PathBuf::from(

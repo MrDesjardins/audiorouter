@@ -1,5 +1,60 @@
 # Active plan — current priorities (2026-11-04)
 
+## VST review defect fixes — owner requested
+
+Owner requested fixes and regressions for four findings from the VST plugin
+review on `feature/vst-plugin-experience` (PLUG-03/04/05/07, M06): the public
+Play path rejects declared VST3 sidechains before using the prepared multi-bus
+bridge; VST3 `IPluginFactory2` ownership has a duplicate release; VST2 chunk
+indices are wrong for state/preset restoration; and MIDI disconnect note release
+depends on a `midi.devices` request. Keep work in the feature worktree and
+preserve untracked build/preview data in the primary checkout.
+
+Ordered work: route sidechain plugins through validated plugin requests into the
+already-built sidechain bridge and exercise preparation, graph compile and
+audio through the normal control-plane path; remove the extra COM release and
+add a refcount regression to the VST3 worker self-test; correct program-vs-bank
+chunk indices with a fixture that refuses incorrect indices; make a bounded
+backend service pass detect lost MIDI inputs and release held notes, with a
+deterministic disconnect regression. Run focused plugin-host/control/engine
+tests, VST3 worker build/self-test and VST2 state fixture acceptance where the
+native toolchain is available, both Rust formatting checks, focused strict
+Clippy, docs validation and `git diff --check`. Rollback: revert only these
+source, test and plan changes; no session migration, device configuration,
+plugin installation, live route, PR or release change is authorized.
+
+Implementation is on the feature worktree. Passed: full control tests (408
+passed, 22 ignored) and plugin-host library tests (126 passed); engine
+sidechain tests (6); plugin worker integration tests (13); MIDI-specific tests
+(12); sidechain scan-identity guard regression (1); strict Clippy for control
+and plugin-host with all targets/features; both Rust format checks; docs
+acceptance (271 Markdown files / 1,515 local links); and `git diff --check`.
+The VST3 worker builds and its `--self-test-host` passes in both x64 and x86
+release outputs. The repository-owned VST2 state acceptance passes for the
+program chunk state path at 44.1/48/96 kHz, program-preset chunk import, the
+legacy `main` export path at all three rates, bank-chunk scope-index regression,
+and the existing nonfinite/crash/hang containment cases. The release desktop
+build completed with shell and all four workers; embedded UI build/typecheck
+succeeded, and the Vite chunk-size notice above 500 kB remains. Built release
+shell `fresh_install_shell` passed on an isolated disposable profile (backend
+status in 66 ms on the final rebuild, expected raw-client
+DeviceAdministration refusal); no audio device opened. The output folder is
+`src-tauri/target/release` in the feature worktree. After the final MIDI change,
+the release build was refreshed; final shell SHA-256 is
+`06D98A22FB1D97EE24A134478524C827FD5BA3ADA8E2B50A0EC041981B19CDC1`, VST3 x64
+`9521E826836A53549FBC5B3C65F888F61F1E879F6BBB490966ED0DF8E5778B57`, VST3 x86
+`D98FBBC9CD930A918AD65989362ADFBC6D567A02E533068F4562389BE4B62522`, CLI
+`E4E156BE52F7BC923BEC3F985A5D9FACC288BDFB9579D1CEF35A07D2D2C2EBD5`. The
+exact-binary fresh-install shell test was rerun and passed with backend ready
+in 66 ms.
+
+The real AGain sidechain route test is opt-in and was not run because the SDK
+AGain bundle is not present in this checkout; there was no endpoint playback,
+attended customer plugin/editor run, installation smoke or release qualification.
+The release executable was not opened interactively. Owner now requested a PR;
+next: push this branch and open the VST feature PR. Hosted checks, current-main
+mergeability, owner review, and merge remain pending. No release is authorized.
+
 ## Issue #136 VST experience — 2026-11-13
 
 Documentation-only execution plan on isolated branch

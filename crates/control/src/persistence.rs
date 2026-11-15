@@ -265,6 +265,8 @@ impl ControlPlane {
             #[cfg(windows)]
             sidechain_bridges: Default::default(),
             instrument_midi: Default::default(),
+            last_midi_inventory_check: None,
+            midi_inventory_worker: None,
             editor_only_plugins: Default::default(),
             plugin_inventory_order: VecDeque::new(),
             privacy_muted,
