@@ -114,7 +114,7 @@ mod live {
         enumerate_active_endpoints, AudioServiceThreadGuard, EndpointDirection, SharedCapture,
         SharedRender,
     };
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::Arc;
     use std::time::{Duration, Instant};
 
@@ -464,17 +464,23 @@ mod live {
     }
 
     fn rpc(pipe: &str, method: &str, params: Value) -> Value {
+        rpc_result(pipe, method, params).unwrap_or_else(|error| panic!("{method}: {error}"))
+    }
+
+    /// Non-panicking variant for background sampling while a commit may hold
+    /// the control plane or briefly change the accepted generation.
+    fn rpc_result(pipe: &str, method: &str, params: Value) -> Result<Value, String> {
         let request = json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params });
-        let frame = audiorouter_protocol::encode_frame(&request).unwrap();
+        let frame =
+            audiorouter_protocol::encode_frame(&request).map_err(|error| format!("{error:?}"))?;
         let response = audiorouter_transport::round_trip(pipe, &frame)
-            .unwrap_or_else(|error| panic!("{method}: {error:?}"));
-        let response: Value = audiorouter_protocol::decode_frame(&response).unwrap();
-        assert!(
-            response["error"].is_null(),
-            "{method}: {}",
-            response["error"]
-        );
-        response["result"].clone()
+            .map_err(|error| format!("{error:?}"))?;
+        let response: Value =
+            audiorouter_protocol::decode_frame(&response).map_err(|error| format!("{error:?}"))?;
+        if !response["error"].is_null() {
+            return Err(response["error"].to_string());
+        }
+        Ok(response["result"].clone())
     }
 
     /// Render the reference tone continuously into `endpoint_id`.
@@ -1719,11 +1725,17 @@ mod live {
         });
         std::thread::sleep(Duration::from_millis(300));
         let run = std::process::id();
-        rpc(
-            &pipe,
-            "safety.setPrivacyMute",
-            json!({ "muted": true, "idempotencyKey": format!("toggle-mute-{run}") }),
-        );
+        let mute = json!({ "muted": true, "idempotencyKey": format!("toggle-mute-{run}") });
+        let listen_deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            match rpc_result(&pipe, "safety.setPrivacyMute", mute.clone()) {
+                Ok(_) => break,
+                Err(_) if Instant::now() < listen_deadline => {
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                Err(error) => panic!("the private backend did not start: {error}"),
+            }
+        }
         let prepared = rpc(
             &pipe,
             "nativePaths.prepare",
@@ -1801,9 +1813,350 @@ mod live {
         );
     }
 
-    /// Child process of the starvation test: holds and keeps touching
-    /// `AUDIOROUTER_HOG_GB` of memory until it is killed, so the memory
-    /// manager trims other processes' working sets (as a large build does).
+    /// Parameter-only commits keep the prepared worker playing. Uses a COPY
+    /// of a user database (`AUDIOROUTER_TOGGLE_DATABASE`, required) with
+    /// privacy mute latched, so reloading the route cannot be heard. The
+    /// session defaults to `patrick-main-session` and can be named with
+    /// `AUDIOROUTER_TOGGLE_SESSION`. `AUDIOROUTER_PLUGIN_WORKER_PATH` (or
+    /// `AUDIOROUTER_VST3_WORKER_PATH` for a VST3-only route) must name the
+    /// built worker executable, because the test binary does not sit beside
+    /// it. When the database variable is set the fixtures are required: no
+    /// enabled plugin, no changeable control or a missing worker identity
+    /// fails instead of passing silently. The save must finish within
+    /// `AUDIOROUTER_LIVE_COMMIT_MAX_MS` (default 1000), start no plugin
+    /// worker, keep the control plane responsive and keep the same workers.
+    #[test]
+    #[ignore = "live Windows audio devices of a saved session (privacy-muted)"]
+    fn live_saved_session_parameter_change_keeps_the_worker_playing() {
+        let Some(database) = std::env::var_os("AUDIOROUTER_TOGGLE_DATABASE") else {
+            return;
+        };
+        let session_id = std::env::var("AUDIOROUTER_TOGGLE_SESSION")
+            .unwrap_or_else(|_| "patrick-main-session".into());
+        let pipe = format!(r"\\.\pipe\audiorouter-parameter-{}", std::process::id());
+        let server_pipe = pipe.clone();
+        std::thread::spawn(move || {
+            let plane = audiorouter_control::ControlPlane::with_storage(
+                "parameter",
+                audiorouter_storage::Storage::open(std::path::Path::new(&database)).unwrap(),
+            );
+            let grant = audiorouter_control::ClientGrant::with_scopes([
+                audiorouter_domain::PermissionScope::Read,
+                audiorouter_domain::PermissionScope::GraphWrite,
+                audiorouter_domain::PermissionScope::SessionControl,
+                audiorouter_domain::PermissionScope::Capture,
+                audiorouter_domain::PermissionScope::DeviceAdministration,
+            ]);
+            let _ = audiorouter_transport::serve_control_connections_forever_with_grant(
+                &server_pipe,
+                plane,
+                grant,
+            );
+        });
+        std::thread::sleep(Duration::from_millis(300));
+        let run = std::process::id();
+        // Opening a large copied database can take longer than the pipe
+        // client's first wait window; retry until the private backend listens.
+        let mute = json!({ "muted": true, "idempotencyKey": format!("parameter-mute-{run}") });
+        let listen_deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            match rpc_result(&pipe, "safety.setPrivacyMute", mute.clone()) {
+                Ok(_) => break,
+                Err(error) if Instant::now() < listen_deadline => {
+                    eprintln!("waiting for the private backend: {error}");
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                Err(error) => panic!("the private backend did not start: {error}"),
+            }
+        }
+        let prepared = rpc(
+            &pipe,
+            "nativePaths.prepare",
+            json!({ "sessionId": session_id }),
+        );
+        let prepared_generation = prepared["generation"].as_u64().unwrap();
+        rpc(
+            &pipe,
+            "session.start",
+            json!({ "sessionId": session_id, "idempotencyKey": format!("parameter-start-{run}") }),
+        );
+        std::thread::sleep(Duration::from_secs(1));
+        let session = rpc(&pipe, "sessions.get", json!({ "sessionId": session_id }));
+
+        // Required fixtures: an enabled plugin to prove reuse and a parameter that
+        // reaches the live graph without reloading anything. Prefer a built-in
+        // control the owner actually toggles (Gain, Volume or Mute); a route
+        // whose only editable control is a plugin slider still proves reuse,
+        // because a slider is pushed into the running worker.
+        let plugin_ids = session["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|node| node["kind"] == "plugin" && node["enabled"] == true)
+            .filter_map(|node| node["id"].as_str().map(str::to_owned))
+            .collect::<Vec<_>>();
+        assert!(
+            !plugin_ids.is_empty(),
+            "fixture session has no enabled plugin; it cannot prove the worker was reused"
+        );
+        let (target_id, parameter, value, numeric) = session["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find_map(|node| {
+                let id = node["id"].as_str()?.to_owned();
+                let (name, value, numeric): (String, Value, bool) =
+                    match node["kind"].as_str()? {
+                        "gain" => (
+                            "gainDb".to_owned(),
+                            json!(node["parameters"]["gainDb"].as_f64()?),
+                            true,
+                        ),
+                        "volume" => (
+                            "percent".to_owned(),
+                            json!(node["parameters"]["percent"].as_f64()?),
+                            true,
+                        ),
+                        "mute" => (
+                            "muted".to_owned(),
+                            json!(node["parameters"]["muted"].as_bool()?),
+                            false,
+                        ),
+                        // The owner's main route has an EQ and a Spectral
+                        // Gate but no Gain or Volume node.
+                        "parametricEq" => (
+                            "band0GainDb".to_owned(),
+                            json!(node["parameters"]["band0GainDb"].as_f64()?),
+                            true,
+                        ),
+                        "graphicEq" => (
+                            "band0Db".to_owned(),
+                            json!(node["parameters"]["band0Db"].as_f64()?),
+                            true,
+                        ),
+                        "bassTreble" => (
+                            "bassDb".to_owned(),
+                            json!(node["parameters"]["bassDb"].as_f64()?),
+                            true,
+                        ),
+                        "compressor" | "gate" => (
+                            "thresholdDb".to_owned(),
+                            json!(node["parameters"]["thresholdDb"].as_f64()?),
+                            true,
+                        ),
+                        "spectralGate" => (
+                            "thresholdDb".to_owned(),
+                            json!(node["parameters"]["thresholdDb"].as_f64()?),
+                            true,
+                        ),
+                        "limiter" => (
+                            "ceilingDb".to_owned(),
+                            json!(node["parameters"]["ceilingDb"].as_f64()?),
+                            true,
+                        ),
+                        "delay" => (
+                            "delayMs".to_owned(),
+                            json!(node["parameters"]["delayMs"].as_f64()?),
+                            true,
+                        ),
+                        "pitch" => (
+                            "semitones".to_owned(),
+                            json!(node["parameters"]["semitones"].as_f64()?),
+                            true,
+                        ),
+                        "plugin" if node["enabled"] == true => {
+                            // Keep the `pluginParameter:` prefix: the commit
+                            // writes the candidate by parameter name and the
+                            // slider step below keys off the prefix.
+                            let (name, value) = node["parameters"].as_object()?.iter().find_map(
+                                |(name, value)| {
+                                    name.strip_prefix("pluginParameter:")?;
+                                    Some((name.clone(), value.as_f64()?))
+                                },
+                            )?;
+                            (name, json!(value), true)
+                        }
+                        _ => return None,
+                    };
+                Some((id, name, value, numeric))
+            })
+            .expect(
+                "fixture session has no Gain, Volume, Mute, EQ or plugin slider to change; \
+                 point AUDIOROUTER_TOGGLE_SESSION at a saved route with one",
+            );
+
+        let worker_ids = |diagnostics: &Value| {
+            diagnostics["nodeTelemetry"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|item| {
+                    let id = item["nodeId"].as_str()?;
+                    let worker_id = item["plugin"]["workerId"].as_u64()?;
+                    Some((id.to_owned(), worker_id))
+                })
+                .collect::<std::collections::HashMap<_, _>>()
+        };
+        let before_workers = worker_ids(&rpc(&pipe, "system.diagnostics", json!({})));
+        let before_running = plugin_ids
+            .iter()
+            .filter(|id| before_workers.get(*id).is_some_and(|worker| *worker != 0))
+            .cloned()
+            .collect::<Vec<_>>();
+        assert!(
+            !before_running.is_empty(),
+            "fixture session reports no running plugin worker identity: {before_workers:?}"
+        );
+
+        // Continuously sample the worker while the parameter commits run. A
+        // preparation that pauses the route shows up as a stalled
+        // processed-quanta count and/or new output underruns, and a control
+        // plane blocked by a commit shows up as a long gap between samples.
+        let sampling = Arc::new(AtomicBool::new(true));
+        let sample_generation = Arc::new(AtomicU64::new(prepared_generation));
+        let sample_pipe = pipe.clone();
+        let sample_session = session_id.clone();
+        let samples = Arc::new(std::sync::Mutex::new(Vec::<(Instant, u64, u64)>::new()));
+        let samples_for_thread = Arc::clone(&samples);
+        let sampling_for_thread = Arc::clone(&sampling);
+        let generation_for_thread = Arc::clone(&sample_generation);
+        let sampler = std::thread::spawn(move || {
+            while sampling_for_thread.load(Ordering::Acquire) {
+                let generation = generation_for_thread.load(Ordering::Acquire);
+                if let Ok(pump) = rpc_result(
+                    &sample_pipe,
+                    "nativeMultiInputs.pump",
+                    json!({
+                        "sessionId": sample_session,
+                        "generation": generation,
+                        "maxPackets": 64
+                    }),
+                ) {
+                    if let Ok(mut samples) = samples_for_thread.lock() {
+                        samples.push((
+                            Instant::now(),
+                            pump["submittedQuanta"].as_u64().unwrap_or(0),
+                            pump["outputUnderruns"].as_u64().unwrap_or(0),
+                        ));
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        });
+
+        let mut latest = session.clone();
+        let mut latest_value = value;
+        let max_commit_ms = std::env::var("AUDIOROUTER_LIVE_COMMIT_MAX_MS")
+            .ok()
+            .and_then(|value| value.parse::<u128>().ok())
+            .unwrap_or(1_000);
+        for round in 0..4 {
+            latest_value = if numeric {
+                let current = latest_value.as_f64().unwrap();
+                let step = if parameter.starts_with("pluginParameter:") {
+                    0.05
+                } else {
+                    1.0
+                };
+                if current > 20.0 || (current > 0.5 && current < 1.0) {
+                    json!(current - step)
+                } else {
+                    json!(current + step)
+                }
+            } else {
+                json!(!latest_value.as_bool().unwrap())
+            };
+            let mut changed = latest.clone();
+            changed["nodes"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|node| node["id"] == target_id.as_str())
+                .unwrap()["parameters"][&parameter] = latest_value.clone();
+            let plan = rpc(
+                &pipe,
+                "graph.plan",
+                json!({ "sessionId": session_id, "baseRevision": changed["revision"], "candidate": changed }),
+            );
+            let started_at = Instant::now();
+            let committed = rpc(
+                &pipe,
+                "graph.commit",
+                json!({ "planId": plan["planId"], "baseRevision": plan["baseRevision"], "idempotencyKey": format!("parameter-{run}-{round}") }),
+            );
+            let elapsed = started_at.elapsed();
+            eprintln!(
+                "round {round}: {target_id}.{parameter} -> {latest_value} in {elapsed:?}, {:?}",
+                committed["activation"]["native"]
+            );
+            assert_eq!(
+                committed["activation"]["native"]["state"], "applied",
+                "{committed}"
+            );
+            assert!(
+                elapsed <= Duration::from_millis(max_commit_ms as u64),
+                "parameter save {round} took {elapsed:?}; a live save must not reload the route \
+                 (limit {max_commit_ms} ms, set AUDIOROUTER_LIVE_COMMIT_MAX_MS to override)"
+            );
+            assert_eq!(
+                committed["activation"]["timing"]["pluginStarts"], 0,
+                "a parameter-only save started a plugin worker: {committed}"
+            );
+            if let Some(generation) = committed["activation"]["generation"].as_u64() {
+                sample_generation.store(generation, Ordering::Release);
+            }
+            latest = rpc(&pipe, "sessions.get", json!({ "sessionId": session_id }));
+            std::thread::sleep(Duration::from_millis(150));
+        }
+
+        sampling.store(false, Ordering::Release);
+        sampler.join().unwrap();
+        let samples = samples.lock().unwrap().clone();
+        assert!(
+            samples.len() >= 4,
+            "the sampler could not read the worker during the commits: {samples:?}"
+        );
+        // A commit must not block the control plane long enough to starve the
+        // sampler; a two-second reload shows up as one long gap here.
+        for pair in samples.windows(2) {
+            let gap = pair[1].0.duration_since(pair[0].0);
+            assert!(
+                gap < Duration::from_millis(750),
+                "the control plane was blocked for {gap:?} during a parameter save: {samples:?}"
+            );
+            assert!(
+                pair[1].1 >= pair[0].1,
+                "the worker's processed-quanta count went backwards: {samples:?}"
+            );
+        }
+        let (_, first_quanta, first_underruns) = samples[0];
+        let (_, last_quanta, last_underruns) = *samples.last().unwrap();
+        assert!(
+            last_quanta > first_quanta,
+            "the worker stopped processing during the parameter saves: {samples:?}"
+        );
+        assert_eq!(
+            last_underruns, first_underruns,
+            "the route underran during the live parameter saves: {samples:?}"
+        );
+
+        // The plugin that was not edited must still be the same worker.
+        let after_workers = worker_ids(&rpc(&pipe, "system.diagnostics", json!({})));
+        for node_id in &before_running {
+            assert_eq!(
+                after_workers.get(node_id),
+                before_workers.get(node_id),
+                "plugin {node_id} worker restarted during a parameter-only save"
+            );
+        }
+
+        rpc(
+            &pipe,
+            "session.stop",
+            json!({ "sessionId": session_id, "idempotencyKey": format!("parameter-stop-{run}") }),
+        );
+    }
+
     #[test]
     #[ignore = "helper process for live_saved_session_tone_survives_starvation"]
     fn live_memory_hog_helper_process() {

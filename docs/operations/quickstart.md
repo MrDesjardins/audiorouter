@@ -668,7 +668,9 @@ Both use frequency and Q, with no gain control.
 Use Select point to edit a point without dragging it. Undo/Redo beside Save
 and Play (Ctrl+Z/Ctrl+Y) restore tool edits, including after Save or live
 autosave. Save a restored stopped route to keep it; live parameter changes
-follow the ordinary automatic application path.
+follow the ordinary automatic application path and reuse the plugins that are
+already loaded. Turn automatic saving off in **Settings → Appearance → Live
+autosave**; parameter edits then stay a draft until Save.
 Remove point disables that band. The backend bounds the node to sixteen bands;
 older saved `parametricEq@1` nodes use the same editor and retain their sound.
 
@@ -1063,6 +1065,8 @@ keeps that curve and raises bands where additional noise is louder. Play only
 unwanted noise while learning, then **Stop and keep**. The combined profile is
 stored with the node. Live autosave attempts each changed draft once; after a
 conflict, review the refreshed session and deliberately Save or Revert edits.
+Rapid changes collapse into the latest draft, and an unrelated plugin is not
+reloaded for a parameter-only save.
 
 Properties shows Off, Bypass, Ready, Active, Disconnected or Failed beside the
 node name. Ready means enabled while stopped; Active does not prove incoming

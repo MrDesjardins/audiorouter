@@ -358,8 +358,11 @@ impl ControlPlane {
             ));
         }
         let mut session = self.native_paths_session(&session_id)?;
-        let plugin_stages =
-            self.prepare_plugin_stages(&session, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ)?;
+        let plugin_stages = self.prepare_plugin_stages(
+            &session,
+            audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
+            None,
+        )?;
         // A bypassed plugin still runs in the graph, with its bridge set to
         // pass audio dry. Leaving it out made a later live un-bypass insert a
         // stage whose worker pipeline was empty: a quantum of silence and a
@@ -369,8 +372,7 @@ impl ControlPlane {
             .iter_mut()
             .filter(|node| node.kind == NodeKind::Plugin && node.enabled && node.bypass)
         {
-            if let Ok(bridge) = self.plugin_bridge(&session_id, &node.id) {
-                bridge.set_processing_active(false);
+            if plugin_stages.deactivate_started_bridge(&node.id) {
                 node.bypass = false;
             }
         }
@@ -379,7 +381,7 @@ impl ControlPlane {
         let compiled = audiorouter_engine::compile_native_paths_with_plugins_and_audio(
             &session,
             RuntimeGeneration::new(generation),
-            &plugin_stages,
+            &plugin_stages.stages,
             &media,
         )
         .map_err(|error| match error {
@@ -720,6 +722,9 @@ impl ControlPlane {
                     ))
                 })?;
         self.attach_native_multi_input_worker(session_id.clone(), generation, worker)?;
+        plugin_stages.publish(self, &session_id)?;
+        self.live_graph_stale.remove(&session_id);
+        self.live_publication_warnings.remove(&session_id);
         self.multi_input_application_sources = application_sources;
         self.register_multi_input_generators(&session_id);
         self.pending_endpoint_changes.clear();

@@ -1061,6 +1061,10 @@ pub enum PluginWorkerState {
 pub struct PluginWorkerHealth {
     pub state: PluginWorkerState,
     pub failure_count: u32,
+    /// Stable identity of the worker process/queue behind this stage. Two
+    /// reads that report the same nonzero value are the same live worker;
+    /// zero means the implementation cannot say (for example a test double).
+    pub worker_id: u64,
 }
 
 /// Maximum number of independent realtime observers supported by one
@@ -8103,7 +8107,7 @@ pub struct CompiledPathSet {
 }
 
 impl CompiledPathSet {
-    /// Keep active source transports during a flag-only rebuild. Source
+    /// Keep active source transports during a live rebuild. Source
     /// configuration and sample rate must be identical to the prior graph.
     pub fn retain_unchanged_source_transports(
         &mut self,
@@ -9638,7 +9642,7 @@ impl RealtimeScheduler {
 }
 
 impl RuntimeGraph {
-    /// Keep active source transports during a flag-only rebuild. Source
+    /// Keep active source transports during a live rebuild. Source
     /// configuration and sample rate must be identical to the prior graph.
     pub fn retain_unchanged_source_transports(
         &mut self,
@@ -15816,6 +15820,7 @@ mod tests {
                 PluginWorkerHealth {
                     state: PluginWorkerState::Quarantined,
                     failure_count: 3,
+                    worker_id: 0,
                 }
             }
         }
@@ -16089,6 +16094,7 @@ mod tests {
                 PluginWorkerHealth {
                     state: PluginWorkerState::Quarantined,
                     failure_count: 5,
+                    worker_id: 0,
                 }
             }
         }

@@ -47,6 +47,26 @@ export function writeFlowAnimation(storage: Pick<Storage, "setItem"> | null, mod
   }
 }
 
+/** Whether parameter edits are saved automatically while audio plays. A
+ * topology edit still needs Save, and enabled/bypass changes remain live. */
+const LIVE_AUTOSAVE_KEY = "audiorouter.ui.live-autosave";
+
+export function readLiveAutosave(storage: Pick<Storage, "getItem"> | null): boolean {
+  try {
+    return storage?.getItem(LIVE_AUTOSAVE_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+export function writeLiveAutosave(storage: Pick<Storage, "setItem"> | null, enabled: boolean): void {
+  try {
+    storage?.setItem(LIVE_AUTOSAVE_KEY, enabled ? "on" : "off");
+  } catch {
+    /* Optional workflow preference. */
+  }
+}
+
 export function readTheme(storage: Pick<Storage, "getItem"> | null): ThemeMode {
   const value = storage?.getItem(THEME_KEY);
   return value === "light" || value === "high-contrast" || value === "custom" ? value : "dark";

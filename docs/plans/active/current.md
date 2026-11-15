@@ -30,6 +30,43 @@ exist yet, so the hosted publisher, README links and the next nightly remain
 unverified until the change reaches `main` and `Quality history (daily)` is
 dispatched. Next: owner approval to commit and open the PR.
 
+## Live parameter autosave — 2026-11-14
+
+Owner report: toggling a Mute node or a Fun Voice Changer option while playing
+stops output for up to two seconds during autosave. Investigation found the
+backend treated any parameter change as a structural rebuild, started a new
+worker for every plugin (including the unrelated Clear VST), and disabled
+worker pumping until the reload finished. Plan and implementation record:
+[live parameter autosave](live-parameter-autosave.md). Implemented: change
+classification, live plugin-bridge reuse (only changed plugin identity/state or
+VST2 group restarts), pumping through preparation with an atomic swap, decoded
+media reuse, and an optional Live autosave setting with coalesced saves.
+Requirements: GRAPH-08/09/15, UI-05/07. Local Rust/UI formatting, Clippy,
+tests and docs checks pass; production bundled Edge passes 12/12 for the
+autosave scenarios. An independent review found nine issues in the live-reuse
+path (source settings, mixed group preparation, VST2 order, stale active flags,
+pre-publication mutation, slider clobbering, restart on preparation failure,
+unbounded media cache, a test that could not detect a dropout); all nine were
+repaired and regressed. A second review found ten more (enabling a plugin
+without a live worker, flag-only publications clearing the stale marker,
+failed/quarantined reuse, publish errors reported as not applied, a weak live
+test, no dispatcher-level reuse evidence, D7 timing missing, a stale autosave
+message, a repeated quickstart instruction, and decoded media kept after Stop);
+all ten are repaired and regressed, with `graph.plan`/`graph.commit` timing and
+`pluginStarts` now observable. The live parameter test passed on a copied owner
+database (four commits, 39–49 ms each, zero plugin starts), as did every live
+bypass toggle; only the built-exe run with the owner's Clear VST remains. A
+verification pass then closed three leftovers: ordinary tests now drive plugin
+reuse with a bridge double (parameter save and hold-to-compare), the live
+test's plugin-slider fallback keeps the `pluginParameter:` name, and
+hold-to-compare uses the saved session as its reuse base so a missing worker
+does not restart the chain. A fresh release build and copied-owner-database
+live run then passed: four parameter commits completed in 18.9–20.6 ms with
+zero plugin starts and no sampler gap, and every copied-route bypass toggle
+applied. The exact attended Mute/Fun Voice Changer route is not present in the
+copy, so that user-route recording remains the final hardware gate. Next:
+open the approved PR with that limitation recorded.
+
 ## Resilience audit — 2026-11-13
 
 Owner requested a read-only investigation of resilience and fault tolerance

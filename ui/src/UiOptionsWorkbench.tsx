@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { FlowAnimationSetting } from "./FlowAnimationSetting";
+import { LiveAutosaveSetting } from "./LiveAutosaveSetting";
 import { type FlowAnimationMode, type ThemeMode } from "./preferences";
 import {
   DEFAULT_CUSTOM_THEME,
@@ -47,6 +48,8 @@ export function UiOptionsWorkbench({
   onCustomThemes,
   flowAnimation,
   onFlowAnimation,
+  liveAutosave,
+  onLiveAutosave,
 }: {
   theme: ThemeMode;
   onTheme: (theme: ThemeMode) => void;
@@ -54,6 +57,8 @@ export function UiOptionsWorkbench({
   onCustomThemes: (library: CustomThemeLibrary) => void;
   flowAnimation: FlowAnimationMode;
   onFlowAnimation: (mode: FlowAnimationMode) => void;
+  liveAutosave: boolean;
+  onLiveAutosave: (enabled: boolean) => void;
 }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState(false);
@@ -257,6 +262,7 @@ export function UiOptionsWorkbench({
         )}
       </section>
       <FlowAnimationSetting mode={flowAnimation} onChange={onFlowAnimation} />
+      <LiveAutosaveSetting enabled={liveAutosave} onChange={onLiveAutosave} />
     </div>
   );
 }

@@ -1,6 +1,91 @@
 //! Graph planning, commits, history, route inspection and endpoint feedback checks.
 
 use super::*;
+use crate::status::{elapsed_micros, LivePublicationTiming};
+
+/// How a committed graph differs from the graph that was playing.
+///
+/// `FlagsOnly` changes enabled/bypass, `ParametersOnly` changes parameter
+/// values without changing node identity, names, ports, edges or session
+/// fields, and `Structural` changes anything else. The distinction decides
+/// whether the live route can keep its prepared plugins and transports.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum LiveEdit {
+    FlagsOnly,
+    ParametersOnly,
+    Structural,
+}
+
+impl LiveEdit {
+    /// Whether the prepared source transports (Test Signal, Audio File,
+    /// Soundboard) can keep playing through this edit.
+    pub(crate) fn retains_sources(self) -> bool {
+        !matches!(self, LiveEdit::Structural)
+    }
+}
+
+/// How source transports survive a rebuild.
+#[derive(Clone, Copy)]
+pub(crate) enum SourceRetention<'a> {
+    /// Rebuild every source (a structural edit or a fresh start).
+    None,
+    /// Keep every existing transport (a flag-only republish with no saved
+    /// session to compare, such as hold-to-compare).
+    All,
+    /// Keep only sources whose kind and settings are unchanged.
+    Unchanged(&'a Session),
+}
+
+pub(crate) fn source_retention<'a>(
+    live: LiveEdit,
+    previous: Option<&'a Session>,
+) -> SourceRetention<'a> {
+    match (live.retains_sources(), previous) {
+        (false, _) => SourceRetention::None,
+        (true, Some(previous)) => SourceRetention::Unchanged(previous),
+        (true, None) => SourceRetention::All,
+    }
+}
+
+/// Whether a failed live publication of the saved change may stop and restart
+/// the route. Only a layout the playing worker cannot absorb does; a failed
+/// preparation must leave the old graph playing.
+pub(crate) fn failed_activation_may_restart(error: &ControlError) -> bool {
+    matches!(error, ControlError::RestartRequired(_))
+}
+
+/// Classify `current` against the previously committed `previous`.
+///
+/// The commit itself carries a revision, so revision equality is not part of
+/// the comparison. A parameter change wins over a simultaneous flag change:
+/// parameters may need to be pushed into a live plugin bridge.
+pub(crate) fn classify_live_edit(previous: &Session, current: &Session) -> LiveEdit {
+    if previous.id != current.id
+        || previous.name != current.name
+        || previous.edges != current.edges
+        || previous.nodes.len() != current.nodes.len()
+    {
+        return LiveEdit::Structural;
+    }
+    let mut parameters_changed = false;
+    for (before, after) in previous.nodes.iter().zip(&current.nodes) {
+        if before.id != after.id
+            || before.kind != after.kind
+            || before.name != after.name
+            || before.ports != after.ports
+        {
+            return LiveEdit::Structural;
+        }
+        if before.parameters != after.parameters {
+            parameters_changed = true;
+        }
+    }
+    if parameters_changed {
+        LiveEdit::ParametersOnly
+    } else {
+        LiveEdit::FlagsOnly
+    }
+}
 
 /// Whether a Physical Input renders its 5.1/7.1 capture to two ears
 /// (`spatialMode` headphones or speakers).
@@ -356,6 +441,7 @@ impl ControlPlane {
         idempotency_key: &str,
         display_operation_id: &str,
     ) -> Result<Value, ControlError> {
+        let commit_started = Instant::now();
         let checkpoint = self.store.clone();
         let fingerprint = format!("graph.commit:{}:{}", plan_id.as_str(), base_revision);
         let request_hash = audiorouter_storage::lower_hex(&Sha256::digest(fingerprint.as_bytes()));
@@ -485,6 +571,16 @@ impl ControlPlane {
             let generation = runtime
                 .start()
                 .map_err(|_| ControlError::InvalidRequest("session was not prepared".into()))?;
+            // Keep the prepared graph pumping while the new one is compiled
+            // and its path set is built. The worker swap below is atomic; a
+            // service pass in the middle of preparation must keep serving the
+            // old graph instead of pausing the route.
+            #[cfg(windows)]
+            if self.native_multi_input_worker_session.as_ref() == Some(&result.session_id)
+                && self.native_multi_input_worker.is_some()
+            {
+                self.native_multi_input_applied_generation = Some(generation);
+            }
             self.events.append(
                 result.revision,
                 Some(display_operation_id.into()),
@@ -495,25 +591,24 @@ impl ControlPlane {
             // a parameter edit such as a Volume or Mixer input slider takes
             // effect without Stop/Play. A topology change that the running
             // adapter cannot absorb reports `restartRequired` instead.
-            let flags_only = checkpoint
-                .session(&result.session_id)
-                .map(|previous| {
-                    let mut normalized = session.clone();
-                    normalized.revision = previous.revision;
-                    for node in &mut normalized.nodes {
-                        if let Some(old) = previous.nodes.iter().find(|old| old.id == node.id) {
-                            node.enabled = old.enabled;
-                            node.bypass = old.bypass;
-                        }
-                    }
-                    serde_json::to_value(&normalized).ok() == serde_json::to_value(previous).ok()
-                })
-                .unwrap_or(false);
-            self.service_running_native_audio(std::time::Instant::now());
-            // Network sockets are reconfigured first; a failure there must
-            // not be reported as applied.
+            let previous_session = checkpoint.session(&result.session_id).cloned();
+            // After a failed live application the playing graph is older than
+            // the saved session. Never reuse that graph's plugins from it: try
+            // a full preparation of the saved graph instead.
+            let stale = self.live_graph_stale.contains(&result.session_id);
+            let live = if stale {
+                LiveEdit::Structural
+            } else {
+                previous_session
+                    .as_ref()
+                    .map_or(LiveEdit::Structural, |previous| {
+                        classify_live_edit(previous, &session)
+                    })
+            };
+            // Network sockets are independent of the plugin graph and are
+            // always reconfigured from the previously saved session.
             #[cfg(windows)]
-            let network = match checkpoint.session(&result.session_id).cloned() {
+            let network = match previous_session.clone() {
                 Some(previous) => self
                     .reconfigure_running_network_nodes(&result.session_id, &previous)
                     .map(|_| ()),
@@ -521,38 +616,88 @@ impl ControlPlane {
             };
             #[cfg(not(windows))]
             let network: Result<(), ControlError> = Ok(());
+            let reuse_base = if stale {
+                None
+            } else {
+                previous_session.as_ref()
+            };
             let mut generation = generation;
+            let _ = self.live_publication_warnings.remove(&result.session_id);
+            let mut publication_timing: Option<LivePublicationTiming> = None;
             let native = match network.and_then(|()| {
-                self.republish_running_native_graph(&result.session_id, generation, flags_only)
+                self.republish_running_native_graph(
+                    &result.session_id,
+                    generation,
+                    live,
+                    reuse_base,
+                )
             }) {
-                Ok(Some(adapter)) => json!({ "state": "applied", "adapter": adapter }),
-                Ok(None) => Value::Null,
+                Ok(Some((adapter, timing))) => {
+                    publication_timing = Some(timing);
+                    json!({ "state": "applied", "adapter": adapter })
+                }
+                Ok(None) => {
+                    self.record_live_publication(&result.session_id, live);
+                    Value::Null
+                }
                 Err(error) => {
                     let reason = control_error_message(&error);
-                    match self.restart_or_keep_multi_input_route(&result.session_id, generation) {
-                        Some(Ok(restarted)) => {
-                            generation = restarted;
-                            json!({ "state": "restarted", "adapter": "multi-input", "reason": reason })
+                    // Only a change the playing layout cannot absorb may stop
+                    // and restart the route. A failed preparation (a plugin
+                    // that will not load, a missing file, a compile error)
+                    // must leave the old graph playing: restarting would stop
+                    // working audio and then fail the same way.
+                    if !failed_activation_may_restart(&error) {
+                        self.live_graph_stale.insert(result.session_id.clone());
+                        json!({ "state": "restartRequired", "reason": reason })
+                    } else {
+                        match self.restart_or_keep_multi_input_route(&result.session_id, generation)
+                        {
+                            Some(Ok(restarted)) => {
+                                generation = restarted;
+                                self.live_graph_stale.remove(&result.session_id);
+                                json!({ "state": "restarted", "adapter": "multi-input", "reason": reason })
+                            }
+                            Some(Err(restart)) => {
+                                self.live_graph_stale.insert(result.session_id.clone());
+                                json!({
+                                    "state": "restartRequired",
+                                    "reason": format!("{reason}; automatic restart failed: {}", control_error_message(&restart)),
+                                })
+                            }
+                            None => {
+                                self.live_graph_stale.insert(result.session_id.clone());
+                                json!({ "state": "restartRequired", "reason": reason })
+                            }
                         }
-                        Some(Err(restart)) => json!({
-                            "state": "restartRequired",
-                            "reason": format!("{reason}; automatic restart failed: {}", control_error_message(&restart)),
-                        }),
-                        None => json!({ "state": "restartRequired", "reason": reason }),
                     }
                 }
             };
+            let warning = self.live_publication_warnings.remove(&result.session_id);
             let still_running = self
                 .runtimes
                 .get(&result.session_id)
                 .is_some_and(|runtime| runtime.state() == RuntimeState::Running);
-            response["activation"] = json!({
+            let mut activation = json!({
                 "state": if still_running { "running" } else { "stopped" },
                 "generation": generation,
                 "runtime": if native.is_null() { "fake" } else { "native" },
                 "native": native,
+                "timing": {
+                    "commitMicros": elapsed_micros(commit_started),
+                    "prepareMicros": publication_timing.map(|timing| timing.prepare_micros),
+                    "swapMicros": publication_timing.map(|timing| timing.swap_micros),
+                    "pluginStarts": publication_timing.map(|timing| timing.plugin_starts),
+                },
             });
+            if let Some(warning) = warning {
+                activation["native"]["warning"] = json!(warning);
+            }
+            response["activation"] = activation;
         } else {
+            // A simulated commit publishes nothing, so there is no preparation
+            // to time. Keeping the shape free of per-request numbers also keeps
+            // an idempotent replay equal to the response it replays.
             response["activation"] = json!({ "state": "pending", "runtime": "fake" });
         }
         self.remember_operation_outcome(idempotency_key, response.clone(), "graph.commit", None);
@@ -560,6 +705,7 @@ impl ControlPlane {
     }
 
     pub(crate) fn dispatch_plan(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let plan_started = Instant::now();
         let params = params
             .ok_or_else(|| ControlError::InvalidRequest("graph.plan params are required".into()))?;
         let session_id: EntityId = serde_json::from_value(
@@ -598,7 +744,8 @@ impl ControlPlane {
             "diff": diff,
             "affectedDestinations": affected_destinations,
             "warnings": warnings,
-            "requiredScopes": ["graph.write"]
+            "requiredScopes": ["graph.write"],
+            "timing": { "planMicros": elapsed_micros(plan_started) }
         }))
     }
 

@@ -813,3 +813,257 @@ fn play_applies_only_sliders_moved_since_the_state_was_captured() {
         .collect::<Vec<_>>();
     assert_eq!(names, ["pluginParameter:2", "pluginParameter:3"]);
 }
+
+#[test]
+fn failed_or_quarantined_plugin_bridges_are_not_reused() {
+    use audiorouter_plugin_host::WorkerState;
+    // A bridge that has processed audio, or has not processed a quantum yet,
+    // can carry a new parameter template.
+    assert!(plugin_bridge_state_is_reusable(WorkerState::Running));
+    assert!(plugin_bridge_state_is_reusable(WorkerState::Stopped));
+    // A failed or quarantined worker would stay silent; prepare it again.
+    assert!(!plugin_bridge_state_is_reusable(WorkerState::Failed));
+    assert!(!plugin_bridge_state_is_reusable(WorkerState::Quarantined));
+}
+
+#[test]
+fn a_plugin_enabled_without_a_live_bridge_requires_preparation() {
+    let mut plane = ControlPlane::default();
+    let mut saved = session();
+    plane.insert_session(saved.clone()).unwrap();
+    // No plugin nodes: a flag-only republish needs no preparation.
+    assert!(plane.live_plugin_bridges_are_complete(&saved.id, &saved));
+
+    saved.nodes.push(Node {
+        id: EntityId::new("new-plugin"),
+        name: "New plugin".into(),
+        kind: NodeKind::Plugin,
+        type_version: 1,
+        enabled: true,
+        bypass: false,
+        parameters: serde_json::from_value(json!({
+            "path": "effect.vst3",
+            "format": "vst3",
+            "classId": "default",
+            "fingerprint": "a".repeat(64),
+            "pluginParameter:0": 0.3
+        }))
+        .unwrap(),
+        ports: vec![
+            Port {
+                name: "in".into(),
+                direction: PortDirection::Input,
+                channels: 1,
+            },
+            Port {
+                name: "out".into(),
+                direction: PortDirection::Output,
+                channels: 1,
+            },
+        ],
+    });
+    // Enabling a plugin while playing must prepare it instead of failing the
+    // commit because the route has no bridge for that node.
+    assert!(!plane.live_plugin_bridges_are_complete(&saved.id, &saved));
+}
+
+/// A test double for a loaded plugin bridge: reuse must not need a worker
+/// process, so the ordinary suite can prove a live save keeps its plugin.
+#[derive(Debug)]
+struct FakePluginBridge {
+    health: audiorouter_plugin_host::WorkerState,
+    parameters: std::sync::Mutex<Vec<audiorouter_plugin_host::ParameterEvent>>,
+    active: std::sync::atomic::AtomicBool,
+}
+
+impl FakePluginBridge {
+    fn new(health: audiorouter_plugin_host::WorkerState) -> Self {
+        Self {
+            health,
+            parameters: std::sync::Mutex::new(Vec::new()),
+            active: std::sync::atomic::AtomicBool::new(false),
+        }
+    }
+
+    fn parameters(&self) -> Vec<(u32, f32)> {
+        self.parameters
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|event| (event.parameter_id, event.normalized_value))
+            .collect()
+    }
+
+    fn is_active(&self) -> bool {
+        self.active.load(std::sync::atomic::Ordering::Acquire)
+    }
+}
+
+impl audiorouter_engine::RealtimePluginProcessor for FakePluginBridge {
+    fn process(&self, _block: &mut audiorouter_engine::AudioBlock) {}
+}
+
+impl LivePluginBridge for FakePluginBridge {
+    fn bridge_health(&self) -> audiorouter_plugin_host::WorkerState {
+        self.health
+    }
+
+    fn apply_parameters(
+        &self,
+        parameters: Vec<audiorouter_plugin_host::ParameterEvent>,
+    ) -> Result<(), String> {
+        self.parameters.lock().unwrap().extend(parameters);
+        Ok(())
+    }
+
+    fn apply_silence_if_unchanged(&self, _silence: bool) {}
+
+    fn apply_processing_active(&self, active: bool) {
+        self.active
+            .store(active, std::sync::atomic::Ordering::Release);
+    }
+
+    fn into_processor(self: Arc<Self>) -> Arc<dyn RealtimePluginProcessor> {
+        self
+    }
+
+    fn into_registered_bridge(
+        self: Arc<Self>,
+    ) -> Option<Arc<audiorouter_plugin_host::PluginRuntimeBridge>> {
+        None
+    }
+}
+
+/// A route with one loaded plugin between the input and the output.
+fn session_with_plugin() -> (Session, EntityId, Arc<FakePluginBridge>) {
+    let mut saved = session();
+    saved.nodes.insert(
+        1,
+        Node {
+            id: EntityId::new("effect"),
+            name: "Effect".into(),
+            kind: NodeKind::Plugin,
+            type_version: 1,
+            enabled: true,
+            bypass: false,
+            parameters: serde_json::from_value(json!({
+                "path": "effect.vst3",
+                "format": "vst3",
+                "classId": "default",
+                "fingerprint": "a".repeat(64),
+                "pluginParameter:0": 0.3,
+            }))
+            .unwrap(),
+            ports: vec![
+                Port {
+                    name: "in".into(),
+                    direction: PortDirection::Input,
+                    channels: 1,
+                },
+                Port {
+                    name: "out".into(),
+                    direction: PortDirection::Output,
+                    channels: 1,
+                },
+            ],
+        },
+    );
+    saved.edges = vec![
+        Edge {
+            id: EntityId::new("edge-in"),
+            source_node: EntityId::new("in"),
+            source_port: "main".into(),
+            destination_node: EntityId::new("effect"),
+            destination_port: "in".into(),
+            matrix: vec![1.0],
+            enabled: true,
+        },
+        Edge {
+            id: EntityId::new("edge-out"),
+            source_node: EntityId::new("effect"),
+            source_port: "out".into(),
+            destination_node: EntityId::new("out"),
+            destination_port: "main".into(),
+            matrix: vec![1.0],
+            enabled: true,
+        },
+    ];
+    let bridge = Arc::new(FakePluginBridge::new(
+        audiorouter_plugin_host::WorkerState::Running,
+    ));
+    (saved, EntityId::new("effect"), bridge)
+}
+
+/// A slider-only save reuses the loaded plugin: no worker starts, the same
+/// bridge stays in the graph, and only the changed slider is applied.
+#[test]
+fn a_parameter_commit_reuses_a_loaded_plugin_bridge() {
+    let mut plane = ControlPlane::default();
+    let (before, plugin_id, bridge) = session_with_plugin();
+    plane.insert_session(before.clone()).unwrap();
+    let mut after = before.clone();
+    after
+        .nodes
+        .iter_mut()
+        .find(|node| node.id == plugin_id)
+        .unwrap()
+        .parameters
+        .insert("pluginParameter:0".into(), json!(0.8));
+    let live = HashMap::from([(
+        plugin_id.clone(),
+        Arc::clone(&bridge) as Arc<FakePluginBridge>,
+    )]);
+    let stages = plane
+        .prepare_plugin_stages_with(&after, Some(&before), &live, |_, _| {
+            panic!("a parameter-only save must not start a plugin worker")
+        })
+        .unwrap();
+    assert_eq!(stages.started_count(), 0);
+    assert!(stages.stages.contains_key(&plugin_id));
+    stages.publish(&plane, &before.id).unwrap();
+    assert_eq!(bridge.parameters(), vec![(0, 0.8)]);
+    assert!(bridge.is_active());
+}
+
+/// Hold-to-compare republishes the saved graph with a bypass overlay and has no
+/// committed previous session. The saved session must still be the reuse base:
+/// otherwise a route whose live bridge lookup misses (after a worker failure)
+/// restarts every plugin in the chain.
+#[test]
+fn a_comparison_republish_reuses_loaded_plugins() {
+    let mut plane = ControlPlane::default();
+    let (before, plugin_id, bridge) = session_with_plugin();
+    plane.insert_session(before.clone()).unwrap();
+    let mut compared = before.clone();
+    compared
+        .nodes
+        .iter_mut()
+        .find(|node| node.id == plugin_id)
+        .unwrap()
+        .bypass = true;
+    let live = HashMap::from([(
+        plugin_id.clone(),
+        Arc::clone(&bridge) as Arc<FakePluginBridge>,
+    )]);
+    // Without a reuse base every enabled plugin is treated as new: this route
+    // has no current scan evidence, so the preparation falls back to a full
+    // start and fails. That is the defect hold-to-compare must not trigger.
+    let failed = plane.prepare_plugin_stages_with(&compared, None, &live, |_, _| {
+        Err(ControlError::InvalidRequest(
+            "no scan inventory in this test".into(),
+        ))
+    });
+    assert!(failed.is_err());
+    assert!(bridge.parameters().is_empty());
+    // With the saved session as the base the bridge is reused, and the
+    // comparison only marks it inactive inside the graph.
+    let stages = plane
+        .prepare_plugin_stages_with(&compared, Some(&before), &live, |_, _| {
+            panic!("a comparison must not restart a loaded plugin")
+        })
+        .unwrap();
+    assert_eq!(stages.started_count(), 0);
+    stages.publish(&plane, &before.id).unwrap();
+    assert!(!bridge.is_active());
+    assert!(bridge.parameters().is_empty());
+}
