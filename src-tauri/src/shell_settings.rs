@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-const MAX_SETTINGS_BYTES: u64 = 4 * 1024;
+const MAX_SETTINGS_BYTES: u64 = 64 * 1024;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -17,6 +17,8 @@ pub struct ShellSettings {
     pub api_auto_start: bool,
     /// The port and network the API last started with, reused by auto-start.
     pub api: Option<ApiListener>,
+    /// Global Windows keybindings owned by the desktop shell.
+    pub keybinds: Vec<crate::keybinds::KeybindRule>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -85,7 +87,10 @@ mod tests {
         assert!(!load(&path).auto_play, "corrupt file: off");
         std::fs::write(
             &path,
-            format!("{{\"autoPlay\": true, \"pad\": \"{}\"}}", "x".repeat(5000)),
+            format!(
+                "{{\"autoPlay\": true, \"pad\": \"{}\"}}",
+                "x".repeat(MAX_SETTINGS_BYTES as usize + 1)
+            ),
         )
         .unwrap();
         assert!(!load(&path).auto_play, "oversized file: off");
@@ -117,6 +122,7 @@ mod tests {
                 port: 17891,
                 network: Some("192.168.1.20".into()),
             }),
+            ..ShellSettings::default()
         };
         save(&path, &on).unwrap();
         assert_eq!(load(&path), on);

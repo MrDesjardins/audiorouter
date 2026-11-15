@@ -3704,7 +3704,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     ),
     startup: <StartupSettings backend={backend} />,
     shortcuts: (
-      <ShortcutSettings shortcuts={shortcuts} captureShortcut={captureShortcut} shortcutMessage={shortcutMessage} />
+      <ShortcutSettings
+        shortcuts={shortcuts}
+        captureShortcut={captureShortcut}
+        shortcutMessage={shortcutMessage}
+        snapshot={snapshot}
+      />
     ),
     versions: (
       <UpdatesPanel
