@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+Plugin support work on the `feature/vst-plugin-experience` branch. Nothing here
+is released, signed or tested on a clean install yet.
+
+- **Instruments and MIDI.** A new Instrument tool plays VST2 and VST3 synths and
+  samplers from the on-screen keyboard, a MIDI keyboard or an assistant
+  (`play_notes`). Plugins that declare themselves instruments, including DPF
+  ones with a bare `Instrument` category, are kept out of the effect tool.
+- **32-bit plugins.** 32-bit VST2 and VST3 plugins run in their own 32-bit
+  isolated worker.
+- **Plugin census.** A generated page lists how every tested plugin behaved:
+  172 of 190 effects passed every step and 3 of 4 instruments played a note
+  ([plugin census](plugin-census.md), [compatibility](plugin-compatibility.md)).
+  Known problems: AmplitudeImposer is silent, ProM and ZamAutoSat do not
+  restore saved state, ReaControlMIDI crashes when its state is restored (a
+  plugin bug), and PolyMAX needs the UA Connect sign-in.
+- **VST2 programs and presets.** The plugin's Properties can list VST2
+  programs, choose one, and import a `.fxp` or `.fxb` file kept beside the
+  plugin. VST3 programs are listed read-only.
+- **Sidechain input (VST3).** A VST3 plugin that declares an auxiliary input
+  can be given a named `sidechain` port, and have it removed, from its
+  Properties, over the API or from an assistant. It creates no Mixer and no
+  connection of its own.
+- **Safer VST3 hosting.** The worker asks a plugin whether it accepts 32-bit
+  audio before starting it and refuses plainly if not; the saved state of
+  plugins that reject it is recovered from their parameters.
+
+Known limits: shell VST2 plugins and `.fxp` files are covered by fixtures but
+not by a real third-party shell DLL; there is no VST3 unit tree or context menu;
+editors cannot be resized or follow monitor scaling changes yet; the sidechain
+input has not been heard on a real route; hardware MIDI input, a live listening
+check and the hosted 32-bit build are still to do. Roll back by installing the
+previous version; saved routes without Instrument or sidechain nodes load in
+older builds.
+
 ## 0.0.29 — 2026-11-12 (unsigned experimental preview)
 
 - **Plugin windows open without crashing.** Some VST2 plugins (Pitchproof)
