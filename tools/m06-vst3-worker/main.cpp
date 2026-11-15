@@ -42,6 +42,7 @@
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 #include "pluginterfaces/vst/ivstevents.h"
 #include "pluginterfaces/vst/ivstmidicontrollers.h"
+#include "pluginterfaces/vst/ivstunits.h"
 #include "pluginterfaces/vst/vstspeaker.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
 #include "host-support.h"
@@ -1805,6 +1806,69 @@ static std::string parameter_descriptors_message(Vst::IEditController* controlle
     return output.str();
 }
 
+// Read-only program names from IUnitInfo. A plugin without units, or whose
+// counts or strings are out of bounds, lists nothing; no program is selected.
+// The first program list of the root unit is used, else the first list.
+static std::string program_descriptors_message(Vst::IEditController* controller) {
+    constexpr int32 kMaxProgramLists = 64;
+    constexpr int32 kMaxProgramsListed = 256;
+    std::ostringstream output;
+    output << "{\"type\":\"Programs\",\"payload\":{\"programs\":[";
+    Vst::IUnitInfo* units = nullptr;
+    if (controller &&
+        controller->queryInterface(Vst::IUnitInfo::iid, reinterpret_cast<void**>(&units)) ==
+            kResultOk &&
+        units) {
+        const auto list_count = units->getProgramListCount();
+        if (list_count > 0 && list_count <= kMaxProgramLists) {
+            Vst::ProgramListID wanted = Vst::kNoProgramListId;
+            const auto unit_count = units->getUnitCount();
+            for (int32 unit = 0; unit < unit_count && unit < 256; ++unit) {
+                Vst::UnitInfo info{};
+                if (units->getUnitInfo(unit, info) == kResultOk &&
+                    info.id == Vst::kRootUnitId && info.programListId != Vst::kNoProgramListId) {
+                    wanted = info.programListId;
+                    break;
+                }
+            }
+            Vst::ProgramListInfo chosen{};
+            bool found = false;
+            for (int32 index = 0; index < list_count; ++index) {
+                Vst::ProgramListInfo list{};
+                if (units->getProgramListInfo(index, list) != kResultOk) continue;
+                if (!found && (wanted == Vst::kNoProgramListId || list.id == wanted)) {
+                    chosen = list;
+                    found = true;
+                }
+            }
+            if (found && chosen.programCount > 0) {
+                const auto count = std::min(chosen.programCount, kMaxProgramsListed);
+                for (int32 program = 0; program < count; ++program) {
+                    Vst::String128 name{};
+                    if (units->getProgramName(chosen.id, program, name) != kResultOk) {
+                        output << (program ? "," : "") << "{\"id\":" << program
+                               << ",\"name\":\"Program " << program + 1 << "\"}";
+                        continue;
+                    }
+                    std::string text;
+                    for (const auto code_unit : name) {
+                        if (code_unit == 0) break;
+                        text.push_back(code_unit >= 0x20 && code_unit <= 0x7e
+                                           ? static_cast<char>(code_unit)
+                                           : '?');
+                    }
+                    if (text.empty()) text = "Program " + std::to_string(program + 1);
+                    output << (program ? "," : "") << "{\"id\":" << program
+                           << ",\"name\":" << quote_json(text) << "}";
+                }
+            }
+        }
+        units->release();
+    }
+    output << "]}}";
+    return output.str();
+}
+
 static std::string processed_message(uint64_t sequence, uint64_t deadline, uint16_t channels,
                                      const std::vector<float>& samples) {
     std::ostringstream output;
@@ -2221,6 +2285,12 @@ static std::string handle_ui_request(const std::string& json, bool& shutdown) {
     }
     if (json == "{\"type\":\"DescribeParameters\"}") {
         return parameter_descriptors_message(effect.controller());
+    }
+    if (json == "{\"type\":\"DescribePrograms\"}") {
+        return program_descriptors_message(effect.controller());
+    }
+    if (json.find("\"type\":\"SelectProgram\"") != std::string::npos) {
+        return "{\"type\":\"Failure\",\"payload\":{\"code\":\"vst3ProgramSelectionUnsupported\"}}";
     }
     if (json.find("\"type\":\"EditorOpen\"") != std::string::npos) {
         const auto parent_window = required_uint_field(json, "\"parent_window\":");

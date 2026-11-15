@@ -6005,18 +6005,17 @@ impl PluginRuntimeBridge {
                                 ));
                             }
                             BridgeRequest::Programs(reply) => {
-                                let result = if vst2 {
-                                    worker.programs(now).map_err(|error| format!("{error:?}"))
-                                } else {
-                                    Err("programs are only available for VST2 plugins".into())
-                                };
+                                // VST3 lists its program names read-only through
+                                // IUnitInfo; choosing one stays VST2-only.
+                                let result =
+                                    worker.programs(now).map_err(|error| format!("{error:?}"));
                                 let _ = reply.send(result);
                             }
                             BridgeRequest::SelectProgram(program, reply) => {
                                 let result = if vst2 {
                                     worker.select_program(program, now).map_err(|error| format!("{error:?}"))
                                 } else {
-                                    Err("programs are only available for VST2 plugins".into())
+                                    Err("choosing a program is only available for VST2 plugins; VST3 programs are listed read-only".into())
                                 };
                                 let _ = reply.send(result);
                             }

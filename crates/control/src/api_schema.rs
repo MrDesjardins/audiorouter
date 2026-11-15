@@ -158,7 +158,7 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "plugins.resume" => "Retry a plugin in a playing route that was silenced because it passed a recording device's audio through unchanged (for example an unlicensed plugin). Audio resumes only if the plugin has changed audio since; otherwise it stays silent and resumed is false.",
         "plugins.parameters" => "Load one currently scanned plugin in its isolated worker and return bounded parameter descriptors.",
         "plugins.buses" => "Load one currently scanned plugin in its isolated worker and return its exact audio input/output buses, including any declared auxiliary input that can become a sidechain port.",
-        "plugins.programs" => "List the bounded VST2 programs of a plugin node in a playing route.",
+        "plugins.programs" => "List the bounded program names of a plugin node in a playing route (VST2 and VST3; VST3 lists are read-only).",
         "plugins.selectProgram" => "Select one bounded VST2 program by index on a plugin node in a playing route.",
         "plugins.applyPreset" => "Apply a bounded VST2 .fxp or .fxb preset file from the plugin's own directory to a plugin node in a playing route.",
         "plugins.prepareUpdate" => "Prepare replacement node parameters from a current scan after a vendor update, retaining the old state asset. Does not change a route or start audio: apply the returned parameters through graph plan/commit. resetState deliberately starts from defaults instead.",

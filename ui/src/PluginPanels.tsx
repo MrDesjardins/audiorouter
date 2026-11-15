@@ -798,9 +798,9 @@ export function PluginNodeInspector({
         SHA-256 fingerprint
         <input aria-label="Plugin fingerprint" value={fingerprint} readOnly />
       </label>
-      {isVst2 ? (
-        <section className="plugin-programs" aria-label="VST2 programs and presets">
-          <span className="eyebrow">VST2 programs</span>
+      {isVst2 || format === "vst3" ? (
+        <section className="plugin-programs" aria-label={`${formatLabel} programs and presets`}>
+          <span className="eyebrow">{formatLabel} programs</span>
           <button
             type="button"
             disabled={programBusy || !backend?.listPluginPrograms || !sessionId}
@@ -815,9 +815,9 @@ export function PluginNodeInspector({
               <label>
                 Program
                 <select
-                  aria-label="VST2 program"
+                  aria-label={`${formatLabel} program`}
                   value={selectedProgram}
-                  disabled={!backend?.selectPluginProgram || !sessionId}
+                  disabled={!isVst2 || !backend?.selectPluginProgram || !sessionId}
                   onChange={(event) => void chooseProgram(event.target.value)}
                 >
                   {programs.map((program) => (
@@ -829,22 +829,28 @@ export function PluginNodeInspector({
               </label>
             )
           ) : null}
-          <label>
-            Preset file (.fxp or .fxb, beside the plugin)
-            <input
-              aria-label="VST2 preset path"
-              value={presetPath}
-              onChange={(event) => setPresetPath(event.target.value)}
-              placeholder="Full path to the preset file"
-            />
-          </label>
-          <button
-            type="button"
-            disabled={programBusy || !backend?.applyPluginPreset || !sessionId || presetPath.trim() === ""}
-            onClick={() => void applyPreset()}
-          >
-            Import preset
-          </button>
+          {isVst2 ? (
+            <>
+              <label>
+                Preset file (.fxp or .fxb, beside the plugin)
+                <input
+                  aria-label="VST2 preset path"
+                  value={presetPath}
+                  onChange={(event) => setPresetPath(event.target.value)}
+                  placeholder="Full path to the preset file"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={programBusy || !backend?.applyPluginPreset || !sessionId || presetPath.trim() === ""}
+                onClick={() => void applyPreset()}
+              >
+                Import preset
+              </button>
+            </>
+          ) : (
+            <small>VST3 programs are listed for reference; choose them in the plugin&apos;s own window.</small>
+          )}
           {programError ? <small role="alert">{programError}</small> : null}
         </section>
       ) : null}

@@ -266,6 +266,31 @@ describe("PluginEditorControls before Play", () => {
     await waitFor(() => expect(applyPluginPreset).toHaveBeenCalledWith("s", "plugin-1", "C:\\VST2\\Lead.fxp"));
   });
 
+  it("lists VST3 programs read-only, with no choice and no preset import", async () => {
+    const listPluginPrograms = vi.fn().mockResolvedValue({
+      sessionId: "s",
+      nodeId: "plugin-1",
+      programs: [{ id: 0, name: "Init" }],
+    });
+    const selectPluginProgram = vi.fn();
+    render(
+      <PluginNodeInspector
+        node={plugin({ path: "C:\\VST3\\Synth.vst3", format: "vst3" })}
+        disabled={false}
+        onUnload={() => {}}
+        snapshot={null}
+        backend={{ listPluginPrograms, selectPluginProgram }}
+        sessionId="s"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Load programs" }));
+    await waitFor(() => expect(listPluginPrograms).toHaveBeenCalledWith("s", "plugin-1"));
+    const select = await screen.findByLabelText("VST3 program");
+    expect((select as HTMLSelectElement).disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "Import preset" })).toBeNull();
+    expect(selectPluginProgram).not.toHaveBeenCalled();
+  });
+
   it("still needs the desktop app, because the window belongs to the shell", () => {
     render(
       <PluginEditorControls
