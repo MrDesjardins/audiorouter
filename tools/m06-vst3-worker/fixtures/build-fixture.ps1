@@ -1,6 +1,8 @@
 param(
     [string]$SdkInclude = '',
-    # Folder that receives Sample64Only.vst3\Contents\x86_64-win\Sample64Only.vst3
+    # Which fixture: Sample64Only or TwoClasses (sources sample64only.cpp, twoclasses.cpp).
+    [ValidateSet('Sample64Only', 'TwoClasses')][string]$Name = 'Sample64Only',
+    # Folder that receives <Name>.vst3\Contents\x86_64-win\<Name>.vst3
     [Parameter(Mandatory = $true)][string]$OutputDirectory
 )
 
@@ -24,14 +26,14 @@ $include = $kitRoot.FullName
 $version = $kitRoot.Name
 $umLib = Join-Path $kits "Lib/$version/um/x64"
 $ucrtLib = Join-Path $kits "Lib/$version/ucrt/x64"
-$bundle = Join-Path ([System.IO.Path]::GetFullPath($OutputDirectory)) 'Sample64Only.vst3'
+$bundle = Join-Path ([System.IO.Path]::GetFullPath($OutputDirectory)) "$Name.vst3"
 $binaryDirectory = Join-Path $bundle 'Contents\x86_64-win'
 New-Item -ItemType Directory -Force -Path $binaryDirectory | Out-Null
-$output = Join-Path $binaryDirectory 'Sample64Only.vst3'
+$output = Join-Path $binaryDirectory "$Name.vst3"
 $work = Join-Path ([System.IO.Path]::GetFullPath($OutputDirectory)) 'obj'
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 $sources = @(
-    (Join-Path $PSScriptRoot 'sample64only.cpp'),
+    (Join-Path $PSScriptRoot ($Name.ToLowerInvariant() + '.cpp')),
     (Join-Path $sdk 'pluginterfaces\base\funknown.cpp'),
     (Join-Path $sdk 'public.sdk\source\vst\vstinitiids.cpp')
 )
