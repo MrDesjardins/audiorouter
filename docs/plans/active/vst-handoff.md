@@ -359,11 +359,12 @@ it differs:
   now shows a visible `Sidechain input` label. New headed Playwright coverage
   passed in dark, light and high-contrast, with card and Properties screenshots
   under `%TEMP%\audiorouter-playwright-results`. The Properties section's grid
-  spacing was fixed after screenshot inspection. Still open: occupied-port
-  replace/reject flow and guide/property-manifest/video coverage. The default
-  MCP all-method reachability test passed for the registered add/remove tools.
-- VSTC-08: read-only root-unit program lists already exist, but hierarchy and
-  context-menu behavior remain open.
+  spacing was fixed after screenshot inspection. The occupied-port replace/keep
+  flow and guide/property-manifest/video coverage are complete. The default MCP
+  all-method reachability test passed for the registered add/remove tools.
+- VSTC-08: unit hierarchy, per-unit read-only programs and the safe context-menu
+  stub are implemented. UTF16Name reports five units through the worker and
+  `ControlPlane::dispatch`; see the dated evidence below.
 - VSTC-09: pinned SDK mda and AGain builds passed Steinberg validation (94
   passed, 0 failed each) using CMake 4.4.4 and the same configure/build args as
   the acceptance wrapper. The wrapper itself still expects ignored local
@@ -371,12 +372,12 @@ it differs:
   separate from audible graph/runtime sidechain proof.
 - VSTC-10: no real-editor focus/DPI, VST2 refit, pumped-parent, or attended
   check has been run.
-- VSTC-11: release desktop build and isolated `fresh_install_shell` passed;
-  unsigned installer is still unbuilt because the release preparer requires a
-  clean working tree. No signing, hosted i686 CI, or live-ear test was done.
+- VSTC-11: release desktop build, unsigned app-only NSIS install/uninstall and
+  `fresh_install_shell` passed. Signing, hosted i686 CI and live-ear checks
+  remain open.
 
 The latest local continuation completed guide coverage, explicit occupied-key
-replacement, VST3 unit metadata UI and the safe context-menu stub. The signed
+replacement, VST3 unit metadata UI and the safe context-menu stub. The unsigned
 app-only installer installed and uninstalled in a disposable directory, and
 the installed shell passed `fresh_install_shell`. Detailed command results,
 warnings and artifact hash are in `vst-completion-work.md`.
@@ -395,13 +396,14 @@ remaining gates to the owner for review/hosted qualification.
 
 This handoff supersedes older statements above about incomplete guide coverage,
 missing unit-bearing plugins and an unbuilt installer. The ordered local work
-is implemented and committed in `36e79804f` (VSTC-08 metadata/guide work) and
-`b492ce0cd` (VSTC-04 replacement flow); this plan update records the final
-verification. The real UTF16Name VST3 now loads through the native worker's factory
-metadata fallback and returns five units; the opt-in `vst3_programs.rs` test
-passes with a five-unit minimum. The mda SDK bundle also passes the generic
-worker metadata check. VSTC-08 still needs the real unit-bearing response
-through `ControlPlane::dispatch`.
+is implemented and committed in `36e79804f` (VSTC-08 metadata/guide work),
+`b492ce0cd` (VSTC-04 replacement flow) and `60601f4a6` (real VST3 dispatcher
+regression); this plan update records the final verification. The real
+UTF16Name VST3 now loads through the native worker's factory
+metadata fallback and returns five units. Both the opt-in `vst3_programs.rs`
+worker test and `plugins_programs_dispatches_real_vst3_unit_hierarchy` through
+`ControlPlane::dispatch` pass. The mda SDK bundle also passes the generic
+worker metadata check.
 
 The sidechain replace/keep dialog, one-edge replacement, guide recording and
 coverage manifest are complete. All guide checks pass. The unsigned app-only
@@ -423,8 +425,8 @@ Rollup/Zod warnings are recorded in `vst-completion-work.md`.
 
 Do not create or push a PR: explicit approval is still required. The next
 reviewer should inspect the complete branch diff and these remaining gates:
-real unit-bearing VST3 through the dispatcher; pumped-parent editor resize and
-close; attended VST2/VST3 focus and DPI checks; live-ear behavior on owner
-endpoints; hosted i686 CI with every annotation reviewed; and a signed
-installer. No hardware MIDI, PolyMAX sign-in, reporter-specific plugin, or
-real-audio sidechain ducking qualification is claimed here.
+pumped-parent editor resize and close; attended VST2/VST3 focus and DPI checks;
+live-ear behavior on owner endpoints; hosted i686 CI with every annotation
+reviewed; and a signed installer. No hardware MIDI, PolyMAX sign-in,
+reporter-specific plugin, or real-audio sidechain ducking qualification is
+claimed here.

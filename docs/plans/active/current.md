@@ -27,11 +27,11 @@ owner's visible-Mixer and explicit-VST2-pin-label sidechain decisions. The
 occupied-key replace/keep flow, bounded VST3 unit/program display, safe
 context-menu stub and unsigned app-only installer install/uninstall smoke. A
 real five-unit Steinberg UTF16Name sample now passes the worker metadata test;
-the control-plane dispatcher path for that real unit-bearing plugin remains
-open. See [the plan](vst-full-compatibility.md), [handoff](vst-handoff.md) and
-the [completion work plan](vst-completion-work.md) for test results and
-remaining gates: real editor/DPI/pumped parent, owner endpoints, hosted i686
-CI/annotations and signing.
+`plugins.programs` also passes through `ControlPlane::dispatch` with the real
+worker registered on a fake running session. See [the plan](vst-full-compatibility.md),
+[handoff](vst-handoff.md) and the [completion work plan](vst-completion-work.md)
+for test results and remaining gates: real editor/DPI/pumped parent, owner
+endpoints, hosted i686 CI/annotations and signing.
 
 ## CI speed — 2026-11-12
 

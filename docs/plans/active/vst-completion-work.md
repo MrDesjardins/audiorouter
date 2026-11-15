@@ -1006,7 +1006,7 @@ VSTC-11 app-only package smoke (Windows, 2026-11-15): complete release shell and
 
 Packaging warnings (2026-11-15): `npm ci` for the Stream Deck package reports two low-severity advisories (`deepmerge` via `@rollup/plugin-node-resolve`, dev/build-only; the available fix is a major-version downgrade). Rollup also reports upstream Zod pure-annotation/circular-dependency warnings; it strips the annotations and successfully packages the plugin. No runtime dependency or lockfile was changed for these warnings. The installer bundle itself builds successfully.
 
-VSTC-08 still needs the real unit-bearing metadata exercised through the control-plane dispatcher. VSTC-10 still needs a pumped-parent real-editor resize/close run and attended focus/DPI evidence. VSTC-11 still needs hosted i686 CI with annotation review, live-ear checks on owner endpoints, and a signed installer. Do not create or push a PR until the owner approves it.
+VSTC-10 still needs a pumped-parent real-editor resize/close run and attended focus/DPI evidence. VSTC-11 still needs hosted i686 CI with annotation review, live-ear checks on owner endpoints, and a signed installer. Do not create or push a PR until the owner approves it.
 
 VSTC-08 real unit-bearing worker continuation (Windows, 2026-11-15): updated
 `vst3_programs.rs` with an optional minimum-unit assertion and per-unit program
@@ -1022,3 +1022,13 @@ pass. One mda run initially retained the UTF16Name-only five-unit environment
 threshold and correctly failed; rerunning with the generic zero-unit threshold
 passed. The test now checks per-unit program counts/names but does not require
 any specific unit names or parent topology.
+
+VSTC-08 real dispatcher continuation (Windows, 2026-11-15): added the ignored
+integration test `plugins_programs_dispatches_real_vst3_unit_hierarchy` in
+`crates/control/src/plugins_tests.rs`. It starts the real UTF16Name worker,
+registers its bridge on a fake running session, then calls
+`plugins.programs` through `ControlPlane::dispatch`; it returns five units and
+an empty root program list. Passed with `AUDIOROUTER_VST3_WORKER_PATH` pointing
+to the freshly built C++ worker and `AUDIOROUTER_TEST_VST3_EFFECT` pointing to
+the SDK fixture. This exercises API resolution/serialization without opening
+an audio endpoint; it is not live-ear or hardware qualification.
