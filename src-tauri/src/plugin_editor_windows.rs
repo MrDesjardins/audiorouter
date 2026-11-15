@@ -18,15 +18,17 @@
 use std::sync::{mpsc, Arc};
 use std::thread;
 use windows::core::{w, HSTRING, PCWSTR};
-use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{GetStockObject, BLACK_BRUSH, HBRUSH};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::UI::Input::KeyboardAndMouse::SetFocus;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW, GetWindow,
     GetWindowLongPtrW, IsWindow, LoadCursorW, PostMessageW, PostQuitMessage, RegisterClassW,
-    SetForegroundWindow, SetTimer, SetWindowLongPtrW, ShowWindow, TranslateMessage, CREATESTRUCTW,
-    CW_USEDEFAULT, GWLP_USERDATA, GW_CHILD, IDC_ARROW, MSG, SW_HIDE, SW_SHOW, WM_APP, WM_CLOSE,
-    WM_NCCREATE, WM_NCDESTROY, WM_TIMER, WNDCLASSW, WS_OVERLAPPEDWINDOW,
+    SetForegroundWindow, SetTimer, SetWindowLongPtrW, SetWindowPos, ShowWindow, TranslateMessage,
+    CREATESTRUCTW, CW_USEDEFAULT, GWLP_USERDATA, GW_CHILD, IDC_ARROW, MSG, SWP_NOACTIVATE,
+    SWP_NOZORDER, SW_HIDE, SW_SHOW, WM_ACTIVATE, WM_APP, WM_CLOSE, WM_DPICHANGED, WM_NCCREATE,
+    WM_NCDESTROY, WM_SETFOCUS, WM_TIMER, WNDCLASSW, WS_OVERLAPPEDWINDOW,
 };
 
 const WINDOW_CLASS: PCWSTR = w!("AudioRouterPluginEditorHost");
@@ -255,6 +257,26 @@ unsafe fn create_window(
     })
 }
 
+/// `WM_ACTIVATE` carries WA_INACTIVE (0), WA_ACTIVE (1) or WA_CLICKACTIVE (2) in
+/// the low word; only the active states take focus.
+fn activation_gives_focus(wparam: usize) -> bool {
+    matches!(wparam & 0xffff, 1 | 2)
+}
+
+/// Give keyboard focus to the plugin's editor window, if it is inside.
+///
+/// # Safety
+/// Call on the window's own thread. The editor is a child created by another
+/// process; Windows shares the input queue of parent and child, and a failed
+/// SetFocus is harmless.
+unsafe fn focus_editor(window: HWND) {
+    if let Ok(child) = GetWindow(window, GW_CHILD) {
+        if !child.is_invalid() {
+            let _ = SetFocus(Some(child));
+        }
+    }
+}
+
 unsafe extern "system" fn window_proc(
     window: HWND,
     message: u32,
@@ -298,6 +320,7 @@ unsafe extern "system" fn window_proc(
                         WatchAction::Show => {
                             let _ = ShowWindow(window, SW_SHOW);
                             let _ = SetForegroundWindow(window);
+                            focus_editor(window);
                         }
                         WatchAction::Close => {
                             let _ = PostMessageW(Some(window), WM_CLOSE, WPARAM(0), LPARAM(0));
@@ -345,6 +368,34 @@ unsafe extern "system" fn window_proc(
             }
             LRESULT(0)
         }
+        // Keyboard input belongs to the plugin's editor: hand focus to it
+        // whenever this window gets it (opening, clicking the title bar,
+        // switching back with Alt+Tab).
+        WM_SETFOCUS => {
+            focus_editor(window);
+            LRESULT(0)
+        }
+        WM_ACTIVATE if activation_gives_focus(wparam.0) => {
+            focus_editor(window);
+            LRESULT(0)
+        }
+        // Moving the window to a monitor with another scale: Windows suggests
+        // the new outer size. The worker refits the editor to the new client
+        // area on its own pass.
+        WM_DPICHANGED => {
+            if let Some(suggested) = (lparam.0 as *const RECT).as_ref() {
+                let _ = SetWindowPos(
+                    window,
+                    None,
+                    suggested.left,
+                    suggested.top,
+                    suggested.right - suggested.left,
+                    suggested.bottom - suggested.top,
+                    SWP_NOZORDER | SWP_NOACTIVATE,
+                );
+            }
+            LRESULT(0)
+        }
         CLOSE_FINISHED => {
             if let Some(state) = state.as_mut() {
                 state.close_result = Some(wparam.0 != 0);
@@ -376,6 +427,16 @@ unsafe extern "system" fn window_proc(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_active_activation_states_take_focus() {
+        assert!(!activation_gives_focus(0));
+        assert!(activation_gives_focus(1));
+        assert!(activation_gives_focus(2));
+        // The high word (minimized flag) must not change the decision.
+        assert!(!activation_gives_focus(0x1_0000));
+        assert!(activation_gives_focus(0x1_0001));
+    }
 
     #[test]
     fn the_window_appears_when_the_editor_is_inside_it() {
