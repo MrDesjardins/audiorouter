@@ -24,6 +24,7 @@ import {
   appendEndpointLoopbackNode,
   appendLibraryNode,
   appendPluginPlaceholderNode,
+  replaceDraftSidechainConnection,
   appendVirtualBusNode,
   copyDraftNode,
   duplicateDraftNode,
@@ -515,6 +516,49 @@ describe("destination connection creation", () => {
         expect.objectContaining({ sourceNode: mixer?.id, destinationNode: "headphones" }),
       ]),
     );
+  });
+
+  it("replaces an occupied plugin sidechain edge without inserting a Mixer", () => {
+    const pluginEntry: PluginScanEntry = {
+      path: "C:\\Plugins\\sidechain.vst3",
+      identity: {
+        path: "C:\\Plugins\\sidechain.vst3",
+        binaryPath: "C:\\Plugins\\sidechain.vst3\\Contents\\x86_64-win\\sidechain.vst3",
+        format: "vst3",
+        architecture: "x64",
+        fileBytes: 10,
+        sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        vendor: "Test vendor",
+        version: "1.0",
+        classIds: ["test-class"],
+        compatibility: "supportedVst3X64",
+        instrument: false,
+      },
+      error: null,
+      errorCode: null,
+    };
+    let session = appendPluginPlaceholderNode({ ...demoSession, edges: [] }, pluginEntry);
+    session = {
+      ...session,
+      nodes: session.nodes.map((node) =>
+        node.id === "plugin-1"
+          ? { ...node, ports: [...node.ports, { name: "sidechain", direction: "input" as const, channels: 1 }] }
+          : node,
+      ),
+    };
+    session = appendLibraryNode(session, "testSignal");
+    session = appendDraftConnection(session, "mic", "out", "plugin-1", "sidechain");
+    const before = session;
+    const replaced = replaceDraftSidechainConnection(session, "edge-1", "testSignal-1", "out", "plugin-1", "sidechain");
+
+    expect(replaced.edges).toHaveLength(1);
+    expect(replaced.edges[0]).toMatchObject({
+      sourceNode: "testSignal-1",
+      destinationNode: "plugin-1",
+      destinationPort: "sidechain",
+    });
+    expect(replaced.nodes.filter((node) => node.kind === "mixer")).toHaveLength(0);
+    expect(before.edges[0]).toMatchObject({ sourceNode: "mic", destinationPort: "sidechain" });
   });
 });
 

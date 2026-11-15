@@ -1241,6 +1241,25 @@ export function appendDraftConnection(
   };
 }
 
+/** Replaces one source on a plugin's occupied named sidechain input in one draft edit. */
+export function replaceDraftSidechainConnection(
+  session: Session,
+  occupiedEdgeId: EntityId,
+  sourceNodeId: EntityId,
+  sourcePortName: string,
+  destinationNodeId: EntityId,
+  destinationPortName: string,
+): Session {
+  const occupied = session.edges.find((edge) => edge.id === occupiedEdgeId);
+  const destination = session.nodes.find((node) => node.id === destinationNodeId);
+  if (!occupied || occupied.destinationNode !== destinationNodeId || occupied.destinationPort !== destinationPortName)
+    throw new Error("The sidechain connection changed; try again");
+  if (destination?.kind !== "plugin" || destinationPortName !== "sidechain")
+    throw new Error("Only a plugin sidechain input can replace its source");
+  const withoutOccupied = removeDraftConnection(session, occupiedEdgeId);
+  return appendDraftConnection(withoutOccupied, sourceNodeId, sourcePortName, destinationNodeId, destinationPortName);
+}
+
 /** Inserts a deterministic stereo mixer into one draft edge without committing topology. */
 export function insertDraftMixer(session: Session, edgeId: EntityId): Session {
   const edge = session.edges.find((candidate) => candidate.id === edgeId);

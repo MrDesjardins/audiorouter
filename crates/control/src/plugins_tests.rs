@@ -294,7 +294,8 @@ fn add_sidechain_port_adds_the_real_again_auxiliary_input_once_and_undoes() {
     assert!(reply.error.is_none(), "{:?}", reply.error);
     let result = reply.result.unwrap();
     assert_eq!(result["port"], "sidechain");
-    assert_eq!(result["channels"], 2);
+    // AGain's declared auxiliary bus is mono even though its main bus is stereo.
+    assert_eq!(result["channels"], 1);
     let changed = plane.get_session(&original.id).unwrap().clone();
     assert_eq!(changed.revision, 1);
     assert_eq!(changed.edges.len(), 0, "no connection is created");

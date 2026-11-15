@@ -574,6 +574,20 @@ const previewBackend: UiBackend = {
         { id: 0, name: "Init" },
         { id: 1, name: "Bright" },
       ],
+      units: [
+        {
+          id: 0,
+          parent_id: -1,
+          name: "Root unit",
+          program_list_id: 1,
+          program_count: 2,
+          programs: [
+            { id: 0, name: "Attack" },
+            { id: 1, name: "Smooth" },
+          ],
+        },
+        { id: 1, parent_id: 0, name: "Compressor", program_list_id: null, program_count: 0, programs: [] },
+      ],
     };
   },
   async selectPluginProgram(sessionId: string, nodeId: string, program: number) {
