@@ -323,3 +323,28 @@ A1 (catalog and manifest), A2 (fallback test), then B `effCanDo` and
 `effSetBypass`, then C restart flags and content scale, rerunning the census
 after each worker change. Write the P5 design last in that session and give
 the owner the single "needs the owner" list from section I.
+
+## State at the end of the 2026-11-14 session (supersedes older "open" lists above)
+
+Commits on `feature/vst-plugin-experience` since the handoff was written:
+DPF instrument classification, VST3 `canProcessSampleSize`, read-only VST3
+program lists, `plugins.addSidechainPort` / `plugins.removeSidechainPort`
+(API, MCP, Properties UI), the sidechain connection-rule fix (no implicit
+sidechain connection), editor focus/DPI forwarding in the shell window, the
+64-bit-only and two-class VST3 fixtures with real-worker tests, the
+compatibility status section and draft release notes. Nothing is pushed and no
+PR exists.
+
+Still open, in the order to take them:
+
+| Item | What is missing | Needs |
+| --- | --- | --- |
+| VSTC-04 | headed browser scenario and three-theme screenshots of the Sidechain section; guide/property-manifest entries; a visible text label for the `sidechain` handle (the canvas already renders a handle named `<node> sidechain input`, no visible label); real AGain run (`add_sidechain_port_adds_the_real_again_auxiliary_input_once_and_undoes`) | AGain build (CMake) |
+| VSTC-08 | VST3 unit hierarchy and a context-menu stub | design decision on read API |
+| VSTC-09 | Steinberg validator run | validator source/binary and CMake |
+| VSTC-10 | real-editor checks of focus and DPI, VST2 refit on DPI change, pumped-parent harness, attended pass | owner on the built exe |
+| VSTC-11 | installer build, `fresh_install_shell` (close shell PID 55108 first), live-ear check, hosted i686 CI and annotations, signed installer, checksums | owner and hosted CI |
+| Owner | hardware MIDI keyboard, PolyMAX UA Connect sign-in, approval to push and open a PR | owner |
+
+Fixture environment variables are documented in the header of each test file
+(`vst3_programs.rs`, `vst3_sample_format.rs`, `vst3_multi_class.rs`).
