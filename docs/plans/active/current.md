@@ -51,9 +51,14 @@ in 66 ms.
 The real AGain sidechain route test is opt-in and was not run because the SDK
 AGain bundle is not present in this checkout; there was no endpoint playback,
 attended customer plugin/editor run, installation smoke or release qualification.
-The release executable was not opened interactively. Owner now requested a PR;
-next: push this branch and open the VST feature PR. Hosted checks, current-main
-mergeability, owner review, and merge remain pending. No release is authorized.
+The release executable was not opened interactively. Owner requested and
+approved a PR; [PR #152](https://github.com/MrDesjardins/audiorouter/pull/152)
+is open at head `a1dfef66b4762c1339a2dd6ec54960ea8bbe79a2`. GitHub currently
+reports conflicts against `main` at `8fbe4bee217c3455c23802b037bcafd207d6860b`
+(`CONFLICTING` / `DIRTY`) in plugin graph preparation/publication and the active
+plan. No conflicts were resolved yet; next: integrate current `main` while
+preserving both the VST changes and live plugin-reuse work, rerun checks, push
+the merge commit, and update PR #152. No release is authorized.
 
 ## Issue #136 VST experience — 2026-11-13
 

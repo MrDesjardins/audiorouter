@@ -404,8 +404,11 @@ reports the existing >500 kB chunk advisory.
 The opt-in route test that uses real SDK AGain/worker overrides was compiled but
 not executed because its bundle is absent. No endpoint playback, attended
 customer plugin/editor run, interactive release shell check, install smoke, or
-release qualification was performed. Owner now requested a PR: next, push this
-branch and open the VST feature PR. The base has advanced since this branch was
-created; GitHub mergeability/current-main integration, hosted checks, and owner
-review remain pending. The isolated AGain sidechain route can be exercised when
-its SDK fixture is available. No release is authorized.
+release qualification was performed. Owner approved PR #152, opened at
+`a1dfef66b4762c1339a2dd6ec54960ea8bbe79a2`. The current base is
+`8fbe4bee217c3455c23802b037bcafd207d6860b`; GitHub reports `CONFLICTING` and
+`DIRTY`. Plugin graph preparation/publication and the active plan require merge
+resolution. Next: integrate current main without dropping either the VST work
+or live plugin-reuse changes, validate and push the merge, then inspect fresh CI
+and annotations. The AGain route remains pending its SDK fixture. No release is
+authorized.
