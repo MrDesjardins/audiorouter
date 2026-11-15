@@ -132,7 +132,7 @@
     }
   ],
   "guideKindCount": 39,
-  "propertyCount": 257,
+  "propertyCount": 258,
   "tools": [
     {
       "kind": "gain",
@@ -7342,7 +7342,7 @@
               "title": "Every setting",
               "video": "assets/tool-guides/plugin-overview.mp4",
               "poster": "assets/tool-guides/plugin-overview.jpg",
-              "description": "A silent tour of the Plugin Properties panel. It shows Allow unchanged audio being enabled and disabled, then returns to the top. This setting weakens the protected-voice guard for this plugin or its shared VST2 chain; the recording does not demonstrate a running plugin."
+              "description": "A silent tour of the Plugin Properties panel. It shows the recovery choices, briefly enables Allow unchanged audio, then adds and removes a VST3 sidechain input before returning to the top. The sidechain key connects on the canvas and is not mixed into the main signal. No plugin is loaded and no audio is processed in this configuration recording."
             }
           ],
           "status": "exempted"
@@ -7364,7 +7364,7 @@
               "title": "Every setting",
               "video": "assets/tool-guides/plugin-overview.mp4",
               "poster": "assets/tool-guides/plugin-overview.jpg",
-              "description": "A silent tour of the Plugin Properties panel. It shows Allow unchanged audio being enabled and disabled, then returns to the top. This setting weakens the protected-voice guard for this plugin or its shared VST2 chain; the recording does not demonstrate a running plugin."
+              "description": "A silent tour of the Plugin Properties panel. It shows the recovery choices, briefly enables Allow unchanged audio, then adds and removes a VST3 sidechain input before returning to the top. The sidechain key connects on the canvas and is not mixed into the main signal. No plugin is loaded and no audio is processed in this configuration recording."
             }
           ],
           "status": "exempted"
@@ -7381,8 +7381,37 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "plugin--recovery",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/plugin-overview.mp4",
+              "poster": "assets/tool-guides/plugin-overview.jpg",
+              "description": "A silent tour of the Plugin Properties panel. It shows the recovery choices, briefly enables Allow unchanged audio, then adds and removes a VST3 sidechain input before returning to the top. The sidechain key connects on the canvas and is not mixed into the main signal. No plugin is loaded and no audio is processed in this configuration recording."
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "sidechain",
+          "label": "Sidechain input",
+          "type": "action",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "plugin--sidechain",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/plugin-overview.mp4",
+              "poster": "assets/tool-guides/plugin-overview.jpg",
+              "description": "A silent tour of the Plugin Properties panel. It shows the recovery choices, briefly enables Allow unchanged audio, then adds and removes a VST3 sidechain input before returning to the top. The sidechain key connects on the canvas and is not mixed into the main signal. No plugin is loaded and no audio is processed in this configuration recording."
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "pluginParameter:<parameterId>",
@@ -7401,7 +7430,7 @@
               "title": "Every setting",
               "video": "assets/tool-guides/plugin-overview.mp4",
               "poster": "assets/tool-guides/plugin-overview.jpg",
-              "description": "A silent tour of the Plugin Properties panel. It shows Allow unchanged audio being enabled and disabled, then returns to the top. This setting weakens the protected-voice guard for this plugin or its shared VST2 chain; the recording does not demonstrate a running plugin."
+              "description": "A silent tour of the Plugin Properties panel. It shows the recovery choices, briefly enables Allow unchanged audio, then adds and removes a VST3 sidechain input before returning to the top. The sidechain key connects on the canvas and is not mixed into the main signal. No plugin is loaded and no audio is processed in this configuration recording."
             }
           ],
           "status": "exempted"

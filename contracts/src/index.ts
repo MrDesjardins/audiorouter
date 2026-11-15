@@ -1983,7 +1983,12 @@ export type MethodResult = {
   "plugins.buses": { path: string; sha256: string; format: "vst2" | "vst3" | "unknown"; buses: { inputs: { nativeIndex: number; name: string; channels: number; role: "main" | "auxiliary" }[]; outputs: { nativeIndex: number; name: string; channels: number; role: "main" | "auxiliary" }[] } };
   "plugins.removeSidechainPort": { sessionId: EntityId; nodeId: EntityId; removed: boolean; revision?: unknown; activation?: unknown };
   "plugins.addSidechainPort": { sessionId: EntityId; nodeId: EntityId; port: string; channels: number; revision?: unknown; activation?: unknown };
-  "plugins.programs": { sessionId: EntityId; nodeId: EntityId; programs: { id: number; name: string }[] };
+  "plugins.programs": {
+    sessionId: EntityId;
+    nodeId: EntityId;
+    programs: { id: number; name: string }[];
+    units: { id: number; parent_id: number; name: string; program_list_id: number | null; program_count: number; programs: { id: number; name: string }[] }[];
+  };
   "plugins.selectProgram": { sessionId: EntityId; nodeId: EntityId; program: number };
   "plugins.applyPreset": { sessionId: EntityId; nodeId: EntityId; presetPath: string };
   "plugins.retry": PluginScanResult;

@@ -238,6 +238,7 @@ describe("PluginEditorControls before Play", () => {
         { id: 0, name: "Init" },
         { id: 1, name: "Bright" },
       ],
+      units: [],
     });
     const selectPluginProgram = vi.fn().mockResolvedValue({ sessionId: "s", nodeId: "plugin-1", program: 1 });
     const applyPluginPreset = vi.fn().mockResolvedValue({
@@ -271,6 +272,17 @@ describe("PluginEditorControls before Play", () => {
       sessionId: "s",
       nodeId: "plugin-1",
       programs: [{ id: 0, name: "Init" }],
+      units: [
+        {
+          id: 0,
+          parent_id: -1,
+          name: "Root",
+          program_list_id: 7,
+          program_count: 1,
+          programs: [{ id: 0, name: "Init" }],
+        },
+        { id: 1, parent_id: 0, name: "Synth", program_list_id: null, program_count: 0, programs: [] },
+      ],
     });
     const selectPluginProgram = vi.fn();
     render(
@@ -287,6 +299,8 @@ describe("PluginEditorControls before Play", () => {
     await waitFor(() => expect(listPluginPrograms).toHaveBeenCalledWith("s", "plugin-1"));
     const select = await screen.findByLabelText("VST3 program");
     expect((select as HTMLSelectElement).disabled).toBe(true);
+    expect(screen.getByRole("list", { name: "VST3 unit hierarchy" }).textContent).toContain("Within Root");
+    expect(screen.getByRole("list", { name: "VST3 unit hierarchy" }).textContent).toContain("Program list · 1 program");
     expect(screen.queryByRole("button", { name: "Import preset" })).toBeNull();
     expect(selectPluginProgram).not.toHaveBeenCalled();
   });

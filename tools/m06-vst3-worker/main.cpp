@@ -37,6 +37,7 @@
 #include "pluginterfaces/vst/ivstcomponent.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
+#include "pluginterfaces/vst/ivstcontextmenu.h"
 #include "pluginterfaces/vst/ivsthostapplication.h"
 #include "pluginterfaces/vst/ivstmessage.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
@@ -687,9 +688,14 @@ static bool restart_needs_reactivation(int32 flags) {
     return (flags & (Vst::kLatencyChanged | Vst::kIoChanged | Vst::kReloadComponent)) != 0;
 }
 
-class ComponentHandler final : public Vst::IComponentHandler, public Vst::IComponentHandler2 {
+class ComponentHandler final : public Vst::IComponentHandler, public Vst::IComponentHandler2,
+                               public Vst::IComponentHandler3 {
 public:
     tresult PLUGIN_API queryInterface(const TUID iid, void** object) override {
+        if (object && FUnknownPrivate::iidEqual(iid, Vst::IComponentHandler3_iid)) {
+            *object = static_cast<Vst::IComponentHandler3*>(this);
+            return kResultOk;
+        }
         if (object && FUnknownPrivate::iidEqual(iid, Vst::IComponentHandler2_iid)) {
             *object = static_cast<Vst::IComponentHandler2*>(this);
             return kResultOk;
@@ -718,6 +724,11 @@ public:
     tresult PLUGIN_API restartComponent(int32 flags) override {
         if (restart_needs_reactivation(flags)) g_latency_restart_pending.store(true, std::memory_order_release);
         return kResultOk;
+    }
+    // Safe stub: never opens a native or plugin-defined popup. The plugin's
+    // own editor remains available for controls that need its context menu.
+    Vst::IContextMenu* PLUGIN_API createContextMenu(IPlugView*, const Vst::ParamID*) override {
+        return nullptr;
     }
 };
 
@@ -816,6 +827,41 @@ public:
         if (!get_factory) throw std::runtime_error("VST3 GetPluginFactory export is missing");
         factory_ = get_factory();
         if (!factory_) throw std::runtime_error("VST3 factory is null");
+        IPluginFactory2* factory2 = nullptr;
+        factory_->queryInterface(IPluginFactory2_iid, reinterpret_cast<void**>(&factory2));
+        const auto release_factory_interface = [](auto* value) {
+            if (value) value->release();
+        };
+        const std::unique_ptr<IPluginFactory2, decltype(release_factory_interface)> factory2_owner(
+            factory2, release_factory_interface);
+        IPluginFactory3* factory3 = nullptr;
+        factory_->queryInterface(IPluginFactory3_iid, reinterpret_cast<void**>(&factory3));
+        const std::unique_ptr<IPluginFactory3, decltype(release_factory_interface)> factory3_owner(
+            factory3, release_factory_interface);
+        auto get_class_info = [&](int32 index, PClassInfo& info) {
+            if (factory_->getClassInfo(index, &info) == kResultOk) return true;
+            if (factory3) {
+                PClassInfoW unicode_info{};
+                if (factory3->getClassInfoUnicode(index, &unicode_info) == kResultOk) {
+                    std::memcpy(info.cid, unicode_info.cid, sizeof(info.cid));
+                    info.cardinality = unicode_info.cardinality;
+                    std::strncpy(info.category, unicode_info.category, sizeof(info.category) - 1);
+                    std::strncpy(info.name, "VST3 plug-in", sizeof(info.name) - 1);
+                    return true;
+                }
+            }
+            if (factory2) {
+                PClassInfo2 version2_info{};
+                if (factory2->getClassInfo2(index, &version2_info) == kResultOk) {
+                    std::memcpy(info.cid, version2_info.cid, sizeof(info.cid));
+                    info.cardinality = version2_info.cardinality;
+                    std::strncpy(info.category, version2_info.category, sizeof(info.category) - 1);
+                    std::strncpy(info.name, version2_info.name, sizeof(info.name) - 1);
+                    return true;
+                }
+            }
+            return false;
+        };
         // The requested class comes from the bundle's moduleinfo.json, which
         // is not part of the verified binary and may be stale or written in
         // the other byte order. Accept both spellings, but never replace an
@@ -826,8 +872,7 @@ public:
             bool listed = false;
             for (int32 index = 0; index < factory_->countClasses(); ++index) {
                 PClassInfo info{};
-                if (factory_->getClassInfo(index, &info) == kResultOk &&
-                    class_id_matches(info.cid, requested_class)) {
+                if (get_class_info(index, info) && class_id_matches(info.cid, requested_class)) {
                     listed = true;
                     break;
                 }
@@ -840,11 +885,11 @@ public:
         std::ostringstream class_failures;
         bool found_audio_class = false;
         bool found_instrument = false;
-        IPluginFactory2* factory2 = nullptr;
-        factory_->queryInterface(IPluginFactory2_iid, reinterpret_cast<void**>(&factory2));
         for (int32 index = 0; index < factory_->countClasses(); ++index) {
             PClassInfo info{};
-            require_result("getClassInfo", factory_->getClassInfo(index, &info));
+            if (!get_class_info(index, info)) {
+                throw std::runtime_error("VST3 factory did not provide class info through versions 1-3");
+            }
             if (std::strcmp(info.category, kVstAudioEffectClass) != 0) continue;
             if (!requested_class.empty() && !class_id_matches(info.cid, requested_class)) continue;
             // Instruments share the audio-module category; their
@@ -1806,24 +1851,85 @@ static std::string parameter_descriptors_message(Vst::IEditController* controlle
     return output.str();
 }
 
-// Read-only program names from IUnitInfo. A plugin without units, or whose
-// counts or strings are out of bounds, lists nothing; no program is selected.
+// Read-only unit and program metadata from IUnitInfo. Counts are bounded and
+// malformed unit records are skipped; no program is selected.
 // The first program list of the root unit is used, else the first list.
 static std::string program_descriptors_message(Vst::IEditController* controller) {
     constexpr int32 kMaxProgramLists = 64;
+    constexpr int32 kMaxUnits = 256;
     constexpr int32 kMaxProgramsListed = 256;
     std::ostringstream output;
-    output << "{\"type\":\"Programs\",\"payload\":{\"programs\":[";
+    output << "{\"type\":\"Programs\",\"payload\":{\"units\":[";
     Vst::IUnitInfo* units = nullptr;
     if (controller &&
         controller->queryInterface(Vst::IUnitInfo::iid, reinterpret_cast<void**>(&units)) ==
             kResultOk &&
         units) {
         const auto list_count = units->getProgramListCount();
+        const auto unit_count = units->getUnitCount();
+        if (unit_count > 0 && unit_count <= kMaxUnits && list_count >= 0 &&
+            list_count <= kMaxProgramLists) {
+            bool first_unit = true;
+            int32 total_programs = 0;
+            for (int32 index = 0; index < unit_count; ++index) {
+                Vst::UnitInfo unit{};
+                if (units->getUnitInfo(index, unit) != kResultOk) continue;
+                std::string name;
+                for (const auto code_unit : unit.name) {
+                    if (code_unit == 0) break;
+                    name.push_back(code_unit >= 0x20 && code_unit <= 0x7e
+                                       ? static_cast<char>(code_unit)
+                                       : '?');
+                }
+                if (unit.id != Vst::kRootUnitId && name.empty()) continue;
+                int32 program_count = 0;
+                std::vector<std::string> program_names;
+                if (unit.programListId != Vst::kNoProgramListId) {
+                    for (int32 list_index = 0; list_index < list_count; ++list_index) {
+                        Vst::ProgramListInfo list{};
+                        if (units->getProgramListInfo(list_index, list) == kResultOk &&
+                            list.id == unit.programListId && list.programCount >= 0 &&
+                            list.programCount <= kMaxProgramsListed) {
+                            program_count = std::min(list.programCount, kMaxProgramsListed - total_programs);
+                            for (int32 program = 0; program < program_count; ++program) {
+                                Vst::String128 program_name{};
+                                std::string text;
+                                if (units->getProgramName(list.id, program, program_name) == kResultOk) {
+                                    for (const auto code_unit : program_name) {
+                                        if (code_unit == 0) break;
+                                        text.push_back(code_unit >= 0x20 && code_unit <= 0x7e
+                                                           ? static_cast<char>(code_unit)
+                                                           : '?');
+                                    }
+                                }
+                                if (text.empty()) text = "Program " + std::to_string(program + 1);
+                                program_names.push_back(std::move(text));
+                            }
+                            total_programs += program_count;
+                            break;
+                        }
+                    }
+                }
+                if (!first_unit) output << ',';
+                first_unit = false;
+                output << "{\"id\":" << unit.id << ",\"parent_id\":"
+                       << unit.parentUnitId << ",\"name\":" << quote_json(name)
+                       << ",\"program_list_id\":";
+                if (unit.programListId == Vst::kNoProgramListId) output << "null";
+                else output << unit.programListId;
+                output << ",\"program_count\":" << program_count << ",\"programs\":[";
+                for (int32 program = 0; program < program_count; ++program) {
+                    if (program) output << ',';
+                    output << "{\"id\":" << program << ",\"name\":"
+                           << quote_json(program_names[static_cast<std::size_t>(program)]) << '}';
+                }
+                output << "]}";
+            }
+        }
+        output << "],\"programs\":[";
         if (list_count > 0 && list_count <= kMaxProgramLists) {
             Vst::ProgramListID wanted = Vst::kNoProgramListId;
-            const auto unit_count = units->getUnitCount();
-            for (int32 unit = 0; unit < unit_count && unit < 256; ++unit) {
+            for (int32 unit = 0; unit < unit_count && unit < kMaxUnits; ++unit) {
                 Vst::UnitInfo info{};
                 if (units->getUnitInfo(unit, info) == kResultOk &&
                     info.id == Vst::kRootUnitId && info.programListId != Vst::kNoProgramListId) {
@@ -1864,6 +1970,8 @@ static std::string program_descriptors_message(Vst::IEditController* controller)
             }
         }
         units->release();
+    } else {
+        output << "],\"programs\":[";
     }
     output << "]}}";
     return output.str();
@@ -2582,6 +2690,10 @@ static int self_test_host() {
     ComponentHandler handler;
     if (handler.queryInterface(Vst::IComponentHandler_iid, &queried) != kResultOk) throw std::runtime_error("handler QI regression");
     static_cast<Vst::IComponentHandler*>(queried)->release();
+    if (handler.queryInterface(Vst::IComponentHandler3_iid, &queried) != kResultOk || !queried) throw std::runtime_error("handler context-menu stub QI regression");
+    auto* context_handler = static_cast<Vst::IComponentHandler3*>(queried);
+    if (context_handler->createContextMenu(nullptr, nullptr) != nullptr) throw std::runtime_error("context-menu stub unexpectedly opened a menu");
+    context_handler->release();
     if (handler.queryInterface(Vst::IComponentHandler2_iid, &queried) != kResultOk || !queried) throw std::runtime_error("handler2 QI regression");
     auto* handler2 = static_cast<Vst::IComponentHandler2*>(queried);
     if (handler2->setDirty(1) != kResultOk || handler2->startGroupEdit() != kResultOk ||

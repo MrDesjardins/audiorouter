@@ -225,9 +225,7 @@ impl LivePluginBridge {
         }
     }
 
-    pub(crate) fn programs(
-        &self,
-    ) -> Result<Vec<audiorouter_plugin_host::ProgramDescriptor>, String> {
+    pub(crate) fn programs(&self) -> Result<audiorouter_plugin_host::PluginProgramList, String> {
         match self {
             Self::Standard(bridge) => bridge.programs(),
             #[cfg(windows)]
@@ -1730,13 +1728,15 @@ impl ControlPlane {
         params: Option<Value>,
     ) -> Result<Value, ControlError> {
         let (session_id, node_id) = Self::plugin_node_request(&params)?;
-        let programs = self
+        let listing = self
             .plugin_live_bridge(&session_id, &node_id)?
             .programs()
             .map_err(|error| {
                 ControlError::InvalidRequest(format!("plugin programs unavailable: {error}"))
             })?;
-        Ok(json!({ "sessionId": session_id, "nodeId": node_id, "programs": programs }))
+        Ok(
+            json!({ "sessionId": session_id, "nodeId": node_id, "programs": listing.programs, "units": listing.units }),
+        )
     }
 
     /// `plugins.selectProgram`: choose one bounded VST2 program.

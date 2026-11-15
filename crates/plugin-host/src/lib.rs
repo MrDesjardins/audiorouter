@@ -2718,6 +2718,25 @@ pub struct ProgramDescriptor {
     pub name: String,
 }
 
+/// Bounded read-only VST3 unit metadata returned with a program list.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Vst3UnitDescriptor {
+    pub id: i32,
+    pub parent_id: i32,
+    pub name: String,
+    pub program_list_id: Option<i32>,
+    pub program_count: u32,
+    #[serde(default)]
+    pub programs: Vec<ProgramDescriptor>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PluginProgramList {
+    pub programs: Vec<ProgramDescriptor>,
+    #[serde(default)]
+    pub units: Vec<Vst3UnitDescriptor>,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProgramDescriptorError {
     EmptyName,
@@ -2858,6 +2877,8 @@ pub enum WorkerMessage {
     DescribePrograms,
     Programs {
         programs: Vec<ProgramDescriptor>,
+        #[serde(default)]
+        units: Vec<Vst3UnitDescriptor>,
     },
     SelectProgram {
         index: u32,
@@ -4800,7 +4821,7 @@ impl SupervisedWorkerProcess {
         }
     }
 
-    pub fn programs(&mut self, now: Instant) -> Result<Vec<ProgramDescriptor>, WorkerProcessError> {
+    pub fn programs(&mut self, now: Instant) -> Result<PluginProgramList, WorkerProcessError> {
         self.ensure_running()?;
         match self.process.programs() {
             Ok(programs) => {
@@ -5680,7 +5701,7 @@ enum BridgeRequest {
         Vec<ParameterEvent>,
         std::sync::mpsc::Sender<Result<(), String>>,
     ),
-    Programs(std::sync::mpsc::Sender<Result<Vec<ProgramDescriptor>, String>>),
+    Programs(std::sync::mpsc::Sender<Result<PluginProgramList, String>>),
     SelectProgram(u32, std::sync::mpsc::Sender<Result<(), String>>),
     ApplyPreset(Vec<u8>, std::sync::mpsc::Sender<Result<(), String>>),
 }
@@ -6370,7 +6391,7 @@ impl PluginRuntimeBridge {
     }
 
     /// Bounded VST2 programs of the playing instance (control thread).
-    pub fn programs(&self) -> Result<Vec<ProgramDescriptor>, String> {
+    pub fn programs(&self) -> Result<PluginProgramList, String> {
         self.request(BridgeRequest::Programs)
     }
 
@@ -7323,11 +7344,13 @@ impl WorkerProcess {
         }
     }
 
-    pub fn programs(&mut self) -> Result<Vec<ProgramDescriptor>, WorkerProcessError> {
+    pub fn programs(&mut self) -> Result<PluginProgramList, WorkerProcessError> {
         self.write(&WorkerMessage::DescribePrograms)
             .map_err(WorkerProcessError::Message)?;
         match self.read_control().map_err(WorkerProcessError::Message)? {
-            WorkerMessage::Programs { programs } => Ok(programs),
+            WorkerMessage::Programs { programs, units } => {
+                Ok(PluginProgramList { programs, units })
+            }
             WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
             _ => Err(WorkerProcessError::Protocol(
                 "unexpected program description response".into(),
@@ -7995,7 +8018,7 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
         WorkerMessage::Parameters { descriptors } => {
             validate_parameter_descriptors(descriptors)?;
         }
-        WorkerMessage::Programs { programs } => {
+        WorkerMessage::Programs { programs, units } => {
             if programs.len() > MAX_PROGRAMS {
                 return Err(WorkerMessageError::InvalidProgram);
             }
@@ -8005,6 +8028,26 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
                     || program.name.chars().count() > ProgramDescriptor::MAX_NAME_CHARS
                     || program.name.chars().any(char::is_control)
                     || !ids.insert(program.id)
+                {
+                    return Err(WorkerMessageError::InvalidProgram);
+                }
+            }
+            if units.len() > 256 {
+                return Err(WorkerMessageError::InvalidProgram);
+            }
+            let mut unit_ids = std::collections::HashSet::new();
+            for unit in units {
+                if unit.name.chars().count() > ProgramDescriptor::MAX_NAME_CHARS
+                    || unit.name.chars().any(char::is_control)
+                    || !unit_ids.insert(unit.id)
+                    || unit.program_count as usize > MAX_PROGRAMS
+                    || unit.program_list_id.is_some_and(|id| id < 0)
+                    || unit.programs.len() > MAX_PROGRAMS
+                    || unit.programs.iter().any(|program| {
+                        program.name.is_empty()
+                            || program.name.chars().count() > ProgramDescriptor::MAX_NAME_CHARS
+                            || program.name.chars().any(char::is_control)
+                    })
                 {
                     return Err(WorkerMessageError::InvalidProgram);
                 }
@@ -10670,6 +10713,65 @@ not a fingerprint
                 WorkerFrameError::InvalidChannels
             ))
         ));
+    }
+
+    #[test]
+    fn vst3_unit_metadata_round_trips_and_rejects_duplicate_or_unbounded_units() {
+        let message = WorkerMessage::Programs {
+            programs: vec![ProgramDescriptor::new(0, "Init").unwrap()],
+            units: vec![Vst3UnitDescriptor {
+                id: 0,
+                parent_id: -1,
+                name: "Root".into(),
+                program_list_id: Some(1),
+                program_count: 1,
+                programs: vec![ProgramDescriptor::new(0, "Init").unwrap()],
+            }],
+        };
+        let encoded = encode_worker_message(&message).unwrap();
+        assert_eq!(decode_worker_message(&encoded).unwrap(), message);
+
+        let duplicate = WorkerMessage::Programs {
+            programs: Vec::new(),
+            units: vec![
+                Vst3UnitDescriptor {
+                    id: 0,
+                    parent_id: -1,
+                    name: "Root".into(),
+                    program_list_id: None,
+                    program_count: 0,
+                    programs: Vec::new(),
+                },
+                Vst3UnitDescriptor {
+                    id: 0,
+                    parent_id: -1,
+                    name: "Duplicate".into(),
+                    program_list_id: None,
+                    program_count: 0,
+                    programs: Vec::new(),
+                },
+            ],
+        };
+        assert_eq!(
+            encode_worker_message(&duplicate),
+            Err(WorkerMessageError::InvalidProgram)
+        );
+
+        let too_many_programs = WorkerMessage::Programs {
+            programs: Vec::new(),
+            units: vec![Vst3UnitDescriptor {
+                id: 0,
+                parent_id: -1,
+                name: "Root".into(),
+                program_list_id: Some(1),
+                program_count: (MAX_PROGRAMS + 1) as u32,
+                programs: Vec::new(),
+            }],
+        };
+        assert_eq!(
+            encode_worker_message(&too_many_programs),
+            Err(WorkerMessageError::InvalidProgram)
+        );
     }
 
     #[test]

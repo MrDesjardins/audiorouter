@@ -1,7 +1,7 @@
 import { ToolGuideLink } from "./ToolGuideLink";
 // Plug-in scanning, tool list and inspector panels (moved from App.tsx).
 import { useEffect, useRef, useState } from "react";
-import type { Node } from "@audiorouter/contracts";
+import type { MethodResult, Node } from "@audiorouter/contracts";
 import { formatUiError, type UiBackend } from "./backend";
 import { pluginCatalog, STANDARD_PLUGIN_FOLDERS, SUPPORTED_PLUGIN_COMPATIBILITY } from "./draft";
 import { uiIdempotencyKey } from "./idempotency";
@@ -718,6 +718,7 @@ export function PluginNodeInspector({
   const passThroughAllowed = node.parameters.passThroughAllowed === true;
   const isVst2 = format === "vst2";
   const [programs, setPrograms] = useState<{ id: number; name: string }[] | null>(null);
+  const [units, setUnits] = useState<MethodResult["plugins.programs"]["units"]>([]);
   const [selectedProgram, setSelectedProgram] = useState("");
   const [programBusy, setProgramBusy] = useState(false);
   const [programError, setProgramError] = useState<string | null>(null);
@@ -729,6 +730,7 @@ export function PluginNodeInspector({
     try {
       const result = await backend.listPluginPrograms(sessionId, node.id);
       setPrograms(result.programs);
+      setUnits(result.units);
       setSelectedProgram(result.programs.length > 0 ? String(result.programs[0].id) : "");
     } catch (error) {
       setProgramError(formatUiError(error, "Programs could not be listed."));
@@ -874,6 +876,36 @@ export function PluginNodeInspector({
               </label>
             )
           ) : null}
+          {format === "vst3" && units.length > 0 ? (
+            <ul aria-label="VST3 unit hierarchy" className="plugin-unit-list">
+              {units.map((unit) => {
+                const parent = units.find((candidate) => candidate.id === unit.parent_id);
+                return (
+                  <li key={unit.id}>
+                    <span>{unit.name || "Root unit"}</span>
+                    {parent ? <small>Within {parent.name}</small> : null}
+                    {unit.program_list_id !== null ? (
+                      <>
+                        <small>
+                          Program list · {unit.program_count} {unit.program_count === 1 ? "program" : "programs"}
+                        </small>
+                        {unit.programs.length > 0 ? (
+                          <small>
+                            Programs:{" "}
+                            {unit.programs
+                              .slice(0, 6)
+                              .map((program) => program.name)
+                              .join(", ")}
+                            {unit.programs.length > 6 ? `, and ${unit.programs.length - 6} more` : ""}
+                          </small>
+                        ) : null}
+                      </>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
           {isVst2 ? (
             <>
               <label>
@@ -894,7 +926,7 @@ export function PluginNodeInspector({
               </button>
             </>
           ) : (
-            <small>VST3 programs are listed for reference; choose them in the plugin&apos;s own window.</small>
+            <small>VST3 units and programs are read-only; choose a program in the plugin&apos;s own window.</small>
           )}
           {programError ? <small role="alert">{programError}</small> : null}
         </section>

@@ -310,7 +310,7 @@ for (const tool of tools) {
     description: ["networkSend", "networkReceive"].includes(tool.kind)
       ? `A silent tour of the ${tool.title} Properties panel, including an example pairing key and the encrypted-audio note. Update both peers together. This configuration recording does not demonstrate a live network stream.`
       : tool.kind === "plugin"
-        ? "A silent tour of the Plugin Properties panel. It shows Allow unchanged audio being enabled and disabled, then returns to the top. This setting weakens the protected-voice guard for this plugin or its shared VST2 chain; the recording does not demonstrate a running plugin."
+        ? "A silent tour of the Plugin Properties panel. It shows the recovery choices, briefly enables Allow unchanged audio, then adds and removes a VST3 sidechain input before returning to the top. The sidechain key connects on the canvas and is not mixed into the main signal. No plugin is loaded and no audio is processed in this configuration recording."
       : tool.kind === "instrument"
         ? "A silent tour of the Instrument Properties panel. It chooses a MIDI device under Notes come from, presses three keys on the on-screen keyboard, then uses Stop all notes. The recording does not play a real instrument."
       : `A silent tour of the ${tool.title} Properties panel. It scrolls through every setting, then returns to the top.`,
@@ -501,6 +501,10 @@ for (const tool of tools) {
     );
     if (demonstration) {
       property.recordings = [demonstration];
+      property.status = "recorded";
+      property.nonAudibleReason = null;
+    } else if (tool.kind === "plugin" && property.type === "action") {
+      property.recordings = [overview];
       property.status = "recorded";
       property.nonAudibleReason = null;
     } else if (

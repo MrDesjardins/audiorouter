@@ -142,6 +142,9 @@ for (const { tool, render } of selected) {
             .filter((p) => p.default !== null && !p.dynamic)
             .map((p) => [p.key, p.default]),
         );
+    if (tool.kind === "plugin") {
+      parameters.format = "vst3";
+    }
     const telemetry = demo
       ? JSON.parse(
           readFileSync(resolve(renderDirectory, "telemetry.json"), "utf8"),
@@ -384,6 +387,10 @@ for (const { tool, render } of selected) {
       .main-content>.canvas-panel{position:fixed!important;left:-20000px!important;top:0!important;width:800px!important;height:600px!important;visibility:hidden!important}
       .main-content>.inspector{display:block!important;width:100%!important;height:100%!important;max-height:none!important;overflow:auto!important;margin:0!important}
       .dialog-backdrop{z-index:9999!important}.dialog-backdrop .connection-dialog{width:100%!important;max-width:100%!important;max-height:100vh!important;overflow:auto!important;margin:0!important}
+      ${tool.kind === "plugin" ? `
+      /* The offline fixture has no verified plugin binary. Keep its placeholder identity and parameter error out of this Properties-only UI guide. */
+      .inspector [aria-label="Plugin settings"],.inspector .plugin-node-editor>div:first-child,.inspector .plugin-node-editor>label{display:none!important}
+      ` : ""}
     `,
     });
     const inspector = page.locator(".inspector");
@@ -596,15 +603,18 @@ for (const { tool, render } of selected) {
       } else if (tool.kind === "plugin") {
         if (frame === 8) await inspector.getByRole("button", { name: "Use scanned version", exact: true }).scrollIntoViewIfNeeded();
         if (frame === 16) await inspector.getByRole("button", { name: "Start from defaults", exact: true }).focus();
-        if (frame === 20) await inspector.evaluate((element) => { element.scrollTop = 0; });
-        if (frame === 24) {
+        if (frame === 20) await inspector.getByRole("button", { name: "Add sidechain input", exact: true }).scrollIntoViewIfNeeded();
+        if (frame === 26) await inspector.getByRole("button", { name: "Add sidechain input", exact: true }).click();
+        if (frame === 42) await inspector.getByRole("button", { name: "Remove sidechain input", exact: true }).click();
+        if (frame === 52) await inspector.evaluate((element) => { element.scrollTop = 0; });
+        if (frame === 60) {
           const allowed = inspector.getByRole("checkbox", { name: "Allow unchanged audio", exact: true });
           await allowed.scrollIntoViewIfNeeded();
           await allowed.check();
         }
-        if (frame === 60)
+        if (frame === 82)
           await inspector.getByRole("checkbox", { name: "Allow unchanged audio", exact: true }).uncheck();
-        if (frame === 76) await inspector.evaluate((e) => (e.scrollTop = 0));
+        if (frame === 104) await inspector.evaluate((element) => { element.scrollTop = 0; });
       } else if (tool.kind === "instrument") {
         const source = inspector.getByLabel("Instrument keyboard and MIDI").getByRole("combobox");
         const key = (name) => inspector.getByRole("button", { name, exact: true });

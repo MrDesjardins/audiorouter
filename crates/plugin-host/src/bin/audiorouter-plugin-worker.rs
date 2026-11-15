@@ -597,8 +597,14 @@ fn run() -> Result<(), String> {
                 };
                 #[cfg(not(windows))]
                 let programs = Vec::new();
-                write_worker_message(&mut writer, &WorkerMessage::Programs { programs })
-                    .map_err(|error| format!("program description write failed: {error:?}"))?;
+                write_worker_message(
+                    &mut writer,
+                    &WorkerMessage::Programs {
+                        programs,
+                        units: Vec::new(),
+                    },
+                )
+                .map_err(|error| format!("program description write failed: {error:?}"))?;
             }
             WorkerMessage::SelectProgram { index } => {
                 #[cfg(windows)]

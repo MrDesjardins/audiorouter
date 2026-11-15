@@ -1,5 +1,5 @@
 {
-  "backendMethods": 128,
+  "backendMethods": 134,
   "operations": [
     {
       "method": "POST",
@@ -630,6 +630,48 @@
       "operation": "plugins.resume",
       "permission": "SessionControl",
       "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/plugins/buses",
+      "operation": "plugins.buses",
+      "permission": "PluginScan",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/plugins/removeSidechainPort",
+      "operation": "plugins.removeSidechainPort",
+      "permission": "SessionControl",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/plugins/addSidechainPort",
+      "operation": "plugins.addSidechainPort",
+      "permission": "SessionControl",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/plugins/programs",
+      "operation": "plugins.programs",
+      "permission": "PluginScan",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/plugins/selectProgram",
+      "operation": "plugins.selectProgram",
+      "permission": "SessionControl",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/plugins/applyPreset",
+      "operation": "plugins.applyPreset",
+      "permission": "SessionControl",
+      "effect": "ExternalOperation"
     },
     {
       "method": "POST",

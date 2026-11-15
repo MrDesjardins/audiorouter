@@ -160,7 +160,7 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "plugins.buses" => "Load one currently scanned plugin in its isolated worker and return its exact audio input/output buses, including any declared auxiliary input that can become a sidechain port.",
         "plugins.removeSidechainPort" => "Remove the sidechain port of a plugin node; refused while a connection still uses it.",
         "plugins.addSidechainPort" => "Give a VST3 plugin node its declared auxiliary input as a named sidechain port; no Mixer or connection is created.",
-        "plugins.programs" => "List the bounded program names of a plugin node in a playing route (VST2 and VST3; VST3 lists are read-only).",
+        "plugins.programs" => "List bounded program names and any VST3 unit hierarchy for a plugin node in a playing route; VST3 programs are read-only.",
         "plugins.selectProgram" => "Select one bounded VST2 program by index on a plugin node in a playing route.",
         "plugins.applyPreset" => "Apply a bounded VST2 .fxp or .fxb preset file from the plugin's own directory to a plugin node in a playing route.",
         "plugins.prepareUpdate" => "Prepare replacement node parameters from a current scan after a vendor update, retaining the old state asset. Does not change a route or start audio: apply the returned parameters through graph plan/commit. resetState deliberately starts from defaults instead.",

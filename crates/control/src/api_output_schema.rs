@@ -1184,9 +1184,38 @@ fn method_output_schema_impl(name: &str) -> Value {
                         "required": ["id", "name"],
                         "additionalProperties": false
                     }
+                },
+                "units": {
+                    "type": "array",
+                    "maxItems": 256,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": { "type": "integer" },
+                            "parent_id": { "type": "integer" },
+                            "name": { "type": "string", "maxLength": 128 },
+                            "program_list_id": { "type": ["integer", "null"] },
+                            "program_count": { "type": "integer", "minimum": 0, "maximum": 256 },
+                            "programs": {
+                                "type": "array",
+                                "maxItems": 256,
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": { "type": "integer", "minimum": 0 },
+                                        "name": { "type": "string", "minLength": 1, "maxLength": 128 }
+                                    },
+                                    "required": ["id", "name"],
+                                    "additionalProperties": false
+                                }
+                            }
+                        },
+                        "required": ["id", "parent_id", "name", "program_list_id", "program_count", "programs"],
+                        "additionalProperties": false
+                    }
                 }
             },
-            "required": ["sessionId", "nodeId", "programs"],
+            "required": ["sessionId", "nodeId", "programs", "units"],
             "additionalProperties": false
         }),
         "plugins.selectProgram" => json!({

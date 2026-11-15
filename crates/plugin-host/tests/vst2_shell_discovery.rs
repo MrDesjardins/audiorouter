@@ -86,9 +86,9 @@ fn the_worker_protocol_lists_and_selects_real_programs() {
     )
     .unwrap();
     let programs = worker.programs(std::time::Instant::now()).unwrap();
-    assert!(!programs.is_empty());
+    assert!(!programs.programs.is_empty());
     worker
-        .select_program(programs[0].id, std::time::Instant::now())
+        .select_program(programs.programs[0].id, std::time::Instant::now())
         .unwrap();
     assert!(worker
         .select_program(65_535, std::time::Instant::now())
