@@ -295,3 +295,67 @@ resolve the decisions above. Only then propose an authorized implementation
 task with approved spec changes and fail-before/fix-after regressions. This
 planning task authorizes no implementation, commit, push, PR, release, or
 issue reply.
+
+## Continued verification (2026-11-15)
+
+Owner authorized continuing and installing/running the required tools. CMake
+4.4.4 was installed with `winget` (user scope). The pinned SDK checkout is at
+`3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96`. The repository acceptance wrapper
+`tests/acceptance/m06-vst3-sdk.ps1` could not start because it requires the
+ignored repository-local `third_party/cmake-4.4.0/bin/cmake.exe`; its configure
+and build commands were therefore run using installed CMake 4.4.4 with the
+same Visual Studio 18 2026 x64 generator and targets. `mda-vst3` and `again`
+built. The Steinberg validator passed on both bundles, reporting 94 tests
+passed and 0 failed for each. This is offline SDK/fixture evidence, not
+AudioRouter graph/runtime or reporter-plugin evidence.
+
+Rebuilt `audiorouter-vst3-worker.exe` from the branch and ran
+`add_sidechain_port_adds_the_real_again_auxiliary_input_once_and_undoes`
+through `ControlPlane::dispatch` against the built AGain bundle: passed. The
+first run found the test expected a two-channel auxiliary input; discovery
+showed AGain's main bus is stereo and its auxiliary bus is mono. Corrected the
+test to assert the actual declared mono bus, then reran successfully. The
+test proves port discovery/binding and graph edit behavior only; it does not
+prove production engine scheduling or audible ducking.
+
+The release desktop build completed via
+`tools/build-desktop.ps1 -Profile release` on Windows. The fresh-install
+`a_fresh_install_keeps_device_and_folder_consent_exclusive_to_its_window`
+test passed against `src-tauri/target/release/audiorouter-shell.exe` with a
+temporary database and WebView profile: backend first response 77 ms; raw
+pipe device/recording-consent requests were denied. No audio endpoint was
+opened. The unsigned installer has not been built: the release preparer
+requires a clean Git tree, while the focused mono-bus regression and this plan
+evidence are uncommitted. The visible Sidechain label passed headed Playwright
+in dark, light and high-contrast, including screenshot inspection. UI format,
+lint, 1,072 tests, typecheck and production build pass; control Clippy, 405
+control tests, both engine combination suites, contract drift, docs links and
+default-MCP API reachability pass. `check-tool-guide-catalog.mjs` passes; the
+property-coverage check still reports the previously pending
+`plugin.recovery` recording. The release build still emits the main-chunk
+warning (631 kB above the 500 kB threshold); the Sidechain change does not
+materially affect the bundle. Remaining local tasks: Sidechain guide and
+manifest/video coverage, occupied-port replace/reject flow, VST3 unit
+hierarchy/context-menu, installer packaging, and a final full diff audit.
+Owner/hosted gates remain real editor focus/DPI and pumped-parent, live-ear,
+hardware MIDI, PolyMAX sign-in, hosted i686 CI/annotations, signed package,
+and approval to push/open a PR. See `vst-handoff.md` for exact next action.
+
+## Local completion continuation (2026-11-15)
+
+The guide/property coverage and occupied-sidechain replace/keep interaction are
+now implemented and validated. Replacing a connected key is one draft edit and
+never proposes a Mixer. The VST3 inspector now displays bounded unit hierarchy
+and per-unit read-only program names; `IComponentHandler3::createContextMenu`
+returns no menu and is covered by the worker self-test. UI, protocol, REST
+output schema, contracts and default MCP description agree. Real effects on
+this PC reported no units, so a real unit-bearing plugin path still needs
+qualification.
+
+An unsigned app-only NSIS installer was built, installed in a temporary
+directory, checked for all four workers, exercised through `fresh_install_shell`
+and uninstalled. The app binaries are removed; a temporary profile directory
+remains at `%TEMP%\audiorouter-nsis-smoke-issue136`. This does not satisfy
+signing, driver package, hosted CI, real-endpoint audio or attended editor
+gates. Current commands and outcomes are recorded at the end of
+`vst-completion-work.md`.

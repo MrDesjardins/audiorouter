@@ -13,15 +13,25 @@ state, security, quality and M05/M06/M07/M08 gates, including explicit VST3
 auxiliary-bus vs. VST2 single-stream boundaries and concrete editor, stopped
 setup, serial-vs-sum, and sidechain acceptance. See the
 [issue #136 execution plan](issue-136-vst-experience.md) for decisions,
-test matrix, prerequisites, failure containment, rollback and the exact next
-action. No implementation or reproduction claim was made originally. Review pass 2
+test matrix, prerequisites, failure containment, rollback and current evidence.
+The follow-on verification has now built and validated the pinned AGain/mda
+fixtures, passed the real AGain sidechain-port dispatcher test, built the
+release desktop shell and passed `fresh_install_shell`. The visible Sidechain
+canvas label now has a three-theme Playwright scenario and screenshots. These
+do not reproduce the reporter's plugin or qualify audible sidechain scheduling.
+Review pass 2
 (2026-11-14) fixed MIDI stuck-note recovery, worker backlog eviction, active
 session/exact-name targeting and MIDI device connection status, and recorded the
-owner's visible-Mixer and explicit-VST2-pin-label sidechain decisions. The full
-VST plan is still incomplete: P5 sidechain, P6 resize/focus/DPI, P2 programs/
-shell/.fxp, P3 units/multi-class/validator and P9 release gates remain. See
-[the plan](vst-full-compatibility.md), [handoff](vst-handoff.md) and the
-[completion work plan](vst-completion-work.md).
+owner's visible-Mixer and explicit-VST2-pin-label sidechain decisions. The
+2026-11-15 continuation completed the sidechain guide/manifest, explicit
+occupied-key replace/keep flow, bounded VST3 unit/program display, safe
+context-menu stub and unsigned app-only installer install/uninstall smoke. A
+real five-unit Steinberg UTF16Name sample now passes the worker metadata test;
+the control-plane dispatcher path for that real unit-bearing plugin remains
+open. See [the plan](vst-full-compatibility.md), [handoff](vst-handoff.md) and
+the [completion work plan](vst-completion-work.md) for test results and
+remaining gates: real editor/DPI/pumped parent, owner endpoints, hosted i686
+CI/annotations and signing.
 
 ## CI speed — 2026-11-12
 

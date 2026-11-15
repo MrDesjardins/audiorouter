@@ -348,3 +348,83 @@ Still open, in the order to take them:
 
 Fixture environment variables are documented in the header of each test file
 (`vst3_programs.rs`, `vst3_sample_format.rs`, `vst3_multi_class.rs`).
+
+## Continuation update (2026-11-15)
+
+Supersedes the VSTC-04/VSTC-08/VSTC-09/VSTC-10/VSTC-11 checklist above where
+it differs:
+
+- VSTC-04: the real AGain dispatcher test passed after its expected auxiliary
+  channel count was corrected to the fixture's actual mono aux bus. The canvas
+  now shows a visible `Sidechain input` label. New headed Playwright coverage
+  passed in dark, light and high-contrast, with card and Properties screenshots
+  under `%TEMP%\audiorouter-playwright-results`. The Properties section's grid
+  spacing was fixed after screenshot inspection. Still open: occupied-port
+  replace/reject flow and guide/property-manifest/video coverage. The default
+  MCP all-method reachability test passed for the registered add/remove tools.
+- VSTC-08: read-only root-unit program lists already exist, but hierarchy and
+  context-menu behavior remain open.
+- VSTC-09: pinned SDK mda and AGain builds passed Steinberg validation (94
+  passed, 0 failed each) using CMake 4.4.4 and the same configure/build args as
+  the acceptance wrapper. The wrapper itself still expects ignored local
+  CMake 4.4.0 and did not run end-to-end. AGain's aux port discovery test is
+  separate from audible graph/runtime sidechain proof.
+- VSTC-10: no real-editor focus/DPI, VST2 refit, pumped-parent, or attended
+  check has been run.
+- VSTC-11: release desktop build and isolated `fresh_install_shell` passed;
+  unsigned installer is still unbuilt because the release preparer requires a
+  clean working tree. No signing, hosted i686 CI, or live-ear test was done.
+
+The latest local continuation completed guide coverage, explicit occupied-key
+replacement, VST3 unit metadata UI and the safe context-menu stub. The signed
+app-only installer installed and uninstalled in a disposable directory, and
+the installed shell passed `fresh_install_shell`. Detailed command results,
+warnings and artifact hash are in `vst-completion-work.md`.
+
+Still open before release qualification: exercise a real VST3 that reports
+units through the live dispatcher (worker metadata is now verified with
+Steinberg's UTF16Name sample, which reports five units);
+run the pumped-parent/editor resize and attended focus/DPI checks; qualify live
+audio on owner endpoints; run hosted i686 CI and read all annotations; and use
+the signed installer. No push or PR is authorized. Next local action: inspect
+the complete diff, rerun final format/checks after documentation updates, and
+commit each completed work item separately. Then hand the branch and exact
+remaining gates to the owner for review/hosted qualification.
+
+## Final local review handoff (2026-11-15)
+
+This handoff supersedes older statements above about incomplete guide coverage,
+missing unit-bearing plugins and an unbuilt installer. The ordered local work
+is implemented and committed in `36e79804f` (VSTC-08 metadata/guide work) and
+`b492ce0cd` (VSTC-04 replacement flow); this plan update records the final
+verification. The real UTF16Name VST3 now loads through the native worker's factory
+metadata fallback and returns five units; the opt-in `vst3_programs.rs` test
+passes with a five-unit minimum. The mda SDK bundle also passes the generic
+worker metadata check. VSTC-08 still needs the real unit-bearing response
+through `ControlPlane::dispatch`.
+
+The sidechain replace/keep dialog, one-edge replacement, guide recording and
+coverage manifest are complete. All guide checks pass. The unsigned app-only
+NSIS package was installed in an isolated temp folder, all four workers were
+verified, `fresh_install_shell` passed, and the package was uninstalled. A
+temporary isolated WebView profile remains under
+`%TEMP%\audiorouter-nsis-smoke-issue136`; the app is not installed in the
+owner's normal location. The installer is not signed and does not include a
+driver.
+
+Final local checks: 125 plugin-host library tests; the real UTF16Name and mda
+worker tests; native worker self-test; UI suite 1,075 tests and the 9/9 headed
+sidechain/unit UI scenarios across dark, light and high-contrast; workspace and
+Tauri Clippy; Rust formatting; UI format/lint/typecheck/build; contract drift
+(156 API methods / 38 node kinds); default MCP reachability; docs and guide
+checks; app-only release guard and installer smoke. The UI build retains the
+main-chunk advisory above 500 kB. Stream Deck dependency audit and upstream
+Rollup/Zod warnings are recorded in `vst-completion-work.md`.
+
+Do not create or push a PR: explicit approval is still required. The next
+reviewer should inspect the complete branch diff and these remaining gates:
+real unit-bearing VST3 through the dispatcher; pumped-parent editor resize and
+close; attended VST2/VST3 focus and DPI checks; live-ear behavior on owner
+endpoints; hosted i686 CI with every annotation reviewed; and a signed
+installer. No hardware MIDI, PolyMAX sign-in, reporter-specific plugin, or
+real-audio sidechain ducking qualification is claimed here.
