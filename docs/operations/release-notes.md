@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **See a custom theme before using it.** Settings → Appearance now shows a
+  live workspace preview while you edit a theme: a small canvas with flowing,
+  silent and paused connections, plus tool text, a field, a slider and a
+  primary action. Choosing any colour repaints the preview immediately.
+- **Contrast warnings take you to the color.** Click either color name in a
+  warning such as "Secondary text on app background" and that picker opens,
+  scrolls into view, takes focus and briefly lights up.
+- **The color picker shows the contrast line.** The saturation square now
+  dims the shades that miss the guidance and draws the boundary as a white
+  line with a dark edge. It names the worst pair and suggests a lighter or
+  darker shade when that is enough.
+
 ## 0.0.29 — 2026-11-12 (unsigned experimental preview)
 
 - **Plugin windows open without crashing.** Some VST2 plugins (Pitchproof)

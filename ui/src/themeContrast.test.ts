@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CUSTOM_THEME } from "./customTheme";
-import { contrastRatio, themeContrastWarnings } from "./themeContrast";
+import {
+  contrastForRequirement,
+  contrastRequirementsFor,
+  meetsRequirement,
+  themeContrastWarnings,
+  contrastRatio,
+} from "./themeContrast";
 
 describe("custom theme contrast", () => {
   it("measures the WCAG ratio", () => {
@@ -28,5 +34,34 @@ describe("custom theme contrast", () => {
       "muted/raised",
     ]);
     expect(warnings[0].text).toMatch(/^Secondary text on app background: 1\.\d:1, needs 4\.5:1$/);
+  });
+
+  it("lists every rule that involves the edited colour", () => {
+    const muted = contrastRequirementsFor(DEFAULT_CUSTOM_THEME, "muted");
+    expect(muted.map((requirement) => `${requirement.candidate}:${requirement.back}:${requirement.minimum}`)).toEqual([
+      "fore:background:4.5",
+      "fore:surface:4.5",
+      "fore:raised:4.5",
+    ]);
+    const surface = contrastRequirementsFor(DEFAULT_CUSTOM_THEME, "surface");
+    expect(surface).toHaveLength(6);
+    expect(surface.every((requirement) => requirement.candidate === "back")).toBe(true);
+    expect(surface.map((requirement) => requirement.fore)).toEqual([
+      "text",
+      "muted",
+      "danger",
+      "success",
+      "accent",
+      "border",
+    ]);
+    expect(contrastRequirementsFor(DEFAULT_CUSTOM_THEME, "highlight")).toEqual([]);
+  });
+
+  it("checks a candidate against both sides of a rule", () => {
+    const [requirement] = contrastRequirementsFor(DEFAULT_CUSTOM_THEME, "muted");
+    expect(requirement).toBeDefined();
+    expect(contrastForRequirement("#aeb9c8", requirement!)).toBeGreaterThanOrEqual(4.5);
+    expect(meetsRequirement("#aeb9c8", requirement!)).toBe(true);
+    expect(meetsRequirement("#3a414b", requirement!)).toBe(false);
   });
 });
