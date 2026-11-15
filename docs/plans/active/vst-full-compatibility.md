@@ -638,3 +638,16 @@ at both widths. Checked against the older release worker from the main checkout
 `effStartProcess`/`effStopProcess` bracketing. The crash is isolated to the
 plugin worker, the app keeps running, and the supervisor reports the failure.
 Not yet diagnosed (chunk restore on a MIDI-only plugin is the first suspect).
+
+Diagnosis (same day, probe removed afterwards): loading the DLL directly and
+calling `effSetChunk` with the chunk the plugin itself just returned crashes
+the process with `0xC0000005` every time, cold (before any processing format)
+or warm, with the bank index (0) or the program index (1), and with a bank
+chunk sent as a program. `effGetChunk` works in all cases. So the crash is
+inside the plugin's chunk setter for this plugin's own data, not in how the
+host brackets processing, and not an index mistake. Not fixed: a host cannot
+repair a plugin's setter. The worker isolates it and the supervisor reports
+the failure. Listed as a known issue for the compatibility page. A possible
+host-side workaround (restoring ReaControlMIDI through its 15 parameters
+instead of its chunk) was not built: it would need a per-plugin allow-list,
+and the plugin only forwards MIDI, so its saved settings matter little.
