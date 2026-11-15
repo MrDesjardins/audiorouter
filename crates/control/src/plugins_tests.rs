@@ -160,6 +160,95 @@ fn remove_sidechain_port_refuses_a_used_port_then_removes_a_free_one() {
     assert!(again.error.unwrap().message.contains("no sidechain port"));
 }
 
+#[test]
+fn a_sidechain_input_is_only_connected_by_name_and_never_summed() {
+    use audiorouter_domain::Port;
+    let mut plane = ControlPlane::default();
+    let mut original = session();
+    original.nodes.truncate(2);
+    original.edges.clear();
+    let mut third = original.nodes[1].clone();
+    third.id = EntityId::new("third-node");
+    third.name = "Third".into();
+    original.nodes.push(third);
+    let port = |name: &str, direction, channels| Port {
+        name: name.into(),
+        direction,
+        channels,
+    };
+    for source in 0..2 {
+        original.nodes[source].kind = NodeKind::PhysicalInput;
+        original.nodes[source].parameters = Default::default();
+        original.nodes[source].ports = vec![port("out", PortDirection::Output, 2)];
+    }
+    let plugin = &mut original.nodes[2];
+    plugin.kind = NodeKind::Plugin;
+    plugin.parameters = serde_json::from_value(json!({
+        "path": "C:\\VST3\\x.vst3", "format": "vst3",
+        "classId": "41347FD6FED64094AFBB12B7DBA1D441", "fingerprint": "a".repeat(64),
+    }))
+    .unwrap();
+    plugin.ports = vec![
+        port("in", PortDirection::Input, 2),
+        port("out", PortDirection::Output, 2),
+        port("sidechain", PortDirection::Input, 2),
+    ];
+    let (main_id, key_id, plugin_id) = (
+        original.nodes[0].id.clone(),
+        original.nodes[1].id.clone(),
+        original.nodes[2].id.clone(),
+    );
+    plane.plugin_inventories.insert(
+        "C:\\VST3".into(),
+        json!({ "entries": [{
+            "path": "C:\\VST3\\x.vst3",
+            "identity": { "format": "vst3", "sha256": "a".repeat(64) },
+        }] }),
+    );
+    plane.insert_session(original.clone()).unwrap();
+    let connect = |plane: &mut ControlPlane, from: &EntityId, input: Option<&str>| {
+        let key = format!("connect-{}-{}", from.as_str(), input.unwrap_or("unnamed"));
+        let mut params = json!({
+            "sessionId": original.id, "from": from, "to": plugin_id, "idempotencyKey": key,
+        });
+        if let Some(input) = input {
+            params["toInput"] = json!(input);
+        }
+        plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "connections.add".into(),
+            params: Some(params),
+        })
+    };
+    // 1. Without a port name the first source takes the main input.
+    let reply = connect(&mut plane, &main_id, None);
+    assert!(reply.error.is_none(), "{:?}", reply.error);
+    // 2. A second source with no port name is refused; it must not silently
+    //    become the sidechain.
+    let reply = connect(&mut plane, &key_id, None);
+    assert!(
+        reply.error.is_some(),
+        "an unnamed second source must be refused"
+    );
+    let edges = &plane.get_session(&original.id).unwrap().edges;
+    assert_eq!(edges.len(), 1);
+    assert_eq!(edges[0].destination_port, "in");
+    // 3. Naming the sidechain connects it; a second source is refused, not summed.
+    let reply = connect(&mut plane, &key_id, Some("sidechain"));
+    assert!(reply.error.is_none(), "{:?}", reply.error);
+    let reply = connect(&mut plane, &main_id, Some("sidechain"));
+    let message = reply
+        .error
+        .expect("an occupied sidechain is refused")
+        .message;
+    assert!(
+        message.contains("sidechain input") && message.contains("disconnect"),
+        "{message}"
+    );
+    assert_eq!(plane.get_session(&original.id).unwrap().edges.len(), 2);
+}
+
 #[cfg(windows)]
 #[test]
 #[ignore = "requires SDK AGain and a rebuilt native worker override"]
