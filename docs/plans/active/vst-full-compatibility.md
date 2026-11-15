@@ -651,3 +651,5 @@ the failure. Listed as a known issue for the compatibility page. A possible
 host-side workaround (restoring ReaControlMIDI through its 15 parameters
 instead of its chunk) was not built: it would need a per-plugin allow-list,
 and the plugin only forwards MIDI, so its saved settings matter little.
+
+- 2026-11-14: DPF VST3 instruments (Kars, Nekobi) declare a bare `Instrument` category. The scan now accepts that whole string when the module has no `Fx` category; none of the corpus effects match.

@@ -762,6 +762,16 @@ fn inspect_binary_with_control(
 /// instrument.
 fn binary_declares_vst3_instrument(bytes: &[u8]) -> bool {
     const NEEDLE: &[u8] = b"Instrument|";
+    // DPF plugins (Kars, Nekobi) declare the bare category `Instrument` as a
+    // string of its own. Accept it only when the module declares no effect
+    // category, so a framework's embedded word cannot turn an effect into one.
+    // Measured 2026-11-14: Kars and Nekobi match; no effect in the corpus does.
+    if contains_whole_string(bytes, b"Instrument")
+        && !contains_whole_string(bytes, b"Fx")
+        && !bytes.windows(3).any(|window| window == b"Fx|")
+    {
+        return true;
+    }
     let mut from = 0;
     while let Some(offset) = bytes[from..]
         .windows(NEEDLE.len())
@@ -778,6 +788,13 @@ fn binary_declares_vst3_instrument(bytes: &[u8]) -> bool {
         from = at + 1;
     }
     false
+}
+
+/// Whether `needle` appears as a complete NUL-delimited string.
+fn contains_whole_string(bytes: &[u8], needle: &[u8]) -> bool {
+    bytes.windows(needle.len() + 2).any(|window| {
+        window[0] == 0 && window[needle.len() + 1] == 0 && &window[1..=needle.len()] == needle
+    })
 }
 
 /// The bundle's metadata, and whether it listed its audio classes (when it
@@ -9821,9 +9838,14 @@ not a fingerprint
     fn a_vst3_without_metadata_is_classified_from_its_category_string() {
         assert!(binary_declares_vst3_instrument(b"\0Instrument|Synth\0"));
         assert!(binary_declares_vst3_instrument(b"Instrument|Sampler\0"));
-        // Frameworks embed the bare word in effects; an effect usable as an
-        // instrument insert is still an effect.
-        assert!(!binary_declares_vst3_instrument(b"\0Instrument\0"));
+        // DPF declares the bare category alone; with an effect category in the
+        // module the bare word is not trusted.
+        assert!(binary_declares_vst3_instrument(b"\0Instrument\0"));
+        assert!(!binary_declares_vst3_instrument(
+            b"\0Instrument\0\0Fx|Reverb\0"
+        ));
+        assert!(!binary_declares_vst3_instrument(b"\0Instrument\0\0Fx\0"));
+        assert!(!binary_declares_vst3_instrument(b"an Instrument here"));
         assert!(!binary_declares_vst3_instrument(
             b"\0Fx|Instrument|External\0"
         ));
