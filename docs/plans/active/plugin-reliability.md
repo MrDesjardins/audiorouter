@@ -405,10 +405,10 @@ The opt-in route test that uses real SDK AGain/worker overrides was compiled but
 not executed because its bundle is absent. No endpoint playback, attended
 customer plugin/editor run, interactive release shell check, install smoke, or
 release qualification was performed. Owner approved PR #152, opened at
-`a1dfef66b4762c1339a2dd6ec54960ea8bbe79a2`. The current base is
+`360134b5982d2bf293b1a92e6b87b4bafa9d59f5` and pushed to origin. The current base is
 `8fbe4bee217c3455c23802b037bcafd207d6860b`; GitHub reports `CONFLICTING` and
 `DIRTY`. Plugin graph preparation/publication and the active plan require merge
-resolution. Next: integrate current main without dropping either the VST work
-or live plugin-reuse changes, validate and push the merge, then inspect fresh CI
-and annotations. The AGain route remains pending its SDK fixture. No release is
-authorized.
+resolution. Hosted checks were pending at handoff. Next: integrate current main
+without dropping either the VST work or live plugin-reuse changes, validate and
+push the merge, then inspect fresh CI and annotations. The AGain route remains
+pending its SDK fixture. No release is authorized.

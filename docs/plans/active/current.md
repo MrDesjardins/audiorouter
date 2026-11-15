@@ -53,10 +53,11 @@ AGain bundle is not present in this checkout; there was no endpoint playback,
 attended customer plugin/editor run, installation smoke or release qualification.
 The release executable was not opened interactively. Owner requested and
 approved a PR; [PR #152](https://github.com/MrDesjardins/audiorouter/pull/152)
-is open at head `a1dfef66b4762c1339a2dd6ec54960ea8bbe79a2`. GitHub currently
+is open at head `360134b5982d2bf293b1a92e6b87b4bafa9d59f5`. GitHub currently
 reports conflicts against `main` at `8fbe4bee217c3455c23802b037bcafd207d6860b`
 (`CONFLICTING` / `DIRTY`) in plugin graph preparation/publication and the active
-plan. No conflicts were resolved yet; next: integrate current `main` while
+plan. The repair branch is pushed and the PR is linked. Hosted checks are still
+pending. No conflicts were resolved; next: integrate current `main` while
 preserving both the VST changes and live plugin-reuse work, rerun checks, push
 the merge commit, and update PR #152. No release is authorized.
 
