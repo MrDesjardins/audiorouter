@@ -3,6 +3,145 @@
 use super::*;
 use crate::test_support::*;
 
+fn sidechain_request(plane: &mut ControlPlane, session_id: &str, node_id: &str) -> JsonRpcResponse {
+    plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "plugins.addSidechainPort".into(),
+        params: Some(json!({ "sessionId": session_id, "nodeId": node_id })),
+    })
+}
+
+#[test]
+fn add_sidechain_port_refuses_unsupported_nodes_without_changing_the_session() {
+    use audiorouter_domain::Port;
+    let mut plane = ControlPlane::default();
+    let mut original = session();
+    original.nodes.truncate(1);
+    original.edges.clear();
+    let node_id = original.nodes[0].id.clone();
+    let plugin_ports = || {
+        vec![
+            Port {
+                name: "in".into(),
+                direction: PortDirection::Input,
+                channels: 2,
+            },
+            Port {
+                name: "out".into(),
+                direction: PortDirection::Output,
+                channels: 2,
+            },
+        ]
+    };
+    // 1. Not a plugin node.
+    plane.insert_session(original.clone()).unwrap();
+    let reply = sidechain_request(&mut plane, original.id.as_str(), node_id.as_str());
+    let message = reply.error.expect("a non-plugin node is refused").message;
+    assert!(message.contains("only a plugin node"), "{message}");
+    // 2. A VST2 plugin has no declared auxiliary bus in this path.
+    let mut vst2 = original.clone();
+    vst2.id = EntityId::new("vst2-session");
+    vst2.nodes[0].kind = NodeKind::Plugin;
+    vst2.nodes[0].ports = plugin_ports();
+    vst2.nodes[0].parameters =
+        serde_json::from_value(json!({ "path": "C:\\VST2\\x.dll", "format": "vst2" })).unwrap();
+    plane.insert_session(vst2.clone()).unwrap();
+    let reply = sidechain_request(&mut plane, vst2.id.as_str(), node_id.as_str());
+    let message = reply.error.expect("VST2 is refused").message;
+    assert!(message.contains("VST3"), "{message}");
+    // 3. A VST3 plugin whose class was never chosen.
+    let mut unclassed = vst2.clone();
+    unclassed.id = EntityId::new("vst3-unclassed");
+    unclassed.nodes[0].parameters = serde_json::from_value(
+        json!({ "path": "C:\\VST3\\x.vst3", "format": "vst3", "classId": "default" }),
+    )
+    .unwrap();
+    plane.insert_session(unclassed.clone()).unwrap();
+    let reply = sidechain_request(&mut plane, unclassed.id.as_str(), node_id.as_str());
+    let message = reply.error.expect("no class is refused").message;
+    assert!(message.contains("exact VST3 class"), "{message}");
+    // 4. An unknown node, and no explicit scan for a real-looking plugin.
+    let reply = sidechain_request(&mut plane, original.id.as_str(), "missing");
+    assert!(reply.error.is_some());
+    let mut unscanned = unclassed.clone();
+    unscanned.id = EntityId::new("vst3-unscanned");
+    unscanned.nodes[0]
+        .parameters
+        .insert("classId".into(), json!("41347FD6FED64094AFBB12B7DBA1D441"));
+    plane.insert_session(unscanned.clone()).unwrap();
+    let reply = sidechain_request(&mut plane, unscanned.id.as_str(), node_id.as_str());
+    assert!(reply.error.is_some(), "an unscanned plugin is refused");
+    for before in [&original, &vst2, &unclassed, &unscanned] {
+        assert_eq!(plane.get_session(&before.id).unwrap(), before);
+    }
+}
+
+#[cfg(windows)]
+#[test]
+#[ignore = "requires SDK AGain and a rebuilt native worker override"]
+fn add_sidechain_port_adds_the_real_again_auxiliary_input_once_and_undoes() {
+    use audiorouter_domain::Port;
+    let path = std::path::PathBuf::from(std::env::var("AUDIOROUTER_VST3_FIXTURE").unwrap());
+    let root = path.parent().unwrap().to_path_buf();
+    let identity =
+        audiorouter_plugin_host::inspect_binary(&path, std::slice::from_ref(&root)).unwrap();
+    let mut plane = ControlPlane::default();
+    let scan = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "plugins.scan".into(),
+        params: Some(json!({ "directory": root })),
+    });
+    assert!(scan.error.is_none(), "{:?}", scan.error);
+    let mut original = session();
+    original.nodes.truncate(1);
+    original.edges.clear();
+    let node = &mut original.nodes[0];
+    node.kind = NodeKind::Plugin;
+    node.parameters = serde_json::from_value(json!({
+        "path": path, "format": "vst3",
+        "classId": "41347FD6FED64094AFBB12B7DBA1D441", "fingerprint": identity.sha256,
+    }))
+    .unwrap();
+    node.ports = vec![
+        Port {
+            name: "in".into(),
+            direction: PortDirection::Input,
+            channels: 2,
+        },
+        Port {
+            name: "out".into(),
+            direction: PortDirection::Output,
+            channels: 2,
+        },
+    ];
+    let node_id = node.id.clone();
+    plane.insert_session(original.clone()).unwrap();
+    let reply = sidechain_request(&mut plane, original.id.as_str(), node_id.as_str());
+    assert!(reply.error.is_none(), "{:?}", reply.error);
+    let result = reply.result.unwrap();
+    assert_eq!(result["port"], "sidechain");
+    assert_eq!(result["channels"], 2);
+    let changed = plane.get_session(&original.id).unwrap().clone();
+    assert_eq!(changed.revision, 1);
+    assert_eq!(changed.edges.len(), 0, "no connection is created");
+    assert_eq!(changed.nodes.len(), 1, "no Mixer is created");
+    assert!(changed.nodes[0].plugin_sidechain_port().is_some());
+    // A second call is refused or leaves the same single port.
+    let again = sidechain_request(&mut plane, original.id.as_str(), node_id.as_str());
+    let after = plane.get_session(&original.id).unwrap();
+    assert_eq!(
+        after.nodes[0]
+            .ports
+            .iter()
+            .filter(|port| port.name == "sidechain")
+            .count(),
+        1,
+        "{again:?}"
+    );
+}
+
 #[cfg(windows)]
 #[test]
 #[ignore = "requires SDK AGain and a rebuilt native worker override"]

@@ -2711,6 +2711,117 @@ impl ControlPlane {
             "buses": buses,
         }))
     }
+
+    /// `plugins.addSidechainPort`: give a plugin node its declared auxiliary
+    /// input as the named `sidechain` port. The binding comes from the live,
+    /// identity-checked worker, never from request JSON; the edit is one
+    /// reversible graph commit. No Mixer is created and no edge is added.
+    pub(crate) fn dispatch_plugins_add_sidechain_port(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let (session_id, node_id) = Self::plugin_node_request(&params)?;
+        self.ensure_session_loaded(&session_id)?;
+        let session = self.get_session(&session_id)?.clone();
+        let node = session
+            .nodes
+            .iter()
+            .find(|node| node.id == node_id)
+            .ok_or_else(|| ControlError::InvalidRequest("plugin node was not found".into()))?;
+        let name = node.name.clone();
+        let refuse = |message: &str| {
+            ControlError::InvalidRequest(format!(
+                "\"{name}\" cannot get a sidechain port: {message}"
+            ))
+        };
+        if node.kind != NodeKind::Plugin {
+            return Err(refuse("only a plugin node can have one"));
+        }
+        if node.parameters.get("format").and_then(Value::as_str) != Some("vst3") {
+            return Err(refuse(
+                "only a VST3 plugin with a declared auxiliary input is supported",
+            ));
+        }
+        let class_id = node
+            .parameters
+            .get("classId")
+            .and_then(Value::as_str)
+            .filter(|id| *id != "default")
+            .ok_or_else(|| refuse("select the exact VST3 class first"))?
+            .to_owned();
+        let path = node
+            .parameters
+            .get("path")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| refuse("the node has no plugin binary"))?
+            .to_owned();
+        let main_channels = node
+            .ports
+            .iter()
+            .find(|port| {
+                port.direction == audiorouter_domain::PortDirection::Input
+                    && port.name != "sidechain"
+            })
+            .map(|port| u16::from(port.channels))
+            .ok_or_else(|| refuse("it has no main input"))?;
+        #[cfg(not(windows))]
+        {
+            let _ = (&class_id, &path, main_channels);
+            Err(refuse("VST3 discovery requires Windows"))
+        }
+        #[cfg(windows)]
+        {
+            let (mut identity, root) = self.scanned_plugin_identity(&path)?;
+            identity.metadata.class_ids = vec![class_id.clone()];
+            let executable = require_plugin_worker(PluginWorkerKind::for_identity(
+                identity.format,
+                identity.architecture,
+            ))?;
+            let roots = std::slice::from_ref(&root);
+            let mut worker = audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
+                &executable, &identity, roots, main_channels, 48_000, Instant::now(),
+            )
+            .map_err(|error| refuse(&format!("the plugin worker did not start: {error:?}")))?;
+            let result = (|| {
+                let buses = worker
+                    .describe_buses(Instant::now())
+                    .map_err(|error| refuse(&format!("bus discovery failed: {error:?}")))?;
+                let aux = buses
+                    .inputs
+                    .get(1)
+                    .ok_or_else(|| refuse("the plugin declares no auxiliary input"))?;
+                worker
+                    .verify_sidechain_binding(
+                        roots,
+                        &identity.sha256,
+                        Some(&class_id),
+                        (main_channels, aux.channels),
+                        Instant::now(),
+                    )
+                    .map_err(|error| refuse(&format!("{error:?}")))
+            })();
+            let _ = worker.shutdown_with_timeout(Duration::from_secs(2));
+            let binding = result?;
+            let channels = binding.layout().input_buses()[1];
+            let plan = self.plan_bound_plugin_sidechain(
+                &session_id,
+                session.revision,
+                &node_id,
+                &binding,
+            )?;
+            let key = format!("plugins.addSidechainPort:{}", plan.as_str());
+            let commit = self.commit_graph_scoped(&plan, session.revision, &key, &key)?;
+            Ok(json!({
+                "sessionId": session_id,
+                "nodeId": node_id,
+                "port": "sidechain",
+                "channels": channels,
+                "revision": commit.get("revision").cloned().unwrap_or(Value::Null),
+                "activation": commit.get("activation").cloned().unwrap_or(Value::Null),
+            }))
+        }
+    }
 }
 
 /// A plugin node's slider values (`pluginParameter:<id>`).

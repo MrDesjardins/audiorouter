@@ -176,6 +176,7 @@ method_table! {
         "timeShift.transport" => dispatch_time_shift_transport,
         "meters.reset" => dispatch_meter_reset,
         "plugins.resume" => dispatch_plugins_resume,
+        "plugins.addSidechainPort" => dispatch_plugins_add_sidechain_port,
         "plugins.programs" => dispatch_plugins_programs,
         "plugins.selectProgram" => dispatch_plugins_select_program,
         "plugins.applyPreset" => dispatch_plugins_apply_preset,

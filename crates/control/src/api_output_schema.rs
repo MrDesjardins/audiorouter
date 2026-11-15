@@ -1142,6 +1142,19 @@ fn method_output_schema_impl(name: &str) -> Value {
             "required": ["path", "sha256", "format", "buses"],
             "additionalProperties": false
         }),
+        "plugins.addSidechainPort" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string" },
+                "nodeId": { "type": "string" },
+                "port": { "type": "string" },
+                "channels": { "type": "integer", "minimum": 1, "maximum": 2 },
+                "revision": {},
+                "activation": {}
+            },
+            "required": ["sessionId", "nodeId", "port", "channels"],
+            "additionalProperties": false
+        }),
         "plugins.programs" => json!({
             "type": "object",
             "properties": {
