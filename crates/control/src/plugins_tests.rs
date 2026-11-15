@@ -348,6 +348,87 @@ fn plugins_buses_reports_the_real_again_auxiliary_input() {
     assert_eq!(buses["buses"]["outputs"][0]["role"], "main");
 }
 
+/// Exercise the real unit-bearing VST3 response through the public dispatcher.
+/// Set `AUDIOROUTER_VST3_WORKER_PATH` to the native worker and
+/// `AUDIOROUTER_TEST_VST3_EFFECT` to Steinberg's UTF16Name VST3 binary.
+#[cfg(windows)]
+#[test]
+#[ignore = "requires the UTF16Name SDK fixture and rebuilt native VST3 worker"]
+fn plugins_programs_dispatches_real_vst3_unit_hierarchy() {
+    use audiorouter_domain::Port;
+
+    let path = std::path::PathBuf::from(std::env::var("AUDIOROUTER_TEST_VST3_EFFECT").unwrap());
+    let root = path.parent().unwrap().to_path_buf();
+    let identity =
+        audiorouter_plugin_host::inspect_binary(&path, std::slice::from_ref(&root)).unwrap();
+    let mut session = session();
+    let plugin = audiorouter_domain::Node {
+        id: EntityId::new("unit-plugin"),
+        kind: NodeKind::Plugin,
+        type_version: 1,
+        name: "Unit-bearing plugin".into(),
+        enabled: true,
+        bypass: false,
+        parameters: serde_json::from_value(json!({
+            "path": path,
+            "format": "vst3",
+            "fingerprint": identity.sha256,
+        }))
+        .unwrap(),
+        ports: vec![
+            Port {
+                name: "in".into(),
+                direction: PortDirection::Input,
+                channels: 2,
+            },
+            Port {
+                name: "out".into(),
+                direction: PortDirection::Output,
+                channels: 2,
+            },
+        ],
+    };
+    let node_id = plugin.id.clone();
+    session.nodes.push(plugin);
+    let request = PluginStageRequest {
+        node_id: node_id.clone(),
+        scanned_path: path,
+        configured_root: root,
+        fingerprint: identity.sha256,
+        channels: 2,
+        state: None,
+        parameters: Vec::new(),
+    };
+    let prepared = start_plugin_bridges(&session, vec![request], 48_000).unwrap();
+    let bridge = prepared[0]
+        .1
+        .standard()
+        .expect("ordinary VST3 uses the standard bridge");
+
+    let mut plane = ControlPlane::default();
+    plane.insert_session(session.clone()).unwrap();
+    let mut runtime = audiorouter_domain::FakeRuntime::default();
+    runtime.prepare(&session).unwrap();
+    runtime.start().unwrap();
+    plane.runtimes.insert(session.id.clone(), runtime);
+    plane.plugin_bridges.lock().unwrap().insert(
+        (session.id.clone(), node_id.clone()),
+        Arc::downgrade(bridge),
+    );
+
+    let response = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "plugins.programs".into(),
+        params: Some(json!({ "sessionId": session.id, "nodeId": node_id })),
+    });
+    assert!(response.error.is_none(), "{:?}", response.error);
+    let listing = response.result.unwrap();
+    let units = listing["units"].as_array().unwrap();
+    assert!(units.len() >= 5, "expected UTF16Name units, got {units:?}");
+    assert!(listing["programs"].as_array().unwrap().is_empty());
+}
+
 #[cfg(windows)]
 #[test]
 #[ignore = "requires SDK AGain and rebuilt native worker overrides"]
