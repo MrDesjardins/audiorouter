@@ -662,6 +662,12 @@ export function PropertiesPanel({
               snapshot={liveDiagnostics ?? null}
               backend={backend}
               sessionId={session.id}
+              sidechainBlockedReason={
+                JSON.stringify(session.nodes.find((node) => node.id === selectedNode.id)) !==
+                JSON.stringify(selectedNode)
+                  ? "Save or discard changes to this tool before adding a sidechain input."
+                  : undefined
+              }
               onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
               onRemove={(names) =>
                 recordDraftChange(removeNodeDraftParameters(draft, selectedNode.id, names), `${selectedNode.id}:remove`)

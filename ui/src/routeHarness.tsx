@@ -560,6 +560,9 @@ const previewBackend: UiBackend = {
   async resumePlugin(sessionId: string, nodeId: string) {
     return { sessionId, nodeId, resumed: false };
   },
+  async addPluginSidechainPort(sessionId: string, nodeId: string) {
+    return { sessionId, nodeId, port: "sidechain", channels: 2 };
+  },
   async listPluginPrograms(sessionId: string, nodeId: string) {
     return {
       sessionId,

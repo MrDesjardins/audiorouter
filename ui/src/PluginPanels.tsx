@@ -683,6 +683,7 @@ export function PluginNodeInspector({
   snapshot,
   backend,
   sessionId,
+  sidechainBlockedReason,
   onChange,
   onRemove,
 }: {
@@ -690,8 +691,13 @@ export function PluginNodeInspector({
   disabled: boolean;
   onUnload: () => void;
   snapshot: import("@audiorouter/contracts").DiagnosticsSnapshot | null;
-  backend?: Pick<UiBackend, "resumePlugin" | "listPluginPrograms" | "selectPluginProgram" | "applyPluginPreset">;
+  backend?: Pick<
+    UiBackend,
+    "resumePlugin" | "listPluginPrograms" | "selectPluginProgram" | "applyPluginPreset" | "addPluginSidechainPort"
+  >;
   sessionId?: string;
+  /** Why adding a sidechain port is unavailable right now (for example unsaved changes). */
+  sidechainBlockedReason?: string;
   onChange?: (name: string, value: boolean) => void;
   /** Remove settings from the node; "off" removes the key so older builds can still load the route. */
   onRemove?: (names: string[]) => void;
@@ -746,6 +752,26 @@ export function PluginNodeInspector({
       setProgramError(formatUiError(error, "The preset could not be imported."));
     } finally {
       setProgramBusy(false);
+    }
+  };
+  const hasSidechainPort = node.ports.some((port) => port.name === "sidechain");
+  const [sidechain, setSidechain] = useState<{ busy: boolean; error: string | null; added: boolean }>({
+    busy: false,
+    error: null,
+    added: false,
+  });
+  const addSidechain = async () => {
+    if (!backend?.addPluginSidechainPort || !sessionId) return;
+    setSidechain({ busy: true, error: null, added: false });
+    try {
+      await backend.addPluginSidechainPort(sessionId, node.id);
+      setSidechain({ busy: false, error: null, added: true });
+    } catch (error) {
+      setSidechain({
+        busy: false,
+        error: formatUiError(error, "This plugin has no sidechain input to add."),
+        added: false,
+      });
     }
   };
   // The result of the last Retry while this plugin stays silenced.
@@ -852,6 +878,37 @@ export function PluginNodeInspector({
             <small>VST3 programs are listed for reference; choose them in the plugin&apos;s own window.</small>
           )}
           {programError ? <small role="alert">{programError}</small> : null}
+        </section>
+      ) : null}
+      {format === "vst3" ? (
+        <section className="plugin-programs" aria-label="Sidechain input">
+          <span className="eyebrow">Sidechain input</span>
+          {hasSidechainPort || sidechain.added ? (
+            <small>
+              This plugin has a sidechain input named &quot;sidechain&quot;. Connect a source to it on the canvas; it is
+              not mixed into the main signal.
+            </small>
+          ) : (
+            <>
+              <button
+                type="button"
+                disabled={
+                  disabled ||
+                  sidechain.busy ||
+                  !backend?.addPluginSidechainPort ||
+                  !sessionId ||
+                  sidechainBlockedReason !== undefined
+                }
+                onClick={() => void addSidechain()}
+              >
+                {sidechain.busy ? "Checking the plugin..." : "Add sidechain input"}
+              </button>
+              <small>
+                {sidechainBlockedReason ?? "Works only for a VST3 plugin that declares an auxiliary input."}
+              </small>
+            </>
+          )}
+          {sidechain.error ? <small role="alert">{sidechain.error}</small> : null}
         </section>
       ) : null}
       <section

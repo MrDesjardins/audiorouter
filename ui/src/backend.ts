@@ -255,6 +255,8 @@ export interface UiBackend {
   ): Promise<MethodResult["midi.sendEvents"]>;
   /** Retry a plugin silenced for passing a recording device's audio through unchanged. */
   resumePlugin?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.resume"]>;
+  /** Give a VST3 plugin node its declared auxiliary input as a named sidechain port. */
+  addPluginSidechainPort?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.addSidechainPort"]>;
   /** Bounded VST2 programs of a plugin in a playing route. */
   listPluginPrograms?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.programs"]>;
   /** Select one VST2 program by its bounded index. */
@@ -939,6 +941,9 @@ export function createLiveBackend(
     },
     async resumePlugin(currentSessionId, nodeId) {
       return client.request("plugins.resume", { sessionId: currentSessionId, nodeId });
+    },
+    async addPluginSidechainPort(currentSessionId, nodeId) {
+      return client.request("plugins.addSidechainPort", { sessionId: currentSessionId, nodeId });
     },
     async listPluginPrograms(currentSessionId, nodeId) {
       return client.request("plugins.programs", { sessionId: currentSessionId, nodeId });
