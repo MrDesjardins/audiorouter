@@ -1,5 +1,38 @@
 # Active plan — current priorities (2026-11-04)
 
+## Theme editor live preview — 2026-11-15
+
+Owner request: choosing a custom-theme colour should show its effect before
+saving and using the theme. Added `ThemePreview.tsx` in Settings → Appearance:
+a scoped miniature workspace (top bar, navigation, canvas with flowing, silent
+and paused connections, Properties panel) drawn from the theme being edited
+through `customThemeStyle`, so every palette entry has a visible target.
+Requirements UI-07 and UI-17; presentation only, no API, backend or stored
+format change. The preview has a "Preview" caption matching the Theme name and
+Base appearance captions. Contrast warnings put a button on each color name:
+choosing one opens that side's picker (`theme-color-<key>`), scrolls it into
+view, focuses the field and flashes it for 1.6 s. The palette uses a custom
+picker (`ThemeColorPicker.tsx`) instead of the native colour dialog: a swatch
+opens a saturation/brightness square, hue slider and live guidance. The square
+dims the shades that miss every rule for that palette entry and draws the
+combined boundary as a white line with a dark halo; it names the current worst
+pair and suggests lighter/darker when that helps.
+Validation: UI format, typecheck:all and lint pass; the UI-only typecheck of
+the changed graph also passes. `theme-preview.pw.ts` passes in Edge and checks
+edited colours, both base appearances, the caption typography and position,
+five node positions without overlap or canvas overflow, and a 640 px viewport.
+`theme-contrast.pw.ts` checks that either color name opens and focuses the
+right picker, that the canvas dims the failing colour and leaves a passing
+colour unshaded, that the contrast line is drawn (white pixels on the
+boundary), that the hue change redraws it, that the popover stays on screen,
+and that the warning clears. `themeColor.test.ts` and `themeContrast.test.ts` cover the
+colour conversions and rule selection. Screenshots are in the Playwright
+results folder (`theme-preview-dark.png`, `theme-preview-light.png`,
+`theme-preview-narrow.png`, `theme-contrast-picker.png`). Rollback: revert the
+three UI files, the picker and colour helpers, their CSS block, the browser
+tests, the unit tests and the release-note bullets. Next: owner visual check
+in the desktop shell.
+
 ## Publish daily quality history — 2026-11-14
 
 Owner reported that `docs/quality-history.csv` on `main` stopped updating.
