@@ -149,7 +149,7 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 ## Validated lessons
 
 - **2026-11-12 — Open a VST2 editor on the thread that loaded the plugin.**
-  Evidence: [plugin reliability plan, owner session 2026-11-12](docs/plans/active/plugin-reliability.md),
+  Evidence: [plugin reliability plan, owner session 2026-11-12](docs/plans/archived/2026-11-11-plugin-reliability.md),
   `supervised_vst2_worker_survives_its_editor_window_being_built`. Scope: VST2
   loading and editors in the plugin worker. Consequence: Pitchproof crashed the
   worker (0xC0000005) as soon as its window opened from a thread other than the
@@ -223,7 +223,7 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 - **2026-11-03 — Account queued frames before publishing audio.**
   Evidence: `receiving_packet_publication_cannot_wrap_the_playout_frame_count`
   in `crates/windows-audio/src/network_audio.rs` and the
-  [review continuation](docs/plans/active/current.md#open-owner-gates).
+  [review continuation](docs/plans/archived/2026-11-16-active-plan-history.md#open-owner-gates).
   Scope: lock-free audio queues with a separate frame counter. Consequence:
   a consumer can drain immediately after publication; incrementing afterward
   wrapped the Network Receive counter to nearly `usize::MAX`. Reserve the
@@ -311,7 +311,7 @@ Report the result, affected requirement IDs/files, checks performed and limitati
   changing sandbox limits.
 
 - **2026-10-22 — Get human approval before opening a pull request (user preference).**
-  Evidence: [active plan, PR approval preference](docs/plans/active/current.md#pull-request-approval-preference-2026-10-22).
+  Evidence: [plan history, PR approval preference](docs/plans/archived/2026-11-16-active-plan-history.md#pull-request-approval-preference-2026-10-22).
   Scope: all repository branches and pull requests. Consequence: finish local
   validation and present the exact branch, commit and diff summary, then wait
   for explicit human approval before creating a PR; implementation, commits,
@@ -319,7 +319,7 @@ Report the result, affected requirement IDs/files, checks performed and limitati
   test locally first by keeping the branch out of a PR.
 
 - **2026-10-22 — Pause automatic Jev reviews when they add little value (user preference).**
-  Evidence: [active plan, Jev pause](docs/plans/active/current.md#jev-paused-2026-10-22).
+  Evidence: [plan history, Jev pause](docs/plans/archived/2026-11-16-active-plan-history.md#jev-paused-2026-10-22).
   Scope: GitHub pull-request review automation. Consequence: leave the Jev
   workflow available to dispatch manually, but do not run it automatically
   until the owner asks to re-enable it.
@@ -334,7 +334,7 @@ Report the result, affected requirement IDs/files, checks performed and limitati
   a denied getter crashed AppContent before the read helper could catch it.
 
 - **2026-10-20 — Keep Jev focused on findings automated checks cannot report (user preference).**
-  Evidence: [active plan, Jev review scope](docs/plans/active/current.md#jev-review-scope).
+  Evidence: [plan history, Jev review scope](docs/plans/archived/2026-11-16-active-plan-history.md#jev-review-scope).
   Scope: Jev rules and pull-request review. Consequence: the compiler,
   configured linters/static analyzers, and formatters own their diagnostics;
   Jev should report only remaining correctness, safety, security,

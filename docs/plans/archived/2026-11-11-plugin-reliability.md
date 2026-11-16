@@ -1,5 +1,7 @@
 # Plugin worker packaging and copyable errors — 2026-11-11
 
+> **Archived 2026-11-16 — merged in PR #139 and folded into the VST work in PR #152. Attended plugin/editor and endpoint playback gates remain separate.**
+
 Objective: repair the owner's missing-worker failure and make visible errors
 copyable (PLUG-04/05/07, UI-08/11/17, ENG-05; M05/M06/M08). Issue
 [#136](https://github.com/MrDesjardins/audiorouter/issues/136) reports all

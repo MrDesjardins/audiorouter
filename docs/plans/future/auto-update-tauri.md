@@ -244,5 +244,5 @@ Windows qualification (VM first, then a real clean machine):
   [SEC-11](../../spec/13-security.md).
 - [Distribution operations](../../operations/distribution.md) and
   [release notes](../../operations/release-notes.md).
-- [Active update-check hardening](../active/update-check-hardening.md).
+- [Active update-check hardening](../archived/2026-11-11-update-check-hardening.md).
 - Tauri updater documentation: https://v2.tauri.app/plugin/updater/

@@ -1,5 +1,7 @@
 # Three-day code review and repairs — 2026-11-15
 
+> **Archived 2026-11-16 — merged in PR #158. Attended M07/M08, driver-helper and load-controlled UDP gates remain open.**
+
 ## Objective and scope
 
 Owner requested a full review of changes from November 12–15, prioritized

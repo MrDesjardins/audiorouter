@@ -1,5 +1,7 @@
 # Audio latency and clock-drift repair
 
+> **Archived 2026-11-16 — implemented and merged in PR #137. Owner listening, real-session health-log and live cable-continuity gates remain open in the active plan.**
+
 Started 2026-11-10, owner request ("do a performance analysis of the audio
 backend", then "create a plan and execute it. I want you to optimize the
 audio. Make sure to document"). Branch `perf/audio-queue-latency`, worktree
@@ -21,12 +23,12 @@ backend-log fields only.
 
 ## Evidence
 
-- Before: [2026-11-10 audio backend performance analysis](evidence/2026-11-10-audio-backend-performance.md).
+- Before: [2026-11-10 audio backend performance analysis](../active/evidence/2026-11-10-audio-backend-performance.md).
   Over 107 hours of the owner's `audioHealth` records the output queue sat at
   51 ms median (62 ms p90), with 2,841 underruns and 45,089 dropped blocks,
   99% of the underruns arriving with 13–17 dropped blocks. DSP cost, build
   profile and thread scheduling were not the cause.
-- After: [2026-11-11 audio latency repair](evidence/2026-11-11-audio-latency-repair.md).
+- After: [2026-11-11 audio latency repair](../active/evidence/2026-11-11-audio-latency-repair.md).
 
 ## Cause (from the code)
 

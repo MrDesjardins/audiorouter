@@ -1,5 +1,7 @@
 # Live parameter saves must not stop audio
 
+> **Archived 2026-11-16 — merged in PR #150. The attended Mute/Fun Voice Changer recording remains open in the active plan.**
+
 - **Status:** implemented locally, review-repaired three times and passed the
   copied-owner-database live parameter and bypass runs (2026-11-14). The
   built-shell run with the owner's Clear VST remains unrun.

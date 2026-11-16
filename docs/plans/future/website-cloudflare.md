@@ -11,7 +11,7 @@ Origin: an outside report said "the audiorouter.org site is missing a
 Content-Security-Policy header". The Pages-compatible part is done: every
 page carries an enforced CSP `<meta>` tag (`site/generate-csp.mjs`, see
 [site/README.md](../../../site/README.md#content-security-policy) and the
-[active plan](../active/current.md#website-csp-2026-11-02-owner-request)).
+[active plan](../archived/2026-11-16-active-plan-history.md#website-csp-2026-11-02-owner-request)).
 GitHub Pages cannot send custom response headers, so the header itself and
 `frame-ancestors` need a layer in front of Pages. This plan adds that layer.
 

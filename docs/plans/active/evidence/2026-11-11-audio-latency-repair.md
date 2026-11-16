@@ -1,6 +1,6 @@
 # Audio latency and clock-drift repair — 2026-11-11
 
-Plan: [audio latency](../audio-latency.md). Analysis that led to it:
+Plan: [audio latency](../../archived/2026-11-11-audio-latency.md). Analysis that led to it:
 [2026-11-10 performance analysis](2026-11-10-audio-backend-performance.md).
 Branch `perf/audio-queue-latency`. Environment: the owner's Windows 11 PC,
 Rust 1.96.0, debug test builds. Requirement IDs: ARCH-08, CAP-04, QUAL-04,

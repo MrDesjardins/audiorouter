@@ -1,9 +1,11 @@
 # High and medium audit repairs — 2026-11-12
 
+> **Archived 2026-11-16 — merged in PR #142. STO-4 stayed unconfirmed; no further authorized repair work remains.**
+
 ## Objective and authority
 
 Owner requested all three high and eleven listed medium findings in
-[the audit](bug-audit-2026-11-11.md), regression tests, a new branch and a PR.
+[the audit](2026-11-11-bug-audit.md), regression tests, a new branch and a PR.
 Branch: `fix/audit-high-medium`, isolated at `target/audit-repair` from
 `a2dd275e`. The original checkout's unrelated changes are preserved.
 The owner's request explicitly authorizes opening this PR after validation.

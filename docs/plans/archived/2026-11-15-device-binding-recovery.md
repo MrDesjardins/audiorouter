@@ -1,5 +1,7 @@
 # Device binding recovery and setup-field focus — 2026-11-15
 
+> **Archived 2026-11-16 — merged in PR #154. Physical reboot/re-enumeration and attended audio/Narrator gates remain open.**
+
 ## Objective and requirements
 
 Resolve two owner-reported issues: saved physical-input IDs that no longer
