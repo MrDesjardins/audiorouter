@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Sidechain failures stay stopped during recovery.** A route with a failed
+  sidechain plugin is no longer restarted automatically after sleep, device
+  loss or a backend failure.
+- **MIDI recovery is more reliable.** Stop all notes releases canceled timed
+  sequences promptly. MIDI status reports a reconnected keyboard as disconnected
+  until the route opens a new connection; identical device names are not guessed.
+
 - **Recovery keeps failed plugin routes stopped.** A route with an unavailable
   plugin is no longer restarted automatically after sleep or a device change.
 - **Late replies respect the current action.** An event poll cannot replace a

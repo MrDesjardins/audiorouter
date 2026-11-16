@@ -32,6 +32,19 @@ pub struct MidiInputDevice {
     pub name: String,
 }
 
+fn unique_device_by_name<'a>(
+    devices: &'a [MidiInputDevice],
+    name: &str,
+) -> Option<&'a MidiInputDevice> {
+    let mut matches = devices.iter().filter(|device| device.name == name);
+    let first = matches.next()?;
+    if matches.next().is_some() {
+        None
+    } else {
+        Some(first)
+    }
+}
+
 /// Why a MIDI input could not be opened.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum MidiInputError {
@@ -152,10 +165,8 @@ impl MidiInputConnection {
         name: &str,
         sink: impl Fn(u8, u8, u8) + Send + Sync + 'static,
     ) -> Result<Self, MidiInputError> {
-        let device = list_midi_input_devices()
-            .into_iter()
-            .find(|device| device.name == name)
-            .ok_or(MidiInputError::NotConnected)?;
+        let devices = list_midi_input_devices();
+        let device = unique_device_by_name(&devices, name).ok_or(MidiInputError::NotConnected)?;
         let state = Box::new(CallbackState {
             sink: Box::new(sink),
         });
@@ -189,7 +200,7 @@ impl MidiInputConnection {
         }
         Ok(Self {
             handle,
-            name: device.name,
+            name: device.name.clone(),
             _state: state,
         })
     }
@@ -216,6 +227,25 @@ impl Drop for MidiInputConnection {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn duplicate_device_names_are_not_resolved_to_the_first_keyboard() {
+        let devices = vec![
+            MidiInputDevice {
+                index: 0,
+                name: "Keyboard".into(),
+            },
+            MidiInputDevice {
+                index: 1,
+                name: "Keyboard".into(),
+            },
+        ];
+        assert!(unique_device_by_name(&devices, "Keyboard").is_none());
+        assert_eq!(
+            unique_device_by_name(&devices[..1], "Keyboard"),
+            Some(&devices[0])
+        );
+    }
 
     #[test]
     fn short_messages_unpack_into_status_and_data_bytes() {

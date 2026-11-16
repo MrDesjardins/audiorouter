@@ -1,5 +1,54 @@
 # Active plan — current priorities (2026-11-04)
 
+## Release readiness repairs — 2026-11-16
+
+Objective: integrate Dependabot PRs #155, #156 and #157 on current main and
+repair the prioritized release review findings. Requirements: PLUG-05,
+STATE-10/11, CAP-11, ENG-02/04 and MIDI/instrument routing. Branch
+`fix/release-readiness-2026-11-16` starts at main `6d0deb9b`; merged exact
+heads `da95493f`, `2b30e2ed` and `33aa20b9`. Preserve untracked build output.
+
+Tasks: reproduce failed sidechain recovery eligibility, disconnected or
+ambiguous MIDI inputs and cancellation of timed sequences; repair and test
+the owning boundaries. Verify the three dependency updates, focused and broad
+tests, contract drift, Rust/UI formatting and lint, Clippy, docs, and inspect
+the complete diff. Windows hardware MIDI, physical audio/sleep, installer
+and driver qualification remain distinct gates; do not alter the owner's live
+audio. Rollback: revert scoped fixes and dependency merge commits. No new PR
+is authorized by the request to integrate existing PRs.
+
+Fixes: sidechain bridge failure and vanished bridge state now block automatic
+sleep/device/backend recovery, with a regression that failed before the fix.
+Timed MIDI sequences notice cancellation within 20 ms; their eight global
+slots are released promptly. A returned MIDI name cannot revive a stale
+handle, and duplicate names are rejected rather than choosing the first device.
+Tests cover canceled capacity, disconnect/reappearance, ambiguous names and
+the real sidechain recovery witness/sleep boundaries. Restarting the route
+opens fresh MIDI connections; real unplug/replug remains unverified.
+
+Windows results: npm ci installed the exact merged UI dependencies with zero
+audit vulnerabilities; Node 22.22.3 meets their declared floors. UI 125 files /
+1,112 tests, lint, format, all-source typecheck and production build passed
+(647.15 kB main bundle advisory). Control library passed with 22 opt-in ignores;
+storage 113 passed / 1 ignored; shell 114 passed / 4 ignored; source and tool
+combinations 6 each; real MCP stdio 5; focused MIDI 13 and Windows MIDI 4.
+Both all-feature/all-target strict Clippy runs and Rust format checks pass.
+Contracts drift (156 methods, 38 kinds), docs validation and diff checks pass.
+The WASAPI probe lockfile passes `cargo check --locked` with rusqlite 0.42.0.
+The merged shell resolves zip 9.5.1. `tools/build-desktop.ps1 -Profile debug`
+built the shell, CLI and four x64/x86 workers with the new dependencies and
+fresh UI. The isolated fresh-install shell/pipe test passed: backend ready in
+135 ms, no device permission granted to the raw client. This does not exercise
+actual audio, a plugin UI or a packaged installer. No audio hardware, driver
+install, signed artifact, installer or production database was changed.
+Remaining M08 gates: candidate installer install/upgrade/rollback/uninstall and
+data retention on a clean standard-user Windows system, WebView2 absence, real
+MIDI unplug/replug and duplicate names, sidechain plugin failure on a protected
+voice path, sleep/device recovery, and current-head CI. UDP continuity under
+concurrent load remains unqualified after the earlier intermittent failures.
+Next: inspect the final diff and preserve this branch for review; do not call
+the candidate release-ready until its applicable gates have evidence.
+
 ## Three-day code review and repairs — 2026-11-15
 
 Owner requested a full review of the November 12–15 changes, priority-ranked
