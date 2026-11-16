@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Global keyboard shortcuts are the only audio shortcuts.** Start or stop,
+  privacy mute, push-to-talk and soundboard slots are set under Settings →
+  Keyboard shortcuts and work while AudioRouter is minimized. The old in-app
+  Ctrl+Shift+S and Ctrl+Shift+M bindings and their Local shortcuts panel are
+  removed.
+
 ## 0.0.29 — 2026-11-12 (unsigned experimental preview)
 
 - **Plugin windows open without crashing.** Some VST2 plugins (Pitchproof)

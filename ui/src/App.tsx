@@ -131,13 +131,11 @@ import {
   readFlowAnimation,
   readLastSession,
   readLiveAutosave,
-  readShortcuts,
   readSidebarWidth,
   readTheme,
   writeFlowAnimation,
   writeLastSession,
   writeLiveAutosave,
-  writeShortcuts,
   writeSidebarWidth,
   writeTheme,
   type FlowAnimationMode,
@@ -151,14 +149,7 @@ import {
   isDeviceAccessDenied,
 } from "./DeviceAccess";
 import { LibraryDragOverlay } from "./libraryDrag";
-import {
-  defaultShortcutBinding,
-  isEditableShortcutTarget,
-  shortcutConflicts,
-  shortcutFromKeyboardEvent,
-  type ShortcutAction,
-  type ShortcutBinding,
-} from "./shortcuts";
+import { isEditableShortcutTarget } from "./keyboardTarget";
 import { setupChecklist } from "./setup";
 import { uiIdempotencyKey } from "./idempotency";
 import { pluginNodeParameterError, processorParameterError, type ProcessorDescriptor } from "./processorCatalog";
@@ -578,10 +569,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [diagnosticStorage] = useState(browserDiagnosticStorage);
   const uiDiagnosticsRef = useRef<string[]>(readClientDiagnostics(diagnosticStorage));
   const [uiDiagnostics, setUiDiagnostics] = useState<string[]>(uiDiagnosticsRef.current);
-  const [shortcuts, setShortcuts] = useState<ShortcutBinding>(() =>
-    readShortcuts(optionalLocalStorage(), defaultShortcutBinding),
-  );
-  const [shortcutMessage, setShortcutMessage] = useState<string | null>(null);
   const [canvasKeyboardPanel, setCanvasKeyboardPanel] = useState<"routeList" | "connect" | null>(null);
   const [connectionSource, setConnectionSource] = useState("");
   const [connectionDestination, setConnectionDestination] = useState("");
@@ -921,9 +908,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     recordUiDiagnostic,
     backend,
   );
-  useEffect(() => {
-    writeShortcuts(optionalLocalStorage(), shortcuts);
-  }, [shortcuts]);
   // Follow the backend's mute state when it changes. Diagnostics refresh
   // every 50 ms while playing and carry the current value; `status` is only
   // refreshed on a full snapshot, so reacting to every new snapshot object
@@ -2501,45 +2485,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       );
     return { switched: true, stopped: running.length > 0 };
   };
-  // The listener below is re-registered only when its dependencies change, so
-  // it calls this render's actions through a ref. Captured directly, a
-  // shortcut pressed after Save started the pre-save `session` and so played
-  // a "temporary preview of the unsaved route" instead of the saved one.
-  const shortcutActions = useRef({ startSession, stopSession, togglePrivacyMute });
-  shortcutActions.current = { startSession, stopSession, togglePrivacyMute };
-  useEffect(() => {
-    const onShortcut = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
-      if (isEditableShortcutTarget(event.target)) return;
-      const shortcut = shortcutFromKeyboardEvent(event);
-      if (!shortcut || shortcutConflicts(shortcuts).length > 0) return;
-      const actions = shortcutActions.current;
-      if (shortcut === shortcuts.sessionToggle && backend.connected) {
-        event.preventDefault();
-        void (sessionRunning ? actions.stopSession() : actions.startSession());
-      } else if (shortcut === shortcuts.privacyMute && backend.connected) {
-        event.preventDefault();
-        void actions.togglePrivacyMute();
-      }
-    };
-    window.addEventListener("keydown", onShortcut);
-    return () => window.removeEventListener("keydown", onShortcut);
-  }, [backend, sessionRunning, shortcuts, privacyMuted, session.id]);
-  const captureShortcut = (action: ShortcutAction, event: React.KeyboardEvent<HTMLInputElement>) => {
-    event.preventDefault();
-    const shortcut = shortcutFromKeyboardEvent(event.nativeEvent);
-    if (!shortcut) {
-      setShortcutMessage("Use at least one modifier key and a non-modifier key.");
-      return;
-    }
-    const next = { ...shortcuts, [action]: shortcut };
-    setShortcuts(next);
-    setShortcutMessage(
-      shortcutConflicts(next).length > 0
-        ? "Shortcut conflict: duplicate bindings and reserved Ctrl+C/Ctrl+V/Ctrl+S bindings are disabled until resolved."
-        : null,
-    );
-  };
   const addLibraryNode = (kind: LibraryNodeKind, _position?: { x: number; y: number }) => {
     if (!backend.connected) {
       setActionMessage("Reconnect to AudioRouter before editing the route.");
@@ -3703,14 +3648,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       </>
     ),
     startup: <StartupSettings backend={backend} />,
-    shortcuts: (
-      <ShortcutSettings
-        shortcuts={shortcuts}
-        captureShortcut={captureShortcut}
-        shortcutMessage={shortcutMessage}
-        snapshot={snapshot}
-      />
-    ),
+    shortcuts: <ShortcutSettings snapshot={snapshot} />,
     versions: (
       <UpdatesPanel
         enabled={updateChecks}
@@ -4473,7 +4411,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               onCancel={() => setDeviceConsent(null)}
             />
           )}
-          {keyboardHelpOpen && <KeyboardHelp bindings={shortcuts} onClose={() => setKeyboardHelpOpen(false)} />}
+          {keyboardHelpOpen && <KeyboardHelp onClose={() => setKeyboardHelpOpen(false)} />}
           <AppDialogHost />
         </div>
       </SoundboardContext.Provider>

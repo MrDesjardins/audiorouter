@@ -11,13 +11,17 @@ const shellInvoke = (): Invoke | undefined =>
 
 export type KeybindMode = "press" | "hold";
 
-export type KeybindAction = {
-  type: "soundboardTrigger";
-  sessionId?: string | null;
-  nodeId: string;
-  slot: number;
-  mode?: string | null;
-};
+export type KeybindAction =
+  | { type: "sessionToggle" }
+  | { type: "privacyMuteToggle" }
+  | { type: "privacyMutePushToTalk" }
+  | {
+      type: "soundboardTrigger";
+      sessionId?: string | null;
+      nodeId: string;
+      slot: number;
+      mode?: string | null;
+    };
 
 export interface KeybindRule {
   id: string;
@@ -78,8 +82,33 @@ export function capKeybindName(name: string): string {
 }
 
 const ACTION_LABELS: Record<KeybindAction["type"], string> = {
+  sessionToggle: "Start or stop the session",
+  privacyMuteToggle: "Turn privacy mute on or off",
+  privacyMutePushToTalk: "Push to talk (unmute while held)",
   soundboardTrigger: "Play soundboard slot",
 };
+
+/** Push-to-talk and soundboard triggers need the key-up; the others fire once. */
+export function triggerModeFor(type: KeybindAction["type"]): KeybindMode {
+  return type === "privacyMutePushToTalk" || type === "soundboardTrigger" ? "hold" : "press";
+}
+
+/** Enabled rules that share a trigger; every one of them runs on that chord. */
+export function duplicateTriggerIds(rules: readonly KeybindRule[]): Set<string> {
+  const byTrigger = new Map<string, string[]>();
+  for (const rule of rules) {
+    if (!rule.enabled) continue;
+    const key = rule.trigger.keys.trim().toLowerCase();
+    const ids = byTrigger.get(key);
+    if (ids) ids.push(rule.id);
+    else byTrigger.set(key, [rule.id]);
+  }
+  const duplicates = new Set<string>();
+  for (const ids of byTrigger.values()) {
+    if (ids.length > 1) for (const id of ids) duplicates.add(id);
+  }
+  return duplicates;
+}
 
 const MODIFIER_CODE_MAP: Record<string, string> = {
   ControlLeft: "LControl",
@@ -338,10 +367,14 @@ function describeRuleSummary(rule: KeybindRule, nodes: Node[]): string {
   if (customName) {
     return `${customName}${suffix}`;
   }
+  const label = ACTION_LABELS[action.type];
+  if (action.type !== "soundboardTrigger") {
+    return `${label} — ${rule.trigger.keys}${suffix}`;
+  }
   const board = nodes.find((node) => node.id === action.nodeId);
   const slotLabel = board ? soundboardSlots(board).find((entry) => entry.slot === action.slot)?.label : undefined;
   const detail = slotLabel ? `Slot ${action.slot} — ${slotLabel}` : `Slot ${action.slot}`;
-  return `Play soundboard slot: ${detail} — ${rule.trigger.keys}${suffix}`;
+  return `${label}: ${detail} — ${rule.trigger.keys}${suffix}`;
 }
 
 function nextKeybindName(rules: KeybindRule[]): string {
@@ -373,6 +406,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
   const soundboards = useMemo(() => nodes.filter((node) => node.kind === "soundboard"), [nodes]);
   const selectedCount = rules.filter((rule) => selectedIds.has(rule.id)).length;
   const allSelected = rules.length > 0 && selectedCount === rules.length;
+  const duplicateIds = duplicateTriggerIds(rules);
 
   useEffect(() => {
     setSelectedIds((current) => {
@@ -662,16 +696,20 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
       </div>
       <p className="muted">
         Windows-wide hotkeys that work even when AudioRouter is minimized to the tray. Supports keyboard combos,
-        function keys (F1–F24), and mouse side/middle buttons.
+        function keys (F1–F24), and mouse side/middle buttons. These are the app's only audio shortcuts.
       </p>
       {!invoke ? (
         <small className="muted">Global Windows keybindings are available in the desktop app.</small>
       ) : rules.length === 0 ? (
-        <p className="muted">No global keybindings yet. Add one for a soundboard slot.</p>
+        <p className="muted">
+          No global keybindings yet. Add one to start or stop the session, mute the microphone, or play a soundboard
+          slot.
+        </p>
       ) : (
         <div className="keybind-list">
           {rules.map((rule) => {
             const isRecording = recordingId === rule.id;
+            const soundboardAction = rule.action.type === "soundboardTrigger" ? rule.action : null;
             return (
               <div key={rule.id} className="keybind-row">
                 {editingNames ? (
@@ -703,12 +741,15 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                         value={rule.action.type}
                         onChange={(event) => {
                           const nextType = event.target.value as KeybindAction["type"];
-                          if (nextType === "soundboardTrigger") {
-                            updateRule(rule.id, (current) => ({
+                          updateRule(rule.id, (current) => {
+                            const action: KeybindAction =
+                              nextType === "soundboardTrigger" ? defaultAction(soundboards) : { type: nextType };
+                            return {
                               ...current,
-                              action: defaultAction(soundboards),
-                            }));
-                          }
+                              trigger: { ...current.trigger, mode: triggerModeFor(nextType) },
+                              action,
+                            };
+                          });
                         }}
                       >
                         {Object.entries(ACTION_LABELS).map(([value, label]) => (
@@ -719,82 +760,93 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                       </select>
                     </label>
 
-                    <label>
-                      Soundboard
-                      {soundboards.length > 0 ? (
-                        <select
-                          value={rule.action.nodeId}
-                          onChange={(event) =>
-                            updateRule(rule.id, (current) => ({
-                              ...current,
-                              action:
+                    {soundboardAction && (
+                      <>
+                        <label>
+                          Soundboard
+                          {soundboards.length > 0 ? (
+                            <select
+                              value={soundboardAction.nodeId}
+                              onChange={(event) =>
+                                updateRule(rule.id, (current) => ({
+                                  ...current,
+                                  action:
+                                    current.action.type === "soundboardTrigger"
+                                      ? { ...current.action, nodeId: event.target.value }
+                                      : current.action,
+                                }))
+                              }
+                            >
+                              {soundboards.map((node) => (
+                                <option key={node.id} value={node.id}>
+                                  {node.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              value={soundboardAction.nodeId}
+                              placeholder="Soundboard tool ID"
+                              onChange={(event) =>
+                                updateRule(rule.id, (current) => ({
+                                  ...current,
+                                  action:
+                                    current.action.type === "soundboardTrigger"
+                                      ? { ...current.action, nodeId: event.target.value }
+                                      : current.action,
+                                }))
+                              }
+                            />
+                          )}
+                        </label>
+                        <label>
+                          Slot
+                          <select
+                            value={soundboardAction.slot}
+                            onChange={(event) => {
+                              const slot = Math.min(SOUNDBOARD_SLOTS, Math.max(1, Number(event.target.value) || 1));
+                              updateRule(rule.id, (current) =>
                                 current.action.type === "soundboardTrigger"
-                                  ? { ...current.action, nodeId: event.target.value }
-                                  : current.action,
-                            }))
-                          }
-                        >
-                          {soundboards.map((node) => (
-                            <option key={node.id} value={node.id}>
-                              {node.name}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          value={rule.action.nodeId}
-                          placeholder="Soundboard tool ID"
-                          onChange={(event) =>
-                            updateRule(rule.id, (current) => ({
-                              ...current,
-                              action:
-                                current.action.type === "soundboardTrigger"
-                                  ? { ...current.action, nodeId: event.target.value }
-                                  : current.action,
-                            }))
-                          }
-                        />
-                      )}
-                    </label>
-                    <label>
-                      Slot
-                      <select
-                        value={rule.action.slot}
-                        onChange={(event) => {
-                          const slot = Math.min(SOUNDBOARD_SLOTS, Math.max(1, Number(event.target.value) || 1));
-                          updateRule(rule.id, (current) => ({
-                            ...current,
-                            trigger: { ...current.trigger, mode: "hold" },
-                            action: { ...current.action, slot, mode: null },
-                          }));
-                        }}
-                      >
-                        {((targetNodeId) => {
-                          const selectedNode = soundboards.find((node) => node.id === targetNodeId);
-                          const assignedBySlot = new Map(
-                            (selectedNode ? soundboardSlots(selectedNode) : []).map((entry) => [
-                              entry.slot,
-                              entry.label,
-                            ]),
-                          );
-                          return Array.from({ length: SOUNDBOARD_SLOTS }, (_, index) => index + 1).map((slot) => {
-                            const label = assignedBySlot.get(slot);
-                            return (
-                              <option key={slot} value={slot}>
-                                {label ? `Slot ${slot} — ${label}` : `Slot ${slot}`}
-                              </option>
-                            );
-                          });
-                        })(rule.action.nodeId)}
-                      </select>
-                    </label>
+                                  ? {
+                                      ...current,
+                                      trigger: { ...current.trigger, mode: "hold" },
+                                      action: { ...current.action, slot, mode: null },
+                                    }
+                                  : current,
+                              );
+                            }}
+                          >
+                            {((targetNodeId) => {
+                              const selectedNode = soundboards.find((node) => node.id === targetNodeId);
+                              const assignedBySlot = new Map(
+                                (selectedNode ? soundboardSlots(selectedNode) : []).map((entry) => [
+                                  entry.slot,
+                                  entry.label,
+                                ]),
+                              );
+                              return Array.from({ length: SOUNDBOARD_SLOTS }, (_, index) => index + 1).map((slot) => {
+                                const label = assignedBySlot.get(slot);
+                                return (
+                                  <option key={slot} value={slot}>
+                                    {label ? `Slot ${slot} — ${label}` : `Slot ${slot}`}
+                                  </option>
+                                );
+                              });
+                            })(soundboardAction.nodeId)}
+                          </select>
+                        </label>
+                      </>
+                    )}
+                    {rule.action.type === "privacyMutePushToTalk" && (
+                      <small className="muted">Unmutes while the key is held and mutes again when released.</small>
+                    )}
 
                     <label>
                       Trigger
                       <input
                         readOnly
                         value={isRecording ? "Press key or mouse4/5…" : rule.trigger.keys}
-                        aria-label={`Global trigger for ${rule.name?.trim() || `Slot ${rule.action.slot}`}`}
+                        aria-label={`Global trigger for ${rule.name?.trim() || ACTION_LABELS[rule.action.type]}`}
                         onClick={() => {
                           heldModifiersRef.current.clear();
                           usedModifierComboRef.current = false;
@@ -877,6 +929,12 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
             );
           })}
         </div>
+      )}
+      {duplicateIds.size > 0 && (
+        <p className="muted" role="alert">
+          {duplicateIds.size === 2 ? "Two keybinds share" : `${duplicateIds.size} keybinds share`} a shortcut; each one
+          runs. Change one to keep them separate.
+        </p>
       )}
       {message && (
         <p className="muted" role="status">

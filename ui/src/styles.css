@@ -1155,7 +1155,6 @@ button:disabled {
    detail out of the default path. The controls remain available through the
    existing header actions, list view, and selected-node inspector. */
 .app-shell > .lifecycle-panel,
-.app-shell > .shortcut-panel,
 .app-shell > .recorder-actions,
 .app-shell > .recording-actions,
 .app-shell > .virtual-device-lifecycle,

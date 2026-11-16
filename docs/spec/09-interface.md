@@ -63,7 +63,7 @@ the "Who can connect" choice and network URL (HTTP-09),
 explicit token reveal/copy and a link to its local Swagger documentation.
 See [HTTP acceptance](16-local-http-api.md).
 
-The primary window gives the left-to-right canvas the available space and puts a clearly selected, tabbed workbench on the right. Its tabs provide addable input/processing/output tools, selected-node properties, session actions, MCP setup/activity, and diagnostics. Session selection and revision actions live in the Session tab; do not reserve a permanent session rail or duplicate the same actions in a tall header. Tool cards use an icon, title, and short description; unavailable capabilities say why. Keep start/stop in the top bar, alongside the live run state. Show Reconnect in the top bar only when the connection needs it, without moving the run state. Global microphone privacy mute remains available through Properties and its shortcut; omit the ambiguous "Mute mic" header action and the tray mute toggle. While privacy mute silences a source in a running route, the run state says so ("Audio running · Mic muted") and the affected tool cards show "muted". Do not add a separate Route status panel: the fixed top bar already shows run state and a second summary has repeatedly destabilized workspace height. At narrow widths, panels may stack without covering the graph. Detailed controls remain grouped under the selected workbench tab; advanced groups use progressive disclosure instead of one unbounded panel wall.
+The primary window gives the left-to-right canvas the available space and puts a clearly selected, tabbed workbench on the right. Its tabs provide addable input/processing/output tools, selected-node properties, session actions, MCP setup/activity, and diagnostics. Session selection and revision actions live in the Session tab; do not reserve a permanent session rail or duplicate the same actions in a tall header. Tool cards use an icon, title, and short description; unavailable capabilities say why. Keep start/stop in the top bar, alongside the live run state. Show Reconnect in the top bar only when the connection needs it, without moving the run state. Global microphone privacy mute remains available through Properties and a global keybind; omit the ambiguous "Mute mic" header action and the tray mute toggle. While privacy mute silences a source in a running route, the run state says so ("Audio running · Mic muted") and the affected tool cards show "muted". Do not add a separate Route status panel: the fixed top bar already shows run state and a second summary has repeatedly destabilized workspace height. At narrow widths, panels may stack without covering the graph. Detailed controls remain grouped under the selected workbench tab; advanced groups use progressive disclosure instead of one unbounded panel wall.
 
 The MCP tab explains local assistant setup using the installed CLI path, database, named pipe, and an explicitly authorized client ID. It guides least-privilege access and shows a bounded stream of incoming tool-call names, safe argument summaries, and outcomes. Never record audio/media payloads, credentials, or hidden model reasoning. A Diagnostics view exposes recent UI failures and graph node/edge/revision checkpoints; the native backend log records RPC method, outcome, and a privacy-safe state summary in a bounded local file. No diagnostic writer runs in the realtime audio callback.
 
@@ -123,7 +123,7 @@ as a failed current-profile setup.
 - **UI-07 — Live editing.** Parameter changes use bounded/coalesced requests during dragging and one final committed target. Topology edits use backend plan/commit; the UI presents one Save route action and requests a second confirmation only for warnings. Local UI optimism never overrides a backend conflict. When another client edits, merge nonconflicting presentation state and render the new authoritative graph. Show who changed what using client identity, not guessed person names. Automatic parameter saving is optional: Settings → Appearance → Live autosave (default on). When off, parameter edits stay as an unsaved draft until Save, while enabled/bypass changes remain immediate. At most one automatic save runs at a time; edits made during it collapse into the latest draft and must not raise a review warning.
 - **UI-08 — Safety and errors.** Feedback/duplicate warnings identify actual paths and remedies. Missing devices remain on the canvas. Offer rebind, retry, inspect, or stop according to backend capability. No hidden fallback to a new microphone. An emergency privacy mute affects physical capture contributions immediately through the backend; clearing it never starts stopped sessions or recorders.
 - **UI-09 — Sessions/presets.** Create, duplicate, rename, export/import, start/stop, and designate startup sessions. Imports open stopped with unresolved bindings highlighted. Include templates for UC-01, processed mic, app recording, and mix-minus. Presets expand into inspectable ordinary nodes. Header Play/Stop starts or stops the visible canvas route; it does not start a stopped Test Signal or Audio File source. Test Signal Play/Stop controls only that tone through the authorized source transport and may first start a stopped route. A routed, enabled Test Signal Play remains actionable when endpoint readiness is missing so the backend can report the specific start failure. Audio playback still requires the session's exact native endpoint preparation.
-- **UI-10 — Background controls.** Tray controls list session states, recording states, and open/quit actions. Omit the global mute toggle; privacy mute remains available through Properties and its shortcut. Keep the menu short (owner, 2026-11-07): a session/mic status line and a recording line ("Not recording" when idle), then Open, one item that names its action ("Play" when stopped, "Stop audio" when playing; a greyed twin was too subtle), then “Quit and stop audio”, which explicitly stops the backend after recorder finalization. The status refreshes when the menu opens; there is no Refresh item or backend pipe line. Closing the window with its own close button keeps audio running. Default window shortcuts avoid Ctrl+Alt, which Windows treats as AltGr: Ctrl+Shift+S plays/stops and Ctrl+Shift+M toggles privacy mute. Offer optional always-on-top compact meters and global shortcuts, with conflict/rebinding support. Shortcuts dispatch API actions.
+- **UI-10 — Background controls.** Tray controls list session states, recording states, and open/quit actions. Omit the global mute toggle; privacy mute remains available through Properties and a global keybind. Keep the menu short (owner, 2026-11-07): a session/mic status line and a recording line ("Not recording" when idle), then Open, one item that names its action ("Play" when stopped, "Stop audio" when playing; a greyed twin was too subtle), then “Quit and stop audio”, which explicitly stops the backend after recorder finalization. The status refreshes when the menu opens; there is no Refresh item or backend pipe line. Closing the window with its own close button keeps audio running. Keyboard control is Windows-wide only (owner, 2026-11-16): Settings → Keyboard shortcuts defines global keybinds that start or stop the session, toggle privacy mute, push to talk, or trigger a soundboard slot; there are no separate in-app audio shortcuts. Offer optional always-on-top compact meters and global shortcuts, with conflict/rebinding support. Shortcuts dispatch API actions.
 - **UI-11 — Accessibility.** All essential actions work without dragging or a mouse. Provide a structured list/tree view of routes, descriptive accessible names, logical focus order, focus restoration after dialogs, high-contrast/light/dark modes, 200% zoom, and non-color status cues. Target WCAG 2.2 AA applicable criteria plus Windows Narrator testing; record the exact audit checklist in M05.
 
   Properties chart labels retain an 11 CSS-pixel minimum after SVG viewBox
@@ -143,8 +143,8 @@ as a failed current-profile setup.
   In the Windows desktop shell, disable WebView2's built-in browser
   accelerators (including Find, Print and Reload). They must not open browser
   chrome or reload the editor. Continue delivering keyboard events to the
-  app, including its custom audio bindings and canvas shortcuts; ordinary
-  text selection, copy/paste and editing remain available.
+  app, including its canvas and editing shortcuts; ordinary text selection,
+  copy/paste and editing remain available.
 
   Generic boolean tool settings, Duck phase switches, Audio File Loop,
   single-group lock/carry and manual-recorder dither
@@ -566,8 +566,9 @@ Keyboard navigation starts with focus-only links to the canvas and the tools
 and settings workbench. They move focus without changing layout. Ctrl+S (or
 Command+S) uses the header Save action and its readiness, busy and warning
 acknowledgement checks; it does not save from text fields or modal dialogs.
-Reserve this binding alongside clipboard shortcuts so a customized audio
-shortcut cannot start or stop playback when the user saves.
+Reserve this binding alongside clipboard shortcuts: the app assigns no other
+command to Ctrl+S, Ctrl+C or Ctrl+V, and a global keybind that uses one of them
+is the user's explicit choice.
 
 While the canvas has focus, Ctrl+A selects its tools and groups. Ctrl+D
 duplicates a single selected tool without connections; mixed or multiple
@@ -576,9 +577,10 @@ Ctrl+0 fits the route, using the same viewport behavior as the canvas controls.
 These commands leave text editing intact, and zoom never changes saved card
 positions. View changes are immediate and respect reduced motion.
 F2 renames a single selected tool through the themed name dialog; Cancel and
-Escape preserve its name. F1 or ? opens the shortcut reference, including the
-current configurable audio bindings. The reference scrolls by keyboard in a
-short window, traps focus until closed and restores focus to its origin.
+Escape preserve its name. F1 or ? opens the reference for the app's canvas and
+editing shortcuts and points to Settings → Keyboard shortcuts for Windows-wide
+keybinds. The reference scrolls by keyboard in a short window, traps focus until
+closed and restores focus to its origin.
 Neither help nor rename opens over another modal dialog or while editing text.
 
 Switching node selection must remove the preceding tool's editor and timing

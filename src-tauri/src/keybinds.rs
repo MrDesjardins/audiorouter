@@ -630,7 +630,19 @@ fn resolve_session_id(
         })
 }
 
+/// Actions with behavior on the key-up. Every other action fires once on
+/// press, so a saved rule left in hold mode must not run it a second time.
+fn action_runs_on_release(action: &KeybindAction) -> bool {
+    matches!(
+        action,
+        KeybindAction::PrivacyMutePushToTalk | KeybindAction::SoundboardTrigger { .. }
+    )
+}
+
 fn execute_invocation(pipe_name: &str, invocation: KeybindInvocation) {
+    if invocation.release && !action_runs_on_release(&invocation.action) {
+        return;
+    }
     let mut call = crate::backend_call(pipe_name);
     let result: Result<Value, String> = match invocation.action {
         KeybindAction::SessionToggle => call(
@@ -1165,6 +1177,25 @@ mod tests {
         }
         assert_eq!(last.rule_id, "held");
         assert!(last.release);
+    }
+
+    #[test]
+    fn only_hold_actions_run_on_release() {
+        assert!(action_runs_on_release(
+            &KeybindAction::PrivacyMutePushToTalk
+        ));
+        assert!(action_runs_on_release(&KeybindAction::SoundboardTrigger {
+            session_id: None,
+            node_id: "sb-1".into(),
+            slot: 1,
+            mode: None,
+        }));
+        assert!(!action_runs_on_release(&KeybindAction::SessionToggle));
+        assert!(!action_runs_on_release(&KeybindAction::PrivacyMuteToggle));
+        assert!(!action_runs_on_release(&KeybindAction::SoundboardStopAll {
+            session_id: None,
+            node_id: None,
+        }));
     }
 
     #[test]

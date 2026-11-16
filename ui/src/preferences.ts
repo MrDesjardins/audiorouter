@@ -1,8 +1,6 @@
 export type ThemeMode = "dark" | "light" | "high-contrast" | "custom";
-import { previousDefaultShortcutBinding, type ShortcutAction, type ShortcutBinding } from "./shortcuts";
 
 const THEME_KEY = "audiorouter.ui.theme";
-const SHORTCUT_KEY = "audiorouter.ui.shortcuts";
 const LAST_SESSION_KEY = "audiorouter.ui.last-session";
 
 export function readLastSession(storage: Pick<Storage, "getItem"> | null): string | null {
@@ -77,33 +75,6 @@ export function writeTheme(storage: Pick<Storage, "setItem"> | null, theme: Them
     storage?.setItem(THEME_KEY, theme);
   } catch {
     // Presentation preferences are optional and must never block the editor.
-  }
-}
-
-export function readShortcuts(storage: Pick<Storage, "getItem"> | null, fallback: ShortcutBinding): ShortcutBinding {
-  try {
-    const value = storage?.getItem(SHORTCUT_KEY);
-    if (!value) return fallback;
-    const parsed = JSON.parse(value) as Partial<ShortcutBinding>;
-    if (!parsed.sessionToggle || !parsed.privacyMute) return fallback;
-    // The settings page saves every binding, so an untouched old default is
-    // stored as if chosen; move it to the current default.
-    const current = (action: ShortcutAction, saved: string) =>
-      saved === previousDefaultShortcutBinding[action] ? fallback[action] : saved;
-    return {
-      sessionToggle: current("sessionToggle", parsed.sessionToggle),
-      privacyMute: current("privacyMute", parsed.privacyMute),
-    };
-  } catch {
-    return fallback;
-  }
-}
-
-export function writeShortcuts(storage: Pick<Storage, "setItem"> | null, binding: ShortcutBinding): void {
-  try {
-    storage?.setItem(SHORTCUT_KEY, JSON.stringify(binding));
-  } catch {
-    /* Optional presentation preference. */
   }
 }
 

@@ -116,7 +116,8 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     expect(await canvas.boundingBox()).toEqual(before);
     await openSettings(page, "Keyboard shortcuts");
     const help = page.locator(".shortcut-panel");
-    await expect(help).toContainText("Ctrl+D duplicates one selected tool");
+    await expect(help).toContainText("Global keybindings");
+    await expect(help).toContainText("available in the desktop app");
     expect(await help.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     await help.screenshot({ path: `../target/ui-quality-review/round-25/shortcuts-${theme}.png` });
   });

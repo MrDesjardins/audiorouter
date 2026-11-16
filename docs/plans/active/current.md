@@ -1,5 +1,29 @@
 # Active plan — current priorities (2026-11-04)
 
+## Global-only keyboard shortcuts (PR #151) — 2026-11-16
+
+Owner decision: remove the in-app window shortcuts and make Windows-wide global
+keybinds the only audio shortcut mechanism (UI-10). The Settings "Local
+shortcuts" panel, the Ctrl+Shift+S / Ctrl+Shift+M defaults and the
+`audiorouter.ui.shortcuts` preference are removed; global keybinds now offer
+session start/stop, privacy mute, push-to-talk and soundboard slots, matching
+the actions the shell engine already supported. This supersedes the 2026-11-07
+default-binding decision. Duplicate enabled chords are reported in the panel.
+Requirements: UI-10, UI-11, UI-29. Work is on branch
+`feat/global-keybinds-only-shortcuts`, stacked on the PR #151 contributor
+branch.
+
+Validation: UI typecheck/lint/format, 1,080 unit tests and the production
+build; shell 122 tests, strict Clippy and both Rust format checks; docs
+validation (268 files / 1,490 links); focused Edge browser scenarios for help,
+Settings navigation, slow lifecycle and clipboard regressions (17 passed).
+Scenarios that only exercised local shortcuts were removed; the remaining help
+and Settings navigation scenarios were updated. No attended Windows hook or
+audio run is claimed.
+
+Rollback: revert this change; saved global keybinds and shell settings are
+unaffected, and a stale `audiorouter.ui.shortcuts` entry is simply ignored.
+
 ## Publish daily quality history — 2026-11-14
 
 Owner reported that `docs/quality-history.csv` on `main` stopped updating.

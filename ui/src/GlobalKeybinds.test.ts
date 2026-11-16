@@ -3,6 +3,7 @@ import {
   KEYBIND_MAX,
   KEYBIND_NAME_MAX,
   capKeybindName,
+  duplicateTriggerIds,
   keybindIdsAlongStroke,
   keybindLimitMessage,
   paintKeybindSelection,
@@ -10,7 +11,17 @@ import {
   chordFromCaptureModifierKeyUp,
   isValidTrigger,
   keyFromKeyboardEvent,
+  triggerModeFor,
+  type KeybindRule,
 } from "./GlobalKeybinds";
+
+const rule = (id: string, keys: string, enabled = true): KeybindRule => ({
+  id,
+  name: id,
+  enabled,
+  trigger: { keys, mode: "press", passthrough: true },
+  action: { type: "sessionToggle" },
+});
 
 const chord = (key: string, code: string, shiftKey = false) => ({
   key,
@@ -49,6 +60,19 @@ describe("global shortcut capture", () => {
     const pressed = new Set<string>();
     expect(chordFromCaptureKeyDown({ ...chord("Shift", "ShiftLeft"), repeat: false }, pressed)).toBeNull();
     expect(chordFromCaptureModifierKeyUp("ShiftLeft", pressed, false)).toBe("LShift");
+  });
+
+  it("finds enabled rules that share a shortcut", () => {
+    const rules = [rule("a", "F13"), rule("b", " f13 "), rule("c", "F14"), rule("d", "F13", false)];
+    expect([...duplicateTriggerIds(rules)]).toEqual(["a", "b"]);
+    expect(duplicateTriggerIds([rule("a", "F13")]).size).toBe(0);
+  });
+
+  it("asks for the key-up only where the release has a meaning", () => {
+    expect(triggerModeFor("sessionToggle")).toBe("press");
+    expect(triggerModeFor("privacyMuteToggle")).toBe("press");
+    expect(triggerModeFor("privacyMutePushToTalk")).toBe("hold");
+    expect(triggerModeFor("soundboardTrigger")).toBe("hold");
   });
 
   it("allows 100 keybinds and blocks the next one", () => {
