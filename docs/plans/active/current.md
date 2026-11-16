@@ -98,6 +98,29 @@ Run the harness and its negative guards, inspect results, and document missing
 WebView2 and interactive shell limitations. Rollback: restore this clone's
 own snapshot or revert the harness changes; never touch the source VM.
 
+Unattended continuation: create a dedicated, signed-in standard-user saved
+state, then add a bounded wrapper that verifies the exact disposable VM UUID,
+requires it powered off, restores the specified snapshot, starts it, waits for
+the expected guest login, runs the lifecycle harness and requests graceful
+shutdown. Retain step outcomes even on failure; do not force-stop a stuck guest
+or modify another VM. Validate with a full restore/run and negative identity
+guard. The snapshot contains a live guest session and must remain private.
+
+Unattended results (2026-11-16): snapshot `lifecycle-ready-20261116`
+(`74a7f354-c6c4-4be1-ac2d-81a734c08996`) contains fresh standard user
+`arqual4` signed in. The first restore, lifecycle and graceful shutdown passed;
+evidence `%TEMP%/ar-unattended-lifecycle-20261116/result.json`. A repeat hung
+inside VBoxManage guest control and needed its owned process stopped. A third
+run passed the guest lifecycle but initially revealed a null child exit code;
+the wrapper retains the process handle to fix it. A fourth hit the same guest
+control hang, and the 120-second host timeout stopped only its owned process
+tree and shut down the VM; evidence `%TEMP%/ar-unattended-lifecycle-20261116-final/result.json`.
+The corrected success path has not completed a full rerun; do not treat this
+intermittent VirtualBox setup as a reliable gate. The wrong-snapshot identity
+guard passed. Next investigate guest-control stalls after restoring saved state,
+and qualify a repeatable timeout/recovery path before claiming unattended CI.
+Missing-WebView2 and application-captured-recording cases remain open.
+
 Automation result: `tools/vm/installer-lifecycle.ps1` and its guest companion
 passed on the independent Windows 11 clone under `arqual3`, a medium-integrity
 non-administrator signed into the guest desktop. Snapshot

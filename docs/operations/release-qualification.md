@@ -98,7 +98,20 @@ including failures. It does not reset or delete the VM, create users, sign in,
 test an actual captured recording, remove WebView2, exercise an interactive
 installer or validate audio hardware. Restore the dedicated VM snapshot before
 repeating with the same account. Sign-in and snapshot preparation are currently
-separate steps, so this is not yet an unattended end-to-end release gate.
+separate steps.
+
+For repeat runs, `tools/vm/installer-lifecycle-unattended.ps1` accepts the same
+installer, version, hash, credential and output arguments, plus `-VmId`,
+`-SnapshotId` (both exact UUIDs), and `-RestoreDisposableSnapshot`. Prepare a
+private saved-state snapshot with the fresh standard user already signed in;
+the snapshot contains a live Windows session and must be protected accordingly.
+The wrapper requires the VM to be powered off, verifies snapshot ownership and
+installer hashes, restores the snapshot, waits for that user, runs the lifecycle
+and requests graceful shutdown. It bounds the host-side runner as well as the
+guest commands and leaves a failed shutdown running for inspection. Restoring a
+snapshot discards the clone's current disk state; use only a dedicated test VM.
+One end-to-end run passed on the reference host, but a subsequent restore hung
+in VirtualBox guest control; see the active plan before relying on it as a gate.
 
 ## Current qualification snapshot
 
