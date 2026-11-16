@@ -1056,12 +1056,15 @@ fn keybinds_save(
     state: State<'_, ShellState>,
     service: State<'_, keybinds::KeybindService>,
 ) -> Result<Vec<keybinds::KeybindRule>, String> {
-    service.engine.update_rules(&rules)?;
     let path = shell_settings::path_beside(&state.database_path);
     let mut settings = shell_settings::load(&path);
-    settings.keybinds = rules.clone();
+    settings.keybinds = rules;
+    // `load` discards a file over 64 KiB, which would also reset autoplay and
+    // API startup. Refuse that payload before the live hook or the file changes.
+    shell_settings::encoded_within_limit(&settings)?;
+    service.engine.update_rules(&settings.keybinds)?;
     shell_settings::save(&path, &settings)?;
-    Ok(rules)
+    Ok(settings.keybinds)
 }
 
 #[tauri::command]
@@ -2563,6 +2566,10 @@ fn main() {
         shell_settings::load(&shell_settings::path_beside(&state.database_path)).keybinds;
     let keybind_service = keybinds::KeybindService::new(&initial_keybinds);
     tauri::Builder::default()
+        // While this window is focused, tao's default raw-keyboard registration
+        // stops WH_KEYBOARD_LL from seeing keys. `Always` removes that
+        // registration. The shell does not consume raw device events.
+        .device_event_filter(tauri::DeviceEventFilter::Always)
         .manage(state)
         .manage(HttpApiState::default())
         .manage(UiUnsaved::default())

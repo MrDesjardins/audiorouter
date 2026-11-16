@@ -9999,6 +9999,12 @@ button.danger {
 .dialog-backdrop.app-dialog-backdrop {
   z-index: 60;
 }
+.connection-dialog.app-dialog {
+  border-color: var(--ambient-edge);
+  background: var(--ambient-surface);
+  color: var(--text-strong);
+  box-shadow: 0 1rem 3rem var(--ambient-shadow);
+}
 .app-dialog h2 {
   margin: 0;
 }
@@ -10023,6 +10029,105 @@ button.danger {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+.keybind-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.keybind-row {
+  min-width: 0;
+}
+.keybind-body {
+  min-width: 0;
+}
+.keybind-body > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  min-height: 2rem;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+.keybind-body > summary::-webkit-details-marker,
+.keybind-body > summary::marker {
+  display: none;
+  content: "";
+}
+.keybind-body > summary::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+}
+.keybind-body[open] > summary::before {
+  transform: translateY(-0.12rem) rotate(45deg);
+}
+.keybind-title {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  user-select: none;
+}
+.keybind-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+.keybind-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.keybind-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+.keybind-check input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 3px;
+  background: var(--ambient-surface);
+  box-shadow: none;
+}
+.keybind-check input[type="checkbox"]::after {
+  top: 0.1rem;
+  left: 0.3rem;
+  width: 0.22rem;
+  height: 0.42rem;
+  border-radius: 0;
+  background: transparent;
+  border-right: 2px solid transparent;
+  border-bottom: 2px solid transparent;
+  transform: rotate(45deg);
+  transition: none;
+}
+.keybind-check input[type="checkbox"]:checked {
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 28%, var(--ambient-surface));
+}
+.keybind-check input[type="checkbox"]:checked::after {
+  background: transparent;
+  border-right-color: var(--text-strong, #edf4ff);
+  border-bottom-color: var(--text-strong, #edf4ff);
+  transform: rotate(45deg);
+}
+.keybind-name {
+  width: 100%;
+  min-width: 0;
+  user-select: text;
 }
 .keyboard-help {
   max-height: calc(100dvh - 2rem);

@@ -8,10 +8,10 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, SyncSender};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread::{self, JoinHandle};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -94,6 +94,25 @@ fn default_enabled() -> bool {
     true
 }
 
+pub const KEYBIND_NAME_MAX_CHARS: usize = 32;
+pub const KEYBIND_MAX_RULES: usize = 100;
+
+pub fn validate_rules(rules: &[KeybindRule]) -> Result<(), String> {
+    if rules.len() > KEYBIND_MAX_RULES {
+        return Err(format!(
+            "you can add up to {KEYBIND_MAX_RULES} global keybinds"
+        ));
+    }
+    for rule in rules {
+        if rule.name.chars().count() > KEYBIND_NAME_MAX_CHARS {
+            return Err(format!(
+                "keybind name must be {KEYBIND_NAME_MAX_CHARS} characters or fewer"
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum ModifierSide {
     #[default]
@@ -162,6 +181,81 @@ pub struct KeybindInvocation {
     pub rule_id: String,
     pub action: KeybindAction,
     pub release: bool,
+}
+
+const DISPATCH_CAPACITY: usize = 64;
+
+/// Queue from the low-level hook to the RPC worker.
+///
+/// The hook never waits on a backend call. Presses are dropped once the queue
+/// is full. Releases always enter: the oldest press is removed to make room,
+/// and a queue that is already all releases grows so a held action cannot stay
+/// stuck on after its key goes up.
+struct KeybindDispatch {
+    items: Mutex<VecDeque<KeybindInvocation>>,
+    available: Condvar,
+}
+
+impl KeybindDispatch {
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            items: Mutex::new(VecDeque::new()),
+            available: Condvar::new(),
+        })
+    }
+
+    fn enqueue(&self, invocation: KeybindInvocation) {
+        let Ok(mut items) = self.items.lock() else {
+            return;
+        };
+        if items.len() >= DISPATCH_CAPACITY {
+            if !invocation.release {
+                return;
+            }
+            if let Some(index) = items.iter().position(|queued| !queued.release) {
+                items.remove(index);
+            }
+        }
+        items.push_back(invocation);
+        self.available.notify_one();
+    }
+
+    fn recv(&self) -> Option<KeybindInvocation> {
+        let Ok(mut items) = self.items.lock() else {
+            return None;
+        };
+        loop {
+            if let Some(invocation) = items.pop_front() {
+                return Some(invocation);
+            }
+            items = self.available.wait(items).ok()?;
+        }
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.items.lock().map(|items| items.len()).unwrap_or(0)
+    }
+
+    #[cfg(test)]
+    fn pop_ready(&self) -> Option<KeybindInvocation> {
+        self.items.lock().ok()?.pop_front()
+    }
+}
+
+/// Shortcut capture suspends new presses, but a key that is already held must
+/// still deliver its release or the sound (and push-to-talk) stays on.
+fn select_invocations(
+    suspended: bool,
+    invocations: Vec<KeybindInvocation>,
+) -> Vec<KeybindInvocation> {
+    if !suspended {
+        return invocations;
+    }
+    invocations
+        .into_iter()
+        .filter(|invocation| invocation.release)
+        .collect()
 }
 
 /// Parse a trigger string such as `"Control+Shift+F1"` or `"Mouse4"` into
@@ -417,6 +511,7 @@ impl KeybindEngine {
     }
 
     pub fn update_rules(&self, rules: &[KeybindRule]) -> Result<(), String> {
+        validate_rules(rules)?;
         let compiled = compile_rules(rules)?;
         let mut guard = self
             .rules
@@ -451,16 +546,17 @@ impl KeybindService {
             if slot.is_some() {
                 return;
             };
-            let (sender, receiver) = mpsc::sync_channel::<KeybindInvocation>(64);
+            let dispatch = KeybindDispatch::new();
+            let worker = Arc::clone(&dispatch);
             let rpc_pipe = pipe_name;
             let _ = thread::Builder::new()
                 .name("audiorouter-keybind-rpc".into())
                 .spawn(move || {
-                    for invocation in receiver {
+                    while let Some(invocation) = worker.recv() {
                         execute_invocation(&rpc_pipe, invocation);
                     }
                 });
-            match windows_hook::GlobalKeybindListener::start(Arc::clone(&self.engine), sender) {
+            match windows_hook::GlobalKeybindListener::start(Arc::clone(&self.engine), dispatch) {
                 Ok(listener) => *slot = Some(listener),
                 Err(error) => eprintln!("AudioRouter global keybind hook unavailable: {error}"),
             }
@@ -625,7 +721,7 @@ mod windows_hook {
 
     struct HookContext {
         engine: Arc<KeybindEngine>,
-        sender: SyncSender<KeybindInvocation>,
+        queue: Arc<KeybindDispatch>,
     }
 
     static HOOK_CONTEXT: OnceLock<HookContext> = OnceLock::new();
@@ -642,9 +738,9 @@ mod windows_hook {
     impl GlobalKeybindListener {
         pub fn start(
             engine: Arc<KeybindEngine>,
-            sender: SyncSender<KeybindInvocation>,
+            queue: Arc<KeybindDispatch>,
         ) -> Result<Self, String> {
-            let _ = HOOK_CONTEXT.set(HookContext { engine, sender });
+            let _ = HOOK_CONTEXT.set(HookContext { engine, queue });
             let (ready_tx, ready_rx) = mpsc::sync_channel(1);
             let thread = thread::Builder::new()
                 .name("audiorouter-keybind-hook".into())
@@ -760,13 +856,10 @@ mod windows_hook {
             }
             state.handle_event(code, is_down, rules_slice)
         });
-        if suspended {
-            return false;
+        for invocation in select_invocations(suspended, invocations) {
+            ctx.queue.enqueue(invocation);
         }
-        for invocation in invocations {
-            let _ = ctx.sender.try_send(invocation);
-        }
-        swallow
+        !suspended && swallow
     }
 
     unsafe extern "system" fn keyboard_hook_proc(
@@ -945,5 +1038,112 @@ mod tests {
         assert_eq!(inv.len(), 1);
         assert!(inv[0].release);
         assert!(swallow);
+    }
+
+    #[test]
+    fn shifted_punctuation_uses_base_key_names() {
+        let (mods, code) = parse_trigger_keys("LShift+Equal").unwrap();
+        assert_eq!(mods.shift, ModifierSide::Left);
+        assert_eq!(code, TriggerCode::Keyboard(0xBB));
+
+        let (mods, code) = parse_trigger_keys("LShift+Slash").unwrap();
+        assert_eq!(mods.shift, ModifierSide::Left);
+        assert_eq!(code, TriggerCode::Keyboard(0xBF));
+
+        assert!(parse_trigger_keys("LShift+?").is_err());
+        // '+' is the chord separator, so "LShift++" is Left Shift alone.
+        let (mods, code) = parse_trigger_keys("LShift++").unwrap();
+        assert_eq!(mods.shift, ModifierSide::None);
+        assert_eq!(code, TriggerCode::Keyboard(0xA0));
+    }
+
+    #[test]
+    fn rejects_a_keybind_name_longer_than_32_characters() {
+        let mut rule = sample_rule("kb", "F13", KeybindMode::Press, true);
+        rule.name = "n".repeat(32);
+        assert!(validate_rules(&[rule.clone()]).is_ok());
+        rule.name = "n".repeat(33);
+        let error = validate_rules(&[rule]).unwrap_err();
+        assert!(error.contains("32"), "{error}");
+    }
+
+    #[test]
+    fn rejects_more_than_100_keybinds() {
+        let rules: Vec<_> = (0..100)
+            .map(|index| sample_rule(&format!("kb-{index}"), "F13", KeybindMode::Press, true))
+            .collect();
+        assert!(validate_rules(&rules).is_ok());
+        let mut over = rules;
+        over.push(sample_rule("kb-extra", "F13", KeybindMode::Press, true));
+        let error = validate_rules(&over).unwrap_err();
+        assert!(error.contains("100"), "{error}");
+    }
+
+    #[test]
+    fn capture_suspension_still_delivers_an_active_hold_release() {
+        let rules = compile_rules(&[sample_rule("hold-1", "F1", KeybindMode::Hold, true)]).unwrap();
+        let mut state = HookMatcherState::default();
+        let (pressed, _) = state.handle_event(TriggerCode::Keyboard(0x70), true, &rules);
+        assert_eq!(pressed.len(), 1);
+        assert!(!pressed[0].release);
+        assert!(select_invocations(true, pressed).is_empty());
+
+        // Capture passes an empty rule list. The physical release is still
+        // produced and must be dispatched.
+        let (released, _) = state.handle_event(TriggerCode::Keyboard(0x70), false, &[]);
+        let delivered = select_invocations(true, released);
+        assert_eq!(delivered.len(), 1);
+        assert!(delivered[0].release);
+        assert_eq!(delivered[0].rule_id, "hold-1");
+
+        let (again, _) = state.handle_event(TriggerCode::Keyboard(0x70), true, &[]);
+        assert!(select_invocations(true, again).is_empty());
+    }
+
+    #[test]
+    fn a_full_queue_keeps_a_release_by_dropping_a_press() {
+        let queue = KeybindDispatch::new();
+        for index in 0..DISPATCH_CAPACITY {
+            queue.enqueue(invocation(&index.to_string(), false));
+        }
+        queue.enqueue(invocation("dropped-press", false));
+        assert_eq!(queue.len(), DISPATCH_CAPACITY);
+
+        queue.enqueue(invocation("held", true));
+        assert_eq!(queue.len(), DISPATCH_CAPACITY);
+        let first = queue.pop_ready().unwrap();
+        assert_eq!(first.rule_id, "1");
+        assert!(!first.release);
+
+        let mut last = first;
+        while let Some(item) = queue.pop_ready() {
+            last = item;
+        }
+        assert_eq!(last.rule_id, "held");
+        assert!(last.release);
+    }
+
+    #[test]
+    fn a_queue_of_releases_still_accepts_another_release() {
+        let queue = KeybindDispatch::new();
+        for index in 0..DISPATCH_CAPACITY {
+            queue.enqueue(invocation(&index.to_string(), true));
+        }
+        queue.enqueue(invocation("extra-release", true));
+        assert_eq!(queue.len(), DISPATCH_CAPACITY + 1);
+        let mut last = queue.pop_ready().unwrap();
+        while let Some(item) = queue.pop_ready() {
+            last = item;
+        }
+        assert_eq!(last.rule_id, "extra-release");
+        assert!(last.release);
+    }
+
+    fn invocation(id: &str, release: bool) -> KeybindInvocation {
+        KeybindInvocation {
+            rule_id: id.into(),
+            action: KeybindAction::PrivacyMutePushToTalk,
+            release,
+        }
     }
 }
