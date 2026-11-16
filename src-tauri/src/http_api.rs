@@ -182,9 +182,10 @@ fn http_access(method: &str) -> HttpAccess {
         "obs.apply" => HttpAccess::DesktopOnly("Apply OBS changes in the AudioRouter window"),
         "obs.restore" => HttpAccess::DesktopOnly("Restore OBS settings in the AudioRouter window"),
         "plugins.scan" | "plugins.list" | "plugins.retry" => HttpAccess::LocalPaths(&["directory"]),
-        "plugins.inspect" | "plugins.parameters" | "sessions.importFile" => {
+        "plugins.inspect" | "plugins.parameters" | "plugins.buses" | "sessions.importFile" => {
             HttpAccess::LocalPaths(&["path"])
         }
+        "plugins.applyPreset" => HttpAccess::LocalPaths(&["presetPath"]),
         "nativeBridges.prepare" => {
             HttpAccess::LocalPaths(&["renderMappingPath", "captureMappingPath"])
         }
@@ -715,6 +716,8 @@ mod tests {
             ("plugins.retry", "directory"),
             ("plugins.inspect", "path"),
             ("plugins.parameters", "path"),
+            ("plugins.buses", "path"),
+            ("plugins.applyPreset", "presetPath"),
             ("sessions.importFile", "path"),
             ("nativeBridges.prepare", "renderMappingPath"),
             ("nativeBridges.prepare", "captureMappingPath"),
@@ -742,6 +745,16 @@ mod tests {
         );
         assert_eq!(status, 200);
         assert_eq!(forwarded.load(Ordering::Relaxed), 1);
+        for (method, parameter) in [
+            ("plugins.buses", "path"),
+            ("plugins.applyPreset", "presetPath"),
+        ] {
+            let mut params = json!({});
+            params[parameter] = json!(r"C:\Plugins\fixture.bin");
+            let (status, _) = call(&api, &operation_path(method), Some(params));
+            assert_eq!(status, 200, "{method} must allow a local path");
+        }
+        assert_eq!(forwarded.load(Ordering::Relaxed), 3);
         let (status, schema) = call(&api, "/openapi.json", None);
         assert_eq!(status, 200);
         assert!(schema["paths"]["/api/v1/plugins/scan"].is_object());

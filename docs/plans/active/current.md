@@ -2,6 +2,62 @@
 
 ## VST review defect fixes — owner requested
 
+CI repair authorized 2026-11-16 (PR #152, run 43790820298): reproduce and
+repair ENG-02/04, AUTO-18 and M08 failures without weakening gates. Evidence:
+`target/ci-43790820298-failures.log`; all check annotations read (failure
+summaries plus the hosted Ubuntu-label migration notice, no source warnings).
+Observed: MCP integration tests hard-code 105 advanced tools, actual 107;
+browser fixtures exit with stack overflow 0xC00000FD; release PE import guard
+only accepts PE32+ although the package now includes x86 workers; generated
+tool-guide social tags are stale. Tasks: test catalogue membership rather
+than a count; reproduce discovery on a bounded stack and isolate schema
+construction frames; support bounded PE32 and PE32+ import offsets with
+regressions; regenerate metadata; rerun affected entry points and strict
+checks, push, then require new-head hosted CI. Keep opt-in audio/editor gates
+distinct. Rollback is a scoped revert of these repairs and generated metadata.
+
+CI repair results (Windows 11, pinned Rust 1.96.0, Node 22.22.3): the actual
+downloaded `browser-fixtures` executable answered sessions.list/active.get and
+then crashed at presets.list with 0xC00000FD. The new dispatcher regression
+also failed at 512 KiB. CDB captured `__chkstk -> parameter_descriptor_schema
+-> processor_item_schema -> method_output_schema_impl -> describe -> dispatch`;
+the comprehensive output-schema match reserved roughly 440 KiB before calling
+its helpers. Each JSON arm now constructs through its own uninlined generic
+builder, keeping the match frame small without changing the schema or raising
+thread-stack limits. The 512 KiB regression passes. Rebuilt e2e_backend answers
+the exact four-request sequence and exits cleanly. Edge goal-empty and
+goals-and-tour pass 8/8 with both development and compiled CI assets.
+
+MCP's two 105-versus-107 failures reproduce locally; integration tests now
+check unique names, required tools (including both sidechain tools) and object
+input schemas through both protocol versions. All five real stdio/pipe tests
+pass. The PE parser uses the distinct PE32/PE32+ import-directory offsets;
+release tests cover valid imports, dynamic VC runtime refusal and truncated
+directories for both formats. All four existing worker binaries parse; the
+local Rust release worker still imports VCRUNTIME140 and is correctly refused
+by the portable-runtime guard (these are older local development artifacts,
+not a new release qualification). Regenerated social tags and CSP on 40 guide
+pages using the existing generators. Site and all four release-tooling checks
+pass; strict workspace and shell Clippy, Rust format, contract drift, docs and
+86 policy tests pass. `cargo test --workspace --locked` passes, including MCP,
+control, source/tool combinations and doc-tests; its log is
+`target/ci-workspace-fixed.log`. Detailed reproduction/CDB/check logs use the
+ignored `target/ci-*` prefix. New-head hosted browser shards and installer
+packaging remain required. Local browser tooling prints NO_COLOR/FORCE_COLOR
+and React Flow attribution notices; this repair changes no browser runtime,
+styles or attribution configuration and does not suppress those notices.
+
+Additional shell validation found the HTTP path-policy coverage regression
+hidden behind the earlier workspace failure: plugins.buses.path and
+plugins.applyPreset.presetPath were unclassified. Both now use LocalPaths,
+with adapter-level tests rejecting UNC/device paths before forwarding and
+accepting local paths; the schema-walking coverage guard passes. Full shell
+suite: 114 passed / 4 opt-in ignored. Full workspace control results: 430
+passed / 22 opt-in ignored. All 40 generated page changes were inspected to
+confirm their bodies are identical and only head metadata changed. Next:
+final formatting/Clippy/diff checks, commit and push, then watch new-head CI;
+no hosted pass or rebuilt installer is claimed by these local results.
+
 Merge repair (2026-11-15, supersedes the failed audit below): owner authorized
 merging main and pushing. `origin/main` at `01cc24a14` is contained in local
 merge `f7e328446`. Reconciled the reuse trait with the sidechain control enum,

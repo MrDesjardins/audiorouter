@@ -2,6 +2,11 @@
 
 use super::*;
 
+#[inline(never)]
+fn build_schema(build: impl FnOnce() -> Value) -> Value {
+    build()
+}
+
 pub(crate) fn method_output_schema(name: &str) -> Value {
     // Keep the comprehensive match in a separate, uninlined function. A debug
     // build otherwise reserves every arm's temporaries in the caller's frame
@@ -12,6 +17,15 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
 
 #[inline(never)]
 fn method_output_schema_impl(name: &str) -> Value {
+    // Each match arm gets its own construction frame. In debug builds rustc
+    // otherwise reserves the sum of all JSON temporaries here (~440 KiB),
+    // even for arms that call another schema builder. Keep this frame small
+    // for discovery reached through a Windows main thread or pipe adapter.
+    macro_rules! json {
+        ($($tokens:tt)*) => {
+            build_schema(|| serde_json::json!($($tokens)*))
+        };
+    }
     match name {
         "system.quit" => json!({
             "type": "object",
