@@ -635,14 +635,18 @@ impl ControlPlane {
                 let mut compiler_owns_flags = false;
                 match self.plugin_live_bridge(session_id, &node.id)? {
                     crate::plugins::LivePluginBridge::Standard(bridge) => {
-                        bridge.set_silence_if_unchanged(guards.contains(&node.id));
-                        bridge_flags.push((Arc::clone(&bridge), node.enabled && !node.bypass));
-                        stages.insert(node.id.clone(), bridge);
+                        stages.defer_reuse(
+                            node.id.clone(),
+                            bridge,
+                            Vec::new(),
+                            guards.contains(&node.id),
+                            node.enabled && !node.bypass,
+                        );
                     }
                     #[cfg(windows)]
                     crate::plugins::LivePluginBridge::Sidechain(bridge) => {
                         bridge.set_silence_if_unchanged(guards.contains(&node.id));
-                        stages.insert(node.id.clone(), bridge);
+                        stages.stages.insert(node.id.clone(), bridge);
                         compiler_owns_flags = true;
                     }
                 }

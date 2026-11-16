@@ -255,7 +255,7 @@ fn plugin_parameters_valid(events: &[audiorouter_plugin_host::ParameterEvent]) -
 /// The live-bridge operations plugin reuse needs. `PluginRuntimeBridge` is the
 /// production implementation; a test double lets reuse be exercised without a
 /// worker process, so a parameter save can be proven to reuse a loaded plugin.
-pub(crate) trait LivePluginBridge: RealtimePluginProcessor {
+pub(crate) trait ReusablePluginBridge: RealtimePluginProcessor {
     /// Published worker health. A failed or quarantined bridge is not reused.
     fn bridge_health(&self) -> audiorouter_plugin_host::WorkerState;
     /// Push a slider template into the loaded plugin.
@@ -274,7 +274,7 @@ pub(crate) trait LivePluginBridge: RealtimePluginProcessor {
     ) -> Option<Arc<audiorouter_plugin_host::PluginRuntimeBridge>>;
 }
 
-impl LivePluginBridge for audiorouter_plugin_host::PluginRuntimeBridge {
+impl ReusablePluginBridge for audiorouter_plugin_host::PluginRuntimeBridge {
     fn bridge_health(&self) -> audiorouter_plugin_host::WorkerState {
         self.health_state()
     }
@@ -308,7 +308,7 @@ impl LivePluginBridge for audiorouter_plugin_host::PluginRuntimeBridge {
 
 /// One live plugin bridge whose control state is applied only after the new
 /// graph has replaced the playing one.
-struct DeferredPluginUpdate<B: LivePluginBridge> {
+struct DeferredPluginUpdate<B: ReusablePluginBridge> {
     bridge: Arc<B>,
     /// Only sliders that differ from the previously saved node, so values
     /// changed in the plugin's own editor are not overwritten.
@@ -319,19 +319,22 @@ struct DeferredPluginUpdate<B: LivePluginBridge> {
 
 /// The plugin stages of one prepared graph, plus the live control changes
 /// that must wait for its atomic publication.
-pub(crate) struct PluginStageSet<B: LivePluginBridge = audiorouter_plugin_host::PluginRuntimeBridge>
-{
+pub(crate) struct PluginStageSet<
+    B: ReusablePluginBridge = audiorouter_plugin_host::PluginRuntimeBridge,
+> {
     pub(crate) stages: HashMap<EntityId, Arc<dyn RealtimePluginProcessor>>,
     started: Vec<(EntityId, Arc<B>)>,
     updates: Vec<DeferredPluginUpdate<B>>,
+    auxiliary: Vec<(EntityId, PreparedPluginBridge)>,
 }
 
-impl<B: LivePluginBridge> PluginStageSet<B> {
+impl<B: ReusablePluginBridge> PluginStageSet<B> {
     pub(crate) fn empty() -> Self {
         Self {
             stages: HashMap::new(),
             started: Vec::new(),
             updates: Vec::new(),
+            auxiliary: Vec::new(),
         }
     }
 
@@ -379,7 +382,7 @@ impl<B: LivePluginBridge> PluginStageSet<B> {
     /// not counted; reported with `graph.commit` so a live save can prove it
     /// did not reload unrelated plugins.
     pub(crate) fn started_count(&self) -> usize {
-        self.started.len()
+        self.started.len() + self.auxiliary.len()
     }
 
     /// Publish the new worker handles and apply the deferred control changes.
@@ -390,6 +393,15 @@ impl<B: LivePluginBridge> PluginStageSet<B> {
         plane: &ControlPlane,
         session_id: &EntityId,
     ) -> Result<(), ControlError> {
+        #[cfg(windows)]
+        if let Ok(mut bridges) = plane.sidechain_bridges.lock() {
+            bridges.retain(|_, bridge| bridge.strong_count() > 0);
+            for (id, bridge) in &self.auxiliary {
+                if let Some(bridge) = bridge.sidechain() {
+                    bridges.insert((session_id.clone(), id.clone()), Arc::downgrade(bridge));
+                }
+            }
+        }
         if let Ok(mut bridges) = plane.plugin_bridges.lock() {
             bridges.retain(|(owner, _), bridge| owner != session_id || bridge.strong_count() > 0);
             for (id, bridge) in &self.started {
@@ -438,6 +450,7 @@ pub(crate) enum PreparedPluginBridge {
 }
 
 impl PreparedPluginBridge {
+    #[cfg(test)]
     fn standard(&self) -> Option<&Arc<audiorouter_plugin_host::PluginRuntimeBridge>> {
         match self {
             Self::Standard(bridge) => Some(bridge),
@@ -452,13 +465,6 @@ impl PreparedPluginBridge {
         match self {
             Self::Standard(_) => None,
             Self::Sidechain(bridge) => Some(bridge),
-        }
-    }
-    fn processor(self) -> Arc<dyn RealtimePluginProcessor> {
-        match self {
-            Self::Standard(bridge) => bridge,
-            #[cfg(windows)]
-            Self::Sidechain(bridge) => bridge,
         }
     }
 }
@@ -663,6 +669,27 @@ fn start_sidechain_bridge(
     .map_err(|error| not_ready(format!("bridge startup failed: {error:?}")))
 }
 
+fn requested_plugin_groups(
+    session: &Session,
+    eligible: &HashMap<EntityId, usize>,
+    requested: &std::collections::HashSet<EntityId>,
+) -> Result<Vec<Vec<EntityId>>, ControlError> {
+    let mut groups_to_start = Vec::new();
+    for group in plugin_chain_groups(session, eligible) {
+        let requested_members = group.iter().filter(|id| requested.contains(*id)).count();
+        if requested_members == 0 {
+            continue;
+        }
+        if requested_members != group.len() {
+            return Err(ControlError::Internal(
+                "prepared plugin group is missing a member",
+            ));
+        }
+        groups_to_start.push(group);
+    }
+    Ok(groups_to_start)
+}
+
 pub(crate) fn start_plugin_bridges(
     session: &Session,
     requests: Vec<PluginStageRequest>,
@@ -757,7 +784,7 @@ pub(crate) fn start_plugin_bridges(
         .map(|(id, (_, _, channels, _, _))| (id.clone(), *channels))
         .collect();
     let mut started = sidechains;
-    for group in plugin_chain_groups(session, &eligible) {
+    for group in requested_plugin_groups(session, &eligible, &prepared.keys().cloned().collect())? {
         // The grouping helper includes standalone effects. Only this request
         // set belongs to the legacy path; auxiliary effects were prepared
         // above and nodes without requests must not acquire a worker here.
@@ -1143,6 +1170,60 @@ pub(crate) fn plugin_chain_groups(
 mod plugin_chain_group_tests {
     use super::*;
     use audiorouter_domain::{Edge, Node, Port};
+
+    #[derive(Debug, Default)]
+    struct ReuseProbe(std::sync::atomic::AtomicUsize);
+
+    impl RealtimePluginProcessor for ReuseProbe {
+        fn process(&self, _: &mut audiorouter_engine::AudioBlock) {}
+    }
+
+    impl ReusablePluginBridge for ReuseProbe {
+        fn bridge_health(&self) -> audiorouter_plugin_host::WorkerState {
+            audiorouter_plugin_host::WorkerState::Running
+        }
+        fn apply_parameters(
+            &self,
+            _: Vec<audiorouter_plugin_host::ParameterEvent>,
+        ) -> Result<(), String> {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        }
+        fn apply_silence_if_unchanged(&self, _: bool) {}
+        fn apply_processing_active(&self, _: bool) {}
+        fn into_processor(self: Arc<Self>) -> Arc<dyn RealtimePluginProcessor> {
+            self
+        }
+        fn into_registered_bridge(
+            self: Arc<Self>,
+        ) -> Option<Arc<audiorouter_plugin_host::PluginRuntimeBridge>> {
+            None
+        }
+    }
+
+    #[test]
+    fn merged_preparation_reuses_worker_and_defers_slider_changes_until_publication() {
+        let before = graph();
+        let mut after = before.clone();
+        let id = after.nodes[0].id.clone();
+        after.nodes[0]
+            .parameters
+            .insert("pluginParameter:0".into(), json!(0.75));
+        let bridge = Arc::new(ReuseProbe::default());
+        let live = HashMap::from([(id.clone(), Arc::clone(&bridge))]);
+        let mut plane = ControlPlane::default();
+        let prepared = plane
+            .prepare_plugin_stages_with(&after, Some(&before), &live, Some(&id), |_, requests| {
+                assert!(requests.is_empty(), "a reused plugin must not be reloaded");
+                Ok(Vec::new())
+            })
+            .unwrap();
+        assert_eq!(prepared.started_count(), 0);
+        assert_eq!(prepared.stages.len(), 1);
+        assert_eq!(bridge.0.load(std::sync::atomic::Ordering::SeqCst), 0);
+        prepared.publish(&plane, &after.id).unwrap();
+        assert_eq!(bridge.0.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
     fn graph() -> Session {
         let nodes = ["c", "a", "b", "d"]
             .into_iter()
@@ -1294,8 +1375,9 @@ mod plugin_chain_group_tests {
         });
         let mut plane = ControlPlane::default();
         let error = plane
-            .prepare_plugin_stages(&session, 48_000)
-            .expect_err("unscanned plugin identity must not be loaded");
+            .prepare_plugin_stages(&session, 48_000, None)
+            .err()
+            .expect("unscanned plugin identity must not be loaded");
         assert!(
             matches!(&error, ControlError::InvalidRequest(message)
             if message.contains("matching scan identity")),
@@ -1764,11 +1846,12 @@ impl ControlPlane {
         &mut self,
         session: &Session,
         sample_rate_hz: u32,
-    ) -> Result<HashMap<EntityId, Arc<dyn RealtimePluginProcessor>>, ControlError> {
+        previous: Option<&Session>,
+    ) -> Result<PluginStageSet, ControlError> {
         // A route is starting: workers kept alive only for a stopped-session
         // editor would duplicate its plugins.
         self.release_editor_only_plugins(&session.id);
-        self.prepare_plugin_stages_for(session, sample_rate_hz, None)
+        self.prepare_plugin_stages_for(session, sample_rate_hz, None, previous)
     }
 
     /// Start one plugin node's worker without a route, so its editor can open
@@ -1783,9 +1866,11 @@ impl ControlPlane {
             session,
             audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
             Some(node_id),
+            None,
         )?;
+        started.publish(self, &session.id)?;
         if let Ok(mut held) = self.editor_only_plugins.lock() {
-            for (id, processor) in started {
+            for (id, processor) in started.stages {
                 held.insert((session.id.clone(), id), processor);
             }
         }
@@ -1804,7 +1889,75 @@ impl ControlPlane {
         session: &Session,
         sample_rate_hz: u32,
         only: Option<&EntityId>,
-    ) -> Result<HashMap<EntityId, Arc<dyn RealtimePluginProcessor>>, ControlError> {
+        previous: Option<&Session>,
+    ) -> Result<PluginStageSet, ControlError> {
+        let live = session
+            .nodes
+            .iter()
+            .filter_map(|node| {
+                self.plugin_bridge(&session.id, &node.id)
+                    .ok()
+                    .map(|bridge| (node.id.clone(), bridge))
+            })
+            .collect();
+        let auxiliary = std::sync::Mutex::new(Vec::new());
+        let mut stages = self.prepare_plugin_stages_with(
+            session,
+            previous,
+            &live,
+            only,
+            |session, requests| {
+                let mut standard = Vec::new();
+                for (id, bridge) in start_plugin_bridges(session, requests, sample_rate_hz)? {
+                    match bridge {
+                        PreparedPluginBridge::Standard(bridge) => standard.push((id, bridge)),
+                        #[cfg(windows)]
+                        bridge @ PreparedPluginBridge::Sidechain(_) => auxiliary
+                            .lock()
+                            .map_err(|_| {
+                                ControlError::Internal("plugin preparation lock poisoned")
+                            })?
+                            .push((id, bridge)),
+                    }
+                }
+                Ok(standard)
+            },
+        )?;
+        stages.auxiliary = auxiliary
+            .into_inner()
+            .map_err(|_| ControlError::Internal("plugin preparation lock poisoned"))?;
+        for (id, bridge) in &stages.auxiliary {
+            #[cfg(windows)]
+            if let Some(bridge) = bridge.sidechain() {
+                stages.stages.insert(
+                    id.clone(),
+                    Arc::clone(bridge) as Arc<dyn RealtimePluginProcessor>,
+                );
+            }
+        }
+        self.prune_instrument_midi();
+        for (id, bridge) in &stages.started {
+            if let Some(node) = session
+                .nodes
+                .iter()
+                .find(|node| &node.id == id && node.kind == NodeKind::Instrument)
+            {
+                self.connect_instrument_midi(&session.id, node, bridge);
+            }
+        }
+        Ok(stages)
+    }
+
+    fn prepare_plugin_stages_with<B: ReusablePluginBridge + 'static>(
+        &mut self,
+        session: &Session,
+        previous: Option<&Session>,
+        live: &HashMap<EntityId, Arc<B>>,
+        only: Option<&EntityId>,
+        start: impl Fn(&Session, Vec<PluginStageRequest>) -> Result<Vec<(EntityId, Arc<B>)>, ControlError>
+            + Send
+            + Sync,
+    ) -> Result<PluginStageSet<B>, ControlError> {
         let pruned;
         let session = if only.is_some() {
             session
@@ -1820,7 +1973,7 @@ impl ControlPlane {
                 }
         };
         if !session.nodes.iter().any(|node| wanted(&node)) {
-            return Ok(HashMap::new());
+            return Ok(PluginStageSet::empty());
         }
         let guards = plugin_unchanged_guards(session);
         // A live bridge can keep playing when its plugin binary, saved state,
@@ -1876,6 +2029,22 @@ impl ControlPlane {
         let mut stages = PluginStageSet::empty();
         let mut requests = Vec::new();
         for node in session.nodes.iter().filter(wanted) {
+            if let Some((bridge, before)) = reused.remove(&node.id) {
+                let parameters = reused_parameter_events(before, node);
+                if !plugin_parameters_valid(&parameters) {
+                    return Err(ControlError::InvalidRequest(
+                        "plugin parameter template is out of range".into(),
+                    ));
+                }
+                stages.defer_reuse(
+                    node.id.clone(),
+                    bridge,
+                    parameters,
+                    guards.contains(&node.id),
+                    node.enabled && !node.bypass,
+                );
+                continue;
+            }
             let path = node
                 .parameters
                 .get("path")
@@ -1983,45 +2152,12 @@ impl ControlPlane {
                 parameters: plugin_parameter_events(node, captured_sliders.as_ref()),
             });
         }
-        let started =
-            self.while_servicing_audio(|| start_plugin_bridges(session, requests, sample_rate_hz))?;
-        // Keep controls for the existing graph intact if any new group fails
-        // preparation. Publish per-node handles only once all groups exist.
-        if let Ok(mut bridges) = self.plugin_bridges.lock() {
-            bridges.retain(|_, bridge| bridge.strong_count() > 0);
-            for (id, bridge) in &started {
-                if let Some(bridge) = bridge.standard() {
-                    bridges.insert((session.id.clone(), id.clone()), Arc::downgrade(bridge));
-                }
-            }
+        let started = self.while_servicing_audio(|| start(session, requests))?;
+        for (id, bridge) in started {
+            stages.started.push((id.clone(), Arc::clone(&bridge)));
+            stages.stages.insert(id, bridge.into_processor());
         }
-        #[cfg(windows)]
-        if let Ok(mut bridges) = self.sidechain_bridges.lock() {
-            bridges.retain(|_, bridge| bridge.strong_count() > 0);
-            for (id, bridge) in &started {
-                if let Some(bridge) = bridge.sidechain() {
-                    bridges.insert((session.id.clone(), id.clone()), Arc::downgrade(bridge));
-                }
-            }
-        }
-        // Instruments hear their MIDI device from the moment their route
-        // starts; devices of instruments that stopped are closed first.
-        self.prune_instrument_midi();
-        for (id, bridge) in &started {
-            if let Some(node) = session
-                .nodes
-                .iter()
-                .find(|node| &node.id == id && node.kind == NodeKind::Instrument)
-            {
-                if let Some(bridge) = bridge.standard() {
-                    self.connect_instrument_midi(&session.id, node, bridge);
-                }
-            }
-        }
-        Ok(started
-            .into_iter()
-            .map(|(id, bridge)| (id, bridge.processor()))
-            .collect())
+        Ok(stages)
     }
 
     /// Explicit update preparation keeps authoring separate from activation.

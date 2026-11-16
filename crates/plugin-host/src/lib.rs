@@ -5569,6 +5569,9 @@ pub struct PluginRuntimeBridge {
     /// Frames per pipeline quantum, for reporting pipeline delay.
     quantum_frames: usize,
     instance_index: usize,
+    /// Identity of the worker this bridge runs on, shared by every member of a
+    /// VST2 chain. Diagnostics use it to identify a restart between samples.
+    worker_id: u64,
     /// Programs and preset import exist only for the VST2 worker protocol.
     vst2: bool,
     /// Member handles keep the queue owner alive; only the owner joins it.
@@ -5831,6 +5834,7 @@ impl PluginRuntimeBridge {
                 midi: Arc::clone(&head.midi),
                 quantum_frames: frames,
                 instance_index,
+                worker_id: head.worker_id,
                 vst2: head.vst2,
                 owner: Some(Arc::clone(&head)),
             }));
@@ -6275,6 +6279,7 @@ impl PluginRuntimeBridge {
             midi,
             quantum_frames: frames,
             instance_index: 0,
+            worker_id: next_worker_id(),
             vst2,
             owner: None,
         }))

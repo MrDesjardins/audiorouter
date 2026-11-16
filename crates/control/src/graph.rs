@@ -512,6 +512,7 @@ impl ControlPlane {
         idempotency_key: &str,
         display_operation_id: &str,
     ) -> Result<Value, ControlError> {
+        let commit_started = std::time::Instant::now();
         // A plan can wait between preparation and commit. Re-check that every
         // plugin placeholder still has a current explicit scan result, so a
         // queued port or graph edit cannot bypass capability verification.

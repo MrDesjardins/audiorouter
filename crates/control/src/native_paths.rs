@@ -370,8 +370,7 @@ impl ControlPlane {
         for node in session.nodes.iter_mut().filter(|node| {
             audiorouter_engine::hosts_plugin_worker(node.kind) && node.enabled && node.bypass
         }) {
-            if let Ok(bridge) = self.plugin_bridge(&session_id, &node.id) {
-                bridge.set_processing_active(false);
+            if plugin_stages.deactivate_started_bridge(&node.id) {
                 node.bypass = false;
             }
         }

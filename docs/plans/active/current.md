@@ -2,6 +2,49 @@
 
 ## VST review defect fixes — owner requested
 
+Merge repair (2026-11-15, supersedes the failed audit below): owner authorized
+merging main and pushing. `origin/main` at `01cc24a14` is contained in local
+merge `f7e328446`. Reconciled the reuse trait with the sidechain control enum,
+restored generic preparation and deferred publication for standard bridges,
+registered sidechain handles at publication, retained stopped-editor ownership
+and instrument MIDI setup, restored requested-group validation and graph timing,
+and supplied the eight missing client method deadlines (RES-6). Requirements
+PLUG-03/04/05/07 and AUTO-18 remain covered by existing entry-point tests.
+The added `merged_preparation_reuses_worker_and_defers_slider_changes_until_publication`
+regression passes and verifies no reload and no parameter mutation before swap.
+The standard bridge worker ID is initialized once and shared by chain members.
+
+Windows validation: full control library 428 passed / 22 opt-in ignored, then
+the new regression passed separately; plugin-host library 126 passed in the
+preceding continuation; source combinations 6/6 and tool combinations 6/6;
+workspace and Tauri strict Clippy; both Rust format checks; contract drift
+(156 methods / 38 kinds); UI full typecheck; diff whitespace check all pass.
+Evidence logs: ignored `target/vst-merge-{control-tests,combinations,clippy,shell-clippy}.log`.
+The first contract check detected missing deadlines; adding the entries made
+both drift and UI typecheck pass. No UI source or audio algorithm changed.
+No new release binary, attended editor, endpoint playback or hosted CI evidence
+is claimed. Next: commit/push the integration repair to PR #152 and let hosted
+checks validate the new head. Rollback: revert the repair and merge together
+after review; do not discard either feature set or use the old executable as
+proof of this head.
+
+Continuation audit (2026-11-15): local merge `f7e328446` is not buildable.
+`cargo check -p audiorouter-control` reports 29 errors: the reuse trait and
+sidechain control enum both use `LivePluginBridge`; preparation contains an
+orphaned generic reuse body (`B`, `previous`, `live`) and returns a map where
+callers require deferred `PluginStageSet` publication; flags-only refreshes
+refer to removed `bridge_flags`; graph commit timing lacks `commit_started`.
+Do not push or hand off this merged head as tested. The pending standard bridge
+worker-ID repair remains uncommitted. Windows checks on this continuation:
+plugin-host library 126/126 passed; workspace and Tauri format checks passed.
+Next task: reconcile deferred publication/reuse with standard, sidechain and
+stopped-editor bridges, then compile immediately and rerun reuse, sidechain,
+MIDI, dispatcher and engine-combination regressions. Preserve the primary
+checkout's unrelated live-autosave/device/theme work. Earlier build/test
+evidence below applies to its recorded revision, not this merge. Rollback is
+a reviewed scoped correction/revert of the merge; do not reset the worktree
+or drop either parent's behavior.
+
 Owner requested fixes and regressions for four findings from the VST plugin
 review on `feature/vst-plugin-experience` (PLUG-03/04/05/07, M06): the public
 Play path rejects declared VST3 sidechains before using the prepared multi-bus

@@ -528,7 +528,9 @@ fn backend_plugin_stage_path_prepares_and_compiles_a_verified_sidechain_route() 
             "entries": [{ "path": path, "identity": { "sha256": identity.sha256 } }]
         }),
     );
-    let processors = plane.prepare_plugin_stages(&session, 48_000).unwrap();
+    let prepared = plane.prepare_plugin_stages(&session, 48_000, None).unwrap();
+    prepared.publish(&plane, &session.id).unwrap();
+    let processors = prepared.stages;
     let set = audiorouter_engine::compile_native_paths_with_plugins_and_audio(
         &session,
         RuntimeGeneration::new(2),

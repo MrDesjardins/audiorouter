@@ -1634,6 +1634,14 @@ export type ImplementedMethod =
  */
 export type MethodDeadline = "quick" | "long";
 export const METHOD_DEADLINES: Readonly<Record<ImplementedMethod, MethodDeadline>> = {
+  "midi.devices": "long",
+  "midi.sendEvents": "long",
+  "plugins.buses": "long",
+  "plugins.removeSidechainPort": "long",
+  "plugins.addSidechainPort": "long",
+  "plugins.programs": "long",
+  "plugins.selectProgram": "long",
+  "plugins.applyPreset": "long",
   "applications.list": "quick",
   "apps.list": "quick",
   "audioMedia.beginUpload": "long",

@@ -295,15 +295,20 @@ impl ControlPlane {
                     let mut compiler_owns_flags = false;
                     match live {
                         crate::plugins::LivePluginBridge::Standard(bridge) => {
-                            bridge_flags.push((Arc::clone(&bridge), node.enabled && !node.bypass));
-                            stages.insert(node.id.clone(), bridge);
+                            stages.defer_reuse(
+                                node.id.clone(),
+                                bridge,
+                                Vec::new(),
+                                guards.contains(&node.id),
+                                node.enabled && !node.bypass,
+                            );
                         }
                         #[cfg(windows)]
                         crate::plugins::LivePluginBridge::Sidechain(bridge) => {
                             // Multi-bus bypass is compiled from the session
                             // flags; the live flag list only drives the
                             // ordinary bridge's processing switch.
-                            stages.insert(node.id.clone(), bridge);
+                            stages.stages.insert(node.id.clone(), bridge);
                             compiler_owns_flags = true;
                         }
                     }
