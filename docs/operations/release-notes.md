@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Global keyboard shortcuts are the only audio shortcuts.** Start or stop,
+  privacy mute, push-to-talk and soundboard slots are set under Settings →
+  Keyboard shortcuts and work while AudioRouter is minimized. The old in-app
+  Ctrl+Shift+S and Ctrl+Shift+M bindings and their Local shortcuts panel are
+  removed.
 - **Sidechain failures stay stopped during recovery.** A route with a failed
   sidechain plugin is no longer restarted automatically after sleep, device
   loss or a backend failure.

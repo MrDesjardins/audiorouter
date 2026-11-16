@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef } from "react";
-import { shortcutConflicts, type ShortcutBinding } from "./shortcuts";
 
-export function KeyboardHelp({ bindings, onClose }: { bindings: ShortcutBinding; onClose: () => void }) {
+export function KeyboardHelp({ onClose }: { onClose: () => void }) {
   const heading = useId();
   const close = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDListElement>(null);
@@ -12,14 +11,10 @@ export function KeyboardHelp({ bindings, onClose }: { bindings: ShortcutBinding;
       if (origin instanceof HTMLElement && origin.isConnected) origin.focus();
     };
   }, []);
-  const conflict = shortcutConflicts(bindings).length > 0;
-  const unavailable = conflict ? " (disabled: resolve the shortcut conflict in Settings)" : "";
   const entries = [
     ["Ctrl+S", "Save your edits"],
     ["Ctrl+K", "Find a tool, setting, card or session"],
     ["Ctrl+Z / Ctrl+Y", "Undo / redo the latest edit"],
-    [bindings.sessionToggle.replaceAll("Control", "Ctrl"), `Start or stop the route${unavailable}`],
-    [bindings.privacyMute.replaceAll("Control", "Ctrl"), `Turn microphone privacy mute on or off${unavailable}`],
     ["Ctrl+A", "Select all tools and groups on the canvas"],
     ["Ctrl+D", "Duplicate one selected tool"],
     ["F2", "Rename one selected tool"],
@@ -58,7 +53,7 @@ export function KeyboardHelp({ bindings, onClose }: { bindings: ShortcutBinding;
         <h2 id={heading}>Keyboard shortcuts</h2>
         <p>
           Canvas commands work while the canvas has focus. Shortcuts leave text editing alone. Tab starts with links to
-          skip between regions.
+          skip between regions. Windows-wide keybinds are in Settings → Keyboard shortcuts.
         </p>
         <dl ref={list} tabIndex={0} aria-label="Shortcut reference">
           {entries.map(([key, action]) => (

@@ -1,24 +1,14 @@
 import { expect, test } from "./browser-test";
 import { fitCanvas } from "./workbench";
 
-test("help shows custom bindings, fits a short window and leaves another dialog alone", async ({ page }) => {
-  await page.addInitScript(() =>
-    localStorage.setItem(
-      "audiorouter.ui.shortcuts",
-      JSON.stringify({
-        sessionToggle: "Control+Alt+P",
-        privacyMute: "Control+Alt+U",
-      }),
-    ),
-  );
+test("help fits a short window, names the global keybinds page and leaves another dialog alone", async ({ page }) => {
   await page.setViewportSize({ width: 640, height: 360 });
   await page.goto("/route-harness.html");
   await expect(page.getByTestId("canvas-readiness")).toHaveAttribute("data-ready", "true");
   await page.getByRole("tab", { name: "Tools", exact: true }).focus();
   await page.keyboard.press("?");
   const help = page.getByRole("dialog", { name: "Keyboard shortcuts", exact: true });
-  await expect(help).toContainText("Ctrl+Alt+P");
-  await expect(help).toContainText("Ctrl+Alt+U");
+  await expect(help).toContainText("Settings → Keyboard shortcuts");
   await expect(help.getByRole("button", { name: "Close", exact: true })).toBeInViewport();
   const box = (await help.boundingBox())!;
   expect(box.y).toBeGreaterThanOrEqual(0);
@@ -33,26 +23,6 @@ test("help shows custom bindings, fits a short window and leaves another dialog 
   await page.keyboard.press("F1");
   await expect(help).toHaveCount(0);
   await expect(question).toBeVisible();
-});
-
-test("help marks conflicting custom audio shortcuts as disabled", async ({ page }) => {
-  await page.addInitScript(() =>
-    localStorage.setItem(
-      "audiorouter.ui.shortcuts",
-      JSON.stringify({
-        sessionToggle: "Control+Alt+P",
-        privacyMute: "Control+Alt+P",
-      }),
-    ),
-  );
-  await page.goto("/route-harness.html");
-  await expect(page.getByTestId("canvas-readiness")).toHaveAttribute("data-ready", "true");
-  await page.getByRole("tab", { name: "Tools", exact: true }).focus();
-  await page.keyboard.press("F1");
-  const help = page.getByRole("dialog", { name: "Keyboard shortcuts", exact: true });
-  await expect(
-    help.locator("dd").filter({ hasText: "disabled: resolve the shortcut conflict in Settings" }),
-  ).toHaveCount(2);
 });
 
 test("F2 renames the selected tool and cancellation preserves it", async ({ page }) => {
@@ -93,7 +63,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     const dialog = page.getByRole("dialog", { name: "Keyboard shortcuts", exact: true });
     const close = dialog.getByRole("button", { name: "Close", exact: true });
     await expect(close).toBeFocused();
-    await expect(dialog).toContainText("Ctrl+Shift+M");
+    await expect(dialog).toContainText("Settings → Keyboard shortcuts");
     await expect(dialog).toContainText("F2");
     await page.keyboard.press("Tab");
     const reference = dialog.locator("dl");

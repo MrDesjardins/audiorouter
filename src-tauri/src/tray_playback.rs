@@ -22,7 +22,7 @@ fn short(text: &str) -> String {
     cut
 }
 
-fn idempotency_key(prefix: &str) -> String {
+pub(crate) fn idempotency_key(prefix: &str) -> String {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_nanos());

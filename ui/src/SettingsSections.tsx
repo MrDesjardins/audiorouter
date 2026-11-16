@@ -1,11 +1,11 @@
 // The sections that used to live in one Advanced tab, one export per new home:
 // Settings pages, Status › Troubleshoot and recover, and the canvas keyboard panel.
-import type { KeyboardEvent, ReactElement } from "react";
+import type { ReactElement } from "react";
 import type { Node, Session } from "@audiorouter/contracts";
 import type { UiBackend, UiBackendSnapshot } from "./backend";
 import type { InsertableProcessorKind } from "./draft";
-import type { ShortcutAction, ShortcutBinding } from "./shortcuts";
 import { ApiAutostartSetting, AutoplaySetting } from "./AutoplaySetting";
+import { GlobalKeybinds } from "./GlobalKeybinds";
 import { GraphList as NodeList } from "./GraphList";
 import { OsTransitionPanel, RecoveryCheckpointPanel, StartupPanel } from "./AdvancedPanels";
 
@@ -23,54 +23,9 @@ export function StartupSettings({ backend }: { backend: UiBackend }) {
   );
 }
 
-export function ShortcutSettings({
-  shortcuts,
-  captureShortcut,
-  shortcutMessage,
-}: {
-  shortcuts: ShortcutBinding;
-  captureShortcut: (action: ShortcutAction, event: KeyboardEvent<HTMLInputElement>) => void;
-  shortcutMessage: string | null;
-}) {
-  return (
-    <section className="panel shortcut-panel">
-      <h3>Local shortcuts</h3>
-      <p className="muted">These work while AudioRouter is focused and never capture typing in a text field.</p>
-      <p className="muted">
-        Ctrl+S saves your edits. Ctrl+K finds tools, settings and actions. Tab starts with links to skip to the canvas
-        or the workbench.
-      </p>
-      <p className="muted">
-        On the canvas: Ctrl+A selects all tools and groups; Ctrl+D duplicates one selected tool. Ctrl+plus and
-        Ctrl+minus zoom; Ctrl+0 fits the route. Arrow keys move a focused card. F2 renames one selected tool. F1 or ?
-        opens the shortcut reference.
-      </p>
-      <label>
-        Start or stop session
-        <input
-          aria-label="Start or stop session shortcut"
-          value={shortcuts.sessionToggle}
-          readOnly
-          onKeyDown={(event) => captureShortcut("sessionToggle", event)}
-        />
-      </label>
-      <label>
-        Privacy mute
-        <input
-          aria-label="Privacy mute shortcut"
-          value={shortcuts.privacyMute}
-          readOnly
-          onKeyDown={(event) => captureShortcut("privacyMute", event)}
-        />
-      </label>
-      {shortcutMessage && (
-        <p className="muted" role="alert">
-          {shortcutMessage}
-        </p>
-      )}
-      <small>These are app shortcuts. Windows-wide shortcuts are not available here.</small>
-    </section>
-  );
+/** Settings › Keyboard shortcuts: Windows-wide keybinds only (UI-10). */
+export function ShortcutSettings({ snapshot }: { snapshot?: UiBackendSnapshot | null }) {
+  return <GlobalKeybinds snapshot={snapshot} />;
 }
 
 /** Status › Troubleshoot and recover. */

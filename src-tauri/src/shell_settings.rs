@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-const MAX_SETTINGS_BYTES: u64 = 4 * 1024;
+const MAX_SETTINGS_BYTES: u64 = 64 * 1024;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -17,6 +17,8 @@ pub struct ShellSettings {
     pub api_auto_start: bool,
     /// The port and network the API last started with, reused by auto-start.
     pub api: Option<ApiListener>,
+    /// Global Windows keybindings owned by the desktop shell.
+    pub keybinds: Vec<crate::keybinds::KeybindRule>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -45,9 +47,22 @@ pub fn load(path: &Path) -> ShellSettings {
         .unwrap_or_default()
 }
 
+/// Pretty JSON that `load` will accept. Oversized content is refused so a
+/// successful save cannot come back as defaults on the next launch.
+pub fn encoded_within_limit(settings: &ShellSettings) -> Result<String, String> {
+    let text = serde_json::to_string_pretty(settings).map_err(|error| error.to_string())?;
+    if text.len() as u64 > MAX_SETTINGS_BYTES {
+        return Err(format!(
+            "settings exceed the {} KiB limit; remove keybindings or shorten names",
+            MAX_SETTINGS_BYTES / 1024
+        ));
+    }
+    Ok(text)
+}
+
 /// Write through a temporary file so a crash never leaves half a file.
 pub fn save(path: &Path, settings: &ShellSettings) -> Result<(), String> {
-    let text = serde_json::to_string_pretty(settings).map_err(|error| error.to_string())?;
+    let text = encoded_within_limit(settings)?;
     let temporary = path.with_extension("json.tmp");
     std::fs::write(&temporary, text)
         .map_err(|error| format!("settings could not be written: {error}"))?;
@@ -85,7 +100,10 @@ mod tests {
         assert!(!load(&path).auto_play, "corrupt file: off");
         std::fs::write(
             &path,
-            format!("{{\"autoPlay\": true, \"pad\": \"{}\"}}", "x".repeat(5000)),
+            format!(
+                "{{\"autoPlay\": true, \"pad\": \"{}\"}}",
+                "x".repeat(MAX_SETTINGS_BYTES as usize + 1)
+            ),
         )
         .unwrap();
         assert!(!load(&path).auto_play, "oversized file: off");
@@ -117,9 +135,51 @@ mod tests {
                 port: 17891,
                 network: Some("192.168.1.20".into()),
             }),
+            ..ShellSettings::default()
         };
         save(&path, &on).unwrap();
         assert_eq!(load(&path), on);
+        let _ = std::fs::remove_dir_all(&folder);
+    }
+
+    #[test]
+    fn save_refuses_settings_load_would_discard() {
+        let folder = std::env::temp_dir().join(format!(
+            "audiorouter-shell-settings-limit-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&folder);
+        std::fs::create_dir_all(&folder).unwrap();
+        let path = path_beside(&folder.join("state.sqlite"));
+        let kept = ShellSettings {
+            auto_play: true,
+            api_auto_start: true,
+            ..ShellSettings::default()
+        };
+        save(&path, &kept).unwrap();
+
+        let oversized = ShellSettings {
+            auto_play: false,
+            api_auto_start: false,
+            keybinds: vec![crate::keybinds::KeybindRule {
+                id: "kb".into(),
+                name: "n".repeat(MAX_SETTINGS_BYTES as usize),
+                enabled: true,
+                trigger: crate::keybinds::KeybindTrigger {
+                    keys: "F13".into(),
+                    mode: Default::default(),
+                    passthrough: true,
+                },
+                action: crate::keybinds::KeybindAction::SessionToggle,
+            }],
+            ..ShellSettings::default()
+        };
+        let error = save(&path, &oversized).unwrap_err();
+        assert!(error.contains("64 KiB"), "{error}");
+        let loaded = load(&path);
+        assert!(loaded.auto_play);
+        assert!(loaded.api_auto_start);
+        assert!(loaded.keybinds.is_empty());
         let _ = std::fs::remove_dir_all(&folder);
     }
 }

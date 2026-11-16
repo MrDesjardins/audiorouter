@@ -1,5 +1,30 @@
 # Active plan — current priorities (2026-11-04)
 
+## Global-only keyboard shortcuts (PR #151) — 2026-11-16
+
+Owner decision: remove the in-app window shortcuts and make Windows-wide global
+keybinds the only audio shortcut mechanism (UI-10). The Settings "Local
+shortcuts" panel, the Ctrl+Shift+S / Ctrl+Shift+M defaults and the
+`audiorouter.ui.shortcuts` preference are removed; global keybinds now offer
+session start/stop, privacy mute, push-to-talk and soundboard slots, matching
+the actions the shell engine already supported. This supersedes the 2026-11-07
+default-binding decision. Duplicate enabled chords are reported in the panel.
+Requirements: UI-10, UI-11, UI-29. Work is on branch
+`feat/global-keybinds-only-shortcuts`, stacked on the PR #151 contributor
+branch.
+
+Validation: UI typecheck/lint/format, 1,119 unit tests and the production
+build; shell 127 tests, strict Clippy and both Rust format checks; docs
+validation (277 files / 1,519 links); focused Edge browser scenarios for help,
+Settings navigation, slow lifecycle and clipboard regressions (17 passed).
+Scenarios that only exercised local shortcuts were removed; the remaining help
+and Settings navigation scenarios were updated. Main was merged in with only
+the active-plan and release-note entries conflicting; both were kept. No
+attended Windows hook or audio run is claimed.
+
+Rollback: revert this change; saved global keybinds and shell settings are
+unaffected, and a stale `audiorouter.ui.shortcuts` entry is simply ignored.
+
 ## Release readiness repairs — 2026-11-16
 
 Objective: integrate Dependabot PRs #155, #156 and #157 on current main and

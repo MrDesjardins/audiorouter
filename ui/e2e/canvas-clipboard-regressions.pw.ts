@@ -39,18 +39,3 @@ test("selected UI text keeps native Ctrl+C", async ({ page }) => {
   await page.keyboard.press("Control+c");
   expect(await page.evaluate(() => (window as unknown as { __copyPrevented: boolean }).__copyPrevented)).toBe(false);
 });
-
-test("reserved clipboard binding cannot stop playback when copying a tool", async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem(
-      "audiorouter.ui.shortcuts",
-      JSON.stringify({ sessionToggle: "Control+C", privacyMute: "Control+Alt+M" }),
-    );
-    Object.assign(window, { __routeFixtureRunning: true });
-  });
-  await page.goto("/route-harness.html");
-  await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
-  await page.keyboard.press("Control+c");
-  await expect(page.locator(".global-action-message")).toContainText("copied");
-  await expect(page.locator(".audio-run-state")).toContainText("Audio running");
-});
