@@ -58,6 +58,21 @@ This smoke did not run the installer or open audio devices.
 The acceptance script cleans its temporary artifact output afterward; no
 installer is being handed off as a release candidate from this run.
 
+The packaged WebView2 smoke also passed against that release shell on Windows
+11 as a standard user, with isolated database and browser profile: native
+bridge, stopped first launch, canvas, session save and restart passed, with no
+uncaught UI errors and both child processes exiting cleanly. Evidence:
+`%TEMP%/audiorouter-release-readiness-ui-f26f94aff31d4934aad2692b95be74e0/result.json`.
+The result's Git SHA describes the invoking checkout (`91045374a`); the shell
+was built from `20503e066` and has SHA-256
+`64b7648a9a0859d1b9d7e80f234a0d5cc7c0571176835d55091e66b62c0bef8a`.
+
+UDP follow-up: on Windows, `cargo test -p audiorouter-windows-audio
+plays_back_continuously -- --nocapture --test-threads=1` passed both paired and
+unpaired loopback tests with zero discontinuities and underruns while one
+bounded CPU-load job ran. This does not reproduce or resolve the earlier
+failures under heavier concurrent build/test load; that risk remains open.
+
 Stream Deck `npm ci` reports two low advisories: build-only
 `@rollup/plugin-node-resolve` 16.0.3 depends on `deepmerge` 4.3.1
 (GHSA-gcqx-w48m-w2h4). npm's offered fix is a major-version downgrade to 7.1.3;
