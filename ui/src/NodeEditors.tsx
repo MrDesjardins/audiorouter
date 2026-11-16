@@ -52,6 +52,7 @@ export const GENERIC_SETTINGS_EDITOR: Record<NodeKind, boolean> = {
   pitch: true,
   recorder: true,
   plugin: true,
+  instrument: true,
   volume: true,
   bassTreble: true,
   dehum: true,

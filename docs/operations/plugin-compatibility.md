@@ -4,6 +4,33 @@ For how to install, scan and add your own plugins (including UAD), see
 [Bring your own plugins](bring-your-own-plugins.md). This page records what
 was tested.
 
+## Current status (2026-11-14, version 0.0.29)
+
+The per-plugin results are in the generated [plugin census](plugin-census.md).
+It started each plugin in its real isolated worker (VST2 and VST3, 64-bit and
+32-bit), without a window or audio device: 172 of 190 effects passed every
+step, and 3 of 4 instruments played a held note. These are the plugins that
+did not pass, and why:
+
+| Plugin | What happens | Cause |
+| --- | --- | --- |
+| AmplitudeImposer (VST2, VST3, 32/64) | Silent output | The test tone has no second input to impose; not investigated further |
+| ProM (VST3) | State is saved but not restored | The plugin rejects the saved state; AudioRouter restores parameters instead where it can |
+| ZamAutoSat (VST3) | State is saved but not restored | Same |
+| ReaControlMIDI standalone (VST2) | The worker crashes when state is restored | A defect in the plugin: `effSetChunk` crashes in every host variant we tried. Do not save or restore it |
+| UADx PolyMAX (VST3) | Loads, silent with a note held | Needs UA Connect sign-in; owner-gated |
+
+Plugins that declare themselves instruments are listed in the Instrument tool,
+not as effects. Instruments are found from `moduleinfo.json`, a UA manifest, or
+the plugin's category string; a VST2 instrument is only known once it has been
+loaded once. DPF instruments that declare the bare `Instrument` category are
+recognised since 2026-11-14 but the census has not been re-run since.
+
+Not covered by the census: editors, sound quality, live routes, hardware MIDI
+input, the Steinberg validator, and plugins that need a licence. Blue Cat
+plugins are never loaded by the census because their demo shows a modal
+dialog.
+
 ## 2026-10-22 UADx free titles
 
 The eight free UADx effects installed by UA Connect (VST3 only, signed in)
@@ -685,3 +712,11 @@ graph with `running` worker health, zero failures, unchanged SHA-256
 500/500 pairs at 124.283 ms p95. That adds a second local binary-specific
 integration result; it is not an unrestricted compatibility claim for the
 remaining VST2/VST3 inventory.
+
+## Selecting an effect in a VST3 module
+
+When a saved plugin selects a class ID, AudioRouter requires that class to
+exist in the installed binary. It refuses a missing class rather than loading
+another effect from the module. Scan the plugin again and select its current
+class; review its settings before playing. A replacement effect may have
+different parameters, saved state and input buses.

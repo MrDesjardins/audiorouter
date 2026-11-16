@@ -54,6 +54,8 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "meters.reset" => "Reset held sample peaks and clipping statistics of one prepared Meter without changing audio or the saved graph.",
         "soundLibrary.list" => "List the built-in sounds for the Soundboard picker: id, title, category, tags, duration and license.",
         "soundLibrary.read" => "Read one built-in sound as base64 FLAC, for previewing in the picker. The preview never goes to a route.",
+        "midi.devices" => "List connected MIDI keyboards, and for each Instrument tool of a playing route which device it listens to and whether that device is connected.",
+        "midi.sendEvents" => "Play notes on a running Instrument tool: note on/off (a note can last durationMs), control change (such as the sustain pedal), pitch bend, aftertouch and all-notes-off. Events start at the next audio block, or afterMs later.",
         "soundboard.trigger" => "Press (or release) one slot of a running Soundboard tool; the sound starts at the next audio block. An optional mode (once, loop, toggle, hold) replaces the slot's own for this press.",
         "soundboard.stop" => "Fade out one slot, or every slot when no slot is given, of a running Soundboard tool.",
         "soundboard.status" => "Which Soundboard slots are loaded and playing, with progress and ignored or dropped triggers.",
@@ -155,6 +157,12 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "plugins.closeEditor" => "Close a plugin node editor. The editor shows the instance that processes audio, so edits already apply live.",
         "plugins.resume" => "Retry a plugin in a playing route that was silenced because it passed a recording device's audio through unchanged (for example an unlicensed plugin). Audio resumes only if the plugin has changed audio since; otherwise it stays silent and resumed is false.",
         "plugins.parameters" => "Load one currently scanned plugin in its isolated worker and return bounded parameter descriptors.",
+        "plugins.buses" => "Load one currently scanned plugin in its isolated worker and return its exact audio input/output buses, including any declared auxiliary input that can become a sidechain port.",
+        "plugins.removeSidechainPort" => "Remove the sidechain port of a plugin node; refused while a connection still uses it.",
+        "plugins.addSidechainPort" => "Give a VST3 plugin node its declared auxiliary input as a named sidechain port; no Mixer or connection is created.",
+        "plugins.programs" => "List bounded program names and any VST3 unit hierarchy for a plugin node in a playing route; VST3 programs are read-only.",
+        "plugins.selectProgram" => "Select one bounded VST2 program by index on a plugin node in a playing route.",
+        "plugins.applyPreset" => "Apply a bounded VST2 .fxp or .fxb preset file from the plugin's own directory to a plugin node in a playing route.",
         "plugins.prepareUpdate" => "Prepare replacement node parameters from a current scan after a vendor update, retaining the old state asset. Does not change a route or start audio: apply the returned parameters through graph plan/commit. resetState deliberately starts from defaults instead.",
         "virtualDevices.list" => "List managed virtual bus desired state without activating endpoints.",
         "virtualDevices.plan" => "Validate a managed virtual bus lifecycle change without applying it.",
@@ -403,6 +411,33 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
         "soundLibrary.read" => object_schema(
             json!({ "id": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }),
             &["id"],
+        ),
+        "midi.devices" => object_schema(json!({}), &[]),
+        "midi.sendEvents" => object_schema(
+            json!({
+                "sessionId": target_session(),
+                "nodeId": target_node(),
+                "events": {
+                    "type": "array", "minItems": 1, "maxItems": crate::midi::MAX_SEND_EVENTS,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "type": { "enum": ["noteOn", "noteOff", "controlChange", "pitchBend", "aftertouch", "allNotesOff"] },
+                            "channel": { "type": "integer", "minimum": 1, "maximum": 16, "description": "MIDI channel, 1 when omitted." },
+                            "note": { "type": "integer", "minimum": 0, "maximum": 127, "description": "Note number; 60 is middle C, 69 is A 440 Hz." },
+                            "velocity": { "type": "integer", "minimum": 1, "maximum": 127, "description": "How hard a noteOn is played; 100 when omitted." },
+                            "durationMs": { "type": "integer", "minimum": 0, "maximum": crate::midi::MAX_SCHEDULE_MS, "description": "noteOn only: release the note after this long." },
+                            "afterMs": { "type": "integer", "minimum": 0, "maximum": crate::midi::MAX_SCHEDULE_MS, "description": "Start the event this long after the call." },
+                            "controller": { "type": "integer", "minimum": 0, "maximum": 127, "description": "controlChange: controller number (1 modulation, 64 sustain pedal)." },
+                            "value": { "type": "integer", "minimum": 0, "maximum": 127, "description": "controlChange or aftertouch value." },
+                            "bend": { "type": "number", "minimum": -1.0, "maximum": 1.0, "description": "pitchBend amount from -1 (down) to 1 (up)." }
+                        },
+                        "required": ["type"],
+                        "additionalProperties": false
+                    }
+                }
+            }),
+            &["nodeId", "events"],
         ),
         "soundboard.trigger" => object_schema(
             json!({
@@ -675,10 +710,18 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
             }),
             &["path"],
         ),
+        "plugins.buses" => object_schema(
+            json!({
+                "path": { "type": "string", "minLength": 1 },
+                "classId": { "type": "string", "minLength": 1 }
+            }),
+            &["path"],
+        ),
         "plugins.parameters" => object_schema(
             json!({
                 "path": { "type": "string", "minLength": 1 },
-                "classId": { "type": "string", "minLength": 1, "description": "Optional audio-effect class ID from the scan; selects an effect in a multi-effect VST3 module." }
+                "classId": { "type": "string", "minLength": 1, "description": "Optional audio-effect class ID from the scan; selects an effect in a multi-effect VST3 module." },
+                "instrument": { "type": "boolean", "description": "Load the plugin as an instrument (a synth or sampler, for the Instrument tool) instead of an effect. false when omitted." }
             }),
             &["path"],
         ),
@@ -701,6 +744,43 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
                 "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
             }),
             &["sessionId", "nodeId"],
+        ),
+        "plugins.removeSidechainPort" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
+            }),
+            &["nodeId"],
+        ),
+        "plugins.addSidechainPort" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
+            }),
+            &["nodeId"],
+        ),
+        "plugins.programs" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
+            }),
+            &["nodeId"],
+        ),
+        "plugins.selectProgram" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "program": { "type": "integer", "minimum": 0, "maximum": 255 }
+            }),
+            &["nodeId", "program"],
+        ),
+        "plugins.applyPreset" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "presetPath": { "type": "string", "minLength": 1, "maxLength": 32767 }
+            }),
+            &["nodeId", "presetPath"],
         ),
         "plugins.openEditor" => object_schema(
             json!({

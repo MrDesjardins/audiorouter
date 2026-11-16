@@ -833,6 +833,33 @@ describe("canvas library drop positions", () => {
   });
 });
 
+describe("plugin sidechain canvas label", () => {
+  it("shows a visible label when a plugin has a named sidechain input", () => {
+    const session: Session = {
+      ...demoSession,
+      nodes: demoSession.nodes.map((node) =>
+        node.id === "voice"
+          ? {
+              ...node,
+              kind: "plugin",
+              parameters: { ...node.parameters, format: "vst3" },
+              ports: [...node.ports, { name: "sidechain", direction: "input", channels: 1 }],
+            }
+          : node,
+      ),
+    };
+    const { getByText } = render(
+      createElement(SessionFlowCanvas, {
+        session,
+        selectedNodeId: "voice",
+        onSelect: vi.fn(),
+        onConnect: vi.fn(),
+      }),
+    );
+    expect(getByText("Sidechain input")).toBeTruthy();
+  });
+});
+
 describe("signal flow legend", () => {
   it("explains every connection line state the canvas can draw", () => {
     const explained = new Set<string>(SIGNAL_FLOW_LEGEND.map((item) => item.state));

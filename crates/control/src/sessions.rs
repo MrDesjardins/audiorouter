@@ -550,7 +550,7 @@ impl ControlPlane {
         let has_enabled_plugin = session
             .nodes
             .iter()
-            .any(|node| node.enabled && node.kind == NodeKind::Plugin);
+            .any(|node| node.enabled && audiorouter_engine::hosts_plugin_worker(node.kind));
         let native_endpoint_attached = self.native_endpoint_session_is_attached(id);
         let mut native_graph_attached = native_endpoint_attached;
         let mut native_attached = native_endpoint_attached;

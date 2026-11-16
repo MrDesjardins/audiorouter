@@ -1,5 +1,5 @@
 {
-  "nodeKinds": 37,
+  "nodeKinds": 38,
   "tools": [
     {
       "name": "Physical input",
@@ -260,10 +260,18 @@
     {
       "name": "VST Plugin",
       "category": "Plugins",
-      "description": "Host a compatible installed x64 VST3 effect or a qualified x64 VST2 effect in an isolated worker.",
+      "description": "Host an installed VST3 or VST2 effect, 64-bit or 32-bit, in an isolated worker.",
       "icon": "plugin",
       "kind": "plugin",
       "guide": "tools/plugin.html"
+    },
+    {
+      "name": "Instrument",
+      "category": "Plugins",
+      "description": "Play an installed VST instrument from the on-screen keyboard, a MIDI keyboard or a script.",
+      "icon": "♬",
+      "kind": "instrument",
+      "guide": "tools/instrument.html"
     },
     {
       "name": "Virtual Render Source",
@@ -290,5 +298,5 @@
       "guide": "tools/group.html"
     }
   ],
-  "guideCount": 38
+  "guideCount": 39
 }

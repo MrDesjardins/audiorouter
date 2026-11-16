@@ -19,6 +19,8 @@ $crashOutput = Join-Path $outputRoot 'audiorouter-vst2-crash-fixture.dll'
 $crashObject = Join-Path $outputRoot 'audiorouter-vst2-crash-fixture.obj'
 $hangOutput = Join-Path $outputRoot 'audiorouter-vst2-hang-fixture.dll'
 $hangObject = Join-Path $outputRoot 'audiorouter-vst2-hang-fixture.obj'
+$bankOutput = Join-Path $outputRoot 'audiorouter-vst2-bank-fixture.dll'
+$bankObject = Join-Path $outputRoot 'audiorouter-vst2-bank-fixture.obj'
 $vswhere = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe'
 if (-not (Test-Path -LiteralPath $vswhere -PathType Leaf)) { throw "vswhere is missing: $vswhere" }
 $installation = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
@@ -55,6 +57,9 @@ if (-not (Test-Path -LiteralPath $crashOutput -PathType Leaf)) { throw "Crash fi
 & $cl /nologo /LD /O2 /W4 /TC /DVST2_HANG_OUTPUT "/I$vcInclude" "/I$kitRoot\ucrt" "/I$kitRoot\shared" "/I$kitRoot\um" $source "/Fo:$hangObject" "/Fe:$hangOutput" /link "/LIBPATH:$vcLib" "/LIBPATH:$kitLib" "/LIBPATH:$ucrtLib"
 if ($LASTEXITCODE -ne 0) { throw "VST2 hang fixture build failed with exit code $LASTEXITCODE" }
 if (-not (Test-Path -LiteralPath $hangOutput -PathType Leaf)) { throw "Hang fixture build produced no DLL: $hangOutput" }
+& $cl /nologo /LD /O2 /W4 /TC /DVST2_FIXTURE_BANK_CHUNK "/I$vcInclude" "/I$kitRoot\ucrt" "/I$kitRoot\shared" "/I$kitRoot\um" $source "/Fo:$bankObject" "/Fe:$bankOutput" /link "/LIBPATH:$vcLib" "/LIBPATH:$kitLib" "/LIBPATH:$ucrtLib"
+if ($LASTEXITCODE -ne 0) { throw "VST2 bank-chunk fixture build failed with exit code $LASTEXITCODE" }
+if (-not (Test-Path -LiteralPath $bankOutput -PathType Leaf)) { throw "Bank-chunk fixture build produced no DLL: $bankOutput" }
 
 $previousFixture = $env:AUDIOROUTER_VST2_FIXTURE
 $previousSampleRate = $env:AUDIOROUTER_VST2_SAMPLE_RATE
@@ -69,6 +74,9 @@ try {
             --ignored --exact verified_worker_applies_restored_vst2_chunk_state --nocapture
         if ($LASTEXITCODE -ne 0) { throw "VST2 state round-trip acceptance failed at ${sampleRate} Hz with exit code $LASTEXITCODE" }
     }
+    & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- `
+        --ignored --exact verified_worker_imports_vst2_program_chunk_with_program_scope_index --nocapture
+    if ($LASTEXITCODE -ne 0) { throw "VST2 program preset chunk acceptance failed with exit code $LASTEXITCODE" }
     $env:AUDIOROUTER_VST2_FIXTURE = $legacyOutput
     foreach ($sampleRate in @(44100, 48000, 96000)) {
         $env:AUDIOROUTER_VST2_SAMPLE_RATE = [string]$sampleRate
@@ -79,6 +87,10 @@ try {
             --ignored --exact verified_worker_applies_restored_vst2_chunk_state --nocapture
         if ($LASTEXITCODE -ne 0) { throw "VST2 legacy-main state acceptance failed at ${sampleRate} Hz with exit code $LASTEXITCODE" }
     }
+    $env:AUDIOROUTER_VST2_FIXTURE = $bankOutput
+    & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- `
+        --ignored --exact verified_worker_applies_vst2_bank_chunk_with_bank_scope_index --nocapture
+    if ($LASTEXITCODE -ne 0) { throw "VST2 bank-chunk index acceptance failed with exit code $LASTEXITCODE" }
     $env:AUDIOROUTER_VST2_FIXTURE = $invalidOutput
     & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- `
         --ignored --exact verified_worker_rejects_nonfinite_vst2_output --nocapture

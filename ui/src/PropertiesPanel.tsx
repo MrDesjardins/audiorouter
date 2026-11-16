@@ -41,6 +41,7 @@ import { NetworkNodeEditor } from "./NetworkNodeEditor";
 import { EqSpectrumContext } from "./AdvancedEqEditor";
 import { writeEndpointBindingHint } from "./endpointBinding";
 import { recorderHasCaptureSource } from "./RecordingPanels";
+import { InstrumentNodeEditor } from "./InstrumentNodeEditor";
 import { PluginEditorControls, PluginNodeInspector, PluginRecoveryControls } from "./PluginPanels";
 import {
   ApplicationCaptureBinding,
@@ -630,6 +631,25 @@ export function PropertiesPanel({
             }
           />
         )}
+        {selectedNode.kind === "instrument" && (
+          <>
+            <PluginEditorControls
+              node={selectedNode}
+              backend={backend}
+              sessionId={session.id}
+              running={sessionRunning}
+              onStateSaved={(stateId) => changeNodeParameterOn(selectedNode.id, "stateId", stateId)}
+            />
+            <InstrumentNodeEditor
+              node={selectedNode}
+              backend={backend}
+              sessionId={session.id}
+              running={sessionRunning}
+              disabled={!backend.connected}
+              onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+            />
+          </>
+        )}
         {selectedNode.kind === "plugin" && (
           <>
             <PluginEditorControls
@@ -658,6 +678,12 @@ export function PropertiesPanel({
               snapshot={liveDiagnostics ?? null}
               backend={backend}
               sessionId={session.id}
+              sidechainBlockedReason={
+                JSON.stringify(session.nodes.find((node) => node.id === selectedNode.id)) !==
+                JSON.stringify(selectedNode)
+                  ? "Save or discard changes to this tool before adding a sidechain input."
+                  : undefined
+              }
               onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
               onRemove={(names) =>
                 recordDraftChange(removeNodeDraftParameters(draft, selectedNode.id, names), `${selectedNode.id}:remove`)

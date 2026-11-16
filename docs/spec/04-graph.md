@@ -38,6 +38,28 @@ IDs are opaque strings, independent of names, array position, PID, or screen coo
 
 ## Node registry minimum
 
+### Plugin sidechain saved topology
+
+The sidechain representation is port-derived: an effect Plugin may store one
+input port named `sidechain`, with one or two channels, beside one main input
+and one same-width main output. Do not duplicate this width or enablement in
+node parameters. A missing port retains the legacy single-stream topology;
+loading a session never adds the port or changes its edges. Each input accepts
+one edge independently; the key input is never implicitly summed with main.
+The complete dependency graph, including key edges, remains acyclic. Deliberate
+bypass maps only main input to main output, never the key input.
+
+Saved topology is not evidence that an installed plugin supports an auxiliary
+input. Before creating or activating the port, the backend must verify the
+current plugin fingerprint/class and its isolated worker's discovered bus
+metadata. VST3 requires a declared auxiliary input; VST2 requires explicit
+sidechain/key pin labels. User-authored port names and additional channel counts
+do not establish that capability. Missing key connections supply silence.
+Until graph-to-worker auxiliary binding is implemented, this build refuses
+plugin preparation for a saved sidechain port with the affected node named;
+it does not claim playable sidechain support. This paragraph records the
+VSTC-01 staging boundary for GRAPH-01/02/03/06, not a completed release gate.
+
 M02: Physical Input, Application Capture, Endpoint Loopback, Physical Output, Mixer, Gain, Mute, Meter; Network Send and Network Receive (GRAPH-16, added 2026-09-26). M03: Virtual Render Source, Virtual Capture Sink. M04: Parametric EQ, Graphic EQ, Gate/Expander, Compressor, Limiter, Delay, Recorder. M06: Pitch Shift and VST3 Effect. Template/group/preset are authoring concepts that expand to regular nodes, not opaque code execution.
 
 Each registry entry declares ports, display metadata, version, JSON parameter schema, defaults, units, ranges, bypass/failure behavior, estimated latency, dynamic-latency capability, realtime cost class, and availability reason. A recorder is a sink branch; insert it by splitting the edge, so pause/removal never interrupts downstream processing.

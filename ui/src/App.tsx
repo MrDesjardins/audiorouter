@@ -4,6 +4,7 @@ import { CopyErrorButton } from "./CopyErrorButton";
 import { StartupRecovery } from "./StartupRecovery";
 import { keepNativeContextMenu } from "./contextMenuPolicy";
 import { SessionSwitchDialog } from "./SessionSwitchDialog";
+import { SidechainReplaceDialog } from "./SidechainReplaceDialog";
 import {
   customThemeStyle,
   readCustomThemeLibrary,
@@ -99,6 +100,7 @@ import {
   removeSinglePathDraftMixer,
   resetNodeDraftParameters,
   routeFedMixerToOccupiedOutput,
+  replaceDraftSidechainConnection,
   setDraftConnectionEnabled,
   setNodeDraftFlag,
   setNodeDraftName,
@@ -612,6 +614,16 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [sessionSwitchPrompt, setSessionSwitchPrompt] = useState<{
     names: string[];
     decide: (confirmed: boolean) => void;
+  } | null>(null);
+  const [sidechainReplacePrompt, setSidechainReplacePrompt] = useState<{
+    occupiedEdgeId: string;
+    sourceNodeId: string;
+    sourcePort: string;
+    sourceName: string;
+    destinationNodeId: string;
+    destinationPort: string;
+    pluginName: string;
+    currentSourceName: string;
   } | null>(null);
   const connectionDialogReturnFocus = useRef<HTMLElement | null>(null);
   const connectionDialog = useRef<HTMLElement | null>(null);
@@ -2871,6 +2883,20 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         const destinationName = current.nodes.find((node) => node.id === destinationNode)?.name ?? "This input";
         const priorName = current.nodes.find((node) => node.id === occupied.sourceNode)?.name ?? "another source";
         const destination = current.nodes.find((node) => node.id === destinationNode);
+        if (destination?.kind === "plugin" && destinationPort === "sidechain") {
+          setSidechainReplacePrompt({
+            occupiedEdgeId: occupied.id,
+            sourceNodeId: sourceNode,
+            sourcePort,
+            sourceName: current.nodes.find((node) => node.id === sourceNode)?.name ?? "the new source",
+            destinationNodeId: destinationNode,
+            destinationPort,
+            pluginName: destination.name,
+            currentSourceName: priorName,
+          });
+          setConnectionDialogOpen(false);
+          return null;
+        }
         if (destination?.kind === "physicalOutput") {
           const requestedSource = current.nodes.find((node) => node.id === sourceNode);
           if (requestedSource?.kind === "mixer") {
@@ -2933,6 +2959,29 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         setActionMessage(formatUiError(error, "Unable to add connection."));
       }
       return null;
+    }
+  };
+  const decideSidechainReplacement = (replace: boolean) => {
+    const pending = sidechainReplacePrompt;
+    setSidechainReplacePrompt(null);
+    if (!replace || !pending) {
+      setActionMessage("Kept the current sidechain source.");
+      return;
+    }
+    try {
+      const current = draftRef.current;
+      const next = replaceDraftSidechainConnection(
+        current,
+        pending.occupiedEdgeId,
+        pending.sourceNodeId,
+        pending.sourcePort,
+        pending.destinationNodeId,
+        pending.destinationPort,
+      );
+      recordDraftChange(next);
+      setActionMessage(`Replaced the Sidechain input source with ${pending.sourceName}. Save to keep it.`);
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to replace the sidechain source."));
     }
   };
   const addConnection = () => {
@@ -4620,6 +4669,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           )}
           {sessionSwitchPrompt && (
             <SessionSwitchDialog names={sessionSwitchPrompt.names} onDecision={sessionSwitchPrompt.decide} />
+          )}
+          {sidechainReplacePrompt && (
+            <SidechainReplaceDialog
+              pluginName={sidechainReplacePrompt.pluginName}
+              currentSourceName={sidechainReplacePrompt.currentSourceName}
+              nextSourceName={sidechainReplacePrompt.sourceName}
+              onDecision={decideSidechainReplacement}
+            />
           )}
           {deviceConsent && (
             <DeviceAccessDialog

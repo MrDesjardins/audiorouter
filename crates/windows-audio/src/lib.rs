@@ -30,6 +30,13 @@ pub use packet_codec::{decode_interleaved_float32, encode_interleaved_float32};
 mod drift;
 #[cfg(all(test, windows))]
 mod drift_sim_tests;
+#[cfg(windows)]
+mod midi_input;
+#[cfg(windows)]
+pub use midi_input::{
+    list_midi_input_devices, unpack_short_message, MidiInputConnection, MidiInputDevice,
+    MidiInputError,
+};
 mod service_thread;
 pub use service_thread::{AudioServiceThreadCapabilities, AudioServiceThreadGuard};
 #[cfg(windows)]

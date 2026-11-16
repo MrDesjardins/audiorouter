@@ -425,6 +425,77 @@ impl ControlPlane {
         Ok(plan_id)
     }
 
+    /// Prepare a reversible port edit from live worker discovery. This is an
+    /// internal backend building block; adapters must not synthesize a binding
+    /// from request JSON. The existing plan/commit boundary owns persistence,
+    /// revision conflicts and undo. Preparing the plan never publishes audio.
+    pub fn plan_bound_plugin_sidechain(
+        &mut self,
+        session_id: &EntityId,
+        base_revision: u64,
+        node_id: &EntityId,
+        binding: &audiorouter_plugin_host::bus_discovery::VerifiedSidechainBinding,
+    ) -> Result<EntityId, ControlError> {
+        self.ensure_session_loaded(session_id)?;
+        let mut candidate = self.get_session(session_id)?.clone();
+        let node = candidate
+            .nodes
+            .iter_mut()
+            .find(|node| &node.id == node_id)
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("sidechain plugin node was not found".into())
+            })?;
+        let format = node.parameters.get("format").and_then(Value::as_str);
+        let class_matches = match format {
+            Some("vst3") => {
+                node.parameters.get("classId").and_then(Value::as_str) == binding.class_id()
+            }
+            Some("vst2") => binding.class_id().is_none(),
+            _ => false,
+        };
+        if node.kind != NodeKind::Plugin
+            || node.parameters.get("fingerprint").and_then(Value::as_str)
+                != Some(binding.fingerprint())
+            || !class_matches
+        {
+            return Err(ControlError::InvalidRequest(
+                "sidechain binding does not match this plugin's fingerprint and class".into(),
+            ));
+        }
+        let layout = binding.layout();
+        let main = node
+            .ports
+            .iter()
+            .find(|port| port.direction == PortDirection::Input && port.name != "sidechain");
+        let output = node
+            .ports
+            .iter()
+            .find(|port| port.direction == PortDirection::Output);
+        if layout.input_buses().len() != 2
+            || main.is_none_or(|port| u16::from(port.channels) != layout.input_buses()[0])
+            || output.is_none_or(|port| u16::from(port.channels) != layout.output_buses()[0])
+        {
+            return Err(ControlError::InvalidRequest(
+                "discovered plugin buses do not match the graph's main ports".into(),
+            ));
+        }
+        let channels = layout.input_buses()[1] as u8;
+        if let Some(port) = node.plugin_sidechain_port() {
+            if port.channels != channels {
+                return Err(ControlError::InvalidRequest("existing sidechain port width differs from discovery; remove its connections before changing the port".into()));
+            }
+        } else {
+            node.ports.push(audiorouter_domain::Port {
+                name: "sidechain".into(),
+                direction: PortDirection::Input,
+                channels,
+            });
+        }
+        // Validation includes the entire candidate and every incident edge;
+        // no existing channel map is rewritten to accommodate the new port.
+        self.plan_graph(session_id, base_revision, candidate)
+    }
+
     pub fn commit_graph(
         &mut self,
         plan_id: &EntityId,
@@ -448,7 +519,13 @@ impl ControlPlane {
         display_operation_id: &str,
         require_stopped_session: Option<EntityId>,
     ) -> Result<Value, ControlError> {
-        let commit_started = Instant::now();
+        let commit_started = std::time::Instant::now();
+        // A plan can wait between preparation and commit. Re-check that every
+        // plugin placeholder still has a current explicit scan result, so a
+        // queued port or graph edit cannot bypass capability verification.
+        if let Some(candidate) = self.store.plan_candidate(plan_id) {
+            self.validate_plugin_placeholders(candidate)?;
+        }
         let checkpoint = self.store.clone();
         let fingerprint = match &require_stopped_session {
             Some(session_id) => format!(

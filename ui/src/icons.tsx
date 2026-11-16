@@ -52,6 +52,7 @@ export const NODE_KIND_ICONS: Record<NodeKind, IconName> = {
   plugin: "puzzle",
   audioFile: "file-audio",
   soundboard: "layout-grid",
+  instrument: "piano",
   volume: "volume-2",
   bassTreble: "audio-lines",
   dehum: "dehum",

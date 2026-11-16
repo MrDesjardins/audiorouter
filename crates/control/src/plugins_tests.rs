@@ -3,6 +3,582 @@
 use super::*;
 use crate::test_support::*;
 
+fn sidechain_request(plane: &mut ControlPlane, session_id: &str, node_id: &str) -> JsonRpcResponse {
+    plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "plugins.addSidechainPort".into(),
+        params: Some(json!({ "sessionId": session_id, "nodeId": node_id })),
+    })
+}
+
+#[test]
+fn add_sidechain_port_refuses_unsupported_nodes_without_changing_the_session() {
+    use audiorouter_domain::Port;
+    let mut plane = ControlPlane::default();
+    let mut original = session();
+    original.nodes.truncate(1);
+    original.edges.clear();
+    let node_id = original.nodes[0].id.clone();
+    let plugin_ports = || {
+        vec![
+            Port {
+                name: "in".into(),
+                direction: PortDirection::Input,
+                channels: 2,
+            },
+            Port {
+                name: "out".into(),
+                direction: PortDirection::Output,
+                channels: 2,
+            },
+        ]
+    };
+    // 1. Not a plugin node.
+    plane.insert_session(original.clone()).unwrap();
+    let reply = sidechain_request(&mut plane, original.id.as_str(), node_id.as_str());
+    let message = reply.error.expect("a non-plugin node is refused").message;
+    assert!(message.contains("only a plugin node"), "{message}");
+    // 2. A VST2 plugin has no declared auxiliary bus in this path.
+    let mut vst2 = original.clone();
+    vst2.id = EntityId::new("vst2-session");
+    vst2.nodes[0].kind = NodeKind::Plugin;
+    vst2.nodes[0].ports = plugin_ports();
+    vst2.nodes[0].parameters =
+        serde_json::from_value(json!({ "path": "C:\\VST2\\x.dll", "format": "vst2" })).unwrap();
+    plane.insert_session(vst2.clone()).unwrap();
+    let reply = sidechain_request(&mut plane, vst2.id.as_str(), node_id.as_str());
+    let message = reply.error.expect("VST2 is refused").message;
+    assert!(message.contains("VST3"), "{message}");
+    // 3. A VST3 plugin whose class was never chosen.
+    let mut unclassed = vst2.clone();
+    unclassed.id = EntityId::new("vst3-unclassed");
+    unclassed.nodes[0].parameters = serde_json::from_value(
+        json!({ "path": "C:\\VST3\\x.vst3", "format": "vst3", "classId": "default" }),
+    )
+    .unwrap();
+    plane.insert_session(unclassed.clone()).unwrap();
+    let reply = sidechain_request(&mut plane, unclassed.id.as_str(), node_id.as_str());
+    let message = reply.error.expect("no class is refused").message;
+    assert!(message.contains("exact VST3 class"), "{message}");
+    // 4. An unknown node, and no explicit scan for a real-looking plugin.
+    let reply = sidechain_request(&mut plane, original.id.as_str(), "missing");
+    assert!(reply.error.is_some());
+    let mut unscanned = unclassed.clone();
+    unscanned.id = EntityId::new("vst3-unscanned");
+    unscanned.nodes[0]
+        .parameters
+        .insert("classId".into(), json!("41347FD6FED64094AFBB12B7DBA1D441"));
+    plane.insert_session(unscanned.clone()).unwrap();
+    let reply = sidechain_request(&mut plane, unscanned.id.as_str(), node_id.as_str());
+    assert!(reply.error.is_some(), "an unscanned plugin is refused");
+    for before in [&original, &vst2, &unclassed, &unscanned] {
+        assert_eq!(plane.get_session(&before.id).unwrap(), before);
+    }
+}
+
+#[test]
+fn remove_sidechain_port_refuses_a_used_port_then_removes_a_free_one() {
+    use audiorouter_domain::{Edge, Port};
+    let mut plane = ControlPlane::default();
+    let mut original = session();
+    original.nodes.truncate(2);
+    original.edges.clear();
+    let source_id = original.nodes[0].id.clone();
+    let port = |name: &str, direction, channels| Port {
+        name: name.into(),
+        direction,
+        channels,
+    };
+    original.nodes[0].ports = vec![port("out", PortDirection::Output, 1)];
+    let plugin = &mut original.nodes[1];
+    plugin.kind = NodeKind::Plugin;
+    plugin.parameters = serde_json::from_value(json!({
+        "path": "C:\\VST3\\x.vst3", "format": "vst3",
+        "classId": "41347FD6FED64094AFBB12B7DBA1D441", "fingerprint": "a".repeat(64),
+    }))
+    .unwrap();
+    plugin.ports = vec![
+        port("in", PortDirection::Input, 2),
+        port("out", PortDirection::Output, 2),
+        port("sidechain", PortDirection::Input, 1),
+    ];
+    let plugin_id = plugin.id.clone();
+    // A commit re-checks every plugin against a current scan result.
+    plane.plugin_inventories.insert(
+        "C:\\VST3".into(),
+        json!({ "entries": [{
+            "path": "C:\\VST3\\x.vst3",
+            "identity": { "format": "vst3", "sha256": "a".repeat(64) },
+        }] }),
+    );
+    original.edges.push(Edge {
+        id: EntityId::new("key-edge"),
+        source_node: source_id,
+        source_port: "out".into(),
+        destination_node: plugin_id.clone(),
+        destination_port: "sidechain".into(),
+        matrix: vec![1.0],
+        enabled: true,
+    });
+    plane.insert_session(original.clone()).unwrap();
+    let remove = |plane: &mut ControlPlane| {
+        plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "plugins.removeSidechainPort".into(),
+            params: Some(json!({ "sessionId": original.id, "nodeId": plugin_id })),
+        })
+    };
+    // A used port is refused and nothing changes.
+    let refused = remove(&mut plane);
+    let message = refused.error.expect("a used port is refused").message;
+    assert!(message.contains("disconnect it first"), "{message}");
+    assert_eq!(plane.get_session(&original.id).unwrap(), &original);
+    // Without the connection it is removed in one revision.
+    let mut free = original.clone();
+    free.id = EntityId::new("free-sidechain");
+    free.edges.clear();
+    plane.insert_session(free.clone()).unwrap();
+    let reply = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(2)),
+        method: "plugins.removeSidechainPort".into(),
+        params: Some(json!({ "sessionId": free.id, "nodeId": plugin_id })),
+    });
+    assert!(reply.error.is_none(), "{:?}", reply.error);
+    let changed = plane.get_session(&free.id).unwrap();
+    assert_eq!(changed.revision, 1);
+    assert!(changed.nodes[1].plugin_sidechain_port().is_none());
+    // Nothing left to remove.
+    let again = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(3)),
+        method: "plugins.removeSidechainPort".into(),
+        params: Some(json!({ "sessionId": free.id, "nodeId": plugin_id })),
+    });
+    assert!(again.error.unwrap().message.contains("no sidechain port"));
+}
+
+#[test]
+fn a_sidechain_input_is_only_connected_by_name_and_never_summed() {
+    use audiorouter_domain::Port;
+    let mut plane = ControlPlane::default();
+    let mut original = session();
+    original.nodes.truncate(2);
+    original.edges.clear();
+    let mut third = original.nodes[1].clone();
+    third.id = EntityId::new("third-node");
+    third.name = "Third".into();
+    original.nodes.push(third);
+    let port = |name: &str, direction, channels| Port {
+        name: name.into(),
+        direction,
+        channels,
+    };
+    for source in 0..2 {
+        original.nodes[source].kind = NodeKind::PhysicalInput;
+        original.nodes[source].parameters = Default::default();
+        original.nodes[source].ports = vec![port("out", PortDirection::Output, 2)];
+    }
+    let plugin = &mut original.nodes[2];
+    plugin.kind = NodeKind::Plugin;
+    plugin.parameters = serde_json::from_value(json!({
+        "path": "C:\\VST3\\x.vst3", "format": "vst3",
+        "classId": "41347FD6FED64094AFBB12B7DBA1D441", "fingerprint": "a".repeat(64),
+    }))
+    .unwrap();
+    plugin.ports = vec![
+        port("in", PortDirection::Input, 2),
+        port("out", PortDirection::Output, 2),
+        port("sidechain", PortDirection::Input, 2),
+    ];
+    let (main_id, key_id, plugin_id) = (
+        original.nodes[0].id.clone(),
+        original.nodes[1].id.clone(),
+        original.nodes[2].id.clone(),
+    );
+    plane.plugin_inventories.insert(
+        "C:\\VST3".into(),
+        json!({ "entries": [{
+            "path": "C:\\VST3\\x.vst3",
+            "identity": { "format": "vst3", "sha256": "a".repeat(64) },
+        }] }),
+    );
+    plane.insert_session(original.clone()).unwrap();
+    let connect = |plane: &mut ControlPlane, from: &EntityId, input: Option<&str>| {
+        let key = format!("connect-{}-{}", from.as_str(), input.unwrap_or("unnamed"));
+        let mut params = json!({
+            "sessionId": original.id, "from": from, "to": plugin_id, "idempotencyKey": key,
+        });
+        if let Some(input) = input {
+            params["toInput"] = json!(input);
+        }
+        plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "connections.add".into(),
+            params: Some(params),
+        })
+    };
+    // 1. Without a port name the first source takes the main input.
+    let reply = connect(&mut plane, &main_id, None);
+    assert!(reply.error.is_none(), "{:?}", reply.error);
+    // 2. A second source with no port name is refused; it must not silently
+    //    become the sidechain.
+    let reply = connect(&mut plane, &key_id, None);
+    assert!(
+        reply.error.is_some(),
+        "an unnamed second source must be refused"
+    );
+    let edges = &plane.get_session(&original.id).unwrap().edges;
+    assert_eq!(edges.len(), 1);
+    assert_eq!(edges[0].destination_port, "in");
+    // 3. Naming the sidechain connects it; a second source is refused, not summed.
+    let reply = connect(&mut plane, &key_id, Some("sidechain"));
+    assert!(reply.error.is_none(), "{:?}", reply.error);
+    let reply = connect(&mut plane, &main_id, Some("sidechain"));
+    let message = reply
+        .error
+        .expect("an occupied sidechain is refused")
+        .message;
+    assert!(
+        message.contains("sidechain input") && message.contains("disconnect"),
+        "{message}"
+    );
+    assert_eq!(plane.get_session(&original.id).unwrap().edges.len(), 2);
+}
+
+#[cfg(windows)]
+#[test]
+#[ignore = "requires SDK AGain and a rebuilt native worker override"]
+fn add_sidechain_port_adds_the_real_again_auxiliary_input_once_and_undoes() {
+    use audiorouter_domain::Port;
+    let path = std::path::PathBuf::from(std::env::var("AUDIOROUTER_VST3_FIXTURE").unwrap());
+    let root = path.parent().unwrap().to_path_buf();
+    let identity =
+        audiorouter_plugin_host::inspect_binary(&path, std::slice::from_ref(&root)).unwrap();
+    let mut plane = ControlPlane::default();
+    let scan = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "plugins.scan".into(),
+        params: Some(json!({ "directory": root })),
+    });
+    assert!(scan.error.is_none(), "{:?}", scan.error);
+    let mut original = session();
+    original.nodes.truncate(1);
+    original.edges.clear();
+    let node = &mut original.nodes[0];
+    node.kind = NodeKind::Plugin;
+    node.parameters = serde_json::from_value(json!({
+        "path": path, "format": "vst3",
+        "classId": "41347FD6FED64094AFBB12B7DBA1D441", "fingerprint": identity.sha256,
+    }))
+    .unwrap();
+    node.ports = vec![
+        Port {
+            name: "in".into(),
+            direction: PortDirection::Input,
+            channels: 2,
+        },
+        Port {
+            name: "out".into(),
+            direction: PortDirection::Output,
+            channels: 2,
+        },
+    ];
+    let node_id = node.id.clone();
+    plane.insert_session(original.clone()).unwrap();
+    let reply = sidechain_request(&mut plane, original.id.as_str(), node_id.as_str());
+    assert!(reply.error.is_none(), "{:?}", reply.error);
+    let result = reply.result.unwrap();
+    assert_eq!(result["port"], "sidechain");
+    // AGain's declared auxiliary bus is mono even though its main bus is stereo.
+    assert_eq!(result["channels"], 1);
+    let changed = plane.get_session(&original.id).unwrap().clone();
+    assert_eq!(changed.revision, 1);
+    assert_eq!(changed.edges.len(), 0, "no connection is created");
+    assert_eq!(changed.nodes.len(), 1, "no Mixer is created");
+    assert!(changed.nodes[0].plugin_sidechain_port().is_some());
+    // A second call is refused or leaves the same single port.
+    let again = sidechain_request(&mut plane, original.id.as_str(), node_id.as_str());
+    let after = plane.get_session(&original.id).unwrap();
+    assert_eq!(
+        after.nodes[0]
+            .ports
+            .iter()
+            .filter(|port| port.name == "sidechain")
+            .count(),
+        1,
+        "{again:?}"
+    );
+}
+
+#[cfg(windows)]
+#[test]
+#[ignore = "requires SDK AGain and a rebuilt native worker override"]
+fn plugins_buses_reports_the_real_again_auxiliary_input() {
+    let path = std::path::PathBuf::from(std::env::var("AUDIOROUTER_VST3_FIXTURE").unwrap());
+    let root = path.parent().unwrap().to_path_buf();
+    let mut plane = ControlPlane::default();
+    let scan = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "plugins.scan".into(),
+        params: Some(json!({ "directory": root })),
+    });
+    assert!(scan.error.is_none(), "{:?}", scan.error);
+    let buses = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(2)),
+        method: "plugins.buses".into(),
+        params: Some(json!({
+            "path": path,
+            "classId": "41347FD6FED64094AFBB12B7DBA1D441",
+        })),
+    });
+    assert!(buses.error.is_none(), "{:?}", buses.error);
+    let buses = buses.result.unwrap();
+    assert_eq!(buses["format"], "vst3");
+    assert_eq!(buses["buses"]["inputs"].as_array().unwrap().len(), 2);
+    assert_eq!(buses["buses"]["inputs"][0]["role"], "main");
+    assert_eq!(buses["buses"]["inputs"][1]["role"], "auxiliary");
+    assert_eq!(buses["buses"]["inputs"][1]["nativeIndex"], 1);
+    assert_eq!(buses["buses"]["outputs"][0]["role"], "main");
+}
+
+/// Exercise the real unit-bearing VST3 response through the public dispatcher.
+/// Set `AUDIOROUTER_VST3_WORKER_PATH` to the native worker and
+/// `AUDIOROUTER_TEST_VST3_EFFECT` to Steinberg's UTF16Name VST3 binary.
+#[cfg(windows)]
+#[test]
+#[ignore = "requires the UTF16Name SDK fixture and rebuilt native VST3 worker"]
+fn plugins_programs_dispatches_real_vst3_unit_hierarchy() {
+    use audiorouter_domain::Port;
+
+    let path = std::path::PathBuf::from(std::env::var("AUDIOROUTER_TEST_VST3_EFFECT").unwrap());
+    let root = path.parent().unwrap().to_path_buf();
+    let identity =
+        audiorouter_plugin_host::inspect_binary(&path, std::slice::from_ref(&root)).unwrap();
+    let mut session = session();
+    let plugin = audiorouter_domain::Node {
+        id: EntityId::new("unit-plugin"),
+        kind: NodeKind::Plugin,
+        type_version: 1,
+        name: "Unit-bearing plugin".into(),
+        enabled: true,
+        bypass: false,
+        parameters: serde_json::from_value(json!({
+            "path": path,
+            "format": "vst3",
+            "fingerprint": identity.sha256,
+        }))
+        .unwrap(),
+        ports: vec![
+            Port {
+                name: "in".into(),
+                direction: PortDirection::Input,
+                channels: 2,
+            },
+            Port {
+                name: "out".into(),
+                direction: PortDirection::Output,
+                channels: 2,
+            },
+        ],
+    };
+    let node_id = plugin.id.clone();
+    session.nodes.push(plugin);
+    let request = PluginStageRequest {
+        node_id: node_id.clone(),
+        scanned_path: path,
+        configured_root: root,
+        fingerprint: identity.sha256,
+        channels: 2,
+        state: None,
+        parameters: Vec::new(),
+    };
+    let prepared = start_plugin_bridges(&session, vec![request], 48_000).unwrap();
+    let bridge = prepared[0]
+        .1
+        .standard()
+        .expect("ordinary VST3 uses the standard bridge");
+
+    let mut plane = ControlPlane::default();
+    plane.insert_session(session.clone()).unwrap();
+    let mut runtime = audiorouter_domain::FakeRuntime::default();
+    runtime.prepare(&session).unwrap();
+    runtime.start().unwrap();
+    plane.runtimes.insert(session.id.clone(), runtime);
+    plane.plugin_bridges.lock().unwrap().insert(
+        (session.id.clone(), node_id.clone()),
+        Arc::downgrade(bridge),
+    );
+
+    let response = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "plugins.programs".into(),
+        params: Some(json!({ "sessionId": session.id, "nodeId": node_id })),
+    });
+    assert!(response.error.is_none(), "{:?}", response.error);
+    let listing = response.result.unwrap();
+    let units = listing["units"].as_array().unwrap();
+    assert!(units.len() >= 5, "expected UTF16Name units, got {units:?}");
+    assert!(listing["programs"].as_array().unwrap().is_empty());
+}
+
+#[cfg(windows)]
+#[test]
+#[ignore = "requires SDK AGain and rebuilt native worker overrides"]
+fn backend_plugin_stage_path_prepares_and_compiles_a_verified_sidechain_route() {
+    use audiorouter_domain::{Edge, Node, Port};
+    let path = std::path::PathBuf::from(std::env::var("AUDIOROUTER_VST3_FIXTURE").unwrap());
+    let root = path.parent().unwrap().to_path_buf();
+    let identity =
+        audiorouter_plugin_host::inspect_binary(&path, std::slice::from_ref(&root)).unwrap();
+    let make = |id: &str, kind, widths: &[(&str, PortDirection, u8)]| Node {
+        id: EntityId::new(id),
+        name: id.into(),
+        kind,
+        type_version: 1,
+        enabled: true,
+        bypass: false,
+        parameters: Default::default(),
+        ports: widths
+            .iter()
+            .map(|(name, direction, channels)| Port {
+                name: (*name).into(),
+                direction: *direction,
+                channels: *channels,
+            })
+            .collect(),
+    };
+    let mut plugin = make(
+        "effect",
+        NodeKind::Plugin,
+        &[
+            ("sidechain", PortDirection::Input, 1),
+            ("in", PortDirection::Input, 2),
+            ("out", PortDirection::Output, 2),
+        ],
+    );
+    plugin.parameters = serde_json::from_value(json!({ "path": path, "format": "vst3", "classId": "41347FD6FED64094AFBB12B7DBA1D441", "fingerprint": identity.sha256 })).unwrap();
+    let edge = |id: &str, from: &str, to: &str, port: &str, matrix: Vec<f32>| Edge {
+        id: EntityId::new(id),
+        source_node: EntityId::new(from),
+        source_port: "out".into(),
+        destination_node: EntityId::new(to),
+        destination_port: port.into(),
+        matrix,
+        enabled: true,
+    };
+    let mut session = Session {
+        id: EntityId::new("prepared-sidechain"),
+        name: "prepared sidechain".into(),
+        schema_version: 1,
+        revision: 0,
+        nodes: vec![
+            make(
+                "main",
+                NodeKind::PhysicalInput,
+                &[("out", PortDirection::Output, 2)],
+            ),
+            make(
+                "key",
+                NodeKind::PhysicalInput,
+                &[("out", PortDirection::Output, 1)],
+            ),
+            plugin,
+            make(
+                "sink",
+                NodeKind::PhysicalOutput,
+                &[("in", PortDirection::Input, 2)],
+            ),
+        ],
+        edges: vec![
+            edge("main-in", "main", "effect", "in", vec![1.0, 0.0, 0.0, 1.0]),
+            edge("key-in", "key", "effect", "sidechain", vec![1.0]),
+            edge("output", "effect", "sink", "in", vec![1.0, 0.0, 0.0, 1.0]),
+        ],
+    };
+    let request = || PluginStageRequest {
+        node_id: EntityId::new("effect"),
+        scanned_path: path.clone(),
+        configured_root: root.clone(),
+        fingerprint: identity.sha256.clone(),
+        channels: 2,
+        state: None,
+        parameters: vec![audiorouter_plugin_host::ParameterEvent::new(0, 0.75, 0).unwrap()],
+    };
+    // Same binary, wrong class: discovery must refuse the absent aux input.
+    session.nodes[2]
+        .parameters
+        .insert("classId".into(), json!("84E8DE5F92554F5396FAE4133C935A18"));
+    assert!(start_plugin_bridges(&session, vec![request()], 48_000).is_err());
+    session.nodes[2]
+        .parameters
+        .insert("classId".into(), json!("41347FD6FED64094AFBB12B7DBA1D441"));
+    let mut plane = ControlPlane::default();
+    plane.insert_plugin_inventory(
+        root.to_string_lossy().into_owned(),
+        json!({
+            "directory": root,
+            "entries": [{ "path": path, "identity": { "sha256": identity.sha256 } }]
+        }),
+    );
+    let prepared = plane.prepare_plugin_stages(&session, 48_000, None).unwrap();
+    prepared.publish(&plane, &session.id).unwrap();
+    let processors = prepared.stages;
+    let set = audiorouter_engine::compile_native_paths_with_plugins_and_audio(
+        &session,
+        RuntimeGeneration::new(2),
+        &processors,
+        &HashMap::new(),
+    )
+    .unwrap();
+    let graph = &set.paths()[0];
+    let inputs = graph
+        .input_node_ids()
+        .iter()
+        .map(|id| {
+            let mut block = AudioBlock::new(
+                if id.as_str() == "main" { 2 } else { 1 },
+                audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+            )
+            .unwrap();
+            for channel in 0..block.channels() {
+                block
+                    .channel_mut(channel)
+                    .unwrap()
+                    .fill(if id.as_str() == "main" { 0.1 } else { 0.2 });
+            }
+            block
+        })
+        .collect::<Vec<_>>();
+    let mut scratch = AudioBlock::new(2, audiorouter_engine::PROCESSING_QUANTUM_FRAMES).unwrap();
+    let mut output = AudioBlock::new(2, audiorouter_engine::PROCESSING_QUANTUM_FRAMES).unwrap();
+    let mut heard = false;
+    for _ in 0..40 {
+        graph
+            .process(&inputs, &mut scratch, &mut [&mut output])
+            .unwrap();
+        heard |= output
+            .channel(0)
+            .unwrap()
+            .iter()
+            .any(|sample| sample.abs() > 0.0);
+        assert!(output
+            .channel(0)
+            .unwrap()
+            .iter()
+            .all(|sample| sample.is_finite()));
+        std::thread::sleep(Duration::from_millis(3));
+    }
+    assert!(heard, "compiled route must receive prepared worker output");
+}
+
 #[test]
 fn plugin_update_preparation_preserves_state_and_wiring_through_dispatch() {
     let root = std::env::temp_dir().join(format!(
@@ -154,19 +730,21 @@ fn installed_effect_describes_processes_and_restores_state() {
                 .is_empty());
         }
     }
-    let kind = PluginWorkerKind::for_format(identity.format);
+    let kind = PluginWorkerKind::for_identity(identity.format, identity.architecture);
     let executable = require_plugin_worker(kind).unwrap();
     for channels in [1, 2] {
         let spawn = || match kind {
-            PluginWorkerKind::Vst2 => SupervisedWorkerProcess::spawn_verified_with_sample_rate(
-                &executable,
-                &identity,
-                std::slice::from_ref(&root),
-                channels,
-                48_000,
-                Instant::now(),
-            ),
-            PluginWorkerKind::Vst3 => {
+            PluginWorkerKind::Vst2 | PluginWorkerKind::Vst2X86 => {
+                SupervisedWorkerProcess::spawn_verified_with_sample_rate(
+                    &executable,
+                    &identity,
+                    std::slice::from_ref(&root),
+                    channels,
+                    48_000,
+                    Instant::now(),
+                )
+            }
+            PluginWorkerKind::Vst3 | PluginWorkerKind::Vst3X86 => {
                 SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
                     &executable,
                     &identity,
@@ -278,6 +856,46 @@ fn missing_plugin_worker_error_names_search_paths_and_repair_action() {
     assert!(message.contains(&root.join("resources").join(worker).display().to_string()));
     assert!(message.contains("rebuild the complete AudioRouter package"));
     assert!(message.contains("AUDIOROUTER_PLUGIN_WORKER_PATH"));
+}
+
+/// A 32-bit plugin cannot load into a 64-bit process, so it gets the 32-bit
+/// build of its format's worker (2026-11-13, full VST compatibility plan).
+#[test]
+fn x86_plugins_resolve_the_32_bit_workers() {
+    use audiorouter_plugin_host::{PeArchitecture, PluginFormat};
+    for (format, architecture, kind) in [
+        (
+            PluginFormat::Vst2,
+            PeArchitecture::X64,
+            PluginWorkerKind::Vst2,
+        ),
+        (
+            PluginFormat::Vst3,
+            PeArchitecture::X64,
+            PluginWorkerKind::Vst3,
+        ),
+        (
+            PluginFormat::Vst2,
+            PeArchitecture::X86,
+            PluginWorkerKind::Vst2X86,
+        ),
+        (
+            PluginFormat::Vst3,
+            PeArchitecture::X86,
+            PluginWorkerKind::Vst3X86,
+        ),
+    ] {
+        assert_eq!(PluginWorkerKind::for_identity(format, architecture), kind);
+    }
+    assert_ne!(
+        PluginWorkerKind::Vst2.file_name(),
+        PluginWorkerKind::Vst2X86.file_name()
+    );
+    assert!(PluginWorkerKind::Vst3X86.file_name().contains("x86"));
+    assert_ne!(
+        PluginWorkerKind::Vst2.override_variable(),
+        PluginWorkerKind::Vst2X86.override_variable()
+    );
 }
 
 /// VST3 effects run in their own native worker, never the VST2-only one
@@ -741,7 +1359,7 @@ fn plugin_inspect_discovery_has_typed_identity_schema() {
             .as_array()
             .unwrap()
             .len(),
-        10
+        11
     );
     assert_eq!(
         method["outputSchema"]["properties"]["identity"]["properties"]["fileBytes"]["maximum"],
@@ -814,256 +1432,129 @@ fn play_applies_only_sliders_moved_since_the_state_was_captured() {
     assert_eq!(names, ["pluginParameter:2", "pluginParameter:3"]);
 }
 
+/// An Instrument node starts its own worker through the same path a route
+/// uses (`start_plugin_bridges`), and its bridge plays MIDI pushed to the
+/// queue (phase P8b). Needs the built VST2 worker and the test instrument
+/// (`tools/vst2-test-instrument`): set `AUDIOROUTER_PLUGIN_WORKER_PATH` and
+/// `AUDIOROUTER_TEST_VST2_INSTRUMENT`. A VST3 instrument works too: set
+/// `AUDIOROUTER_VST3_WORKER_PATH` and `AUDIOROUTER_TEST_INSTRUMENT` to its bundle.
+#[cfg(windows)]
 #[test]
-fn failed_or_quarantined_plugin_bridges_are_not_reused() {
-    use audiorouter_plugin_host::WorkerState;
-    // A bridge that has processed audio, or has not processed a quantum yet,
-    // can carry a new parameter template.
-    assert!(plugin_bridge_state_is_reusable(WorkerState::Running));
-    assert!(plugin_bridge_state_is_reusable(WorkerState::Stopped));
-    // A failed or quarantined worker would stay silent; prepare it again.
-    assert!(!plugin_bridge_state_is_reusable(WorkerState::Failed));
-    assert!(!plugin_bridge_state_is_reusable(WorkerState::Quarantined));
-}
-
-#[test]
-fn a_plugin_enabled_without_a_live_bridge_requires_preparation() {
-    let mut plane = ControlPlane::default();
-    let mut saved = session();
-    plane.insert_session(saved.clone()).unwrap();
-    // No plugin nodes: a flag-only republish needs no preparation.
-    assert!(plane.live_plugin_bridges_are_complete(&saved.id, &saved));
-
-    saved.nodes.push(Node {
-        id: EntityId::new("new-plugin"),
-        name: "New plugin".into(),
-        kind: NodeKind::Plugin,
+#[ignore = "needs the built VST2 worker and the test instrument DLL"]
+fn an_instrument_node_starts_a_worker_and_plays_midi() {
+    use audiorouter_domain::{Node, Port};
+    use audiorouter_plugin_host::inspect_binary;
+    let dll = std::path::PathBuf::from(
+        std::env::var_os("AUDIOROUTER_TEST_INSTRUMENT")
+            .or_else(|| std::env::var_os("AUDIOROUTER_TEST_VST2_INSTRUMENT"))
+            .expect("test instrument path"),
+    );
+    let root = dll.parent().unwrap().to_path_buf();
+    let identity = inspect_binary(&dll, std::slice::from_ref(&root)).unwrap();
+    let node = |id: &str, kind: NodeKind| Node {
+        id: EntityId::new(id),
+        name: id.into(),
+        kind,
         type_version: 1,
         enabled: true,
         bypass: false,
-        parameters: serde_json::from_value(json!({
-            "path": "effect.vst3",
-            "format": "vst3",
-            "classId": "default",
-            "fingerprint": "a".repeat(64),
-            "pluginParameter:0": 0.3
-        }))
-        .unwrap(),
-        ports: vec![
-            Port {
-                name: "in".into(),
-                direction: PortDirection::Input,
-                channels: 1,
-            },
-            Port {
-                name: "out".into(),
-                direction: PortDirection::Output,
-                channels: 1,
-            },
-        ],
+        parameters: Default::default(),
+        ports: vec![Port {
+            name: "out".into(),
+            direction: PortDirection::Output,
+            channels: 2,
+        }],
+    };
+    let session = Session {
+        id: EntityId::new("instrument-session"),
+        name: "instrument".into(),
+        schema_version: 1,
+        revision: 0,
+        nodes: vec![node("piano", NodeKind::Instrument)],
+        edges: vec![],
+    };
+    let request = |node_id: &str| PluginStageRequest {
+        node_id: EntityId::new(node_id),
+        scanned_path: dll.clone(),
+        configured_root: root.clone(),
+        fingerprint: identity.sha256.clone(),
+        channels: 2,
+        state: None,
+        parameters: Vec::new(),
+    };
+    let started = start_plugin_bridges(&session, vec![request("piano")], 48_000).unwrap();
+    assert_eq!(started.len(), 1);
+    let (id, bridge) = &started[0];
+    let bridge = bridge
+        .standard()
+        .expect("instrument uses its MIDI-capable standard bridge");
+    assert_eq!(id.as_str(), "piano");
+    let peak = |quanta: usize| {
+        let mut peak = 0.0_f32;
+        let mut samples = vec![0.0_f32; audiorouter_engine::PROCESSING_QUANTUM_FRAMES * 2];
+        for _ in 0..quanta {
+            let mut block = audiorouter_engine::AudioBlock::new(
+                2,
+                audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+            )
+            .unwrap();
+            audiorouter_engine::RealtimePluginProcessor::process(bridge.as_ref(), &mut block);
+            block.copy_to_interleaved(&mut samples).unwrap();
+            peak = samples
+                .iter()
+                .fold(peak, |peak, sample| peak.max(sample.abs()));
+            std::thread::sleep(std::time::Duration::from_millis(3));
+        }
+        peak
+    };
+    assert!(peak(40) < 1e-6, "silent until a note arrives");
+    // Play it the way a client does: through the dispatcher, the node named
+    // rather than identified, on a session whose runtime is running.
+    let mut plane = ControlPlane::default();
+    plane.insert_session(session.clone()).unwrap();
+    let mut runtime = audiorouter_domain::FakeRuntime::default();
+    runtime.prepare(&session).unwrap();
+    runtime.start().unwrap();
+    plane.runtimes.insert(session.id.clone(), runtime);
+    plane
+        .plugin_bridges
+        .lock()
+        .unwrap()
+        .insert((session.id.clone(), id.clone()), Arc::downgrade(bridge));
+    let response = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "midi.sendEvents".into(),
+        params: Some(json!({ "nodeId": "PIANO", "events": [
+            { "type": "noteOn", "note": 69, "velocity": 120 }
+        ] })),
     });
-    // Enabling a plugin while playing must prepare it instead of failing the
-    // commit because the route has no bridge for that node.
-    assert!(!plane.live_plugin_bridges_are_complete(&saved.id, &saved));
-}
-
-/// A test double for a loaded plugin bridge: reuse must not need a worker
-/// process, so the ordinary suite can prove a live save keeps its plugin.
-#[derive(Debug)]
-struct FakePluginBridge {
-    health: audiorouter_plugin_host::WorkerState,
-    parameters: std::sync::Mutex<Vec<audiorouter_plugin_host::ParameterEvent>>,
-    active: std::sync::atomic::AtomicBool,
-}
-
-impl FakePluginBridge {
-    fn new(health: audiorouter_plugin_host::WorkerState) -> Self {
-        Self {
-            health,
-            parameters: std::sync::Mutex::new(Vec::new()),
-            active: std::sync::atomic::AtomicBool::new(false),
+    let result = response.result.expect("midi.sendEvents plays");
+    assert_eq!(result["accepted"], json!(1));
+    assert_eq!(result["heldNotes"], json!(1));
+    let sounded = peak(300);
+    assert!(sounded > 0.01, "the held note sounds (peak {sounded})");
+    // The panic button releases it and the output falls silent again.
+    let response = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(2)),
+        method: "midi.sendEvents".into(),
+        params: Some(json!({ "nodeId": "piano", "events": [{ "type": "allNotesOff" }] })),
+    });
+    assert_eq!(response.result.expect("panic")["heldNotes"], json!(0));
+    // A real synth rings out its release tail (Surge XT takes about a second);
+    // the test instrument stops at once. Either way the output must reach
+    // silence, and a note that never released would not.
+    let mut tail = f32::MAX;
+    for _ in 0..40 {
+        tail = peak(60);
+        if tail < 1e-6 {
+            break;
         }
     }
-
-    fn parameters(&self) -> Vec<(u32, f32)> {
-        self.parameters
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|event| (event.parameter_id, event.normalized_value))
-            .collect()
-    }
-
-    fn is_active(&self) -> bool {
-        self.active.load(std::sync::atomic::Ordering::Acquire)
-    }
-}
-
-impl audiorouter_engine::RealtimePluginProcessor for FakePluginBridge {
-    fn process(&self, _block: &mut audiorouter_engine::AudioBlock) {}
-}
-
-impl LivePluginBridge for FakePluginBridge {
-    fn bridge_health(&self) -> audiorouter_plugin_host::WorkerState {
-        self.health
-    }
-
-    fn apply_parameters(
-        &self,
-        parameters: Vec<audiorouter_plugin_host::ParameterEvent>,
-    ) -> Result<(), String> {
-        self.parameters.lock().unwrap().extend(parameters);
-        Ok(())
-    }
-
-    fn apply_silence_if_unchanged(&self, _silence: bool) {}
-
-    fn apply_processing_active(&self, active: bool) {
-        self.active
-            .store(active, std::sync::atomic::Ordering::Release);
-    }
-
-    fn into_processor(self: Arc<Self>) -> Arc<dyn RealtimePluginProcessor> {
-        self
-    }
-
-    fn into_registered_bridge(
-        self: Arc<Self>,
-    ) -> Option<Arc<audiorouter_plugin_host::PluginRuntimeBridge>> {
-        None
-    }
-}
-
-/// A route with one loaded plugin between the input and the output.
-fn session_with_plugin() -> (Session, EntityId, Arc<FakePluginBridge>) {
-    let mut saved = session();
-    saved.nodes.insert(
-        1,
-        Node {
-            id: EntityId::new("effect"),
-            name: "Effect".into(),
-            kind: NodeKind::Plugin,
-            type_version: 1,
-            enabled: true,
-            bypass: false,
-            parameters: serde_json::from_value(json!({
-                "path": "effect.vst3",
-                "format": "vst3",
-                "classId": "default",
-                "fingerprint": "a".repeat(64),
-                "pluginParameter:0": 0.3,
-            }))
-            .unwrap(),
-            ports: vec![
-                Port {
-                    name: "in".into(),
-                    direction: PortDirection::Input,
-                    channels: 1,
-                },
-                Port {
-                    name: "out".into(),
-                    direction: PortDirection::Output,
-                    channels: 1,
-                },
-            ],
-        },
-    );
-    saved.edges = vec![
-        Edge {
-            id: EntityId::new("edge-in"),
-            source_node: EntityId::new("in"),
-            source_port: "main".into(),
-            destination_node: EntityId::new("effect"),
-            destination_port: "in".into(),
-            matrix: vec![1.0],
-            enabled: true,
-        },
-        Edge {
-            id: EntityId::new("edge-out"),
-            source_node: EntityId::new("effect"),
-            source_port: "out".into(),
-            destination_node: EntityId::new("out"),
-            destination_port: "main".into(),
-            matrix: vec![1.0],
-            enabled: true,
-        },
-    ];
-    let bridge = Arc::new(FakePluginBridge::new(
-        audiorouter_plugin_host::WorkerState::Running,
-    ));
-    (saved, EntityId::new("effect"), bridge)
-}
-
-/// A slider-only save reuses the loaded plugin: no worker starts, the same
-/// bridge stays in the graph, and only the changed slider is applied.
-#[test]
-fn a_parameter_commit_reuses_a_loaded_plugin_bridge() {
-    let mut plane = ControlPlane::default();
-    let (before, plugin_id, bridge) = session_with_plugin();
-    plane.insert_session(before.clone()).unwrap();
-    let mut after = before.clone();
-    after
-        .nodes
-        .iter_mut()
-        .find(|node| node.id == plugin_id)
+    assert!(tail < 1e-6, "silent after all notes off (peak {tail})");
+    // With no request for it, the instrument node starts nothing.
+    assert!(start_plugin_bridges(&session, vec![], 48_000)
         .unwrap()
-        .parameters
-        .insert("pluginParameter:0".into(), json!(0.8));
-    let live = HashMap::from([(
-        plugin_id.clone(),
-        Arc::clone(&bridge) as Arc<FakePluginBridge>,
-    )]);
-    let stages = plane
-        .prepare_plugin_stages_with(&after, Some(&before), &live, |_, _| {
-            panic!("a parameter-only save must not start a plugin worker")
-        })
-        .unwrap();
-    assert_eq!(stages.started_count(), 0);
-    assert!(stages.stages.contains_key(&plugin_id));
-    stages.publish(&plane, &before.id).unwrap();
-    assert_eq!(bridge.parameters(), vec![(0, 0.8)]);
-    assert!(bridge.is_active());
-}
-
-/// Hold-to-compare republishes the saved graph with a bypass overlay and has no
-/// committed previous session. The saved session must still be the reuse base:
-/// otherwise a route whose live bridge lookup misses (after a worker failure)
-/// restarts every plugin in the chain.
-#[test]
-fn a_comparison_republish_reuses_loaded_plugins() {
-    let mut plane = ControlPlane::default();
-    let (before, plugin_id, bridge) = session_with_plugin();
-    plane.insert_session(before.clone()).unwrap();
-    let mut compared = before.clone();
-    compared
-        .nodes
-        .iter_mut()
-        .find(|node| node.id == plugin_id)
-        .unwrap()
-        .bypass = true;
-    let live = HashMap::from([(
-        plugin_id.clone(),
-        Arc::clone(&bridge) as Arc<FakePluginBridge>,
-    )]);
-    // Without a reuse base every enabled plugin is treated as new: this route
-    // has no current scan evidence, so the preparation falls back to a full
-    // start and fails. That is the defect hold-to-compare must not trigger.
-    let failed = plane.prepare_plugin_stages_with(&compared, None, &live, |_, _| {
-        Err(ControlError::InvalidRequest(
-            "no scan inventory in this test".into(),
-        ))
-    });
-    assert!(failed.is_err());
-    assert!(bridge.parameters().is_empty());
-    // With the saved session as the base the bridge is reused, and the
-    // comparison only marks it inactive inside the graph.
-    let stages = plane
-        .prepare_plugin_stages_with(&compared, Some(&before), &live, |_, _| {
-            panic!("a comparison must not restart a loaded plugin")
-        })
-        .unwrap();
-    assert_eq!(stages.started_count(), 0);
-    stages.publish(&plane, &before.id).unwrap();
-    assert!(!bridge.is_active());
-    assert!(bridge.parameters().is_empty());
+        .is_empty());
 }

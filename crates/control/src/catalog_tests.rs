@@ -3,6 +3,32 @@
 use super::*;
 
 #[test]
+fn discovery_dispatch_keeps_stack_headroom_for_its_callers() {
+    std::thread::Builder::new()
+        .stack_size(512 * 1024)
+        .spawn(|| {
+            let mut plane = ControlPlane::default();
+            let response = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "system.describe".into(),
+                params: None,
+            });
+            assert!(response.error.is_none());
+            assert_eq!(
+                response.result.unwrap()["methods"]
+                    .as_array()
+                    .unwrap()
+                    .len(),
+                API_METHODS.len()
+            );
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+#[test]
 fn describe_exposes_versions_methods_limits_and_unavailable_nodes() {
     let plane = ControlPlane::new("test-build");
     let description = plane.describe();
@@ -1297,7 +1323,7 @@ fn has_no_settings(kind: audiorouter_domain::NodeKind) -> bool {
         | ParametricEq | Compressor | Gate | Limiter | Delay | GraphicEq | Pitch | Recorder
         | AudioFile | Soundboard | Volume | BassTreble | Dehum | Declick | InputSwitch
         | OutputSwitch | Denoise | SpeechDenoise | FirFilter | SpectralGate | TimeShift
-        | NetworkSend | NetworkReceive | Duck | FunVoiceChanger => false,
+        | NetworkSend | NetworkReceive | Duck | FunVoiceChanger | Instrument => false,
     }
 }
 

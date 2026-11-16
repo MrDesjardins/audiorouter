@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { DiagnosticsSnapshot, Node } from "@audiorouter/contracts";
-import { PluginNodeInspector, PluginRecoveryControls } from "./PluginPanels";
+import { PluginEditorControls, PluginNodeInspector, PluginRecoveryControls } from "./PluginPanels";
 
 afterEach(cleanup);
 
@@ -195,5 +195,205 @@ describe("PluginNodeInspector unchanged-audio guard", () => {
     expect(variant(/^Audio passes through unchanged$/).style.visibility).toBe("visible");
     // A hidden status must not show through: an explicit "visible" child overrides a hidden parent.
     expect(screen.getByText(/probably not licensed/).style.visibility).toBe("hidden");
+  });
+});
+
+// Owner report (issue #136): "I want to open and configure the plugin before
+// I press Play". The button used to be disabled until the route ran.
+describe("PluginEditorControls before Play", () => {
+  it("lets the plugin window open while the route is stopped, in the desktop app", async () => {
+    const invoke = vi.fn().mockResolvedValue({ error: null });
+    (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = { invoke };
+    try {
+      render(
+        <PluginEditorControls
+          node={plugin()}
+          backend={{} as never}
+          sessionId="route"
+          running={false}
+          onStateSaved={() => undefined}
+        />,
+      );
+      const open = screen.getByRole("button", { name: "Open plugin window" }) as HTMLButtonElement;
+      expect(open.disabled).toBe(false);
+      expect(open.title).not.toMatch(/Press Play first/);
+      fireEvent.click(open);
+      await waitFor(() =>
+        expect(invoke).toHaveBeenCalledWith("open_plugin_editor", {
+          sessionId: "route",
+          nodeId: plugin().id,
+          title: plugin().name,
+        }),
+      );
+    } finally {
+      delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+    }
+  });
+
+  it("lists and selects VST2 programs and imports a preset from the plugin directory", async () => {
+    const listPluginPrograms = vi.fn().mockResolvedValue({
+      sessionId: "s",
+      nodeId: "plugin-1",
+      programs: [
+        { id: 0, name: "Init" },
+        { id: 1, name: "Bright" },
+      ],
+      units: [],
+    });
+    const selectPluginProgram = vi.fn().mockResolvedValue({ sessionId: "s", nodeId: "plugin-1", program: 1 });
+    const applyPluginPreset = vi.fn().mockResolvedValue({
+      sessionId: "s",
+      nodeId: "plugin-1",
+      presetPath: "C:\\VST2\\Lead.fxp",
+    });
+    render(
+      <PluginNodeInspector
+        node={plugin({ path: "C:\\VST2\\TDR Nova.dll", format: "vst2" })}
+        disabled={false}
+        onUnload={() => {}}
+        snapshot={null}
+        backend={{ listPluginPrograms, selectPluginProgram, applyPluginPreset }}
+        sessionId="s"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Load programs" }));
+    await waitFor(() => expect(listPluginPrograms).toHaveBeenCalledWith("s", "plugin-1"));
+    fireEvent.change(screen.getByLabelText("VST2 program"), { target: { value: "1" } });
+    await waitFor(() => expect(selectPluginProgram).toHaveBeenCalledWith("s", "plugin-1", 1));
+    fireEvent.change(screen.getByLabelText("VST2 preset path"), {
+      target: { value: "C:\\VST2\\Lead.fxp" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Import preset" }));
+    await waitFor(() => expect(applyPluginPreset).toHaveBeenCalledWith("s", "plugin-1", "C:\\VST2\\Lead.fxp"));
+  });
+
+  it("lists VST3 programs read-only, with no choice and no preset import", async () => {
+    const listPluginPrograms = vi.fn().mockResolvedValue({
+      sessionId: "s",
+      nodeId: "plugin-1",
+      programs: [{ id: 0, name: "Init" }],
+      units: [
+        {
+          id: 0,
+          parent_id: -1,
+          name: "Root",
+          program_list_id: 7,
+          program_count: 1,
+          programs: [{ id: 0, name: "Init" }],
+        },
+        { id: 1, parent_id: 0, name: "Synth", program_list_id: null, program_count: 0, programs: [] },
+      ],
+    });
+    const selectPluginProgram = vi.fn();
+    render(
+      <PluginNodeInspector
+        node={plugin({ path: "C:\\VST3\\Synth.vst3", format: "vst3" })}
+        disabled={false}
+        onUnload={() => {}}
+        snapshot={null}
+        backend={{ listPluginPrograms, selectPluginProgram }}
+        sessionId="s"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Load programs" }));
+    await waitFor(() => expect(listPluginPrograms).toHaveBeenCalledWith("s", "plugin-1"));
+    const select = await screen.findByLabelText("VST3 program");
+    expect((select as HTMLSelectElement).disabled).toBe(true);
+    expect(screen.getByRole("list", { name: "VST3 unit hierarchy" }).textContent).toContain("Within Root");
+    expect(screen.getByRole("list", { name: "VST3 unit hierarchy" }).textContent).toContain("Program list · 1 program");
+    expect(screen.queryByRole("button", { name: "Import preset" })).toBeNull();
+    expect(selectPluginProgram).not.toHaveBeenCalled();
+  });
+
+  it("adds a VST3 sidechain input once, and explains a refusal without changing the panel", async () => {
+    const addPluginSidechainPort = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("the plugin declares no auxiliary input"))
+      .mockResolvedValue({ sessionId: "s", nodeId: "plugin-1", port: "sidechain", channels: 2 });
+    const { rerender } = render(
+      <PluginNodeInspector
+        node={plugin({ path: "C:\\VST3\\Comp.vst3", format: "vst3" })}
+        disabled={false}
+        onUnload={() => {}}
+        snapshot={null}
+        backend={{ addPluginSidechainPort }}
+        sessionId="s"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add sidechain input" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("no auxiliary input");
+    fireEvent.click(screen.getByRole("button", { name: "Add sidechain input" }));
+    await waitFor(() => expect(addPluginSidechainPort).toHaveBeenCalledTimes(2));
+    expect(addPluginSidechainPort).toHaveBeenCalledWith("s", "plugin-1");
+    expect(await screen.findByText(/has a sidechain input named/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Add sidechain input" })).toBeNull();
+    // An effect that already has the port, or a VST2 plugin, offers no button.
+    rerender(
+      <PluginNodeInspector
+        node={plugin({ path: "C:\\VST2\\x.dll", format: "vst2" })}
+        disabled={false}
+        onUnload={() => {}}
+        snapshot={null}
+        backend={{ addPluginSidechainPort }}
+        sessionId="s"
+      />,
+    );
+    expect(screen.queryByText("Sidechain input")).toBeNull();
+  });
+
+  it("removes a sidechain input and shows the backend's refusal when a connection uses it", async () => {
+    const removePluginSidechainPort = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("still has a connection into its sidechain port; disconnect it first"))
+      .mockResolvedValue({ sessionId: "s", nodeId: "plugin-1", removed: true });
+    const node = plugin({ path: "C:\\VST3\\Comp.vst3", format: "vst3" });
+    node.ports = [...node.ports, { name: "sidechain", direction: "input", channels: 1 }];
+    render(
+      <PluginNodeInspector
+        node={node}
+        disabled={false}
+        onUnload={() => {}}
+        snapshot={null}
+        backend={{ removePluginSidechainPort }}
+        sessionId="s"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Remove sidechain input" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("disconnect it first");
+    fireEvent.click(screen.getByRole("button", { name: "Remove sidechain input" }));
+    await waitFor(() => expect(removePluginSidechainPort).toHaveBeenCalledTimes(2));
+    expect(removePluginSidechainPort).toHaveBeenLastCalledWith("s", "plugin-1");
+  });
+
+  it("does not offer a sidechain input while the tool has unsaved changes", () => {
+    const addPluginSidechainPort = vi.fn();
+    render(
+      <PluginNodeInspector
+        node={plugin({ path: "C:\\VST3\\Comp.vst3", format: "vst3" })}
+        disabled={false}
+        onUnload={() => {}}
+        snapshot={null}
+        backend={{ addPluginSidechainPort }}
+        sessionId="s"
+        sidechainBlockedReason="Save or discard changes to this tool before adding a sidechain input."
+      />,
+    );
+    const button = screen.getByRole("button", { name: "Add sidechain input" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(screen.getByText(/Save or discard changes/)).toBeTruthy();
+    expect(addPluginSidechainPort).not.toHaveBeenCalled();
+  });
+
+  it("still needs the desktop app, because the window belongs to the shell", () => {
+    render(
+      <PluginEditorControls
+        node={plugin()}
+        backend={{} as never}
+        sessionId="route"
+        running={false}
+        onStateSaved={() => undefined}
+      />,
+    );
+    expect((screen.getByRole("button", { name: "Open plugin window" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

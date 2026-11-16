@@ -48,6 +48,7 @@ method_table! {
         "audioMedia.importTemporaryRecording" => dispatch_audio_media_import_temporary_recording,
         "audioMedia.delete" => dispatch_audio_media_delete,
         "soundLibrary.read" => dispatch_sound_library_read,
+        "midi.devices" => dispatch_midi_devices,
         "recorders.list" => dispatch_recorders_list,
         "recorders.create" => dispatch_recorder_create,
         "devices.setAccess" => dispatch_device_access_set,
@@ -87,6 +88,7 @@ method_table! {
         "plugins.inspect" => dispatch_plugins_inspect,
         "plugins.parameters" => dispatch_plugins_parameters,
         "plugins.saveState" => dispatch_plugins_save_state,
+        "plugins.buses" => dispatch_plugins_buses,
         "virtualDevices.list" => dispatch_virtual_devices_list,
         "virtualDevices.plan" => dispatch_virtual_devices_plan,
         "virtualDevices.apply" => dispatch_virtual_devices_apply,
@@ -167,12 +169,18 @@ method_table! {
     }
     target {
         "audioSources.transport" => dispatch_audio_source_transport,
+        "midi.sendEvents" => dispatch_midi_send_events,
         "soundboard.trigger" => dispatch_soundboard_trigger,
         "soundboard.stop" => dispatch_soundboard_stop,
         "soundboard.status" => dispatch_soundboard_status,
         "timeShift.transport" => dispatch_time_shift_transport,
         "meters.reset" => dispatch_meter_reset,
         "plugins.resume" => dispatch_plugins_resume,
+        "plugins.removeSidechainPort" => dispatch_plugins_remove_sidechain_port,
+        "plugins.addSidechainPort" => dispatch_plugins_add_sidechain_port,
+        "plugins.programs" => dispatch_plugins_programs,
+        "plugins.selectProgram" => dispatch_plugins_select_program,
+        "plugins.applyPreset" => dispatch_plugins_apply_preset,
         "plugins.prepareUpdate" => dispatch_plugins_prepare_update
     }
     custom {

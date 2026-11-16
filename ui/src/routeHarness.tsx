@@ -548,9 +548,55 @@ const previewBackend: UiBackend = {
     sequence += 1;
     return { sessionId, nodeId, state: sourceStates.get(nodeId) ?? "stopped", loop: false };
   },
+  // Offline MIDI: one fake keyboard, and notes are only recorded for the e2e to read back.
+  async midiDevices() {
+    return { devices: ["Fixture Keystation"], instruments: [] };
+  },
+  async midiSendEvents(sessionId: string, nodeId: string, events: Array<{ type: string; note?: number }>) {
+    if (!running || sessionId !== committed.id) throw new Error("Fixture route is stopped");
+    const sent = ((window as unknown as { __routeFixtureMidi?: unknown[] }).__routeFixtureMidi ??= []);
+    sent.push(...events);
+    return { sessionId, nodeId, accepted: events.length, scheduled: 0, heldNotes: 1 };
+  },
   // The offline harness has no worker to recover, so Retry always stays silenced.
   async resumePlugin(sessionId: string, nodeId: string) {
     return { sessionId, nodeId, resumed: false };
+  },
+  async addPluginSidechainPort(sessionId: string, nodeId: string) {
+    return { sessionId, nodeId, port: "sidechain", channels: 2 };
+  },
+  async removePluginSidechainPort(sessionId: string, nodeId: string) {
+    return { sessionId, nodeId, removed: true };
+  },
+  async listPluginPrograms(sessionId: string, nodeId: string) {
+    return {
+      sessionId,
+      nodeId,
+      programs: [
+        { id: 0, name: "Init" },
+        { id: 1, name: "Bright" },
+      ],
+      units: [
+        {
+          id: 0,
+          parent_id: -1,
+          name: "Root unit",
+          program_list_id: 1,
+          program_count: 2,
+          programs: [
+            { id: 0, name: "Attack" },
+            { id: 1, name: "Smooth" },
+          ],
+        },
+        { id: 1, parent_id: 0, name: "Compressor", program_list_id: null, program_count: 0, programs: [] },
+      ],
+    };
+  },
+  async selectPluginProgram(sessionId: string, nodeId: string, program: number) {
+    return { sessionId, nodeId, program };
+  },
+  async applyPluginPreset(sessionId: string, nodeId: string, presetPath: string) {
+    return { sessionId, nodeId, presetPath };
   },
   ...(injected.__routeFixtureSoundboardStatus
     ? {

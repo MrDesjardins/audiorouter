@@ -64,6 +64,7 @@ mod cable_routes;
 mod catalog;
 mod dispatch_methods;
 mod graph;
+mod midi;
 mod native_application;
 mod native_bindings;
 mod native_dispatch;
@@ -322,6 +323,10 @@ pub const MULTI_INPUT_RENDER_HEADROOM_100NS: i64 = 500_000;
 /// Service gaps longer than this can empty a minimal shared-mode render
 /// buffer (one 10 ms engine period plus margin) and are counted as late.
 pub const AUDIO_SERVICE_LATE_GAP: std::time::Duration = std::time::Duration::from_millis(8);
+/// Keep MIDI device-loss recovery independent of UI/client status requests
+/// without enumerating Windows devices on every audio service pass.
+pub(crate) const MIDI_DEVICE_POLL_INTERVAL: std::time::Duration =
+    std::time::Duration::from_millis(250);
 
 pub struct ControlPlane {
     store: GraphStore,
@@ -409,6 +414,29 @@ pub struct ControlPlane {
             (EntityId, EntityId),
             std::sync::Weak<audiorouter_plugin_host::PluginRuntimeBridge>,
         >,
+    >,
+    /// Live sidechain (multi-bus) bridges by (session, node). Weak: a bridge
+    /// lives only as long as its graph, and this map only serves state,
+    /// editor and recovery control, never audio.
+    #[cfg(windows)]
+    sidechain_bridges: std::sync::Mutex<
+        HashMap<
+            (EntityId, EntityId),
+            std::sync::Weak<audiorouter_plugin_host::sidechain_bridge::SidechainRuntimeBridge>,
+        >,
+    >,
+    /// MIDI devices feeding running instruments, by (session, node). Closed
+    /// when the instrument's bridge is gone.
+    instrument_midi: std::sync::Mutex<HashMap<(EntityId, EntityId), midi::InstrumentMidiInputs>>,
+    /// Last service-owned MIDI device inventory check.
+    last_midi_inventory_check: Option<std::time::Instant>,
+    /// Device enumeration runs off the audio-service thread; completed
+    /// inventories are applied on a later service pass.
+    midi_inventory_worker: Option<std::sync::mpsc::Receiver<Vec<String>>>,
+    /// Plugin workers started only so an editor can open while the session is
+    /// stopped; they hold the bridge alive until the editor closes.
+    editor_only_plugins: std::sync::Mutex<
+        HashMap<(EntityId, EntityId), Arc<dyn audiorouter_engine::RealtimePluginProcessor>>,
     >,
     plugin_inventory_order: VecDeque<String>,
     privacy_muted: bool,
@@ -608,6 +636,12 @@ impl ControlPlane {
             tool_presets: Vec::new(),
             plugin_inventories: HashMap::new(),
             plugin_bridges: Default::default(),
+            #[cfg(windows)]
+            sidechain_bridges: Default::default(),
+            instrument_midi: Default::default(),
+            last_midi_inventory_check: None,
+            midi_inventory_worker: None,
+            editor_only_plugins: Default::default(),
             plugin_inventory_order: VecDeque::new(),
             privacy_muted: false,
             startup_enabled: false,

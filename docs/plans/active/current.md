@@ -11,118 +11,276 @@ selector. Physical reboot and attended audio qualification remain open.
 
 ## Theme editor live preview — 2026-11-15
 
-Owner request: choosing a custom-theme colour should show its effect before
-saving and using the theme. Added `ThemePreview.tsx` in Settings → Appearance:
-a scoped miniature workspace (top bar, navigation, canvas with flowing, silent
-and paused connections, Properties panel) drawn from the theme being edited
-through `customThemeStyle`, so every palette entry has a visible target.
-Requirements UI-07 and UI-17; presentation only, no API, backend or stored
-format change. The preview has a "Preview" caption matching the Theme name and
-Base appearance captions. Contrast warnings put a button on each color name:
-choosing one opens that side's picker (`theme-color-<key>`), scrolls it into
-view, focuses the field and flashes it for 1.6 s. The palette uses a custom
-picker (`ThemeColorPicker.tsx`) instead of the native colour dialog: a swatch
-opens a saturation/brightness square, hue slider and live guidance. The square
-dims the shades that miss every rule for that palette entry and draws the
-combined boundary as a white line with a dark halo; it names the current worst
-pair and suggests lighter/darker when that helps.
-Validation: UI format, typecheck:all and lint pass; the UI-only typecheck of
-the changed graph also passes. `theme-preview.pw.ts` passes in Edge and checks
-edited colours, both base appearances, the caption typography and position,
-five node positions without overlap or canvas overflow, and a 640 px viewport.
-`theme-contrast.pw.ts` checks that either color name opens and focuses the
-right picker, that the canvas dims the failing colour and leaves a passing
-colour unshaded, that the contrast line is drawn (white pixels on the
-boundary), that the hue change redraws it, that the popover stays on screen,
-and that the warning clears. `themeColor.test.ts` and `themeContrast.test.ts` cover the
-colour conversions and rule selection. Screenshots are in the Playwright
-results folder (`theme-preview-dark.png`, `theme-preview-light.png`,
-`theme-preview-narrow.png`, `theme-contrast-picker.png`). Rollback: revert the
-three UI files, the picker and colour helpers, their CSS block, the browser
-tests, the unit tests and the release-note bullets. Next: owner visual check
-in the desktop shell.
+Main's theme preview work remains in place (UI-07/17): Settings → Appearance
+shows a scoped workspace using the edited palette. Contrast warnings open and
+focus either named colour picker, scroll it into view and flash it for 1.6 s.
+The custom picker shows a saturation/brightness square, hue slider, shaded
+failing colours and a contrast boundary. Main's validation covers UI format,
+lint/typecheck, `theme-preview.pw.ts` at both base appearances and 640 px,
+`theme-contrast.pw.ts`, and the colour/contrast unit tests. Screenshots remain
+in the Playwright results folder. Next: owner visual check in the desktop
+shell. Rollback: revert the scoped theme preview/picker, colour helpers, CSS,
+tests and release notes; no API or stored-format change.
 
-## Publish daily quality history — 2026-11-14
+## VST review defect fixes — owner requested
 
-Owner reported that `docs/quality-history.csv` on `main` stopped updating.
-Since 2026-10-21 the nightly only uploaded proposed files because `main`
-requires a pull request and the `Quality gate`, and the proposed CSV started
-from the stale main copy, so the rows collected after 2026-10-21 never reached
-it. Requirements: ENG-01/02/04 and NFR-04/05/06.
+Main synchronization (owner, 2026-11-16): merge `origin/main` at `16b83a432`
+into this feature branch, preserving device-binding recovery and VST hosting.
+Only release notes and this plan have textual conflicts; retain both sets of
+entries. Validate merged control code, UI typecheck/lint, contract drift,
+formatting/docs, and device-binding/plugin browser scenarios before pushing.
+Requirements PLUG-03/04/05/07, CAP-02/11/12, STATE-03, UI-17, ENG-02/04 and
+AUTO-18. Rollback: reviewed revert of this merge; no device/audio state change.
+Next: finish merge validation, commit and push; hosted CI remains required.
 
-Decision (owner, 2026-11-14): publish the durable daily CSV and SVG to the
-unprotected `quality-data` branch, as `code-stats-data` and `metrics-data`
-already do, and link README there. `main` keeps no generated quality history;
-no workflow gets a branch-protection bypass.
+Merged-head validation: control library 438 passed / 22 opt-in ignored;
+focused device-binding, session-selection and Plugin inspector UI tests 36/36;
+rebuilt e2e_backend and compiled browser assets, then Edge Plugin inspector,
+Sidechain and combined device UX tests 24/24 across three themes and two
+viewport sizes. Workspace and shell strict Clippy, both Rust format checks,
+UI format/lint/full typecheck, contract drift (156 methods / 38 kinds), docs
+(276 files / 1,518 links) and both staged/unstaged diff checks pass. Logs use
+`target/main-sync-*`. Updated the two sidechain commit calls with `None` for
+main's new optional stopped-session requirement, preserving their existing
+live-edit behavior. Final fetch confirms MERGE_HEAD still equals origin/main
+at `16b83a432`. No live endpoint, attended editor or new installer run. Next:
+commit/push the resolved merge and require new-head hosted CI.
 
-Tasks: add `quality-history.yml`, which runs after the nightly, downloads
-`quality-history-collected`, merges it with the rows already published (so a
-re-run or an evicted cache cannot duplicate or truncate history), renders the
-chart and pushes to `quality-data`; remove the artifact-only publisher and the
-stale README table; extend the quality policy tests and runbook. Rollback:
-revert this scoped commit; the branch can stay as an inert data branch.
+Remaining CI repair (owner, 2026-11-16; run 43796875006): retain all gates.
+Release now reaches a second guard that incorrectly requires x64 on the two
+x86 workers; declare/check each packaged binary's expected architecture and
+test cross-architecture rejection. Browser shard 3: reproduce the 16.8 px
+plugin toggle shift and reserve the sidechain guidance slot (UI-17); derive
+guide catalogue expectations from its manifest; wait for all fixture edges
+before taking a sidechain replacement baseline. Validate exact CI browser
+assets, all themes, release scripts and current annotations, then push and
+watch. Evidence: `target/ci-43796875006-failures.log`. Rollback: scoped revert
+of these repairs; no installer, driver or device state is changed locally.
 
-Validation on Windows 2026-11-14: `node tools/quality/verify.mjs --checks
-policy` passed 86 tests, including the new merge/chart tests, and `--checks
-docs` passed 267 files / 1,489 links. The merge and chart commands were run
-against the real `quality-history-collected` artifact of run 43585111559: 39
-rows (Oct 8-Nov 14) survived, the SVG parsed as XML, and a second merge was
-byte-identical. Actionlint 1.7.12 passed on every workflow. The branch does not
-exist yet, so the hosted publisher, README links and the next nightly remain
-unverified until the change reaches `main` and `Quality history (daily)` is
-dispatched. Next: owner approval to commit and open the PR.
+Reproduction and repair: the plugin layout test failed locally in all three
+themes. A clean sidechain hint occupies one line, while editing the plugin
+substitutes two-line draft guidance above Voice protection, shifting the
+checkbox 16.8 px. Both messages now occupy the same reserved grid slot;
+existing exact bounding-box assertions pass unchanged. The guide index has
+39 entries after Instrument was added; its browser test now checks every
+manifest entry's link as well as the derived count and existing search.
+The flaky sidechain test initially counted six decorative legend edges before
+the actual route edge mounted. It now waits for the fixture's expected count
+and scopes every assertion to the canvas, excluding the legend. All seven
+failed/flaky cases pass with compiled CI assets; full shard 3/4 is running
+with CI retries/fail-on-flake policy (`target/ci-browser-shard3-round2.log`).
 
-## Live parameter autosave — 2026-11-14
+Packaging declares x64/x86 per binary and requires an exact corresponding PE
+machine match. Tests prove both expected machines pass and each wrong-machine
+direction fails, retaining DOS/PE bounds and non-reparse checks. The six real
+local shell/CLI/worker executables all pass their expected-architecture checks.
+All four release-tooling checks, docs, 86 policy tests, UI format/lint/full
+typecheck and 14 PluginNodeInspector tests pass. Current-head annotations were
+read: failure summaries plus hosted Ubuntu-label notices, no code warnings.
+No new compiled installer qualification is claimed; require new-head hosted
+installer checks. The UI change only reserves existing guidance space; it
+adds no setting, changes no audio behavior, and needs no new guide recording.
 
-Owner report: toggling a Mute node or a Fun Voice Changer option while playing
-stops output for up to two seconds during autosave. Investigation found the
-backend treated any parameter change as a structural rebuild, started a new
-worker for every plugin (including the unrelated Clear VST), and disabled
-worker pumping until the reload finished. Plan and implementation record:
-[live parameter autosave](live-parameter-autosave.md). Implemented: change
-classification, live plugin-bridge reuse (only changed plugin identity/state or
-VST2 group restarts), pumping through preparation with an atomic swap, decoded
-media reuse, and an optional Live autosave setting with coalesced saves.
-Requirements: GRAPH-08/09/15, UI-05/07. Local Rust/UI formatting, Clippy,
-tests and docs checks pass; production bundled Edge passes 12/12 for the
-autosave scenarios. An independent review found nine issues in the live-reuse
-path (source settings, mixed group preparation, VST2 order, stale active flags,
-pre-publication mutation, slider clobbering, restart on preparation failure,
-unbounded media cache, a test that could not detect a dropout); all nine were
-repaired and regressed. A second review found ten more (enabling a plugin
-without a live worker, flag-only publications clearing the stale marker,
-failed/quarantined reuse, publish errors reported as not applied, a weak live
-test, no dispatcher-level reuse evidence, D7 timing missing, a stale autosave
-message, a repeated quickstart instruction, and decoded media kept after Stop);
-all ten are repaired and regressed, with `graph.plan`/`graph.commit` timing and
-`pluginStarts` now observable. The live parameter test passed on a copied owner
-database (four commits, 39–49 ms each, zero plugin starts), as did every live
-bypass toggle; only the built-exe run with the owner's Clear VST remains. A
-verification pass then closed three leftovers: ordinary tests now drive plugin
-reuse with a bridge double (parameter save and hold-to-compare), the live
-test's plugin-slider fallback keeps the `pluginParameter:` name, and
-hold-to-compare uses the saved session as its reuse base so a missing worker
-does not restart the chain. A fresh release build and copied-owner-database
-live run then passed: four parameter commits completed in 18.9–20.6 ms with
-zero plugin starts and no sampler gap, and every copied-route bypass toggle
-applied. The exact attended Mute/Fun Voice Changer route is not present in the
-copy, so that user-route recording remains the final hardware gate. Next:
-open the approved PR with that limitation recorded.
+Full affected shard result: `CI=true npx playwright test
+--config=playwright.ci.config.ts --shard=3/4` passed on Windows Edge with
+191 passed / 4 existing opt-in skipped, zero failures or flaky retries (9.3 min).
+This includes all Plugin inspector and Sidechain scenarios, guide playback,
+layout, contrast and theme coverage. Dark/light/high-contrast switch screenshots
+were inspected. Full local UI formatting/lint/typecheck and release/doc/policy
+checks pass. Complete diff inspected and whitespace check clean. Push this
+repair and watch the new hosted head; hosted installer packaging and all-shard
+success are still required before reporting CI green.
 
-## Resilience audit — 2026-11-13
+CI repair authorized 2026-11-16 (PR #152, run 43790820298): reproduce and
+repair ENG-02/04, AUTO-18 and M08 failures without weakening gates. Evidence:
+`target/ci-43790820298-failures.log`; all check annotations read (failure
+summaries plus the hosted Ubuntu-label migration notice, no source warnings).
+Observed: MCP integration tests hard-code 105 advanced tools, actual 107;
+browser fixtures exit with stack overflow 0xC00000FD; release PE import guard
+only accepts PE32+ although the package now includes x86 workers; generated
+tool-guide social tags are stale. Tasks: test catalogue membership rather
+than a count; reproduce discovery on a bounded stack and isolate schema
+construction frames; support bounded PE32 and PE32+ import offsets with
+regressions; regenerate metadata; rerun affected entry points and strict
+checks, push, then require new-head hosted CI. Keep opt-in audio/editor gates
+distinct. Rollback is a scoped revert of these repairs and generated metadata.
 
-Owner requested a read-only investigation of resilience and fault tolerance
-in the UI and backend. See the [findings](resilience-audit-2026-11-13.md):
-eleven findings (three high: no backups in the desktop app, a handler panic
-stops audio with no resume, no reconnect after device loss or sleep), covering
-STATE-02/07/10/11/12 and CAP-11/12. No code changed; nothing was compiled or
-run. Next: owner selects findings to repair and answers the two decisions
-(RES-3, RES-10).
+CI repair results (Windows 11, pinned Rust 1.96.0, Node 22.22.3): the actual
+downloaded `browser-fixtures` executable answered sessions.list/active.get and
+then crashed at presets.list with 0xC00000FD. The new dispatcher regression
+also failed at 512 KiB. CDB captured `__chkstk -> parameter_descriptor_schema
+-> processor_item_schema -> method_output_schema_impl -> describe -> dispatch`;
+the comprehensive output-schema match reserved roughly 440 KiB before calling
+its helpers. Each JSON arm now constructs through its own uninlined generic
+builder, keeping the match frame small without changing the schema or raising
+thread-stack limits. The 512 KiB regression passes. Rebuilt e2e_backend answers
+the exact four-request sequence and exits cleanly. Edge goal-empty and
+goals-and-tour pass 8/8 with both development and compiled CI assets.
 
-Owner authorized all high/medium repairs and a version bump on 2026-11-13.
-Implementation is on `fix/resilience`; see the
-[execution plan](resilience-implementation.md) for scope, recovery boundaries,
-regression evidence and next action. The original audit remains the baseline.
+MCP's two 105-versus-107 failures reproduce locally; integration tests now
+check unique names, required tools (including both sidechain tools) and object
+input schemas through both protocol versions. All five real stdio/pipe tests
+pass. The PE parser uses the distinct PE32/PE32+ import-directory offsets;
+release tests cover valid imports, dynamic VC runtime refusal and truncated
+directories for both formats. All four existing worker binaries parse; the
+local Rust release worker still imports VCRUNTIME140 and is correctly refused
+by the portable-runtime guard (these are older local development artifacts,
+not a new release qualification). Regenerated social tags and CSP on 40 guide
+pages using the existing generators. Site and all four release-tooling checks
+pass; strict workspace and shell Clippy, Rust format, contract drift, docs and
+86 policy tests pass. `cargo test --workspace --locked` passes, including MCP,
+control, source/tool combinations and doc-tests; its log is
+`target/ci-workspace-fixed.log`. Detailed reproduction/CDB/check logs use the
+ignored `target/ci-*` prefix. New-head hosted browser shards and installer
+packaging remain required. Local browser tooling prints NO_COLOR/FORCE_COLOR
+and React Flow attribution notices; this repair changes no browser runtime,
+styles or attribution configuration and does not suppress those notices.
+
+Additional shell validation found the HTTP path-policy coverage regression
+hidden behind the earlier workspace failure: plugins.buses.path and
+plugins.applyPreset.presetPath were unclassified. Both now use LocalPaths,
+with adapter-level tests rejecting UNC/device paths before forwarding and
+accepting local paths; the schema-walking coverage guard passes. Full shell
+suite: 114 passed / 4 opt-in ignored. Full workspace control results: 430
+passed / 22 opt-in ignored. All 40 generated page changes were inspected to
+confirm their bodies are identical and only head metadata changed. Next:
+final formatting/Clippy/diff checks, commit and push, then watch new-head CI;
+no hosted pass or rebuilt installer is claimed by these local results.
+
+Merge repair (2026-11-15, supersedes the failed audit below): owner authorized
+merging main and pushing. `origin/main` at `01cc24a14` is contained in local
+merge `f7e328446`. Reconciled the reuse trait with the sidechain control enum,
+restored generic preparation and deferred publication for standard bridges,
+registered sidechain handles at publication, retained stopped-editor ownership
+and instrument MIDI setup, restored requested-group validation and graph timing,
+and supplied the eight missing client method deadlines (RES-6). Requirements
+PLUG-03/04/05/07 and AUTO-18 remain covered by existing entry-point tests.
+The added `merged_preparation_reuses_worker_and_defers_slider_changes_until_publication`
+regression passes and verifies no reload and no parameter mutation before swap.
+The standard bridge worker ID is initialized once and shared by chain members.
+
+Windows validation: full control library 428 passed / 22 opt-in ignored, then
+the new regression passed separately; plugin-host library 126 passed in the
+preceding continuation; source combinations 6/6 and tool combinations 6/6;
+workspace and Tauri strict Clippy; both Rust format checks; contract drift
+(156 methods / 38 kinds); UI full typecheck; diff whitespace check all pass.
+Evidence logs: ignored `target/vst-merge-{control-tests,combinations,clippy,shell-clippy}.log`.
+The first contract check detected missing deadlines; adding the entries made
+both drift and UI typecheck pass. No UI source or audio algorithm changed.
+No new release binary, attended editor, endpoint playback or hosted CI evidence
+is claimed. Next: commit/push the integration repair to PR #152 and let hosted
+checks validate the new head. Rollback: revert the repair and merge together
+after review; do not discard either feature set or use the old executable as
+proof of this head.
+
+Continuation audit (2026-11-15): local merge `f7e328446` is not buildable.
+`cargo check -p audiorouter-control` reports 29 errors: the reuse trait and
+sidechain control enum both use `LivePluginBridge`; preparation contains an
+orphaned generic reuse body (`B`, `previous`, `live`) and returns a map where
+callers require deferred `PluginStageSet` publication; flags-only refreshes
+refer to removed `bridge_flags`; graph commit timing lacks `commit_started`.
+Do not push or hand off this merged head as tested. The pending standard bridge
+worker-ID repair remains uncommitted. Windows checks on this continuation:
+plugin-host library 126/126 passed; workspace and Tauri format checks passed.
+Next task: reconcile deferred publication/reuse with standard, sidechain and
+stopped-editor bridges, then compile immediately and rerun reuse, sidechain,
+MIDI, dispatcher and engine-combination regressions. Preserve the primary
+checkout's unrelated live-autosave/device/theme work. Earlier build/test
+evidence below applies to its recorded revision, not this merge. Rollback is
+a reviewed scoped correction/revert of the merge; do not reset the worktree
+or drop either parent's behavior.
+
+Owner requested fixes and regressions for four findings from the VST plugin
+review on `feature/vst-plugin-experience` (PLUG-03/04/05/07, M06): the public
+Play path rejects declared VST3 sidechains before using the prepared multi-bus
+bridge; VST3 `IPluginFactory2` ownership has a duplicate release; VST2 chunk
+indices are wrong for state/preset restoration; and MIDI disconnect note release
+depends on a `midi.devices` request. Keep work in the feature worktree and
+preserve untracked build/preview data in the primary checkout.
+
+Ordered work: route sidechain plugins through validated plugin requests into the
+already-built sidechain bridge and exercise preparation, graph compile and
+audio through the normal control-plane path; remove the extra COM release and
+add a refcount regression to the VST3 worker self-test; correct program-vs-bank
+chunk indices with a fixture that refuses incorrect indices; make a bounded
+backend service pass detect lost MIDI inputs and release held notes, with a
+deterministic disconnect regression. Run focused plugin-host/control/engine
+tests, VST3 worker build/self-test and VST2 state fixture acceptance where the
+native toolchain is available, both Rust formatting checks, focused strict
+Clippy, docs validation and `git diff --check`. Rollback: revert only these
+source, test and plan changes; no session migration, device configuration,
+plugin installation, live route, PR or release change is authorized.
+
+Implementation is on the feature worktree. Passed: full control tests (408
+passed, 22 ignored) and plugin-host library tests (126 passed); engine
+sidechain tests (6); plugin worker integration tests (13); MIDI-specific tests
+(12); sidechain scan-identity guard regression (1); strict Clippy for control
+and plugin-host with all targets/features; both Rust format checks; docs
+acceptance (271 Markdown files / 1,515 local links); and `git diff --check`.
+The VST3 worker builds and its `--self-test-host` passes in both x64 and x86
+release outputs. The repository-owned VST2 state acceptance passes for the
+program chunk state path at 44.1/48/96 kHz, program-preset chunk import, the
+legacy `main` export path at all three rates, bank-chunk scope-index regression,
+and the existing nonfinite/crash/hang containment cases. The release desktop
+build completed with shell and all four workers; embedded UI build/typecheck
+succeeded, and the Vite chunk-size notice above 500 kB remains. Built release
+shell `fresh_install_shell` passed on an isolated disposable profile (backend
+status in 66 ms on the final rebuild, expected raw-client
+DeviceAdministration refusal); no audio device opened. The output folder is
+`src-tauri/target/release` in the feature worktree. After the final MIDI change,
+the release build was refreshed; final shell SHA-256 is
+`06D98A22FB1D97EE24A134478524C827FD5BA3ADA8E2B50A0EC041981B19CDC1`, VST3 x64
+`9521E826836A53549FBC5B3C65F888F61F1E879F6BBB490966ED0DF8E5778B57`, VST3 x86
+`D98FBBC9CD930A918AD65989362ADFBC6D567A02E533068F4562389BE4B62522`, CLI
+`E4E156BE52F7BC923BEC3F985A5D9FACC288BDFB9579D1CEF35A07D2D2C2EBD5`. The
+exact-binary fresh-install shell test was rerun and passed with backend ready
+in 66 ms.
+
+The real AGain sidechain route test is opt-in and was not run because the SDK
+AGain bundle is not present in this checkout; there was no endpoint playback,
+attended customer plugin/editor run, installation smoke or release qualification.
+The release executable was not opened interactively. Owner requested and
+approved a PR; [PR #152](https://github.com/MrDesjardins/audiorouter/pull/152)
+is open at head `360134b5982d2bf293b1a92e6b87b4bafa9d59f5`. GitHub currently
+reports conflicts against `main` at `8fbe4bee217c3455c23802b037bcafd207d6860b`
+(`CONFLICTING` / `DIRTY`) in plugin graph preparation/publication and the active
+plan. The repair branch is pushed and the PR is linked. Hosted checks are still
+pending. No conflicts were resolved; next: integrate current `main` while
+preserving both the VST changes and live plugin-reuse work, rerun checks, push
+the merge commit, and update PR #152. No release is authorized.
+
+## Issue #136 VST experience — 2026-11-13
+
+Documentation-only execution plan on isolated branch
+`feature/vst-plugin-experience` from current `origin/main` at
+`7d70d502`. The report partially improved on v0.0.29 but still describes
+native-editor sizing/crashes, automatic Mixer insertion during an attempted
+plugin connection/sidechain, and a need to configure while stopped. These
+reports remain unreproduced; plugin/OS/scaling details and support bundle are
+not available. The plan traces PLUG-01–07, GRAPH-01–15, DSP-19, UI/API/MCP,
+state, security, quality and M05/M06/M07/M08 gates, including explicit VST3
+auxiliary-bus vs. VST2 single-stream boundaries and concrete editor, stopped
+setup, serial-vs-sum, and sidechain acceptance. See the
+[issue #136 execution plan](issue-136-vst-experience.md) for decisions,
+test matrix, prerequisites, failure containment, rollback and current evidence.
+The follow-on verification has now built and validated the pinned AGain/mda
+fixtures, passed the real AGain sidechain-port dispatcher test, built the
+release desktop shell and passed `fresh_install_shell`. The visible Sidechain
+canvas label now has a three-theme Playwright scenario and screenshots. These
+do not reproduce the reporter's plugin or qualify audible sidechain scheduling.
+Review pass 2
+(2026-11-14) fixed MIDI stuck-note recovery, worker backlog eviction, active
+session/exact-name targeting and MIDI device connection status, and recorded the
+owner's visible-Mixer and explicit-VST2-pin-label sidechain decisions. The
+2026-11-15 continuation completed the sidechain guide/manifest, explicit
+occupied-key replace/keep flow, bounded VST3 unit/program display, safe
+context-menu stub and unsigned app-only installer install/uninstall smoke. A
+real five-unit Steinberg UTF16Name sample now passes the worker metadata test;
+`plugins.programs` also passes through `ControlPlane::dispatch` with the real
+worker registered on a fake running session. See [the plan](vst-full-compatibility.md),
+[handoff](vst-handoff.md) and the [completion work plan](vst-completion-work.md)
+for test results and remaining gates: real editor/DPI/pumped parent, owner
+endpoints, hosted i686 CI/annotations and signing.
 
 ## CI speed — 2026-11-12
 

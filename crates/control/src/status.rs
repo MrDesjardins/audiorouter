@@ -281,25 +281,41 @@ impl ControlPlane {
                 for node in session
                     .nodes
                     .iter_mut()
-                    .filter(|node| node.kind == NodeKind::Plugin)
+                    .filter(|node| audiorouter_engine::hosts_plugin_worker(node.kind))
                 {
-                    let bridge = match self.plugin_bridge(session_id, &node.id) {
-                        Ok(bridge) => bridge,
+                    let live = match self.plugin_live_bridge(session_id, &node.id) {
+                        Ok(live) => live,
                         Err(_) if !node.enabled => continue,
                         Err(_) => return Err(ControlError::RestartRequired(
                             "a plugin changed while the route was preparing; stop and press Play"
                                 .into(),
                         )),
                     };
-                    stages.defer_reuse(
-                        node.id.clone(),
-                        Arc::clone(&bridge),
-                        Vec::new(),
-                        guards.contains(&node.id),
-                        node.enabled && !node.bypass,
-                    );
-                    node.enabled = true;
-                    node.bypass = false;
+                    live.set_silence_if_unchanged(guards.contains(&node.id));
+                    let mut compiler_owns_flags = false;
+                    match live {
+                        crate::plugins::LivePluginBridge::Standard(bridge) => {
+                            stages.defer_reuse(
+                                node.id.clone(),
+                                bridge,
+                                Vec::new(),
+                                guards.contains(&node.id),
+                                node.enabled && !node.bypass,
+                            );
+                        }
+                        #[cfg(windows)]
+                        crate::plugins::LivePluginBridge::Sidechain(bridge) => {
+                            // Multi-bus bypass is compiled from the session
+                            // flags; the live flag list only drives the
+                            // ordinary bridge's processing switch.
+                            stages.stages.insert(node.id.clone(), bridge);
+                            compiler_owns_flags = true;
+                        }
+                    }
+                    if !compiler_owns_flags {
+                        node.enabled = true;
+                        node.bypass = false;
+                    }
                 }
                 stages
             } else {

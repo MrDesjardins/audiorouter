@@ -13,7 +13,7 @@ use std::sync::Arc;
 use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
 use audiorouter_engine::{
     compile_native_paths_with_plugins_and_audio, AudioBlock, CompiledMixerFanoutGraph,
-    CompiledPathSet, DecodedAudio, RuntimeGeneration, SourceTransport,
+    CompiledPathSet, DecodedAudio, RealtimePluginProcessor, RuntimeGeneration, SourceTransport,
 };
 use serde_json::json;
 
@@ -43,6 +43,7 @@ fn role(kind: NodeKind) -> Role {
         | NodeKind::TestSignal
         | NodeKind::AudioFile
         | NodeKind::NetworkReceive
+        | NodeKind::Instrument
         | NodeKind::Soundboard => Role::Source,
         NodeKind::PhysicalOutput | NodeKind::VirtualCaptureSink | NodeKind::NetworkSend => {
             Role::Sink
@@ -169,6 +170,36 @@ fn session(label: &str, nodes: Vec<Node>, edges: Vec<Edge>) -> Session {
     }
 }
 
+/// Stands in for an instrument worker with one note held: it ignores the
+/// silent block it is handed and replaces it with a tone.
+#[derive(Debug)]
+struct HeldNote;
+
+impl RealtimePluginProcessor for HeldNote {
+    fn process(&self, block: &mut AudioBlock) {
+        for channel in 0..block.channels() {
+            for (index, sample) in block.channel_mut(channel).unwrap().iter_mut().enumerate() {
+                *sample = 0.3 * (index as f32 * 0.1).sin().max(0.2);
+            }
+        }
+    }
+}
+
+/// One bound worker per Instrument node, as the control plane binds them.
+fn instrument_workers(session: &Session) -> HashMap<EntityId, Arc<dyn RealtimePluginProcessor>> {
+    session
+        .nodes
+        .iter()
+        .filter(|node| node.kind == NodeKind::Instrument)
+        .map(|node| {
+            (
+                node.id.clone(),
+                Arc::new(HeldNote) as Arc<dyn RealtimePluginProcessor>,
+            )
+        })
+        .collect()
+}
+
 fn compile(session: &Session) -> Result<CompiledPathSet, String> {
     let media = HashMap::from([(
         "media-1".to_owned(),
@@ -181,10 +212,30 @@ fn compile(session: &Session) -> Result<CompiledPathSet, String> {
     compile_native_paths_with_plugins_and_audio(
         session,
         RuntimeGeneration::new(1),
-        &Default::default(),
+        &instrument_workers(session),
         &media,
     )
     .map_err(|error| format!("{error:?}"))
+}
+
+/// An instrument whose worker is not bound must fail closed (never play as a
+/// transparent stage), in every layout.
+#[test]
+fn an_instrument_without_a_bound_worker_is_refused() {
+    let label = "unbound instrument";
+    let session = session(
+        label,
+        vec![source_node("a", NodeKind::Instrument), output("out-1")],
+        vec![edge("a", "out-1")],
+    );
+    let media = HashMap::new();
+    let result = compile_native_paths_with_plugins_and_audio(
+        &session,
+        RuntimeGeneration::new(1),
+        &Default::default(),
+        &media,
+    );
+    assert!(result.is_err(), "{label}: compiled without a worker");
 }
 
 /// Whether a source renders its own sound in the engine (so the device-free
@@ -192,7 +243,10 @@ fn compile(session: &Session) -> Result<CompiledPathSet, String> {
 /// purpose: a new source must decide here.
 fn renders_own_audio(kind: NodeKind) -> bool {
     match kind {
-        NodeKind::TestSignal | NodeKind::AudioFile | NodeKind::Soundboard => true,
+        NodeKind::TestSignal
+        | NodeKind::AudioFile
+        | NodeKind::Soundboard
+        | NodeKind::Instrument => true,
         NodeKind::PhysicalInput
         | NodeKind::ApplicationCapture
         | NodeKind::EndpointLoopback
@@ -251,6 +305,9 @@ fn start_generators(set: &CompiledPathSet, session: &Session, label: &str) {
                         assert!(board.trigger(0), "{label}: Soundboard trigger rejected");
                     }
                 }
+                // An instrument sounds as soon as its worker holds a note; the
+                // double bound in `compile` holds one from the start.
+                NodeKind::Instrument => {}
                 // Guarded by the exhaustive classifier: a new generator kind
                 // fails here until it gets a start arm above.
                 _ => assert!(!renders_own_audio(node.kind), "{label}: {:?}", node.kind),

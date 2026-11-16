@@ -32,7 +32,7 @@ Encoder reply waits share one shutdown deadline. A timed-out writer is
 reported failed/recoverable; its thread keeps the file until the I/O returns,
 and shutdown does not wait indefinitely for that thread to exit.
 
-The current catalog contains 148 methods, including backend-owned quit/finalize,
+The current catalog contains 154 methods, including backend-owned quit/finalize,
 session portability, bounded WAV/MP3 media import, source transport, recorder
 lifecycle, plugin inventory/retry, and startup plan/apply methods.
 
@@ -91,6 +91,8 @@ See [network privacy and permissions](privacy-permissions.md#audio-privacy-bound
 | `recovery.clearSafeMode` | `sessionControl` | mutating; requires an idempotency key |
 | `soundLibrary.list` | `read` | read-only; bundled sound library manifest |
 | `soundLibrary.read` | `read` | read-only; one bundled sound as base64 for preview |
+| `midi.devices` | `read` | read-only; connected MIDI keyboards (by name) and, for each Instrument of a playing route, the device it listens to and whether it is connected; MCP tool `list_midi_devices` |
+| `midi.sendEvents` | `sessionControl` | mutating; plays notes on a running Instrument: up to 64 `events` (`noteOn` with optional `durationMs`, `noteOff`, `controlChange`, `pitchBend`, `aftertouch`, `allNotesOff`), each optionally `afterMs` later; no idempotency key because a repeat plays again; `sessionId` optional (active session), `nodeId` an ID or exact name; MCP tool `play_notes` |
 | `soundboard.trigger` | `sessionControl` | mutating; plays a slot, no idempotency key because a repeat press plays again; optional per-press `mode`; `sessionId` optional (active session), `nodeId` an ID or exact name |
 | `soundboard.stop` | `sessionControl` | mutating; fades out one slot or all voices; same addressing as `soundboard.trigger` |
 | `soundboard.status` | `read` | read-only; live voices per slot; same addressing as `soundboard.trigger` |
@@ -150,6 +152,12 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `plugins.retry` | `pluginScan` | mutating; requires an idempotency key |
 | `plugins.inspect` | `pluginScan` | read-only |
 | `plugins.parameters` | `pluginScan` | external operation; bounded descriptors from the exact revalidated plugin worker |
+| `plugins.buses` | `pluginScan` | read-only; exact VST2/VST3 audio bus discovery through a verified isolated worker; optional exact VST3 `classId`; no graph mutation |
+| `plugins.removeSidechainPort` | `sessionControl` | mutating; removes the `sidechain` port of a plugin node as one reversible graph commit; refused while any connection uses it |
+| `plugins.addSidechainPort` | `sessionControl` | mutating; adds the declared VST3 auxiliary input as the named `sidechain` port from a live, identity-checked worker, as one reversible graph commit; creates no Mixer and no connection |
+| `plugins.programs` | `pluginScan` | read-only; bounded program list for a plugin in a playing route (VST2 and VST3; VST3 is read-only); optional `sessionId`, `nodeId` is an ID or exact name |
+| `plugins.selectProgram` | `pluginScan` | mutating; selects a bounded VST2 program index on a playing plugin; optional `sessionId`, `nodeId` is an ID or exact name |
+| `plugins.applyPreset` | `pluginScan` | external operation; applies a bounded VST2 `.fxp`/`.fxb` file from the plugin's own directory to a playing plugin; optional `sessionId`, `nodeId` is an ID or exact name |
 | `virtualDevices.list` | `read` | read-only |
 | `virtualDevices.plan` | `deviceAdministration` | plan-only |
 | `virtualDevices.apply` | `deviceAdministration` | mutating; requires an idempotency key |

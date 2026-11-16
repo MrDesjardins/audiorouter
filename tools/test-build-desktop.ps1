@@ -15,7 +15,10 @@ function Write-DesktopFixture([string]$Name) {
 function global:cargo.exe {
     $global:desktopFixtureCommands += "cargo $args"
     if ($global:desktopFixtureFailBuild) { $global:LASTEXITCODE = 9; return }
-    if ($args -contains 'audiorouter-plugin-worker') { Write-DesktopFixture 'audiorouter-plugin-worker.exe' }
+    if ($args -contains 'audiorouter-plugin-worker') {
+        if ($args -contains 'i686-pc-windows-msvc') { Write-DesktopFixture 'audiorouter-plugin-worker-x86.exe' }
+        else { Write-DesktopFixture 'audiorouter-plugin-worker.exe' }
+    }
     else { Write-DesktopFixture 'audiorouter-shell.exe' }
     $global:LASTEXITCODE = 0
 }
@@ -23,7 +26,10 @@ function global:npm.cmd { $global:desktopFixtureCommands += "npm $args"; $global
 function global:powershell.exe {
     $global:desktopFixtureCommands += "powershell $args"
     if ($args -contains 'tools/stage-mcp-cli.ps1') { Write-DesktopFixture 'audiorouter-cli.exe' }
-    elseif (-not $global:desktopFixtureOmitWorker) { Write-DesktopFixture 'audiorouter-vst3-worker.exe' }
+    elseif (-not $global:desktopFixtureOmitWorker) {
+        if ($args -contains 'x86') { Write-DesktopFixture 'audiorouter-vst3-worker-x86.exe' }
+        else { Write-DesktopFixture 'audiorouter-vst3-worker.exe' }
+    }
     $global:LASTEXITCODE = 0
 }
 
@@ -37,7 +43,7 @@ try {
 }
 $global:desktopFixtureOmitWorker = $false
 $result = @(& $fixtureBuild)
-if (@($result | Where-Object { $_ -like '*SHA256*' }).Count -ne 4) { throw 'Not all four binaries were checked' }
+if (@($result | Where-Object { $_ -like '*SHA256*' }).Count -ne 6) { throw 'Not all six binaries were checked' }
 if (-not ($global:desktopFixtureCommands -match 'npm --prefix ui run build')) { throw 'UI was not rebuilt' }
 $global:desktopFixtureFailBuild = $true
 try {

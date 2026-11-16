@@ -3,6 +3,141 @@
 use super::*;
 use crate::test_support::*;
 
+#[cfg(windows)]
+#[test]
+#[ignore = "requires rebuilt VST2 worker and AUDIOROUTER_TEST_VST2_BUS_FIXTURE"]
+fn discovered_sidechain_port_plans_commit_replay_and_undo_atomically() {
+    use audiorouter_plugin_host::{inspect_binary, SupervisedWorkerProcess};
+    let plugin =
+        std::path::PathBuf::from(std::env::var("AUDIOROUTER_TEST_VST2_BUS_FIXTURE").unwrap());
+    let worker = std::path::PathBuf::from(std::env::var("AUDIOROUTER_TEST_VST2_WORKER").unwrap());
+    let root = plugin.parent().unwrap().to_path_buf();
+    let identity = inspect_binary(&plugin, std::slice::from_ref(&root)).unwrap();
+    let mut worker = SupervisedWorkerProcess::spawn_verified_with_sample_rate(
+        worker,
+        &identity,
+        std::slice::from_ref(&root),
+        2,
+        48_000,
+        Instant::now(),
+    )
+    .unwrap();
+    let binding = worker
+        .verify_sidechain_binding(
+            std::slice::from_ref(&root),
+            &identity.sha256,
+            None,
+            (2, 2),
+            Instant::now(),
+        )
+        .unwrap();
+    assert!(worker.shutdown().unwrap().success());
+    let mut plane = ControlPlane::default();
+    let scan = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "plugins.scan".into(),
+        params: Some(json!({ "directory": root })),
+    });
+    assert!(scan.error.is_none(), "{:?}", scan.error);
+    let mut original = session();
+    original.nodes.truncate(1);
+    original.edges.clear();
+    let node = &mut original.nodes[0];
+    node.kind = NodeKind::Plugin;
+    node.parameters = serde_json::from_value(
+        json!({ "path": plugin, "format": "vst2", "fingerprint": identity.sha256 }),
+    )
+    .unwrap();
+    node.ports = vec![
+        audiorouter_domain::Port {
+            name: "in".into(),
+            direction: PortDirection::Input,
+            channels: 2,
+        },
+        audiorouter_domain::Port {
+            name: "out".into(),
+            direction: PortDirection::Output,
+            channels: 2,
+        },
+    ];
+    let node_id = node.id.clone();
+    plane.insert_session(original.clone()).unwrap();
+    let mut wrong_identity = original.clone();
+    wrong_identity.id = EntityId::new("wrong-plugin-binding");
+    wrong_identity.nodes[0]
+        .parameters
+        .insert("fingerprint".into(), json!("f".repeat(64)));
+    plane.insert_session(wrong_identity.clone()).unwrap();
+    assert!(plane
+        .plan_bound_plugin_sidechain(&wrong_identity.id, 0, &node_id, &binding)
+        .is_err());
+    assert_eq!(
+        plane.get_session(&wrong_identity.id).unwrap(),
+        &wrong_identity
+    );
+    let mut wrong_width = original.clone();
+    wrong_width.id = EntityId::new("wrong-plugin-width");
+    for port in &mut wrong_width.nodes[0].ports {
+        port.channels = 1;
+    }
+    plane.insert_session(wrong_width.clone()).unwrap();
+    assert!(plane
+        .plan_bound_plugin_sidechain(&wrong_width.id, 0, &node_id, &binding)
+        .is_err());
+    assert_eq!(plane.get_session(&wrong_width.id).unwrap(), &wrong_width);
+    let plan_id = plane
+        .plan_bound_plugin_sidechain(&original.id, 0, &node_id, &binding)
+        .unwrap();
+    assert_eq!(
+        plane.get_session(&original.id).unwrap(),
+        &original,
+        "planning cannot mutate the session"
+    );
+    for expected_replay in [false, true] {
+        let result = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(), id: Some(json!(2)), method: "graph.commit".into(),
+            params: Some(json!({ "planId": plan_id, "baseRevision": 0, "idempotencyKey": "sidechain-binding" })),
+        });
+        assert!(result.error.is_none(), "{:?}", result.error);
+        assert_eq!(result.result.unwrap()["idempotentReplay"], expected_replay);
+    }
+    let changed = plane.get_session(&original.id).unwrap().clone();
+    assert_eq!(changed.revision, 1);
+    assert_eq!(
+        changed.nodes[0].plugin_sidechain_port().unwrap().channels,
+        2
+    );
+    assert!(
+        plane
+            .plan_bound_plugin_sidechain(&original.id, 0, &node_id, &binding)
+            .is_err(),
+        "stale revision must refuse"
+    );
+    assert_eq!(plane.get_session(&original.id).unwrap(), &changed);
+    let undo = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(3)),
+        method: "graph.undoPlan".into(),
+        params: Some(json!({ "sessionId": original.id, "baseRevision": 1 })),
+    });
+    assert!(undo.error.is_none(), "{:?}", undo.error);
+    let undo_plan = undo.result.unwrap()["planId"].clone();
+    let result = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(4)),
+        method: "graph.commit".into(),
+        params: Some(
+            json!({ "planId": undo_plan, "baseRevision": 1, "idempotencyKey": "undo-sidechain" }),
+        ),
+    });
+    assert!(result.error.is_none(), "{:?}", result.error);
+    let restored = plane.get_session(&original.id).unwrap();
+    assert_eq!(restored.revision, 2);
+    assert_eq!(restored.nodes, original.nodes);
+    assert_eq!(restored.edges, original.edges);
+}
+
 #[test]
 fn endpoint_feedback_names_the_return_and_accepts_a_separate_recording_cable() {
     let mut session = feedback_fixture();

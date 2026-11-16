@@ -2182,6 +2182,32 @@
       ],
       "realtimeCostClass": "low",
       "type": "soundboard@1"
+    },
+    {
+      "availability": {
+        "reason": "requires a bound isolated plugin worker",
+        "status": "unavailable"
+      },
+      "latencySamples": 0,
+      "parameters": [
+        {
+          "description": "The instrument class ID from plugins.scan (a VST3 module can hold several classes); default selects its first instrument.",
+          "name": "classId",
+          "type": "string"
+        },
+        {
+          "description": "Opaque settings asset from plugins.saveState or plugins.prepareUpdate. Omit it to start from the instrument's defaults.",
+          "name": "stateId",
+          "type": "string"
+        },
+        {
+          "description": "Where notes come from: \"keyboard\" (the on-screen keyboard and the API only), \"all\" (every connected MIDI device, plus the keyboard) or a MIDI device id from midi.devices. keyboard when unset.",
+          "name": "midiInput",
+          "type": "string"
+        }
+      ],
+      "realtimeCostClass": "worker-bound",
+      "type": "instrument@1"
     }
   ],
   "voicePresets": [
@@ -2868,7 +2894,7 @@
     }
   ],
   "sourceHashes": {
-    "crates/control/src/catalog.rs": "e77209ad35b793c8b04b15d1030a4c06ea7bfc19b28bd387a79a855c3aea1965",
+    "crates/control/src/catalog.rs": "8cd92b2f34e1ccaa472cde5c3d6ae16320ba1e6c3a447df8507ba26b82b2f6a7",
     "crates/domain/src/voice_changer.rs": "221e9abc0f3bfb14214ce907adb197983d6cdcbab5bf9587476edd6eb904cf14"
   }
 }

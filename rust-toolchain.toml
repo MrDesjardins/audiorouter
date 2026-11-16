@@ -3,3 +3,5 @@
 [toolchain]
 channel = "1.96.0"
 components = ["rustfmt", "clippy"]
+# i686: the 32-bit plugin worker, which hosts 32-bit VST plugins.
+targets = ["i686-pc-windows-msvc"]

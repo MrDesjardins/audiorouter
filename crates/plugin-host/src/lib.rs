@@ -24,7 +24,10 @@ use std::sync::{
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+pub mod bus_discovery;
+pub mod sidechain_bridge;
 pub mod vst2;
+pub mod vst2_preset;
 
 pub const MAX_PLUGIN_BYTES: u64 = 256 * 1024 * 1024;
 pub const MAX_PLUGIN_METADATA_BYTES: u64 = 1024 * 1024;
@@ -144,10 +147,10 @@ pub enum PluginFormat {
 pub enum PluginCompatibility {
     SupportedVst3X64,
     SupportedVst2X64Gated,
+    /// A 32-bit plugin, hosted by the 32-bit worker process.
+    SupportedVst3X86,
+    SupportedVst2X86,
     UnsupportedFormat,
-    /// An x64 plugin whose metadata declares an instrument; AudioRouter has
-    /// no MIDI input, so it is listed with its reason but cannot be added.
-    UnsupportedInstrument,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -413,23 +416,132 @@ pub struct PluginIdentity {
     pub metadata: PluginMetadata,
 }
 
-impl PluginIdentity {
-    pub fn compatibility(&self) -> PluginCompatibility {
-        if self.metadata.instrument
-            && self.architecture == PeArchitecture::X64
-            && self.format != PluginFormat::Unknown
-        {
-            return PluginCompatibility::UnsupportedInstrument;
+/// Binaries (by SHA-256) a worker refused as instruments when it loaded them.
+/// A scan never runs plugin code, so a VST2 DLL (no metadata file) or a VST3
+/// module without `moduleinfo.json` only reveals that it is an instrument at
+/// load; remembering it keeps the next scan result honest.
+static LEARNED_INSTRUMENTS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Where the learned fingerprints are kept between runs: one lowercase SHA-256
+/// per line, in the user's own application-data folder. `AUDIOROUTER_LEARNED_INSTRUMENTS_FILE`
+/// overrides it; unit tests never touch the real file.
+fn learned_instruments_file() -> Option<PathBuf> {
+    if let Some(path) = std::env::var_os("AUDIOROUTER_LEARNED_INSTRUMENTS_FILE") {
+        return Some(PathBuf::from(path));
+    }
+    if cfg!(test) {
+        return None;
+    }
+    std::env::var_os("LOCALAPPDATA").map(|base| {
+        PathBuf::from(base)
+            .join("AudioRouter")
+            .join("learned-instruments.txt")
+    })
+}
+
+fn is_fingerprint(text: &str) -> bool {
+    text.len() == 64 && text.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+/// Fingerprints stored in `path`; a missing or unreadable file is an empty list.
+fn read_learned_fingerprints(path: &Path) -> Vec<String> {
+    // The file is tiny (a line per instrument); a hand-edited huge one is ignored.
+    match fs::metadata(path) {
+        Ok(metadata) if metadata.len() <= 4096 * 65 => {}
+        _ => return Vec::new(),
+    }
+    fs::read_to_string(path)
+        .map(|text| {
+            text.lines()
+                .map(|line| line.trim().to_ascii_lowercase())
+                .filter(|line| is_fingerprint(line))
+                .take(4096)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Append one fingerprint; best effort, because remembering is only a convenience.
+fn append_learned_fingerprint(path: &Path, sha256: &str) {
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{sha256}");
+    }
+}
+
+/// Load the saved fingerprints once per process, before the first read or write.
+fn load_learned_instruments_once() {
+    static LOADED: std::sync::Once = std::sync::Once::new();
+    LOADED.call_once(|| {
+        let Some(path) = learned_instruments_file() else {
+            return;
+        };
+        let saved = read_learned_fingerprints(&path);
+        if let Ok(mut learned) = LEARNED_INSTRUMENTS.lock() {
+            for sha256 in saved {
+                if !learned.contains(&sha256) {
+                    learned.push(sha256);
+                }
+            }
         }
-        if self.format == PluginFormat::Vst3 && self.architecture == PeArchitecture::X64 {
-            PluginCompatibility::SupportedVst3X64
-        } else if cfg!(windows)
-            && self.format == PluginFormat::Vst2
-            && self.architecture == PeArchitecture::X64
-        {
-            PluginCompatibility::SupportedVst2X64Gated
-        } else {
-            PluginCompatibility::UnsupportedFormat
+    });
+}
+
+/// Record the worker's refusal text; returns whether it named an instrument.
+pub fn note_instrument_refusal(sha256: &str, message: &str) -> bool {
+    if !message.contains("is an instrument") {
+        return false;
+    }
+    load_learned_instruments_once();
+    let mut added = false;
+    if let Ok(mut learned) = LEARNED_INSTRUMENTS.lock() {
+        if !learned.iter().any(|known| known == sha256) && learned.len() < 4096 {
+            learned.push(sha256.to_owned());
+            added = true;
+        }
+    }
+    if added && is_fingerprint(sha256) {
+        if let Some(path) = learned_instruments_file() {
+            append_learned_fingerprint(&path, &sha256.to_ascii_lowercase());
+        }
+    }
+    true
+}
+
+fn learned_instrument(sha256: &str) -> bool {
+    load_learned_instruments_once();
+    LEARNED_INSTRUMENTS
+        .lock()
+        .is_ok_and(|learned| learned.iter().any(|known| known == sha256))
+}
+
+impl PluginIdentity {
+    /// Whether this plugin is an instrument (a synth or sampler played with
+    /// MIDI): its metadata says so, or a worker refused it as an effect once.
+    /// A VST2 DLL carries no metadata, so it only shows as an instrument after
+    /// a load attempt reveals it; until then it is listed without a kind.
+    pub fn is_instrument(&self) -> bool {
+        (self.metadata.instrument || learned_instrument(&self.sha256))
+            && matches!(self.architecture, PeArchitecture::X64 | PeArchitecture::X86)
+            && self.format != PluginFormat::Unknown
+    }
+
+    /// Whether the plugin can be hosted at all. Instruments and effects share
+    /// the same rules; the Instrument tool and the effect tool each check the
+    /// kind where they add the plugin.
+    pub fn compatibility(&self) -> PluginCompatibility {
+        match (self.format, self.architecture) {
+            (PluginFormat::Vst3, PeArchitecture::X64) => PluginCompatibility::SupportedVst3X64,
+            (PluginFormat::Vst3, PeArchitecture::X86) => PluginCompatibility::SupportedVst3X86,
+            (PluginFormat::Vst2, PeArchitecture::X64) if cfg!(windows) => {
+                PluginCompatibility::SupportedVst2X64Gated
+            }
+            (PluginFormat::Vst2, PeArchitecture::X86) if cfg!(windows) => {
+                PluginCompatibility::SupportedVst2X86
+            }
+            _ => PluginCompatibility::UnsupportedFormat,
         }
     }
 
@@ -607,7 +719,7 @@ fn inspect_binary_with_control(
         }
     }
     let architecture = parse_pe_architecture(&bytes).ok_or(InspectionError::NotPe)?;
-    if architecture != PeArchitecture::X64 {
+    if !matches!(architecture, PeArchitecture::X64 | PeArchitecture::X86) {
         return Err(InspectionError::UnsupportedArchitecture);
     }
     if format == PluginFormat::Unknown
@@ -617,11 +729,17 @@ fn inspect_binary_with_control(
         format = PluginFormat::Vst2;
     }
     let digest = Sha256::digest(&bytes);
-    let plugin_metadata = if format == PluginFormat::Vst3 && canonical.is_dir() {
-        read_plugin_metadata(&canonical)
-    } else {
-        PluginMetadata::default()
-    };
+    let (mut plugin_metadata, classes_listed) =
+        if format == PluginFormat::Vst3 && canonical.is_dir() {
+            read_plugin_metadata(&canonical)
+        } else {
+            (PluginMetadata::default(), false)
+        };
+    // No class list in the metadata (many JUCE builds ship without
+    // `moduleinfo.json`): read the class category from the binary's own bytes.
+    if format == PluginFormat::Vst3 && !plugin_metadata.instrument && !classes_listed {
+        plugin_metadata.instrument = binary_declares_vst3_instrument(&bytes);
+    }
     Ok(PluginIdentity {
         path: canonical,
         binary_path,
@@ -633,10 +751,58 @@ fn inspect_binary_with_control(
     })
 }
 
-fn read_plugin_metadata(bundle: &Path) -> PluginMetadata {
-    let mut metadata = read_module_info(bundle);
+/// Whether a VST3 binary holds an instrument class category such as
+/// `Instrument|Synth`. A VST3 class declares its sub-categories as one plain
+/// string in the module, so this needs no plugin code to run. The bare word
+/// "Instrument" is not enough (frameworks embed it in effects too), and
+/// `Fx|Instrument` is an effect, so the match must start a string and be
+/// followed by a sub-category. Measured on 2026-11-14: Surge XT, RipplerX and
+/// PolyMAX match; 30 effects (Dragonfly, Zam, Surge XT Effects, tiagolr, UADx)
+/// do not. A module with both an effect and an instrument class is listed as an
+/// instrument.
+fn binary_declares_vst3_instrument(bytes: &[u8]) -> bool {
+    const NEEDLE: &[u8] = b"Instrument|";
+    // DPF plugins (Kars, Nekobi) declare the bare category `Instrument` as a
+    // string of its own. Accept it only when the module declares no effect
+    // category, so a framework's embedded word cannot turn an effect into one.
+    // Measured 2026-11-14: Kars and Nekobi match; no effect in the corpus does.
+    if contains_whole_string(bytes, b"Instrument")
+        && !contains_whole_string(bytes, b"Fx")
+        && !bytes.windows(3).any(|window| window == b"Fx|")
+    {
+        return true;
+    }
+    let mut from = 0;
+    while let Some(offset) = bytes[from..]
+        .windows(NEEDLE.len())
+        .position(|window| window == NEEDLE)
+    {
+        let at = from + offset;
+        let starts_string = at == 0 || bytes[at - 1] == 0;
+        let has_sub_category = bytes
+            .get(at + NEEDLE.len())
+            .is_some_and(u8::is_ascii_alphabetic);
+        if starts_string && has_sub_category {
+            return true;
+        }
+        from = at + 1;
+    }
+    false
+}
+
+/// Whether `needle` appears as a complete NUL-delimited string.
+fn contains_whole_string(bytes: &[u8], needle: &[u8]) -> bool {
+    bytes.windows(needle.len() + 2).any(|window| {
+        window[0] == 0 && window[needle.len() + 1] == 0 && &window[1..=needle.len()] == needle
+    })
+}
+
+/// The bundle's metadata, and whether it listed its audio classes (when it
+/// did, their categories are trusted and the binary is not searched).
+fn read_plugin_metadata(bundle: &Path) -> (PluginMetadata, bool) {
+    let (mut metadata, classes_listed) = read_module_info(bundle);
     metadata.instrument = metadata.instrument || bundle_manifest_declares_synth(bundle);
-    metadata
+    (metadata, classes_listed)
 }
 
 /// Read a bounded JSON metadata file from `Contents/Resources` of a bundle.
@@ -663,13 +829,13 @@ fn bundle_manifest_declares_synth(bundle: &Path) -> bool {
         .unwrap_or(false)
 }
 
-fn read_module_info(bundle: &Path) -> PluginMetadata {
+fn read_module_info(bundle: &Path) -> (PluginMetadata, bool) {
     let path = bundle
         .join("Contents")
         .join("Resources")
         .join("moduleinfo.json");
     let Ok(file) = fs::File::open(path) else {
-        return PluginMetadata::default();
+        return (PluginMetadata::default(), false);
     };
     let mut bytes = Vec::new();
     if file
@@ -678,11 +844,11 @@ fn read_module_info(bundle: &Path) -> PluginMetadata {
         .is_err()
         || bytes.len() as u64 > MAX_PLUGIN_METADATA_BYTES
     {
-        return PluginMetadata::default();
+        return (PluginMetadata::default(), false);
     }
     let normalized = strip_json_trailing_commas(&bytes);
     let Ok(value) = serde_json::from_slice::<serde_json::Value>(&normalized) else {
-        return PluginMetadata::default();
+        return (PluginMetadata::default(), false);
     };
     let vendor = value
         .get("Factory Info")
@@ -754,12 +920,15 @@ fn read_module_info(bundle: &Path) -> PluginMetadata {
         .collect::<Vec<_>>();
     let instrument = !audio_sub_categories.is_empty()
         && audio_sub_categories.iter().all(|instrument| *instrument);
-    PluginMetadata {
-        instrument,
-        vendor,
-        version,
-        class_ids,
-    }
+    (
+        PluginMetadata {
+            instrument,
+            vendor,
+            version,
+            class_ids,
+        },
+        !audio_sub_categories.is_empty(),
+    )
 }
 
 fn strip_json_trailing_commas(bytes: &[u8]) -> Vec<u8> {
@@ -807,7 +976,15 @@ fn resolve_binary_path(path: &Path) -> Result<PathBuf, InspectionError> {
     if !path.is_dir() {
         return Ok(path.to_path_buf());
     }
-    let contents = path.join("Contents").join("x86_64-win");
+    // 64-bit bundles keep their binary in `x86_64-win`, 32-bit ones in
+    // `x86-win` (VST3 bundle layout). Prefer the 64-bit folder.
+    let contents = [
+        path.join("Contents").join("x86_64-win"),
+        path.join("Contents").join("x86-win"),
+    ]
+    .into_iter()
+    .find(|candidate| candidate.is_dir())
+    .unwrap_or_else(|| path.join("Contents").join("x86_64-win"));
     let entries = fs::read_dir(&contents).map_err(|error| {
         if error.kind() == std::io::ErrorKind::NotFound {
             InspectionError::Missing
@@ -1037,10 +1214,14 @@ fn pe_export_exists(bytes: &[u8], wanted: &[u8]) -> Option<bool> {
         return Some(false);
     };
     let optional = pe_offset.checked_add(24)?;
-    if read_u16(bytes, optional)? != 0x20b {
-        return Some(false);
-    }
-    let export_rva = read_u32(bytes, optional.checked_add(112)?)?;
+    // PE32+ (x64) keeps the export directory 112 bytes into the optional
+    // header, PE32 (x86) 96 bytes in.
+    let directory_offset = match read_u16(bytes, optional)? {
+        0x20b => 112,
+        0x10b => 96,
+        _ => return Some(false),
+    };
+    let export_rva = read_u32(bytes, optional.checked_add(directory_offset)?)?;
     if export_rva == 0 {
         return Some(false);
     }
@@ -1173,8 +1354,11 @@ pub enum WorkerMessageError {
     InvalidFrame(WorkerFrameError),
     InvalidBusLayout(WorkerAudioBusLayoutError),
     InvalidBusFrames(WorkerAudioBusFramesError),
+    InvalidBusDiscovery(bus_discovery::BusDiscoveryError),
     InvalidParameter(ParameterEventError),
     InvalidParameterDescriptor(ParameterDescriptorError),
+    InvalidProgram,
+    InvalidMidi(MidiEventError),
     InvalidEditor,
     InvalidProtocolVersion,
     InvalidPluginHash,
@@ -1461,7 +1645,10 @@ impl WorkerSupervisor {
         if identity.format == PluginFormat::Vst2 {
             #[cfg(windows)]
             {
-                if identity.architecture != PeArchitecture::X64 {
+                if !matches!(
+                    identity.architecture,
+                    PeArchitecture::X64 | PeArchitecture::X86
+                ) {
                     return Err(WorkerStartError::UnsupportedPlugin);
                 }
             }
@@ -1472,7 +1659,10 @@ impl WorkerSupervisor {
             }
         }
         if !matches!(identity.format, PluginFormat::Vst3 | PluginFormat::Vst2)
-            || identity.architecture != PeArchitecture::X64
+            || !matches!(
+                identity.architecture,
+                PeArchitecture::X64 | PeArchitecture::X86
+            )
         {
             return Err(WorkerStartError::UnsupportedPlugin);
         }
@@ -1764,6 +1954,7 @@ pub fn stage_engine_worker_result<'a>(
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WorkerLoopError {
+    InvalidLayout,
     ThreadStart,
     InvalidParameters,
     InvalidRestartPolicy,
@@ -1778,6 +1969,15 @@ pub struct SupervisedBusWorkerLoop {
     stop: Arc<AtomicBool>,
     failed: Arc<AtomicBool>,
     quarantined: Arc<AtomicBool>,
+    failure_reason: Arc<Mutex<Option<String>>>,
+    requests: Arc<Mutex<std::collections::VecDeque<BridgeRequest>>>,
+    unchanged_audio: Arc<AtomicBool>,
+    silence_unchanged: Arc<AtomicBool>,
+    silenced_unchanged: Arc<AtomicBool>,
+    plugin_latency: Arc<AtomicU32>,
+    output_misses: Arc<AtomicU32>,
+    input_drops: Arc<AtomicU32>,
+    quantum_frames: usize,
     join: Option<JoinHandle<()>>,
 }
 
@@ -1796,8 +1996,17 @@ impl SupervisedBusWorkerLoop {
         worker: SupervisedWorkerProcess,
         scheduler: Arc<audiorouter_engine::RuntimeBusScheduler>,
         parameters: Vec<ParameterEvent>,
+        sample_rate_hz: u32,
+        initial_latency_samples: u32,
     ) -> Result<Self, WorkerLoopError> {
-        Self::spawn_with_restart_policy(worker, scheduler, parameters, 0)
+        Self::spawn_with_restart_policy_and_rate(
+            worker,
+            scheduler,
+            parameters,
+            0,
+            sample_rate_hz,
+            initial_latency_samples,
+        )
     }
 
     /// Spawn the owner with an explicit bounded automatic replacement budget.
@@ -1810,6 +2019,27 @@ impl SupervisedBusWorkerLoop {
         scheduler: Arc<audiorouter_engine::RuntimeBusScheduler>,
         parameters: Vec<ParameterEvent>,
         max_restarts: u32,
+    ) -> Result<Self, WorkerLoopError> {
+        Self::spawn_with_restart_policy_and_rate(
+            worker,
+            scheduler,
+            parameters,
+            max_restarts,
+            48_000,
+            0,
+        )
+    }
+
+    /// The rate-aware form used by a real bridge; the unchanged-audio watch
+    /// needs it to measure its two-second window in frames.
+    #[allow(clippy::too_many_arguments)]
+    pub fn spawn_with_restart_policy_and_rate(
+        worker: SupervisedWorkerProcess,
+        scheduler: Arc<audiorouter_engine::RuntimeBusScheduler>,
+        parameters: Vec<ParameterEvent>,
+        max_restarts: u32,
+        sample_rate_hz: u32,
+        initial_latency_samples: u32,
     ) -> Result<Self, WorkerLoopError> {
         if max_restarts > MAX_AUTOMATIC_WORKER_RESTARTS {
             return Err(WorkerLoopError::InvalidRestartPolicy);
@@ -1842,10 +2072,29 @@ impl SupervisedBusWorkerLoop {
         let stop = Arc::new(AtomicBool::new(false));
         let failed = Arc::new(AtomicBool::new(false));
         let quarantined = Arc::new(AtomicBool::new(false));
+        let failure_reason = Arc::new(Mutex::new(None::<String>));
+        let requests = Arc::new(Mutex::new(
+            std::collections::VecDeque::<BridgeRequest>::new(),
+        ));
+        let unchanged_audio = Arc::new(AtomicBool::new(false));
+        let silence_unchanged = Arc::new(AtomicBool::new(false));
+        let silenced_unchanged = Arc::new(AtomicBool::new(false));
+        let plugin_latency = Arc::new(AtomicU32::new(initial_latency_samples));
+        let output_misses = Arc::new(AtomicU32::new(0));
+        let input_drops = Arc::new(AtomicU32::new(0));
         let thread_stop = Arc::clone(&stop);
         let thread_failed = Arc::clone(&failed);
         let thread_quarantined = Arc::clone(&quarantined);
+        let thread_failure_reason = Arc::clone(&failure_reason);
+        let thread_requests = Arc::clone(&requests);
+        let thread_unchanged_audio = Arc::clone(&unchanged_audio);
+        let thread_silence_unchanged = Arc::clone(&silence_unchanged);
+        let thread_silenced_unchanged = Arc::clone(&silenced_unchanged);
+        let thread_plugin_latency = Arc::clone(&plugin_latency);
+        let thread_output_misses = Arc::clone(&output_misses);
+        let thread_input_drops = Arc::clone(&input_drops);
         let thread_scheduler = Arc::clone(&scheduler);
+        let quantum_frames = scheduler.frames();
         let join = std::thread::Builder::new()
             .name("audiorouter-vst3-bus-worker".into())
             .spawn(move || {
@@ -1857,8 +2106,17 @@ impl SupervisedBusWorkerLoop {
                     thread_stop,
                     thread_failed,
                     thread_quarantined,
+                    thread_failure_reason,
+                    thread_requests,
+                    thread_unchanged_audio,
+                    thread_silence_unchanged,
+                    thread_silenced_unchanged,
+                    thread_plugin_latency,
+                    thread_output_misses,
+                    thread_input_drops,
                     parameters,
                     max_restarts,
+                    sample_rate_hz,
                 );
             })
             .map_err(|_| WorkerLoopError::ThreadStart)?;
@@ -1867,6 +2125,15 @@ impl SupervisedBusWorkerLoop {
             stop,
             failed,
             quarantined,
+            failure_reason,
+            requests,
+            unchanged_audio,
+            silence_unchanged,
+            silenced_unchanged,
+            plugin_latency,
+            output_misses,
+            input_drops,
+            quantum_frames,
             join: Some(join),
         })
     }
@@ -1881,6 +2148,114 @@ impl SupervisedBusWorkerLoop {
 
     pub fn is_quarantined(&self) -> bool {
         self.quarantined.load(Ordering::Acquire)
+    }
+
+    /// Why the worker stopped, if it has (control plane only).
+    pub fn failure_reason(&self) -> Option<String> {
+        self.failure_reason
+            .lock()
+            .ok()
+            .and_then(|slot| slot.clone())
+    }
+
+    /// True when this plugin returned clearly audible input unchanged since it
+    /// started. The caller decides whether that is a warning or a fault.
+    pub fn passes_audio_unchanged(&self) -> bool {
+        self.unchanged_audio.load(Ordering::Acquire)
+    }
+
+    /// Protected-path policy: when set, an unchanged verdict silences the
+    /// plugin until the user deliberately resumes it.
+    pub fn set_silence_if_unchanged(&self, silence: bool) {
+        self.silence_unchanged.store(silence, Ordering::Release);
+        if !silence {
+            self.silenced_unchanged.store(false, Ordering::Release);
+        }
+    }
+
+    pub fn silenced_for_unchanged_audio(&self) -> bool {
+        self.silenced_unchanged.load(Ordering::Acquire)
+    }
+
+    /// Deliberate recovery (Retry). Lets audio through again only when the
+    /// plugin has changed loud audio since it was silenced.
+    pub fn resume_after_unchanged(&self) -> bool {
+        if !self.silenced_unchanged.load(Ordering::Acquire) {
+            return true;
+        }
+        if self.unchanged_audio.load(Ordering::Acquire) {
+            return false;
+        }
+        self.silenced_unchanged.store(false, Ordering::Release);
+        true
+    }
+
+    /// The delay the plugin reports for itself, in samples.
+    pub fn reported_latency_samples(&self) -> u32 {
+        self.plugin_latency.load(Ordering::Acquire)
+    }
+
+    /// Bounded callback counters; output misses include startup warm-up.
+    pub fn continuity_counts(&self) -> (u32, u32) {
+        (
+            self.output_misses.load(Ordering::Relaxed),
+            self.input_drops.load(Ordering::Relaxed),
+        )
+    }
+
+    fn request<T>(
+        &self,
+        make: impl FnOnce(std::sync::mpsc::Sender<Result<T, String>>) -> BridgeRequest,
+    ) -> Result<T, String> {
+        let (reply, receiver) = std::sync::mpsc::channel();
+        let mut requests = self
+            .requests
+            .lock()
+            .map_err(|_| "plugin runtime is unavailable".to_string())?;
+        if requests.len() >= 32 || self.has_failed() {
+            return Err("plugin runtime is unavailable or busy".into());
+        }
+        requests.push_back(make(reply));
+        drop(requests);
+        receiver
+            .recv_timeout(BRIDGE_REQUEST_TIMEOUT)
+            .map_err(|_| "plugin runtime did not respond".to_string())?
+    }
+
+    /// Capture the processing instance's opaque state (control thread).
+    pub fn save_state(&self) -> Result<PluginStateAsset, String> {
+        self.request(BridgeRequest::SaveState)
+    }
+
+    /// Open the plugin's own editor inside an authorized parent window.
+    pub fn open_editor(&self, authorization: EditorParentAuthorization) -> Result<(), String> {
+        self.request(|reply| BridgeRequest::OpenEditor(authorization, reply))
+    }
+
+    /// Close the editor; the worker applies its edits to the processing instance.
+    pub fn close_editor(&self) -> Result<(), String> {
+        self.request(BridgeRequest::CloseEditor)
+    }
+
+    /// Replace the bounded control-plane parameter template.
+    pub fn set_parameters(
+        &self,
+        parameters: Vec<ParameterEvent>,
+    ) -> Result<(), PluginRuntimeBridgeError> {
+        if parameters.len() > MAX_PARAMETER_EVENTS
+            || parameters.iter().any(|event| {
+                !event.normalized_value.is_finite()
+                    || !(0.0..=1.0).contains(&event.normalized_value)
+                    || event.sample_offset >= self.quantum_frames
+            })
+        {
+            return Err(PluginRuntimeBridgeError::InvalidParameters);
+        }
+        // The owner thread reads the scheduler; the template is part of the
+        // owner's spawn arguments, so a live change is carried by a request
+        // slot instead of shared mutable state.
+        self.request(|reply| BridgeRequest::SetParameters(parameters.clone(), reply))
+            .map_err(|_| PluginRuntimeBridgeError::InvalidParameters)
     }
 
     /// Request termination and join the owner thread. This is a control-plane
@@ -1909,13 +2284,128 @@ fn run_supervised_bus_worker(
     stop: Arc<AtomicBool>,
     failed: Arc<AtomicBool>,
     quarantined: Arc<AtomicBool>,
-    parameters: Vec<ParameterEvent>,
+    failure_reason: Arc<Mutex<Option<String>>>,
+    requests: Arc<Mutex<std::collections::VecDeque<BridgeRequest>>>,
+    unchanged_audio: Arc<AtomicBool>,
+    silence_unchanged: Arc<AtomicBool>,
+    silenced_unchanged: Arc<AtomicBool>,
+    plugin_latency: Arc<AtomicU32>,
+    output_misses: Arc<AtomicU32>,
+    input_drops: Arc<AtomicU32>,
+    mut parameters: Vec<ParameterEvent>,
     max_restarts: u32,
+    sample_rate_hz: u32,
 ) {
+    let note_failure = move |reason: String| {
+        if let Ok(mut slot) = failure_reason.lock() {
+            if slot.is_none() {
+                *slot = Some(bounded_failure_reason(reason));
+            }
+        }
+    };
     let mut restart_count = 0;
+    let mut unchanged_watch = UnchangedAudioWatch::new(scheduler.frames(), sample_rate_hz);
+    let latency_poll_frames = plugin_latency_poll_frames(sample_rate_hz);
+    let mut frames_since_latency = 0_usize;
+    macro_rules! recover {
+        ($reason:expr) => {{
+            note_failure($reason);
+            match recover_supervised_bus_worker(
+                worker,
+                &mut restart_count,
+                max_restarts,
+                &failed,
+                &quarantined,
+            ) {
+                Some(replacement) => {
+                    worker = replacement;
+                    continue;
+                }
+                None => break,
+            }
+        }};
+    }
     while !stop.load(Ordering::Acquire) {
+        // Serve control requests between complete quanta; the worker protocol
+        // is request/response, so a frame is never in flight here.
+        let pending = requests
+            .try_lock()
+            .ok()
+            .and_then(|mut queue| queue.pop_front());
+        if let Some(request) = pending {
+            let now = Instant::now();
+            let action = match &request {
+                BridgeRequest::SaveState(_) => "saving settings",
+                BridgeRequest::OpenEditor(..) => "opening the plugin window",
+                BridgeRequest::CloseEditor(_) => "closing the plugin window",
+                BridgeRequest::SetParameters(..) => "updating plugin parameters",
+                BridgeRequest::Programs(_) => "listing plugin programs",
+                BridgeRequest::SelectProgram(..) => "selecting a plugin program",
+                BridgeRequest::ApplyPreset(..) => "applying a plugin preset",
+            };
+            match request {
+                BridgeRequest::SaveState(reply) => {
+                    let _ =
+                        reply.send(worker.save_state(now).map_err(|error| format!("{error:?}")));
+                }
+                BridgeRequest::OpenEditor(authorization, reply) => {
+                    let opened = worker
+                        .open_editor(&authorization, now)
+                        .map_err(|error| format!("{error:?}"));
+                    if let Err(error) = &opened {
+                        note_failure(format!("{action}: {error}"));
+                    }
+                    let _ = reply.send(opened);
+                }
+                BridgeRequest::CloseEditor(reply) => {
+                    let closed = worker
+                        .close_editor(now)
+                        .map_err(|error| format!("{error:?}"));
+                    // Settings changed in the editor can change the delay.
+                    if closed.is_ok() {
+                        if let Ok(samples) = worker.plugin_latency_samples(now) {
+                            plugin_latency.store(samples, Ordering::Release);
+                        }
+                    }
+                    let _ = reply.send(closed);
+                }
+                BridgeRequest::SetParameters(next, reply) => {
+                    let valid = next.len() <= MAX_PARAMETER_EVENTS
+                        && next.iter().all(|event| {
+                            event.normalized_value.is_finite()
+                                && (0.0..=1.0).contains(&event.normalized_value)
+                                && event.sample_offset < scheduler.frames()
+                        });
+                    if valid {
+                        parameters = next;
+                        let _ = reply.send(Ok(()));
+                    } else {
+                        let _ = reply.send(Err("invalid parameter template".into()));
+                    }
+                }
+                // Multi-bus workers are VST3 only; programs and VST2 presets
+                // do not apply here.
+                BridgeRequest::Programs(reply) => {
+                    let _ = reply.send(Err("programs are only available for VST2 plugins".into()));
+                }
+                BridgeRequest::SelectProgram(_, reply) => {
+                    let _ = reply.send(Err("programs are only available for VST2 plugins".into()));
+                }
+                BridgeRequest::ApplyPreset(_, reply) => {
+                    let _ = reply.send(Err(
+                        "preset import is only available for VST2 plugins".into()
+                    ));
+                }
+            }
+            if worker.state() != WorkerState::Running {
+                note_failure(format!("the worker stopped while {action}"));
+                failed.store(true, Ordering::Release);
+                break;
+            }
+            continue;
+        }
         let Some(handle) = scheduler.try_take_input() else {
-            std::thread::yield_now();
+            std::thread::park_timeout(Duration::from_micros(100));
             continue;
         };
         let generation = handle.generation();
@@ -1943,48 +2433,24 @@ fn run_supervised_bus_worker(
         }
         scheduler.recycle_input(handle);
         if conversion_failed {
+            input_drops.fetch_add(1, Ordering::Relaxed);
             worker.record_failure(Instant::now());
-            let Some(replacement) = recover_supervised_bus_worker(
-                worker,
-                &mut restart_count,
-                max_restarts,
-                &failed,
-                &quarantined,
-            ) else {
-                break;
-            };
-            worker = replacement;
-            continue;
+            recover!("could not convert an input bus for the plugin worker".into());
         }
+        // Keep the main input for the unchanged-audio watch before the bus
+        // layout consumes the frames.
+        let main_input = input_frames.first().map(|frame| frame.samples.clone());
         let Ok(input_frames) = input_layout.input_frames(input_frames) else {
             worker.record_failure(Instant::now());
-            let Some(replacement) = recover_supervised_bus_worker(
-                worker,
-                &mut restart_count,
-                max_restarts,
-                &failed,
-                &quarantined,
-            ) else {
-                break;
-            };
-            worker = replacement;
-            continue;
+            recover!("the plugin worker input buses did not match its layout".into());
         };
         let processed = match worker.process_buses(input_frames, parameters.clone(), Instant::now())
         {
             Ok(processed) => processed,
-            Err(_) => {
-                let Some(replacement) = recover_supervised_bus_worker(
-                    worker,
-                    &mut restart_count,
-                    max_restarts,
-                    &failed,
-                    &quarantined,
-                ) else {
-                    break;
-                };
-                worker = replacement;
-                continue;
+            Err(error) => {
+                recover!(format!(
+                    "processing audio through the plugin failed: {error:?}"
+                ));
             }
         };
         let mut output_blocks = Vec::with_capacity(processed.frames().len());
@@ -2003,20 +2469,10 @@ fn run_supervised_bus_worker(
             output_blocks.push(block);
         }
         if output_conversion_failed || output_blocks.len() != processed.frames().len() {
+            output_misses.fetch_add(1, Ordering::Relaxed);
             worker.record_failure(Instant::now());
-            let Some(replacement) = recover_supervised_bus_worker(
-                worker,
-                &mut restart_count,
-                max_restarts,
-                &failed,
-                &quarantined,
-            ) else {
-                break;
-            };
-            worker = replacement;
-            continue;
+            recover!("the plugin worker returned an unreadable output bus".into());
         }
-        let output_refs = output_blocks.iter().collect::<Vec<_>>();
         if output_layout.output_buses().len() != processed.frames().len()
             || output_layout
                 .output_buses()
@@ -2025,33 +2481,45 @@ fn run_supervised_bus_worker(
                 .any(|(channels, frame)| *channels != frame.channels)
         {
             worker.record_failure(Instant::now());
-            let Some(replacement) = recover_supervised_bus_worker(
-                worker,
-                &mut restart_count,
-                max_restarts,
-                &failed,
-                &quarantined,
-            ) else {
-                break;
-            };
-            worker = replacement;
-            continue;
+            recover!("the plugin worker output buses did not match its layout".into());
         }
+        // Protected-path policy: an unlicensed plugin that returns the dry
+        // voice unchanged must never send it on. The watch keeps observing
+        // the real output so a later Retry can see whether it recovered.
+        if let (Some(input), Some(output_block)) =
+            (main_input.as_deref(), output_blocks.first_mut())
+        {
+            let mut output = vec![0.0_f32; output_block.channels() * output_block.frames()];
+            if output_block.copy_to_interleaved(&mut output).is_ok() {
+                if let Some(unchanged) = unchanged_watch.observe(input, &output) {
+                    unchanged_audio.store(unchanged, Ordering::Release);
+                    if unchanged && silence_unchanged.load(Ordering::Acquire) {
+                        silenced_unchanged.store(true, Ordering::Release);
+                    }
+                }
+            }
+            if silenced_unchanged.load(Ordering::Acquire) {
+                output_block.clear();
+            }
+        }
+        let output_refs = output_blocks.iter().collect::<Vec<_>>();
         if scheduler
             .try_submit_outputs(generation, identity, &output_refs)
             .is_err()
         {
+            output_misses.fetch_add(1, Ordering::Relaxed);
             worker.record_failure(Instant::now());
-            let Some(replacement) = recover_supervised_bus_worker(
-                worker,
-                &mut restart_count,
-                max_restarts,
-                &failed,
-                &quarantined,
-            ) else {
-                break;
-            };
-            worker = replacement;
+            recover!("the plugin worker output could not be published without waiting".into());
+        }
+        // A plugin may change its delay while it runs (lookahead or
+        // oversampling switched in its window). Re-read it between frames.
+        frames_since_latency = frames_since_latency.saturating_add(identity.frame_count);
+        if frames_since_latency >= latency_poll_frames {
+            frames_since_latency = 0;
+            let now = Instant::now();
+            if let Ok(samples) = worker.plugin_latency_samples(now) {
+                plugin_latency.store(samples, Ordering::Release);
+            }
         }
     }
     // Dropping the active worker performs the bounded child termination on
@@ -2130,6 +2598,76 @@ pub struct ParameterEvent {
     pub sample_offset: usize,
 }
 
+/// Most MIDI events one audio block may carry to a worker.
+pub const MAX_MIDI_EVENTS_PER_BLOCK: usize = 256;
+
+/// One MIDI channel-voice message for an instrument worker, placed at a
+/// sample offset inside the block it travels with.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct MidiEvent {
+    pub sample_offset: u32,
+    /// Status byte: `0x80..=0xEF` (note off/on, aftertouch, control change,
+    /// program change, channel pressure, pitch bend), channel in the low nibble.
+    pub status: u8,
+    pub data1: u8,
+    pub data2: u8,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MidiEventError {
+    /// Only channel-voice messages are carried; system messages are not.
+    NotChannelVoice,
+    /// A data byte has its high bit set.
+    DataByteOutOfRange,
+    OffsetOutOfRange,
+    TooMany,
+}
+
+impl MidiEvent {
+    pub fn new(
+        sample_offset: u32,
+        status: u8,
+        data1: u8,
+        data2: u8,
+    ) -> Result<Self, MidiEventError> {
+        if !(0x80..=0xEF).contains(&status) {
+            return Err(MidiEventError::NotChannelVoice);
+        }
+        if data1 > 0x7F || data2 > 0x7F {
+            return Err(MidiEventError::DataByteOutOfRange);
+        }
+        if sample_offset as usize >= MAX_WORKER_FRAMES {
+            return Err(MidiEventError::OffsetOutOfRange);
+        }
+        Ok(Self {
+            sample_offset,
+            status,
+            data1,
+            data2,
+        })
+    }
+}
+
+/// Validates the events of one block against its frame count.
+pub fn validate_midi_events_for_frame(
+    events: &[MidiEvent],
+    frame_count: usize,
+) -> Result<(), WorkerMessageError> {
+    if events.len() > MAX_MIDI_EVENTS_PER_BLOCK {
+        return Err(WorkerMessageError::InvalidMidi(MidiEventError::TooMany));
+    }
+    for event in events {
+        MidiEvent::new(event.sample_offset, event.status, event.data1, event.data2)
+            .map_err(WorkerMessageError::InvalidMidi)?;
+        if event.sample_offset as usize >= frame_count {
+            return Err(WorkerMessageError::InvalidMidi(
+                MidiEventError::OffsetOutOfRange,
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ParameterDescriptor {
     pub parameter_id: u32,
@@ -2137,6 +2675,92 @@ pub struct ParameterDescriptor {
     pub default_value: f32,
     pub minimum: f32,
     pub maximum: f32,
+}
+
+/// One selectable effect inside a VST2 shell DLL.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ShellPluginDescriptor {
+    pub id: u32,
+    pub name: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ShellPluginDescriptorError {
+    EmptyName,
+    NameTooLong,
+}
+
+impl ShellPluginDescriptor {
+    pub const MAX_NAME_CHARS: usize = 128;
+
+    pub fn new(id: u32, name: impl Into<String>) -> Result<Self, ShellPluginDescriptorError> {
+        let name = name.into();
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(ShellPluginDescriptorError::EmptyName);
+        }
+        if name.chars().count() > Self::MAX_NAME_CHARS || name.chars().any(char::is_control) {
+            return Err(ShellPluginDescriptorError::NameTooLong);
+        }
+        Ok(Self {
+            id,
+            name: name.to_owned(),
+        })
+    }
+}
+
+/// Most VST2 programs one plugin may report; banks are bounded separately.
+pub const MAX_PROGRAMS: usize = 256;
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ProgramDescriptor {
+    pub id: u32,
+    pub name: String,
+}
+
+/// Bounded read-only VST3 unit metadata returned with a program list.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Vst3UnitDescriptor {
+    pub id: i32,
+    pub parent_id: i32,
+    pub name: String,
+    pub program_list_id: Option<i32>,
+    pub program_count: u32,
+    #[serde(default)]
+    pub programs: Vec<ProgramDescriptor>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PluginProgramList {
+    pub programs: Vec<ProgramDescriptor>,
+    #[serde(default)]
+    pub units: Vec<Vst3UnitDescriptor>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProgramDescriptorError {
+    EmptyName,
+    NameTooLong,
+}
+
+impl ProgramDescriptor {
+    /// Longest program name kept; a plugin's display name is not routing data.
+    pub const MAX_NAME_CHARS: usize = 128;
+
+    pub fn new(id: u32, name: impl Into<String>) -> Result<Self, ProgramDescriptorError> {
+        let name = name.into();
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(ProgramDescriptorError::EmptyName);
+        }
+        if name.chars().count() > Self::MAX_NAME_CHARS || name.chars().any(char::is_control) {
+            return Err(ProgramDescriptorError::NameTooLong);
+        }
+        Ok(Self {
+            id,
+            name: name.to_owned(),
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -2247,7 +2871,25 @@ pub enum WorkerMessage {
         layout: WorkerAudioBusLayout,
     },
     Ready,
+    DescribeBuses,
+    Buses(bus_discovery::DiscoveredAudioBuses),
     DescribeParameters,
+    DescribePrograms,
+    Programs {
+        programs: Vec<ProgramDescriptor>,
+        #[serde(default)]
+        units: Vec<Vst3UnitDescriptor>,
+    },
+    SelectProgram {
+        index: u32,
+    },
+    ProgramSelected {
+        index: u32,
+    },
+    ApplyPreset {
+        bytes: Vec<u8>,
+    },
+    PresetApplied,
     DescribeEditor,
     EditorOpen {
         parent_window: u64,
@@ -2278,6 +2920,12 @@ pub enum WorkerMessage {
         channels: u16,
         frames: u32,
         parameters: Vec<ParameterEvent>,
+    },
+    /// One-way: MIDI events for the next process message of an instrument
+    /// worker. Sent only when there are events, so effects never see it; the
+    /// worker keeps them until that block is processed. No response.
+    Midi {
+        events: Vec<MidiEvent>,
     },
     Processed {
         frame: WorkerFrame,
@@ -2478,12 +3126,17 @@ impl WorkerSession {
             (
                 WorkerSessionState::Active,
                 WorkerMessage::ProcessedShared { .. }
+                | WorkerMessage::Midi { .. }
                 | WorkerMessage::StateSave
                 | WorkerMessage::StateRestore { .. },
             ) => Ok(None),
             (
                 WorkerSessionState::Active,
-                WorkerMessage::DescribeParameters
+                WorkerMessage::DescribeBuses
+                | WorkerMessage::DescribeParameters
+                | WorkerMessage::DescribePrograms
+                | WorkerMessage::SelectProgram { .. }
+                | WorkerMessage::ApplyPreset { .. }
                 | WorkerMessage::DescribeEditor
                 | WorkerMessage::ConfigureChain { .. }
                 | WorkerMessage::SelectInstance { .. },
@@ -3042,6 +3695,8 @@ pub struct SupervisedWorkerProcess {
     shared_transport: bool,
     bus_layout: Option<WorkerAudioBusLayout>,
     plugin_path: Option<PathBuf>,
+    /// An instrument played with MIDI (see `spawn_instrument_verified`).
+    instrument: bool,
     #[cfg(feature = "test-fixtures")]
     fixture_mode: Option<String>,
 }
@@ -3179,6 +3834,7 @@ impl SupervisedWorkerProcess {
             channels,
             sample_rate_hz,
             shared_transport: false,
+            instrument: false,
             bus_layout: None,
             plugin_path: None,
             #[cfg(feature = "test-fixtures")]
@@ -3289,6 +3945,7 @@ impl SupervisedWorkerProcess {
             channels,
             sample_rate_hz: DEFAULT_WORKER_SAMPLE_RATE_HZ,
             shared_transport: false,
+            instrument: false,
             bus_layout: None,
             plugin_path: None,
             fixture_mode: Some(mode.to_owned()),
@@ -3338,6 +3995,7 @@ impl SupervisedWorkerProcess {
                     .unwrap_or(channels),
                 sample_rate_hz: DEFAULT_WORKER_SAMPLE_RATE_HZ,
                 shared_transport: false,
+                instrument: false,
                 bus_layout: layout.cloned(),
                 plugin_path: None,
                 fixture_mode: Some(mode.to_owned()),
@@ -3418,6 +4076,47 @@ impl SupervisedWorkerProcess {
         .map_err(|(error, _)| error)
     }
 
+    /// Prepare the exact multi-bus class verified by discovery. No graph is
+    /// published here; all failures leave the caller's candidate untouched.
+    #[cfg(windows)]
+    pub fn spawn_verified_bound_vst3(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        configured_roots: &[PathBuf],
+        binding: &bus_discovery::VerifiedSidechainBinding,
+        sample_rate_hz: u32,
+        now: Instant,
+    ) -> Result<Self, WorkerProcessError> {
+        if identity.format != PluginFormat::Vst3
+            || identity.sha256 != binding.fingerprint()
+            || identity.metadata.class_ids.first().map(String::as_str) != binding.class_id()
+            || binding.native_index() != 1
+        {
+            return Err(WorkerProcessError::Protocol(
+                "sidechain runtime identity or native bus index does not match discovery".into(),
+            ));
+        }
+        let mut worker = Self::spawn_verified_native_vst3_multi_bus_with_sample_rate(
+            executable,
+            identity,
+            configured_roots,
+            binding.layout(),
+            sample_rate_hz,
+            now,
+        )?;
+        let buses = worker.describe_buses(now)?;
+        if buses.processing_layout().ok().as_ref() != Some(binding.layout())
+            || buses.inputs.get(1).map(|bus| bus.native_index) != Some(binding.native_index())
+        {
+            terminate_child(&mut worker.process.child);
+            worker.supervisor.record_failure(now);
+            return Err(WorkerProcessError::Protocol(
+                "plugin bus layout changed since sidechain discovery".into(),
+            ));
+        }
+        Ok(worker)
+    }
+
     #[cfg(feature = "test-fixtures")]
     pub fn spawn_multi_bus_fixture(
         executable: impl AsRef<Path>,
@@ -3459,6 +4158,7 @@ impl SupervisedWorkerProcess {
             channels: layout.input_buses().first().copied().unwrap_or(0),
             sample_rate_hz: DEFAULT_WORKER_SAMPLE_RATE_HZ,
             shared_transport: false,
+            instrument: false,
             bus_layout: Some(layout.clone()),
             plugin_path: None,
             fixture_mode: Some(mode.unwrap_or("echo").to_owned()),
@@ -3496,12 +4196,17 @@ impl SupervisedWorkerProcess {
             ));
         }
         let process = if let Some(plugin_path) = plugin_path {
-            WorkerProcess::spawn_multi_bus_for_plugin_with_sample_rate(
+            WorkerProcess::spawn_inner_with_class(
                 &executable,
-                plugin_path,
                 &identity.sha256,
-                layout,
+                layout.input_buses()[0],
                 sample_rate_hz,
+                None,
+                None,
+                Some(plugin_path),
+                Some(layout),
+                identity.metadata.class_ids.first().map(String::as_str),
+                false,
             )
         } else {
             WorkerProcess::spawn_multi_bus(&executable, &identity.sha256, layout)
@@ -3515,6 +4220,7 @@ impl SupervisedWorkerProcess {
                 channels: layout.input_buses()[0],
                 sample_rate_hz,
                 shared_transport: false,
+                instrument: false,
                 bus_layout: Some(layout.clone()),
                 plugin_path: plugin_path.map(Path::to_path_buf),
                 #[cfg(feature = "test-fixtures")]
@@ -3584,6 +4290,7 @@ impl SupervisedWorkerProcess {
                 plugin_path,
                 None,
                 identity.metadata.class_ids.first().map(String::as_str),
+                false,
             )
         } else if identity.format == PluginFormat::Vst2 || plugin_path.is_some() {
             WorkerProcess::spawn_for_plugin_with_sample_rate(
@@ -3610,8 +4317,100 @@ impl SupervisedWorkerProcess {
                 channels,
                 sample_rate_hz,
                 shared_transport: false,
+                instrument: false,
                 bus_layout: None,
                 plugin_path: plugin_path.map(Path::to_path_buf),
+                #[cfg(feature = "test-fixtures")]
+                fixture_mode: None,
+            }),
+            Err(error) => {
+                supervisor.record_failure(now);
+                Err((error, supervisor))
+            }
+        }
+    }
+
+    /// Spawn a worker that hosts a VST2 or VST3 *instrument* after
+    /// revalidating the scanned plugin. The worker is played with
+    /// `send_midi`; its audio input is ignored.
+    pub fn spawn_instrument_verified(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        configured_roots: &[PathBuf],
+        channels: u16,
+        sample_rate_hz: u32,
+        now: Instant,
+    ) -> Result<Self, WorkerProcessError> {
+        identity
+            .verify_current(configured_roots)
+            .map_err(WorkerProcessError::PluginIdentity)?;
+        Self::spawn_instrument_with_supervisor(
+            executable.as_ref().to_path_buf(),
+            identity,
+            channels,
+            sample_rate_hz,
+            WorkerSupervisor::new(),
+            now,
+        )
+        .map_err(|(error, _)| error)
+    }
+
+    fn spawn_instrument_with_supervisor(
+        executable: PathBuf,
+        identity: &PluginIdentity,
+        channels: u16,
+        sample_rate_hz: u32,
+        mut supervisor: WorkerSupervisor,
+        now: Instant,
+    ) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
+        let executable = match validate_worker_executable(&executable) {
+            Ok(path) => path,
+            Err(error) => {
+                supervisor.record_failure(now);
+                return Err((WorkerProcessError::Spawn(error), supervisor));
+            }
+        };
+        if let Err(error) = supervisor.start(identity, now) {
+            if error == WorkerStartError::Quarantined {
+                return Err((WorkerProcessError::Quarantined, supervisor));
+            }
+            return Err((
+                WorkerProcessError::Protocol(format!("worker start rejected: {error:?}")),
+                supervisor,
+            ));
+        }
+        let process_result = match identity.format {
+            PluginFormat::Vst2 => WorkerProcess::spawn_vst2_instrument(
+                &executable,
+                &identity.binary_path,
+                &identity.sha256,
+                channels,
+                sample_rate_hz,
+            ),
+            PluginFormat::Vst3 => WorkerProcess::spawn_vst3_instrument(
+                &executable,
+                &identity.binary_path,
+                &identity.sha256,
+                identity.metadata.class_ids.first().map(String::as_str),
+                channels,
+                sample_rate_hz,
+            ),
+            PluginFormat::Unknown => Err(WorkerProcessError::Protocol(
+                "plugin format is unknown".into(),
+            )),
+        };
+        match process_result {
+            Ok(process) => Ok(Self {
+                process,
+                supervisor,
+                executable,
+                identity: identity.clone(),
+                channels,
+                sample_rate_hz,
+                shared_transport: false,
+                instrument: true,
+                bus_layout: None,
+                plugin_path: Some(identity.binary_path.clone()),
                 #[cfg(feature = "test-fixtures")]
                 fixture_mode: None,
             }),
@@ -3711,6 +4510,7 @@ impl SupervisedWorkerProcess {
                 channels,
                 sample_rate_hz,
                 shared_transport: true,
+                instrument: false,
                 bus_layout: None,
                 plugin_path: None,
                 #[cfg(feature = "test-fixtures")]
@@ -3786,6 +4586,21 @@ impl SupervisedWorkerProcess {
                 Err(error)
             }
         }
+    }
+
+    /// MIDI for the next block of an instrument worker (see
+    /// `WorkerProcess::send_midi`). A failed write ends the worker like any
+    /// other protocol failure.
+    pub fn send_midi(
+        &mut self,
+        events: Vec<MidiEvent>,
+        now: Instant,
+    ) -> Result<(), WorkerProcessError> {
+        self.ensure_running()?;
+        self.process.send_midi(events).inspect_err(|_| {
+            terminate_child(&mut self.process.child);
+            self.supervisor.record_failure(now);
+        })
     }
 
     /// Process one multi-bus quantum while refreshing supervision only after
@@ -3900,6 +4715,94 @@ impl SupervisedWorkerProcess {
         }
     }
 
+    /// Bind a candidate graph port to a live worker's actual discovered input.
+    /// This control-plane operation never changes graph topology. Only the
+    /// explicitly selected single-stream discovery worker is eligible; legacy
+    /// multi-bus constructors can select a class implicitly and are excluded.
+    pub fn verify_sidechain_binding(
+        &mut self,
+        configured_roots: &[PathBuf],
+        expected_fingerprint: &str,
+        expected_class_id: Option<&str>,
+        channels: (u16, u16),
+        now: Instant,
+    ) -> Result<bus_discovery::VerifiedSidechainBinding, WorkerProcessError> {
+        if self.instrument
+            || self.bus_layout.is_some()
+            || expected_fingerprint != self.identity.sha256
+        {
+            return Err(WorkerProcessError::Protocol(
+                "sidechain discovery worker identity mismatch".into(),
+            ));
+        }
+        self.identity
+            .verify_current(configured_roots)
+            .map_err(WorkerProcessError::PluginIdentity)?;
+        let class_id = self.identity.metadata.class_ids.first().cloned();
+        match self.identity.format {
+            PluginFormat::Vst3
+                if class_id.is_none() || class_id.as_deref() != expected_class_id =>
+            {
+                return Err(WorkerProcessError::Protocol(
+                    "sidechain discovery requires the explicitly selected VST3 class".into(),
+                ));
+            }
+            PluginFormat::Vst2 if expected_class_id.is_some() => {
+                return Err(WorkerProcessError::Protocol(
+                    "VST2 class selection is not supported by sidechain discovery".into(),
+                ));
+            }
+            PluginFormat::Unknown => {
+                return Err(WorkerProcessError::Protocol(
+                    "unsupported sidechain plugin format".into(),
+                ));
+            }
+            PluginFormat::Vst2 | PluginFormat::Vst3 => {}
+        }
+        let buses = self.describe_buses(now)?;
+        let layout = buses.processing_layout().map_err(|error| {
+            WorkerProcessError::Message(WorkerMessageError::InvalidBusDiscovery(error))
+        })?;
+        // The first graph version has one key port. Never merge several aux
+        // buses or infer which one the user intended from their widths.
+        if layout.input_buses() != [channels.0, channels.1]
+            || layout.output_buses() != [channels.0]
+            || self.channels != channels.0
+        {
+            return Err(WorkerProcessError::Protocol(
+                "discovered sidechain buses do not match the requested graph ports".into(),
+            ));
+        }
+        Ok(bus_discovery::VerifiedSidechainBinding {
+            fingerprint: self.identity.sha256.clone(),
+            class_id: if self.identity.format == PluginFormat::Vst3 {
+                class_id
+            } else {
+                None
+            },
+            native_index: buses.inputs[1].native_index,
+            layout,
+        })
+    }
+
+    pub fn describe_buses(
+        &mut self,
+        now: Instant,
+    ) -> Result<bus_discovery::DiscoveredAudioBuses, WorkerProcessError> {
+        self.ensure_running()?;
+        match self.process.describe_buses() {
+            Ok(buses) => {
+                self.supervisor.heartbeat(now);
+                Ok(buses)
+            }
+            Err(error) => {
+                terminate_child(&mut self.process.child);
+                self.supervisor.record_failure(now);
+                Err(error)
+            }
+        }
+    }
+
     pub fn describe_parameters(
         &mut self,
         now: Instant,
@@ -3909,6 +4812,61 @@ impl SupervisedWorkerProcess {
             Ok(descriptors) => {
                 self.supervisor.heartbeat(now);
                 Ok(descriptors)
+            }
+            Err(error) => {
+                terminate_child(&mut self.process.child);
+                self.supervisor.record_failure(now);
+                Err(error)
+            }
+        }
+    }
+
+    pub fn programs(&mut self, now: Instant) -> Result<PluginProgramList, WorkerProcessError> {
+        self.ensure_running()?;
+        match self.process.programs() {
+            Ok(programs) => {
+                self.supervisor.heartbeat(now);
+                Ok(programs)
+            }
+            Err(error) => {
+                terminate_child(&mut self.process.child);
+                self.supervisor.record_failure(now);
+                Err(error)
+            }
+        }
+    }
+
+    pub fn select_program(&mut self, index: u32, now: Instant) -> Result<(), WorkerProcessError> {
+        // A caller error must not be treated as a worker failure and kill the
+        // supervised process.
+        if index as usize >= MAX_PROGRAMS {
+            return Err(WorkerProcessError::Protocol(
+                "program index out of range".into(),
+            ));
+        }
+        self.ensure_running()?;
+        match self.process.select_program(index) {
+            Ok(()) => {
+                self.supervisor.heartbeat(now);
+                Ok(())
+            }
+            Err(error) => {
+                terminate_child(&mut self.process.child);
+                self.supervisor.record_failure(now);
+                Err(error)
+            }
+        }
+    }
+
+    pub fn apply_preset(&mut self, bytes: &[u8], now: Instant) -> Result<(), WorkerProcessError> {
+        if bytes.is_empty() || bytes.len() > vst2_preset::MAX_VST2_PRESET_BYTES {
+            return Err(WorkerProcessError::Protocol("invalid preset size".into()));
+        }
+        self.ensure_running()?;
+        match self.process.apply_preset(bytes) {
+            Ok(()) => {
+                self.supervisor.heartbeat(now);
+                Ok(())
             }
             Err(error) => {
                 terminate_child(&mut self.process.child);
@@ -4034,6 +4992,7 @@ impl SupervisedWorkerProcess {
             shared_transport: _shared_transport,
             bus_layout: _bus_layout,
             plugin_path: _plugin_path,
+            instrument: _instrument,
             #[cfg(feature = "test-fixtures")]
                 fixture_mode: _fixture_mode,
         } = self;
@@ -4063,6 +5022,7 @@ impl SupervisedWorkerProcess {
             shared_transport,
             bus_layout,
             plugin_path,
+            instrument,
             #[cfg(feature = "test-fixtures")]
             fixture_mode,
         } = self;
@@ -4085,6 +5045,16 @@ impl SupervisedWorkerProcess {
                 channels,
                 bus_layout.as_ref(),
                 mode,
+                supervisor,
+                now,
+            );
+        }
+        if instrument {
+            return Self::spawn_instrument_with_supervisor(
+                executable,
+                &identity,
+                channels,
+                sample_rate_hz,
                 supervisor,
                 now,
             );
@@ -4189,6 +5159,377 @@ struct PluginQuantum {
 /// `SupervisedWorkerProcess` exchange. The one-quantum pipeline is
 /// fail-closed: a late result, full queue, or worker failure produces silence
 /// for that callback and never waits for recovery.
+/// MIDI waiting for an instrument's next block. The producers are the control
+/// plane and MIDI input threads; the consumer is the bridge's own runtime
+/// thread, never the audio callback, so a short lock is fine. Overflow discards
+/// the queued burst and prioritizes note-offs for every held note rather than
+/// risking a note-off being evicted and leaving a plugin sounding indefinitely.
+#[derive(Default)]
+struct MidiQueueState {
+    pending: std::collections::VecDeque<MidiEvent>,
+    /// Notes requested by producers, including queued note-ons.
+    held: [u128; 16],
+    /// Notes whose note-on has been delivered to the worker and not released.
+    sounding: [u128; 16],
+    /// Sustain (bit 0) and sostenuto (bit 1) state for each channel.
+    pedal_held: [u8; 16],
+    /// Bounded note-off set drained before ordinary events.
+    release_pending: [u128; 16],
+    /// Channels needing sustain/all-notes-off reset before explicit note-offs.
+    panic_channels: u16,
+    /// Invalidates delayed events when a panic, overflow, or CC panic occurs.
+    schedule_generation: u64,
+}
+
+pub struct MidiQueue {
+    state: Mutex<MidiQueueState>,
+}
+
+impl Default for MidiQueue {
+    fn default() -> Self {
+        Self {
+            state: Mutex::new(MidiQueueState::default()),
+        }
+    }
+}
+
+impl MidiQueue {
+    /// Maximum number of ordinary events retained while waiting for a block.
+    pub const CAPACITY: usize = 1024;
+
+    fn push_locked(state: &mut MidiQueueState, events: &[MidiEvent]) -> usize {
+        let valid_count = events
+            .iter()
+            .filter(|event| MidiEvent::new(0, event.status, event.data1, event.data2).is_ok())
+            .count();
+        if valid_count > Self::CAPACITY.saturating_sub(state.pending.len()) {
+            state.pending.clear();
+            state.schedule_generation = state.schedule_generation.wrapping_add(1);
+            for channel in 0..16 {
+                if state.held[channel] != 0
+                    || state.sounding[channel] != 0
+                    || state.pedal_held[channel] != 0
+                {
+                    state.panic_channels |= 1 << channel;
+                }
+                state.release_pending[channel] |= state.held[channel] | state.sounding[channel];
+                state.held[channel] = 0;
+                state.pedal_held[channel] = 0;
+            }
+            return 0;
+        }
+
+        let mut accepted = 0;
+        for event in events {
+            let Ok(event) = MidiEvent::new(0, event.status, event.data1, event.data2) else {
+                continue;
+            };
+            let channel = usize::from(event.status & 0x0F);
+            let kind = event.status & 0xF0;
+            let bit = 1_u128 << event.data1;
+            if kind == 0x90 && event.data2 > 0 {
+                state.held[channel] |= bit;
+            } else if kind == 0x80 || kind == 0x90 {
+                state.held[channel] &= !bit;
+            } else if kind == 0xB0 && matches!(event.data1, 64 | 66) {
+                let pedal = if event.data1 == 64 { 1 } else { 2 };
+                if event.data2 >= 64 {
+                    state.pedal_held[channel] |= pedal;
+                } else {
+                    state.pedal_held[channel] &= !pedal;
+                }
+            } else if kind == 0xB0 && matches!(event.data1, 120 | 123) {
+                state.schedule_generation = state.schedule_generation.wrapping_add(1);
+                state.pending.retain(|queued| {
+                    let queued_channel = usize::from(queued.status & 0x0F);
+                    let queued_kind = queued.status & 0xF0;
+                    queued_channel != channel || !matches!(queued_kind, 0x80 | 0x90)
+                });
+                state.panic_channels |= 1 << channel;
+                state.release_pending[channel] |= state.held[channel] | state.sounding[channel];
+                state.held[channel] = 0;
+                state.pedal_held[channel] = 0;
+                state.panic_channels |= 1 << channel;
+            }
+            state.pending.push_back(event);
+            accepted += 1;
+        }
+        accepted
+    }
+
+    /// Queues channel-voice messages (their sample offsets are ignored: they
+    /// take effect at the start of the next block). Returns how many were
+    /// accepted; malformed messages are skipped. If a valid batch would exceed
+    /// capacity, the pending burst is discarded and already-held notes are
+    /// explicitly released before future events are delivered.
+    pub fn push(&self, events: &[MidiEvent]) -> usize {
+        let Ok(mut state) = self.state.lock() else {
+            return 0;
+        };
+        Self::push_locked(&mut state, events)
+    }
+
+    /// Releases every held note on every channel (a panic button, a route
+    /// stop, an unplugged keyboard). Returns how many notes were released.
+    pub fn release_all_notes(&self) -> usize {
+        let Ok(mut state) = self.state.lock() else {
+            return 0;
+        };
+        state.schedule_generation = state.schedule_generation.wrapping_add(1);
+        state.pending.clear();
+        let mut newly_released = 0;
+        for channel in 0..16 {
+            let requested = state.held[channel] | state.sounding[channel];
+            if requested != 0 || state.pedal_held[channel] != 0 {
+                state.panic_channels |= 1 << channel;
+            }
+            newly_released += (requested & !state.release_pending[channel]).count_ones() as usize;
+            state.release_pending[channel] |= requested;
+            state.held[channel] = 0;
+        }
+        state.pedal_held = [0; 16];
+        newly_released
+    }
+
+    /// Snapshot used by one delayed sequence. It becomes invalid after panic,
+    /// route stop, queue overflow, or device-loss cleanup.
+    pub fn schedule_generation(&self) -> Option<u64> {
+        self.state
+            .lock()
+            .ok()
+            .map(|state| state.schedule_generation)
+    }
+
+    /// Push a timed event only if no panic/release has invalidated its sequence.
+    pub fn push_scheduled(&self, generation: u64, events: &[MidiEvent]) -> usize {
+        let Ok(mut state) = self.state.lock() else {
+            return 0;
+        };
+        if state.schedule_generation != generation {
+            return 0;
+        }
+        Self::push_locked(&mut state, events)
+    }
+
+    /// Push a batch only if no panic, overflow, or other queue-wide recovery
+    /// happened since the caller captured the generation.
+    pub fn push_for_generation(&self, generation: u64, events: &[MidiEvent]) -> usize {
+        let Ok(mut state) = self.state.lock() else {
+            return 0;
+        };
+        if state.schedule_generation != generation {
+            return 0;
+        }
+        Self::push_locked(&mut state, events)
+    }
+
+    /// Number of notes currently held.
+    pub fn held_notes(&self) -> usize {
+        self.state.lock().map_or(0, |state| {
+            state
+                .held
+                .iter()
+                .map(|bits| bits.count_ones() as usize)
+                .sum()
+        })
+    }
+
+    /// Events waiting for the next block (runtime thread). At most one
+    /// block's worth leaves per call; the rest wait for the following block.
+    fn take_block(&self) -> Vec<MidiEvent> {
+        let Ok(mut state) = self.state.lock() else {
+            return Vec::new();
+        };
+        let mut block = Vec::with_capacity(MAX_MIDI_EVENTS_PER_BLOCK);
+        for channel in 0..16 {
+            if state.panic_channels & (1 << channel) != 0 {
+                // Release sustain before note-offs so the pedal cannot defeat
+                // a panic or queue-overflow recovery.
+                block.push(MidiEvent {
+                    sample_offset: 0,
+                    status: 0xB0 | channel as u8,
+                    data1: 64,
+                    data2: 0,
+                });
+                block.push(MidiEvent {
+                    sample_offset: 0,
+                    status: 0xB0 | channel as u8,
+                    data1: 123,
+                    data2: 0,
+                });
+                block.push(MidiEvent {
+                    sample_offset: 0,
+                    status: 0xB0 | channel as u8,
+                    data1: 66,
+                    data2: 0,
+                });
+                state.panic_channels &= !(1 << channel);
+            }
+        }
+        for channel in 0..16 {
+            while state.release_pending[channel] != 0 && block.len() < MAX_MIDI_EVENTS_PER_BLOCK {
+                let note = state.release_pending[channel].trailing_zeros() as u8;
+                let bit = 1_u128 << note;
+                state.release_pending[channel] &= !bit;
+                state.sounding[channel] &= !bit;
+                block.push(MidiEvent {
+                    sample_offset: 0,
+                    status: 0x80 | channel as u8,
+                    data1: note,
+                    data2: 0,
+                });
+            }
+        }
+        if block.len() == MAX_MIDI_EVENTS_PER_BLOCK
+            || state.release_pending.iter().any(|notes| *notes != 0)
+        {
+            return block;
+        }
+        let count = state
+            .pending
+            .len()
+            .min(MAX_MIDI_EVENTS_PER_BLOCK - block.len());
+        let queued = state.pending.drain(..count).collect::<Vec<_>>();
+        for event in queued {
+            let channel = usize::from(event.status & 0x0F);
+            let kind = event.status & 0xF0;
+            let bit = 1_u128 << event.data1;
+            if kind == 0x90 && event.data2 > 0 {
+                state.sounding[channel] |= bit;
+            } else if kind == 0x80 || kind == 0x90 {
+                state.sounding[channel] &= !bit;
+            } else if kind == 0xB0 && matches!(event.data1, 120 | 123) {
+                state.sounding[channel] = 0;
+            }
+            block.push(event);
+        }
+        block
+    }
+}
+
+#[cfg(test)]
+mod midi_queue_tests {
+    use super::{MidiEvent, MidiQueue};
+
+    #[test]
+    fn a_full_queue_does_not_lose_a_note_off_or_leave_a_note_sounding() {
+        let queue = MidiQueue::default();
+        queue.push(&[MidiEvent::new(0, 0x90, 60, 100).unwrap()]);
+        assert_eq!(queue.take_block()[0].status, 0x90);
+        assert_eq!(queue.held_notes(), 1);
+
+        let control_change = MidiEvent::new(0, 0xB0, 1, 10).unwrap();
+        let backlog = vec![control_change; MidiQueue::CAPACITY];
+        assert_eq!(queue.push(&backlog), MidiQueue::CAPACITY);
+
+        // The old implementation dropped the oldest event and could evict
+        // this note-off while clearing held-note bookkeeping.
+        assert_eq!(queue.push(&[MidiEvent::new(0, 0x80, 60, 0).unwrap()]), 0);
+        assert_eq!(queue.held_notes(), 0);
+        let releases = queue.take_block();
+        assert_eq!(releases.len(), 4);
+        assert_eq!((releases[0].status, releases[0].data1), (0xB0, 64));
+        assert_eq!((releases[1].status, releases[1].data1), (0xB0, 123));
+        assert_eq!((releases[2].status, releases[2].data1), (0xB0, 66));
+        assert_eq!((releases[3].status, releases[3].data1), (0x80, 60));
+        assert!(queue.take_block().is_empty());
+    }
+
+    #[test]
+    fn panic_discards_queued_note_ons_and_prioritizes_releases() {
+        let queue = MidiQueue::default();
+        queue.push(&[
+            MidiEvent::new(0, 0x90, 60, 100).unwrap(),
+            MidiEvent::new(0, 0x90, 64, 100).unwrap(),
+        ]);
+        assert_eq!(queue.release_all_notes(), 2);
+        assert_eq!(queue.held_notes(), 0);
+        let events = queue.take_block();
+        assert_eq!(events.len(), 5);
+        assert_eq!((events[0].status, events[0].data1), (0xB0, 64));
+        assert_eq!((events[1].status, events[1].data1), (0xB0, 123));
+        assert_eq!((events[2].status, events[2].data1), (0xB0, 66));
+        assert_eq!((events[3].status, events[3].data1), (0x80, 60));
+        assert_eq!((events[4].status, events[4].data1), (0x80, 64));
+        assert!(queue.take_block().is_empty());
+    }
+
+    #[test]
+    fn panic_cancels_old_scheduled_messages_and_releases_queued_notes() {
+        let queue = MidiQueue::default();
+        let generation = queue.schedule_generation().unwrap();
+        assert_eq!(
+            queue.push_scheduled(generation, &[MidiEvent::new(0, 0x90, 60, 100).unwrap()]),
+            1
+        );
+        assert_eq!(queue.held_notes(), 1);
+
+        queue.release_all_notes();
+        assert_eq!(
+            queue.push_scheduled(generation, &[MidiEvent::new(0, 0x90, 62, 100).unwrap()]),
+            0
+        );
+        let release = queue.take_block();
+        assert_eq!(release.len(), 4);
+        assert_eq!((release[0].status, release[0].data1), (0xB0, 64));
+        assert_eq!((release[1].status, release[1].data1), (0xB0, 123));
+        assert_eq!((release[2].status, release[2].data1), (0xB0, 66));
+        assert_eq!((release[3].status, release[3].data1), (0x80, 60));
+        assert_eq!(queue.held_notes(), 0);
+    }
+
+    #[test]
+    fn all_sound_off_controller_invalidates_delayed_notes() {
+        let queue = MidiQueue::default();
+        let generation = queue.schedule_generation().unwrap();
+        queue.push_scheduled(generation, &[MidiEvent::new(0, 0x90, 60, 100).unwrap()]);
+        queue.take_block();
+        assert_eq!(queue.held_notes(), 1);
+
+        queue.push(&[MidiEvent::new(0, 0xB0, 123, 0).unwrap()]);
+        assert_eq!(
+            queue.push_scheduled(generation, &[MidiEvent::new(0, 0x90, 62, 100).unwrap()]),
+            0
+        );
+        let events = queue.take_block();
+        assert_eq!((events[0].status, events[0].data1), (0xB0, 64));
+        assert_eq!((events[1].status, events[1].data1), (0xB0, 123));
+        assert_eq!((events[2].status, events[2].data1), (0xB0, 66));
+        assert_eq!((events[3].status, events[3].data1), (0x80, 60));
+        assert!(events
+            .iter()
+            .any(|event| event.status == 0xB0 && event.data1 == 123));
+    }
+
+    #[test]
+    fn panic_lifts_sustain_even_when_no_note_is_currently_held() {
+        let queue = MidiQueue::default();
+        queue.push(&[MidiEvent::new(0, 0xB0, 64, 127).unwrap()]);
+        let pedal = queue.take_block();
+        assert_eq!(pedal.len(), 1);
+        assert_eq!(
+            (pedal[0].status, pedal[0].data1, pedal[0].data2),
+            (0xB0, 64, 127)
+        );
+
+        queue.release_all_notes();
+        let reset = queue.take_block();
+        assert_eq!(reset.len(), 3);
+        assert_eq!(
+            (reset[0].status, reset[0].data1, reset[0].data2),
+            (0xB0, 64, 0)
+        );
+        assert_eq!(
+            (reset[1].status, reset[1].data1, reset[1].data2),
+            (0xB0, 123, 0)
+        );
+        assert_eq!(
+            (reset[2].status, reset[2].data1, reset[2].data2),
+            (0xB0, 66, 0)
+        );
+    }
+}
+
 pub struct PluginRuntimeBridge {
     free: Arc<ArrayQueue<PluginQuantum>>,
     input: Arc<ArrayQueue<PluginQuantum>>,
@@ -4223,13 +5564,16 @@ pub struct PluginRuntimeBridge {
     /// [`PluginRuntimeBridge::resume_after_unchanged`] or by lifting the policy.
     silenced_unchanged: Arc<AtomicBool>,
     worker: Option<JoinHandle<()>>,
+    /// MIDI for an instrument bridge (always present; empty for effects).
+    midi: Arc<MidiQueue>,
     /// Frames per pipeline quantum, for reporting pipeline delay.
     quantum_frames: usize,
     instance_index: usize,
     /// Identity of the worker this bridge runs on, shared by every member of a
-    /// VST2 chain. Diagnostics use it to tell a reused worker from a restarted
-    /// one across live commits.
+    /// VST2 chain. Diagnostics use it to identify a restart between samples.
     worker_id: u64,
+    /// Programs and preset import exist only for the VST2 worker protocol.
+    vst2: bool,
     /// Member handles keep the queue owner alive; only the owner joins it.
     owner: Option<Arc<PluginRuntimeBridge>>,
 }
@@ -4363,6 +5707,14 @@ enum BridgeRequest {
         std::sync::mpsc::Sender<Result<(), String>>,
     ),
     CloseEditor(std::sync::mpsc::Sender<Result<(), String>>),
+    /// Replace the bounded parameter template on the owner thread.
+    SetParameters(
+        Vec<ParameterEvent>,
+        std::sync::mpsc::Sender<Result<(), String>>,
+    ),
+    Programs(std::sync::mpsc::Sender<Result<PluginProgramList, String>>),
+    SelectProgram(u32, std::sync::mpsc::Sender<Result<(), String>>),
+    ApplyPreset(Vec<u8>, std::sync::mpsc::Sender<Result<(), String>>),
 }
 
 /// How long a control request waits for the runtime thread.
@@ -4424,6 +5776,27 @@ impl PluginRuntimeBridge {
         Self::start_internal(worker, channels, frames, depth, 1)
     }
 
+    /// Start the bridge for an instrument worker (spawned with
+    /// `SupervisedWorkerProcess::spawn_instrument_verified`). Notes pushed to
+    /// `midi_queue()` reach the plugin at the start of its next block; the
+    /// audio handed to `process` is ignored and replaced by the instrument's.
+    pub fn start_instrument(
+        worker: SupervisedWorkerProcess,
+        channels: usize,
+        frames: usize,
+        depth: usize,
+    ) -> Result<Arc<Self>, PluginRuntimeBridgeError> {
+        if worker.process.chain_members > 0 || !worker.instrument {
+            return Err(PluginRuntimeBridgeError::InvalidDepth);
+        }
+        Self::start_internal(worker, channels, frames, depth, 1)
+    }
+
+    /// The MIDI queue of this bridge (used by instruments).
+    pub fn midi_queue(&self) -> Arc<MidiQueue> {
+        Arc::clone(&self.midi)
+    }
+
     pub fn start_chain(
         worker: SupervisedWorkerProcess,
         channels: usize,
@@ -4458,9 +5831,11 @@ impl PluginRuntimeBridge {
                 silence_unchanged: Arc::clone(&head.silence_unchanged),
                 silenced_unchanged: Arc::clone(&head.silenced_unchanged),
                 worker: None,
+                midi: Arc::clone(&head.midi),
                 quantum_frames: frames,
                 instance_index,
                 worker_id: head.worker_id,
+                vst2: head.vst2,
                 owner: Some(Arc::clone(&head)),
             }));
         }
@@ -4552,6 +5927,10 @@ impl PluginRuntimeBridge {
         let thread_input = Arc::clone(&input);
         let thread_output = Arc::clone(&output);
         let thread_parameters = Arc::clone(&parameters);
+        let instrument = worker.instrument;
+        let vst2 = worker.identity.format == PluginFormat::Vst2;
+        let midi = Arc::new(MidiQueue::default());
+        let thread_midi = Arc::clone(&midi);
         let worker_thread = std::thread::Builder::new()
             .name("audiorouter-plugin-runtime".into())
             .spawn(move || {
@@ -4590,7 +5969,13 @@ impl PluginRuntimeBridge {
                                         let _ = reply.send(Err(error));
                                     }
                                     BridgeRequest::OpenEditor(_, reply)
-                                    | BridgeRequest::CloseEditor(reply) => {
+                                    | BridgeRequest::CloseEditor(reply)
+                                    | BridgeRequest::SetParameters(_, reply)
+                                    | BridgeRequest::SelectProgram(_, reply)
+                                    | BridgeRequest::ApplyPreset(_, reply) => {
+                                        let _ = reply.send(Err(error.clone()));
+                                    }
+                                    BridgeRequest::Programs(reply) => {
                                         let _ = reply.send(Err(error));
                                     }
                                 }
@@ -4608,6 +5993,10 @@ impl PluginRuntimeBridge {
                             BridgeRequest::SaveState(_) => "saving settings",
                             BridgeRequest::OpenEditor(..) => "opening the plugin window",
                             BridgeRequest::CloseEditor(_) => "closing the plugin window",
+                            BridgeRequest::SetParameters(..) => "updating plugin parameters",
+                            BridgeRequest::Programs(_) => "listing plugin programs",
+                            BridgeRequest::SelectProgram(..) => "selecting a plugin program",
+                            BridgeRequest::ApplyPreset(..) => "applying a plugin preset",
                         };
                         match request {
                             BridgeRequest::SaveState(reply) => {
@@ -4639,6 +6028,37 @@ impl PluginRuntimeBridge {
                                     }
                                 }
                                 let _ = reply.send(closed);
+                            }
+                            BridgeRequest::SetParameters(_, reply) => {
+                                // The legacy bridge owns its template directly;
+                                // this request belongs to the bus owner.
+                                let _ = reply.send(Err(
+                                    "parameter templates are set directly on a plugin bridge"
+                                        .into(),
+                                ));
+                            }
+                            BridgeRequest::Programs(reply) => {
+                                // VST3 lists its program names read-only through
+                                // IUnitInfo; choosing one stays VST2-only.
+                                let result =
+                                    worker.programs(now).map_err(|error| format!("{error:?}"));
+                                let _ = reply.send(result);
+                            }
+                            BridgeRequest::SelectProgram(program, reply) => {
+                                let result = if vst2 {
+                                    worker.select_program(program, now).map_err(|error| format!("{error:?}"))
+                                } else {
+                                    Err("choosing a program is only available for VST2 plugins; VST3 programs are listed read-only".into())
+                                };
+                                let _ = reply.send(result);
+                            }
+                            BridgeRequest::ApplyPreset(bytes, reply) => {
+                                let result = if vst2 {
+                                    worker.apply_preset(&bytes, now).map_err(|error| format!("{error:?}"))
+                                } else {
+                                    Err("preset import is only available for VST2 plugins".into())
+                                };
+                                let _ = reply.send(result);
                             }
                         }
                         thread_health_state
@@ -4719,11 +6139,21 @@ impl PluginRuntimeBridge {
                     } else if !active_now[0] {
                         Ok(frame)
                     } else {
-                        worker.process(
-                            frame,
-                            parameters.into_iter().next().unwrap_or_default(),
-                            Instant::now(),
-                        )
+                        let now = Instant::now();
+                        // An instrument gets its MIDI first; a failed hand-off
+                        // ends the worker like any protocol failure.
+                        let sent = if instrument {
+                            worker.send_midi(thread_midi.take_block(), now)
+                        } else {
+                            Ok(())
+                        };
+                        sent.and_then(|()| {
+                            worker.process(
+                                frame,
+                                parameters.into_iter().next().unwrap_or_default(),
+                                now,
+                            )
+                        })
                     };
                     match result {
                         Ok(result)
@@ -4731,7 +6161,7 @@ impl PluginRuntimeBridge {
                                 && result.frame_count() == frames
                                 && quantum.block.copy_from_interleaved(&result.samples).is_ok() =>
                         {
-                            if processing {
+                            if processing && !instrument {
                                 if let Some(unchanged) =
                                     unchanged_watch.observe(&input_copy, &result.samples)
                                 {
@@ -4846,9 +6276,11 @@ impl PluginRuntimeBridge {
             silence_unchanged,
             silenced_unchanged,
             worker: Some(worker_thread),
+            midi,
             quantum_frames: frames,
             instance_index: 0,
             worker_id: next_worker_id(),
+            vst2,
             owner: None,
         }))
     }
@@ -4969,6 +6401,27 @@ impl PluginRuntimeBridge {
     /// Close the editor; the worker applies its edits to the processing instance.
     pub fn close_editor(&self) -> Result<(), String> {
         self.request(BridgeRequest::CloseEditor)
+    }
+
+    /// Bounded VST2 programs of the playing instance (control thread).
+    pub fn programs(&self) -> Result<PluginProgramList, String> {
+        self.request(BridgeRequest::Programs)
+    }
+
+    /// Select one VST2 program by its bounded index.
+    pub fn select_program(&self, index: u32) -> Result<(), String> {
+        if index as usize >= MAX_PROGRAMS {
+            return Err("program index out of range".into());
+        }
+        self.request(|reply| BridgeRequest::SelectProgram(index, reply))
+    }
+
+    /// Apply a bounded VST2 `.fxp`/`.fxb` file body to the playing instance.
+    pub fn apply_preset(&self, bytes: &[u8]) -> Result<(), String> {
+        if bytes.is_empty() || bytes.len() > vst2_preset::MAX_VST2_PRESET_BYTES {
+            return Err("invalid preset size".into());
+        }
+        self.request(|reply| BridgeRequest::ApplyPreset(bytes.to_vec(), reply))
     }
 
     /// The isolated worker's last-observed supervisor state. Published by the
@@ -5518,7 +6971,86 @@ impl WorkerProcess {
             plugin_path,
             bus_layout,
             None,
+            false,
         )
+    }
+
+    /// Spawn a worker that hosts a VST2 *instrument*: it is played with
+    /// `send_midi` and needs no audio input. The graph block handed to
+    /// `process` is ignored and replaced by the instrument's output.
+    #[cfg(windows)]
+    pub fn spawn_vst2_instrument(
+        executable: impl AsRef<Path>,
+        plugin_path: impl AsRef<Path>,
+        plugin_sha256: &str,
+        channels: u16,
+        sample_rate_hz: u32,
+    ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_inner_with_class(
+            executable,
+            plugin_sha256,
+            channels,
+            sample_rate_hz,
+            None,
+            None,
+            Some(plugin_path.as_ref()),
+            None,
+            None,
+            true,
+        )
+    }
+
+    /// Spawn the native VST3 worker for an *instrument* (see
+    /// `spawn_vst2_instrument`). `class_id` is the 32-digit class to load, or
+    /// the first instrument class of the module when `None`.
+    #[cfg(windows)]
+    pub fn spawn_vst3_instrument(
+        executable: impl AsRef<Path>,
+        plugin_path: impl AsRef<Path>,
+        plugin_sha256: &str,
+        class_id: Option<&str>,
+        channels: u16,
+        sample_rate_hz: u32,
+    ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_inner_with_class(
+            executable,
+            plugin_sha256,
+            channels,
+            sample_rate_hz,
+            None,
+            None,
+            Some(plugin_path.as_ref()),
+            None,
+            class_id,
+            true,
+        )
+    }
+
+    #[cfg(not(windows))]
+    pub fn spawn_vst2_instrument(
+        _: impl AsRef<Path>,
+        _: impl AsRef<Path>,
+        _: &str,
+        _: u16,
+        _: u32,
+    ) -> Result<Self, WorkerProcessError> {
+        Err(WorkerProcessError::Protocol(
+            "VST2 loading requires Windows".into(),
+        ))
+    }
+
+    #[cfg(not(windows))]
+    pub fn spawn_vst3_instrument(
+        _: impl AsRef<Path>,
+        _: impl AsRef<Path>,
+        _: &str,
+        _: Option<&str>,
+        _: u16,
+        _: u32,
+    ) -> Result<Self, WorkerProcessError> {
+        Err(WorkerProcessError::Protocol(
+            "VST3 loading requires Windows".into(),
+        ))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -5532,6 +7064,7 @@ impl WorkerProcess {
         plugin_path: Option<&Path>,
         bus_layout: Option<&WorkerAudioBusLayout>,
         class_id: Option<&str>,
+        instrument: bool,
     ) -> Result<Self, WorkerProcessError> {
         let executable =
             validate_worker_executable(executable.as_ref()).map_err(WorkerProcessError::Spawn)?;
@@ -5581,6 +7114,9 @@ impl WorkerProcess {
                 "--plugin-path",
                 &loadable_plugin_path(plugin_path).to_string_lossy(),
             ]);
+        }
+        if instrument {
+            command.arg("--instrument");
         }
         if let Some(class_id) = class_id {
             if class_id.len() != 32 || !class_id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
@@ -5796,6 +7332,20 @@ impl WorkerProcess {
         }
     }
 
+    pub fn describe_buses(
+        &mut self,
+    ) -> Result<bus_discovery::DiscoveredAudioBuses, WorkerProcessError> {
+        self.write(&WorkerMessage::DescribeBuses)
+            .map_err(WorkerProcessError::Message)?;
+        match self.read_control().map_err(WorkerProcessError::Message)? {
+            WorkerMessage::Buses(buses) => Ok(buses),
+            WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
+            _ => Err(WorkerProcessError::Protocol(
+                "unexpected bus description response".into(),
+            )),
+        }
+    }
+
     pub fn describe_parameters(&mut self) -> Result<Vec<ParameterDescriptor>, WorkerProcessError> {
         self.write(&WorkerMessage::DescribeParameters)
             .map_err(WorkerProcessError::Message)?;
@@ -5804,6 +7354,54 @@ impl WorkerProcess {
             WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
             _ => Err(WorkerProcessError::Protocol(
                 "unexpected parameter description response".into(),
+            )),
+        }
+    }
+
+    pub fn programs(&mut self) -> Result<PluginProgramList, WorkerProcessError> {
+        self.write(&WorkerMessage::DescribePrograms)
+            .map_err(WorkerProcessError::Message)?;
+        match self.read_control().map_err(WorkerProcessError::Message)? {
+            WorkerMessage::Programs { programs, units } => {
+                Ok(PluginProgramList { programs, units })
+            }
+            WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
+            _ => Err(WorkerProcessError::Protocol(
+                "unexpected program description response".into(),
+            )),
+        }
+    }
+
+    pub fn select_program(&mut self, index: u32) -> Result<(), WorkerProcessError> {
+        if index as usize >= MAX_PROGRAMS {
+            return Err(WorkerProcessError::Protocol(
+                "program index out of range".into(),
+            ));
+        }
+        self.write(&WorkerMessage::SelectProgram { index })
+            .map_err(WorkerProcessError::Message)?;
+        match self.read_control().map_err(WorkerProcessError::Message)? {
+            WorkerMessage::ProgramSelected { index: selected } if selected == index => Ok(()),
+            WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
+            _ => Err(WorkerProcessError::Protocol(
+                "unexpected program selection response".into(),
+            )),
+        }
+    }
+
+    pub fn apply_preset(&mut self, bytes: &[u8]) -> Result<(), WorkerProcessError> {
+        if bytes.is_empty() || bytes.len() > vst2_preset::MAX_VST2_PRESET_BYTES {
+            return Err(WorkerProcessError::Protocol("invalid preset size".into()));
+        }
+        self.write(&WorkerMessage::ApplyPreset {
+            bytes: bytes.to_vec(),
+        })
+        .map_err(WorkerProcessError::Message)?;
+        match self.read_control().map_err(WorkerProcessError::Message)? {
+            WorkerMessage::PresetApplied => Ok(()),
+            WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
+            _ => Err(WorkerProcessError::Protocol(
+                "unexpected preset application response".into(),
             )),
         }
     }
@@ -6108,6 +7706,16 @@ impl WorkerProcess {
     fn write(&mut self, message: &WorkerMessage) -> Result<(), WorkerMessageError> {
         write_worker_message(&mut self.writer, message)
     }
+
+    /// Hands MIDI events to an instrument worker for the block sent next. A
+    /// block without events sends nothing, so effect workers never see MIDI.
+    pub fn send_midi(&mut self, events: Vec<MidiEvent>) -> Result<(), WorkerProcessError> {
+        if events.is_empty() {
+            return Ok(());
+        }
+        self.write(&WorkerMessage::Midi { events })
+            .map_err(WorkerProcessError::Message)
+    }
 }
 
 fn receive_worker_message(
@@ -6377,6 +7985,11 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
             validate_shared_frame_shape(*sequence, *deadline_tick, *channels, *frames)?;
             validate_parameter_events_for_frame(parameters, *frames as usize)?;
         }
+        WorkerMessage::Midi { events } => {
+            // Offsets are checked against the block length by the worker when
+            // it applies them; here only the protocol-wide bounds.
+            validate_midi_events_for_frame(events, MAX_WORKER_FRAMES)?;
+        }
         WorkerMessage::Processed { frame } => {
             WorkerFrame::new(
                 frame.sequence,
@@ -6411,8 +8024,58 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
         WorkerMessage::StateRestore { asset } | WorkerMessage::State { asset } => {
             validate_worker_state(asset)?;
         }
+        WorkerMessage::Buses(buses) => {
+            buses
+                .processing_layout()
+                .map_err(WorkerMessageError::InvalidBusDiscovery)?;
+        }
         WorkerMessage::Parameters { descriptors } => {
             validate_parameter_descriptors(descriptors)?;
+        }
+        WorkerMessage::Programs { programs, units } => {
+            if programs.len() > MAX_PROGRAMS {
+                return Err(WorkerMessageError::InvalidProgram);
+            }
+            let mut ids = std::collections::HashSet::new();
+            for program in programs {
+                if program.name.is_empty()
+                    || program.name.chars().count() > ProgramDescriptor::MAX_NAME_CHARS
+                    || program.name.chars().any(char::is_control)
+                    || !ids.insert(program.id)
+                {
+                    return Err(WorkerMessageError::InvalidProgram);
+                }
+            }
+            if units.len() > 256 {
+                return Err(WorkerMessageError::InvalidProgram);
+            }
+            let mut unit_ids = std::collections::HashSet::new();
+            for unit in units {
+                if unit.name.chars().count() > ProgramDescriptor::MAX_NAME_CHARS
+                    || unit.name.chars().any(char::is_control)
+                    || !unit_ids.insert(unit.id)
+                    || unit.program_count as usize > MAX_PROGRAMS
+                    || unit.program_list_id.is_some_and(|id| id < 0)
+                    || unit.programs.len() > MAX_PROGRAMS
+                    || unit.programs.iter().any(|program| {
+                        program.name.is_empty()
+                            || program.name.chars().count() > ProgramDescriptor::MAX_NAME_CHARS
+                            || program.name.chars().any(char::is_control)
+                    })
+                {
+                    return Err(WorkerMessageError::InvalidProgram);
+                }
+            }
+        }
+        WorkerMessage::SelectProgram { index } | WorkerMessage::ProgramSelected { index }
+            if *index as usize >= MAX_PROGRAMS =>
+        {
+            return Err(WorkerMessageError::InvalidProgram);
+        }
+        WorkerMessage::ApplyPreset { bytes }
+            if bytes.is_empty() || bytes.len() > vst2_preset::MAX_VST2_PRESET_BYTES =>
+        {
+            return Err(WorkerMessageError::InvalidProgram);
         }
         WorkerMessage::Editor(descriptor) => {
             EditorDescriptor::new(descriptor.has_editor, descriptor.width, descriptor.height)?;
@@ -7738,6 +9401,57 @@ mod tests {
         bytes
     }
 
+    /// A 32-bit (PE32) DLL exporting `name`: its optional header is smaller
+    /// and its export directory sits at a different offset than in PE32+.
+    fn pe_x86_with_export(name: &[u8]) -> Vec<u8> {
+        let mut bytes = vec![0; 0x600];
+        bytes[0..2].copy_from_slice(b"MZ");
+        bytes[0x3c..0x40].copy_from_slice(&(0x80u32).to_le_bytes());
+        bytes[0x80..0x84].copy_from_slice(b"PE\0\0");
+        bytes[0x84..0x86].copy_from_slice(&0x014cu16.to_le_bytes());
+        bytes[0x86..0x88].copy_from_slice(&1u16.to_le_bytes());
+        bytes[0x94..0x96].copy_from_slice(&0xe0u16.to_le_bytes());
+        bytes[0x98..0x9a].copy_from_slice(&0x10bu16.to_le_bytes());
+        bytes[0x98 + 96..0x98 + 100].copy_from_slice(&0x1000u32.to_le_bytes());
+        let section = 0x98 + 0xe0;
+        bytes[section + 8..section + 12].copy_from_slice(&0x200u32.to_le_bytes());
+        bytes[section + 12..section + 16].copy_from_slice(&0x1000u32.to_le_bytes());
+        bytes[section + 16..section + 20].copy_from_slice(&0x200u32.to_le_bytes());
+        bytes[section + 20..section + 24].copy_from_slice(&0x400u32.to_le_bytes());
+        bytes[0x400 + 24..0x400 + 28].copy_from_slice(&1u32.to_le_bytes());
+        bytes[0x400 + 32..0x400 + 36].copy_from_slice(&0x1040u32.to_le_bytes());
+        bytes[0x440..0x444].copy_from_slice(&0x1050u32.to_le_bytes());
+        bytes[0x450..0x450 + name.len()].copy_from_slice(name);
+        bytes[0x450 + name.len()] = 0;
+        bytes
+    }
+
+    /// Regression (2026-11-13): a 32-bit VST2 DLL was classified `Unknown`
+    /// because the export walk only understood PE32+ headers, so every x86
+    /// plugin showed as unsupported even after the 32-bit worker existed.
+    #[test]
+    fn classifies_a_32_bit_vst2_dll_from_its_pe32_exports() {
+        let root = temp_root();
+        for export in [&b"VSTPluginMain"[..], &b"main"[..]] {
+            let path = root.join("x86-effect.dll");
+            fs::write(&path, pe_x86_with_export(export)).unwrap();
+            let identity = inspect_binary(&path, std::slice::from_ref(&root)).unwrap();
+            assert_eq!(identity.format, PluginFormat::Vst2);
+            assert_eq!(identity.architecture, PeArchitecture::X86);
+            #[cfg(windows)]
+            assert_eq!(
+                identity.compatibility(),
+                PluginCompatibility::SupportedVst2X86
+            );
+        }
+        // A 32-bit DLL without a VST entry point stays unrecognized.
+        let path = root.join("x86-plain.dll");
+        fs::write(&path, pe_x86_with_export(b"DllMain")).unwrap();
+        let identity = inspect_binary(&path, std::slice::from_ref(&root)).unwrap();
+        assert_eq!(identity.format, PluginFormat::Unknown);
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn inspects_x64_vst3_and_fingerprints_it() {
         let root = temp_root();
@@ -7907,6 +9621,116 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    /// Regression (2026-11-13): Surge XT and PatchWork Synth were listed as
+    /// supported effects because a scan cannot see inside the binary; a worker
+    /// refusal is remembered so the next scan lists them as instruments.
+    #[test]
+    fn a_worker_refusal_makes_the_next_scan_list_an_instrument() {
+        let identity = PluginIdentity {
+            path: PathBuf::from("synth.dll"),
+            binary_path: PathBuf::from("synth.dll"),
+            format: PluginFormat::Vst2,
+            architecture: PeArchitecture::X64,
+            file_bytes: 1,
+            sha256: "ab".repeat(32),
+            metadata: Default::default(),
+        };
+        #[cfg(windows)]
+        assert_eq!(
+            identity.compatibility(),
+            PluginCompatibility::SupportedVst2X64Gated
+        );
+        // Other failures are not instruments.
+        assert!(!note_instrument_refusal(&identity.sha256, "worker crashed"));
+        #[cfg(windows)]
+        assert_eq!(
+            identity.compatibility(),
+            PluginCompatibility::SupportedVst2X64Gated
+        );
+        assert!(!identity.is_instrument());
+        assert!(note_instrument_refusal(
+            &identity.sha256,
+            "VST2 load failed: VST2 plugin is an instrument; play it with the Instrument tool"
+        ));
+        assert!(identity.is_instrument());
+        // An instrument is still a hostable plugin: the Instrument tool plays it.
+        #[cfg(windows)]
+        assert_eq!(
+            identity.compatibility(),
+            PluginCompatibility::SupportedVst2X64Gated
+        );
+        // Only that binary.
+        let mut other = identity.clone();
+        other.sha256 = "cd".repeat(32);
+        assert!(!other.is_instrument());
+    }
+
+    #[test]
+    fn learned_instrument_fingerprints_survive_a_restart() {
+        let dir = std::env::temp_dir().join(format!("ar-learned-{}", std::process::id()));
+        let file = dir.join("nested").join("learned.txt");
+        let _ = fs::remove_dir_all(&dir);
+        assert!(read_learned_fingerprints(&file).is_empty());
+        let first = "ab".repeat(32);
+        let second = "CD".repeat(32);
+        append_learned_fingerprint(&file, &first);
+        append_learned_fingerprint(&file, &second.to_ascii_lowercase());
+        // Junk lines (wrong length, not hex) are ignored when reading back.
+        fs::write(
+            &file,
+            format!(
+                "{first}
+not a fingerprint
+{}
+{}
+",
+                "cd".repeat(32),
+                "zz".repeat(32)
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            read_learned_fingerprints(&file),
+            vec![first, "cd".repeat(32)]
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Regression (2026-11-13): a 32-bit VST3 bundle keeps its binary in
+    /// `Contents/x86-win`, which inspection did not look in ("Missing").
+    #[test]
+    fn inspects_a_32_bit_vst3_bundle_under_x86_win_contents() {
+        let root = temp_root();
+        let bundle = root.join("effect32.vst3");
+        let binary_dir = bundle.join("Contents").join("x86-win");
+        fs::create_dir_all(&binary_dir).unwrap();
+        fs::write(
+            binary_dir.join("effect32.vst3"),
+            pe_x86_with_export(b"GetPluginFactory"),
+        )
+        .unwrap();
+        let identity = inspect_binary(&bundle, std::slice::from_ref(&root)).unwrap();
+        assert_eq!(identity.format, PluginFormat::Vst3);
+        assert_eq!(identity.architecture, PeArchitecture::X86);
+        assert_eq!(
+            identity.compatibility(),
+            PluginCompatibility::SupportedVst3X86
+        );
+        // A bundle with both keeps using the 64-bit binary.
+        let both = root.join("both.vst3");
+        for (folder, bytes) in [
+            ("x86-win", pe_x86_with_export(b"GetPluginFactory")),
+            ("x86_64-win", pe_x64()),
+        ] {
+            let directory = both.join("Contents").join(folder);
+            fs::create_dir_all(&directory).unwrap();
+            fs::write(directory.join("both.vst3"), bytes).unwrap();
+        }
+        let identity = inspect_binary(&both, std::slice::from_ref(&root)).unwrap();
+        assert_eq!(identity.architecture, PeArchitecture::X64);
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn inspects_a_vst3_bundle_binary_under_x64_contents() {
         let root = temp_root();
@@ -8030,44 +9854,92 @@ mod tests {
             let resources = bundle.join("Contents").join("Resources");
             fs::create_dir_all(&resources).unwrap();
             fs::write(resources.join(file), json).unwrap();
-            let compatibility = inspect_binary(&bundle, std::slice::from_ref(&root))
-                .unwrap()
-                .compatibility();
+            let identity = inspect_binary(&bundle, std::slice::from_ref(&root)).unwrap();
+            // An instrument is hostable like an effect; only its kind differs.
+            assert_eq!(
+                identity.compatibility(),
+                PluginCompatibility::SupportedVst3X64
+            );
+            let instrument = identity.is_instrument();
             fs::remove_dir_all(root).unwrap();
-            compatibility
+            instrument
         };
         // Standard VST3 module info: every audio class is an instrument.
         let synth_classes = br#"{ "Classes": [
             { "CID": "A", "Category": "Audio Module Class", "Sub Categories": ["Instrument", "Synth"] }
         ] }"#;
-        assert_eq!(
-            bundle_with("synth.vst3", "moduleinfo.json", synth_classes),
-            PluginCompatibility::UnsupportedInstrument
-        );
+        assert!(bundle_with("synth.vst3", "moduleinfo.json", synth_classes));
         let effect_classes = br#"{ "Classes": [
             { "CID": "A", "Category": "Audio Module Class", "Sub Categories": "Fx|Dynamics" }
         ] }"#;
-        assert_eq!(
-            bundle_with("effect.vst3", "moduleinfo.json", effect_classes),
-            PluginCompatibility::SupportedVst3X64
-        );
+        assert!(!bundle_with(
+            "effect.vst3",
+            "moduleinfo.json",
+            effect_classes
+        ));
         // Universal Audio's own bundle manifest.
-        assert_eq!(
-            bundle_with(
-                "uaudio_synth.vst3",
-                "manifest.json",
-                br#"{ "is_synth": true }"#
-            ),
-            PluginCompatibility::UnsupportedInstrument
-        );
-        assert_eq!(
-            bundle_with(
-                "uaudio_effect.vst3",
-                "manifest.json",
-                br#"{ "is_synth": false }"#
-            ),
-            PluginCompatibility::SupportedVst3X64
-        );
+        assert!(bundle_with(
+            "uaudio_synth.vst3",
+            "manifest.json",
+            br#"{ "is_synth": true }"#
+        ));
+        assert!(!bundle_with(
+            "uaudio_effect.vst3",
+            "manifest.json",
+            br#"{ "is_synth": false }"#
+        ));
+    }
+
+    #[test]
+    fn a_vst3_without_metadata_is_classified_from_its_category_string() {
+        assert!(binary_declares_vst3_instrument(b"\0Instrument|Synth\0"));
+        assert!(binary_declares_vst3_instrument(b"Instrument|Sampler\0"));
+        // DPF declares the bare category alone; with an effect category in the
+        // module the bare word is not trusted.
+        assert!(binary_declares_vst3_instrument(b"\0Instrument\0"));
+        assert!(!binary_declares_vst3_instrument(
+            b"\0Instrument\0\0Fx|Reverb\0"
+        ));
+        assert!(!binary_declares_vst3_instrument(b"\0Instrument\0\0Fx\0"));
+        assert!(!binary_declares_vst3_instrument(b"an Instrument here"));
+        assert!(!binary_declares_vst3_instrument(
+            b"\0Fx|Instrument|External\0"
+        ));
+        assert!(!binary_declares_vst3_instrument(b"\0Instrument|\0"));
+        assert!(!binary_declares_vst3_instrument(
+            b"an Instrument|Synth label"
+        ));
+        assert!(!binary_declares_vst3_instrument(b""));
+
+        let inspect = |name: &str, tail: &[u8], module_info: Option<&[u8]>| {
+            let root = temp_root();
+            let bundle = root.join(name);
+            let binary_dir = bundle.join("Contents").join("x86_64-win");
+            fs::create_dir_all(&binary_dir).unwrap();
+            let mut binary = pe_x64();
+            binary.extend_from_slice(tail);
+            fs::write(binary_dir.join(name), binary).unwrap();
+            if let Some(json) = module_info {
+                let resources = bundle.join("Contents").join("Resources");
+                fs::create_dir_all(&resources).unwrap();
+                fs::write(resources.join("moduleinfo.json"), json).unwrap();
+            }
+            let identity = inspect_binary(&bundle, std::slice::from_ref(&root)).unwrap();
+            let instrument = identity.is_instrument();
+            fs::remove_dir_all(root).unwrap();
+            instrument
+        };
+        assert!(inspect("synth.vst3", b"\0Instrument|Synth\0", None));
+        assert!(!inspect("effect.vst3", b"\0Fx|Reverb\0", None));
+        // A class list in the metadata is trusted over the byte search.
+        let effect_classes = br#"{ "Classes": [
+            { "CID": "0123456789ABCDEF0123456789ABCDEF", "Category": "Audio Module Class", "Sub Categories": "Fx|Dynamics" }
+        ] }"#;
+        assert!(!inspect(
+            "listed.vst3",
+            b"\0Instrument|Synth\0",
+            Some(effect_classes)
+        ));
     }
 
     #[test]
@@ -8740,7 +10612,19 @@ mod tests {
             identity.compatibility(),
             PluginCompatibility::UnsupportedFormat
         );
+        // 32-bit plugins are supported since 2026-11-13 (own 32-bit worker).
         identity.architecture = PeArchitecture::X86;
+        #[cfg(windows)]
+        assert_eq!(
+            identity.compatibility(),
+            PluginCompatibility::SupportedVst2X86
+        );
+        identity.format = PluginFormat::Vst3;
+        assert_eq!(
+            identity.compatibility(),
+            PluginCompatibility::SupportedVst3X86
+        );
+        identity.architecture = PeArchitecture::Arm64;
         assert_eq!(
             identity.compatibility(),
             PluginCompatibility::UnsupportedFormat
@@ -8843,6 +10727,65 @@ mod tests {
                 WorkerFrameError::InvalidChannels
             ))
         ));
+    }
+
+    #[test]
+    fn vst3_unit_metadata_round_trips_and_rejects_duplicate_or_unbounded_units() {
+        let message = WorkerMessage::Programs {
+            programs: vec![ProgramDescriptor::new(0, "Init").unwrap()],
+            units: vec![Vst3UnitDescriptor {
+                id: 0,
+                parent_id: -1,
+                name: "Root".into(),
+                program_list_id: Some(1),
+                program_count: 1,
+                programs: vec![ProgramDescriptor::new(0, "Init").unwrap()],
+            }],
+        };
+        let encoded = encode_worker_message(&message).unwrap();
+        assert_eq!(decode_worker_message(&encoded).unwrap(), message);
+
+        let duplicate = WorkerMessage::Programs {
+            programs: Vec::new(),
+            units: vec![
+                Vst3UnitDescriptor {
+                    id: 0,
+                    parent_id: -1,
+                    name: "Root".into(),
+                    program_list_id: None,
+                    program_count: 0,
+                    programs: Vec::new(),
+                },
+                Vst3UnitDescriptor {
+                    id: 0,
+                    parent_id: -1,
+                    name: "Duplicate".into(),
+                    program_list_id: None,
+                    program_count: 0,
+                    programs: Vec::new(),
+                },
+            ],
+        };
+        assert_eq!(
+            encode_worker_message(&duplicate),
+            Err(WorkerMessageError::InvalidProgram)
+        );
+
+        let too_many_programs = WorkerMessage::Programs {
+            programs: Vec::new(),
+            units: vec![Vst3UnitDescriptor {
+                id: 0,
+                parent_id: -1,
+                name: "Root".into(),
+                program_list_id: Some(1),
+                program_count: (MAX_PROGRAMS + 1) as u32,
+                programs: Vec::new(),
+            }],
+        };
+        assert_eq!(
+            encode_worker_message(&too_many_programs),
+            Err(WorkerMessageError::InvalidProgram)
+        );
     }
 
     #[test]
@@ -9038,6 +10981,82 @@ mod tests {
                 ParameterEventError::OffsetOutOfRange
             ))
         ));
+    }
+
+    #[test]
+    fn midi_events_are_bounded_channel_voice_messages_inside_the_block() {
+        assert_eq!(
+            MidiEvent::new(0, 0x90, 60, 100),
+            Ok(MidiEvent {
+                sample_offset: 0,
+                status: 0x90,
+                data1: 60,
+                data2: 100
+            })
+        );
+        assert_eq!(
+            MidiEvent::new(0, 0xF8, 0, 0),
+            Err(MidiEventError::NotChannelVoice)
+        );
+        assert_eq!(
+            MidiEvent::new(0, 0x7F, 0, 0),
+            Err(MidiEventError::NotChannelVoice)
+        );
+        assert_eq!(
+            MidiEvent::new(0, 0x90, 128, 0),
+            Err(MidiEventError::DataByteOutOfRange)
+        );
+        assert_eq!(
+            MidiEvent::new(MAX_WORKER_FRAMES as u32, 0x90, 60, 1),
+            Err(MidiEventError::OffsetOutOfRange)
+        );
+        let message = |events: Vec<MidiEvent>| WorkerMessage::Midi { events };
+        assert!(
+            validate_worker_message(&message(vec![MidiEvent::new(3, 0x90, 60, 90).unwrap()]))
+                .is_ok()
+        );
+        // A forged event past the protocol-wide block bound is refused.
+        let forged = MidiEvent {
+            sample_offset: MAX_WORKER_FRAMES as u32,
+            status: 0x90,
+            data1: 60,
+            data2: 90,
+        };
+        assert_eq!(
+            validate_worker_message(&message(vec![forged])),
+            Err(WorkerMessageError::InvalidMidi(
+                MidiEventError::OffsetOutOfRange
+            ))
+        );
+        let crowd = vec![MidiEvent::new(0, 0x90, 60, 90).unwrap(); MAX_MIDI_EVENTS_PER_BLOCK + 1];
+        assert_eq!(
+            validate_worker_message(&message(crowd)),
+            Err(WorkerMessageError::InvalidMidi(MidiEventError::TooMany))
+        );
+        // The check a worker applies against the real length of its block.
+        let late = [MidiEvent::new(4, 0x90, 60, 90).unwrap()];
+        assert_eq!(
+            validate_midi_events_for_frame(&late, 4),
+            Err(WorkerMessageError::InvalidMidi(
+                MidiEventError::OffsetOutOfRange
+            ))
+        );
+    }
+
+    #[test]
+    fn midi_message_round_trips_and_a_session_accepts_it_while_active() {
+        let message = WorkerMessage::Midi {
+            events: vec![
+                MidiEvent::new(10, 0x90, 64, 80).unwrap(),
+                MidiEvent::new(90, 0x80, 64, 0).unwrap(),
+            ],
+        };
+        let decoded = decode_worker_message(&encode_worker_message(&message).unwrap()).unwrap();
+        assert_eq!(decoded, message);
+        let mut session = WorkerSession::new("0".repeat(64), 2).unwrap();
+        session.hello_sent().unwrap();
+        session.accept(&WorkerMessage::Ready, 0).unwrap();
+        assert_eq!(session.accept(&message, 0), Ok(None));
     }
 
     #[test]

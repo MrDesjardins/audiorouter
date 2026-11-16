@@ -16,7 +16,7 @@ You install and license them yourself, exactly as you would for a DAW.
 | 64-bit (x64) **VST2** audio effect (`.dll`) | Yes, through a gated adapter. |
 | UADx and UAD Spark (UA Connect) | Yes; see the [UAD section](#universal-audio-uad-plugins). |
 | 32-bit (x86) VST2 or VST3 | No. Install the 64-bit version. |
-| Instruments and synths (MIDI) | No. AudioRouter has no MIDI input yet; Play says the plugin is an instrument. |
+| Instruments and synths (MIDI) | Yes. Add them with the **Instrument** entry in Tools and play them from the on-screen keyboard, a MIDI keyboard, a script or an assistant. See [Instruments](#instruments-and-synths). |
 | AAX (Pro Tools), Audio Units (macOS), CLAP | No. Many vendors include VST2 or VST3 builds in the same installer. |
 | Stand-alone apps and "Console" style mixers | Not as a plugin. Route their audio devices instead (see the [UAD section](#apollo-console-unison-and-console-inserts)). |
 
@@ -228,10 +228,9 @@ licensed (a Spark subscription must be active), then press Retry, or Stop
 and Play. On a microphone path the plugin is silent until then (see
 [the protected voice rule](#the-protected-voice-rule)).
 
-**UADx PolyMAX Synth** is an instrument. AudioRouter has no MIDI input, so
-a scan lists it as `unsupportedInstrument` (in the **Advanced** Plugin scan
-panel) and leaves it out of the Plugins list. A list remembered from before
-this check still shows it until you scan again; Play refuses it either way.
+**UADx PolyMAX Synth** is an instrument. A scan marks it as one and it is
+listed under **Instruments**, not under Plugins; see
+[Instruments](#instruments-and-synths).
 
 ### UAD-2 "Powered Plug-Ins" (need Apollo or UAD-2 hardware)
 
@@ -261,8 +260,27 @@ Use them this way instead:
 3. Avoid processing the same signal twice: if Console already compresses your
    voice, don't add a second compressor by accident.
 
-### Not supported
+## Instruments and synths
+
+An instrument makes sound from notes instead of changing sound that comes in, so
+it has an output and no input. Add it from **Tools** (under **Instruments**,
+which appears once a scan finds one), connect its output like any source, and
+press Play.
+
+- **Where the notes come from.** In Properties, choose **On-screen keyboard
+  only**, **Every connected MIDI keyboard**, or one keyboard by name. A keyboard
+  that is not plugged in is never swapped for another one: the choice stays and
+  is marked "not connected".
+- **On-screen keyboard.** Two octaves, enabled while the route plays. **Stop all
+  notes** silences anything ringing, and leaving the panel releases held keys.
+- **Scripts and assistants.** `midi.devices` lists keyboards and what each
+  instrument listens to; `midi.sendEvents` plays notes (REST and the
+  `list_midi_devices` and `play_notes` assistant tools).
+- **VST2 files** only show as instruments after a load attempt, because the
+  file does not say. Until then one is listed with the effects, and adding it
+  as an effect says it is an instrument and where to add it instead.
+
+## Not supported
 
 - **AAX** builds (Pro Tools only). Install the VST2 or VST3 build instead.
-- **UAD instruments and synths** (no MIDI input in AudioRouter yet).
 - **LUNA** extensions, which are part of UA's LUNA software.

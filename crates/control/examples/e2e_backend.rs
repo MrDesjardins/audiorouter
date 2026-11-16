@@ -166,6 +166,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             || matches!(method, "session.start" | "session.stop");
         let allowed = allowed
             || method.starts_with("recorders.")
+            // MIDI listing is a read; sendEvents answers "start the route" offline.
+            || method.starts_with("midi.")
             || matches!(
                 method,
                 "recordings.preview" | "recordings.inspectRecovery" | "recordings.setMetadata"

@@ -2,6 +2,11 @@
 
 use super::*;
 
+#[inline(never)]
+fn build_schema(build: impl FnOnce() -> Value) -> Value {
+    build()
+}
+
 pub(crate) fn method_output_schema(name: &str) -> Value {
     // Keep the comprehensive match in a separate, uninlined function. A debug
     // build otherwise reserves every arm's temporaries in the caller's frame
@@ -12,6 +17,15 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
 
 #[inline(never)]
 fn method_output_schema_impl(name: &str) -> Value {
+    // Each match arm gets its own construction frame. In debug builds rustc
+    // otherwise reserves the sum of all JSON temporaries here (~440 KiB),
+    // even for arms that call another schema builder. Keep this frame small
+    // for discovery reached through a Windows main thread or pipe adapter.
+    macro_rules! json {
+        ($($tokens:tt)*) => {
+            build_schema(|| serde_json::json!($($tokens)*))
+        };
+    }
     match name {
         "system.quit" => json!({
             "type": "object",
@@ -1113,6 +1127,141 @@ fn method_output_schema_impl(name: &str) -> Value {
             "required": ["sessionId", "nodeId", "stateId", "sizeBytes"],
             "additionalProperties": false
         }),
+        "plugins.buses" => json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string" },
+                "sha256": { "type": "string" },
+                "format": { "type": "string", "enum": ["vst2", "vst3", "unknown"] },
+                "buses": {
+                    "type": "object",
+                    "properties": {
+                        "inputs": { "type": "array", "maxItems": 8, "items": {
+                            "type": "object",
+                            "properties": {
+                                "nativeIndex": { "type": "integer", "minimum": 0 },
+                                "name": { "type": "string" },
+                                "channels": { "type": "integer", "minimum": 1, "maximum": 2 },
+                                "role": { "type": "string", "enum": ["main", "auxiliary"] }
+                            },
+                            "required": ["nativeIndex", "name", "channels", "role"],
+                            "additionalProperties": false
+                        } },
+                        "outputs": { "type": "array", "maxItems": 8, "items": {
+                            "type": "object",
+                            "properties": {
+                                "nativeIndex": { "type": "integer", "minimum": 0 },
+                                "name": { "type": "string" },
+                                "channels": { "type": "integer", "minimum": 1, "maximum": 2 },
+                                "role": { "type": "string", "enum": ["main", "auxiliary"] }
+                            },
+                            "required": ["nativeIndex", "name", "channels", "role"],
+                            "additionalProperties": false
+                        } }
+                    },
+                    "required": ["inputs", "outputs"],
+                    "additionalProperties": false
+                }
+            },
+            "required": ["path", "sha256", "format", "buses"],
+            "additionalProperties": false
+        }),
+        "plugins.removeSidechainPort" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string" },
+                "nodeId": { "type": "string" },
+                "removed": { "type": "boolean" },
+                "revision": {},
+                "activation": {}
+            },
+            "required": ["sessionId", "nodeId", "removed"],
+            "additionalProperties": false
+        }),
+        "plugins.addSidechainPort" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string" },
+                "nodeId": { "type": "string" },
+                "port": { "type": "string" },
+                "channels": { "type": "integer", "minimum": 1, "maximum": 2 },
+                "revision": {},
+                "activation": {}
+            },
+            "required": ["sessionId", "nodeId", "port", "channels"],
+            "additionalProperties": false
+        }),
+        "plugins.programs" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string" },
+                "nodeId": { "type": "string" },
+                "programs": {
+                    "type": "array",
+                    "maxItems": 256,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": { "type": "integer", "minimum": 0 },
+                            "name": { "type": "string", "minLength": 1, "maxLength": 128 }
+                        },
+                        "required": ["id", "name"],
+                        "additionalProperties": false
+                    }
+                },
+                "units": {
+                    "type": "array",
+                    "maxItems": 256,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": { "type": "integer" },
+                            "parent_id": { "type": "integer" },
+                            "name": { "type": "string", "maxLength": 128 },
+                            "program_list_id": { "type": ["integer", "null"] },
+                            "program_count": { "type": "integer", "minimum": 0, "maximum": 256 },
+                            "programs": {
+                                "type": "array",
+                                "maxItems": 256,
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": { "type": "integer", "minimum": 0 },
+                                        "name": { "type": "string", "minLength": 1, "maxLength": 128 }
+                                    },
+                                    "required": ["id", "name"],
+                                    "additionalProperties": false
+                                }
+                            }
+                        },
+                        "required": ["id", "parent_id", "name", "program_list_id", "program_count", "programs"],
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "required": ["sessionId", "nodeId", "programs", "units"],
+            "additionalProperties": false
+        }),
+        "plugins.selectProgram" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string" },
+                "nodeId": { "type": "string" },
+                "program": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["sessionId", "nodeId", "program"],
+            "additionalProperties": false
+        }),
+        "plugins.applyPreset" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string" },
+                "nodeId": { "type": "string" },
+                "presetPath": { "type": "string" }
+            },
+            "required": ["sessionId", "nodeId", "presetPath"],
+            "additionalProperties": false
+        }),
         "plugins.prepareUpdate" => json!({
             "type": "object", "properties": {
                 "sessionId": { "type": "string" }, "nodeId": { "type": "string" },
@@ -1169,9 +1318,10 @@ fn method_output_schema_impl(name: &str) -> Value {
                         "vendor": { "type": ["string", "null"], "maxLength": 128 },
                         "version": { "type": ["string", "null"], "maxLength": 128 },
                         "classIds": { "type": "array", "maxItems": 256, "items": { "type": "string", "maxLength": 32 } },
-                        "compatibility": { "enum": ["supportedVst3X64", "supportedVst2X64Gated", "unsupportedFormat", "unsupportedInstrument"] }
+                        "compatibility": { "enum": ["supportedVst3X64", "supportedVst2X64Gated", "supportedVst3X86", "supportedVst2X86", "unsupportedFormat"] },
+                        "instrument": { "type": "boolean", "description": "True when the plugin is a synth or sampler (play it with the Instrument tool); a VST2 file only shows as one after a load attempt." }
                     },
-                    "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "vendor", "version", "classIds", "compatibility"],
+                    "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "vendor", "version", "classIds", "compatibility", "instrument"],
                     "additionalProperties": false
                 },
                 "error": { "type": ["string", "null"] },
@@ -1448,6 +1598,28 @@ fn method_output_schema_impl(name: &str) -> Value {
             "type": "object", "properties": {
                 "id": { "type": "string" }, "format": { "enum": ["flac"] }, "dataBase64": { "type": "string" }
             }, "required": ["id", "format", "dataBase64"], "additionalProperties": false
+        }),
+        "midi.devices" => json!({
+            "type": "object", "properties": {
+                "devices": { "type": "array", "items": { "type": "string" } },
+                "instruments": { "type": "array", "items": {
+                    "type": "object", "properties": {
+                        "sessionId": { "type": "string" },
+                        "nodeId": { "type": "string" },
+                        "midiInput": { "type": "string" },
+                        "connected": { "type": "boolean" }
+                    }, "required": ["sessionId", "nodeId", "midiInput", "connected"], "additionalProperties": false
+                } }
+            }, "required": ["devices", "instruments"], "additionalProperties": false
+        }),
+        "midi.sendEvents" => json!({
+            "type": "object", "properties": {
+                "sessionId": { "type": "string" },
+                "nodeId": { "type": "string" },
+                "accepted": { "type": "integer", "minimum": 0 },
+                "scheduled": { "type": "integer", "minimum": 0 },
+                "heldNotes": { "type": "integer", "minimum": 0 }
+            }, "required": ["sessionId", "nodeId", "accepted", "scheduled", "heldNotes"], "additionalProperties": false
         }),
         "soundboard.trigger" => json!({
             "type": "object", "properties": {
@@ -2431,9 +2603,10 @@ fn plugin_scan_output_schema() -> Value {
                                 "vendor": { "type": ["string", "null"], "maxLength": 128 },
                                 "version": { "type": ["string", "null"], "maxLength": 128 },
                                 "classIds": { "type": "array", "maxItems": 256, "items": { "type": "string", "maxLength": 32 } },
-                                "compatibility": { "enum": ["supportedVst3X64", "supportedVst2X64Gated", "unsupportedFormat", "unsupportedInstrument"] }
+                                "compatibility": { "enum": ["supportedVst3X64", "supportedVst2X64Gated", "supportedVst3X86", "supportedVst2X86", "unsupportedFormat"] },
+                                "instrument": { "type": "boolean", "description": "True when the plugin is a synth or sampler (play it with the Instrument tool); a VST2 file only shows as one after a load attempt." }
                             },
-                            "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "vendor", "version", "classIds", "compatibility"],
+                            "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "vendor", "version", "classIds", "compatibility", "instrument"],
                             "additionalProperties": false
                         },
                         "error": { "type": ["string", "null"] },

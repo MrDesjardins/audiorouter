@@ -37,9 +37,13 @@
 #include "pluginterfaces/vst/ivstcomponent.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
+#include "pluginterfaces/vst/ivstcontextmenu.h"
 #include "pluginterfaces/vst/ivsthostapplication.h"
 #include "pluginterfaces/vst/ivstmessage.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
+#include "pluginterfaces/vst/ivstevents.h"
+#include "pluginterfaces/vst/ivstmidicontrollers.h"
+#include "pluginterfaces/vst/ivstunits.h"
 #include "pluginterfaces/vst/vstspeaker.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
 #include "host-support.h"
@@ -405,6 +409,76 @@ static uint64_t required_uint_field(const std::string& json, const std::string& 
     return parse_uint(json, position);
 }
 
+// One MIDI channel-voice message for an instrument (worker protocol "Midi").
+struct MidiEvent {
+    std::size_t offset;
+    uint8_t status;
+    uint8_t data1;
+    uint8_t data2;
+};
+// Aligned with MAX_MIDI_EVENTS_PER_BLOCK in the Rust worker contract.
+constexpr std::size_t kMaxMidiEvents = 256;
+
+static std::vector<MidiEvent> parse_midi_events(const std::string& json) {
+    const std::string key = "\"events\":[";
+    const auto array = json.find(key);
+    if (array == std::string::npos) throw protocol_error("missing MIDI event array");
+    auto position = array + key.size();
+    std::vector<MidiEvent> events;
+    while (position < json.size() && json[position] != ']') {
+        if (json[position] != '{') {
+            ++position;
+            continue;
+        }
+        auto cursor = find_required(json, "\"sample_offset\":", position);
+        const auto offset = parse_uint(json, cursor);
+        cursor = find_required(json, "\"status\":", cursor);
+        const auto status = parse_uint(json, cursor);
+        cursor = find_required(json, "\"data1\":", cursor);
+        const auto data1 = parse_uint(json, cursor);
+        cursor = find_required(json, "\"data2\":", cursor);
+        const auto data2 = parse_uint(json, cursor);
+        if (offset >= kMaxFrames || status < 0x80 || status > 0xEF || data1 > 0x7F || data2 > 0x7F) {
+            throw protocol_error("MIDI event is outside the bounded contract");
+        }
+        events.push_back({static_cast<std::size_t>(offset), static_cast<uint8_t>(status),
+                          static_cast<uint8_t>(data1), static_cast<uint8_t>(data2)});
+        if (events.size() > kMaxMidiEvents) {
+            throw protocol_error("MIDI event count exceeds the bounded contract");
+        }
+        const auto close = json.find('}', cursor);
+        if (close == std::string::npos) throw protocol_error("MIDI event is unterminated");
+        position = close + 1;
+    }
+    if (position >= json.size()) throw protocol_error("MIDI event array is unterminated");
+    return events;
+}
+
+// The input event list handed to an instrument's process call.
+class EventList final : public Vst::IEventList {
+public:
+    tresult PLUGIN_API queryInterface(const TUID iid, void** object) override {
+        return host_query<Vst::IEventList>(this, iid, object, Vst::IEventList_iid);
+    }
+    uint32 PLUGIN_API addRef() override { return 1; }
+    uint32 PLUGIN_API release() override { return 1; }
+    int32 PLUGIN_API getEventCount() override { return static_cast<int32>(events_.size()); }
+    tresult PLUGIN_API getEvent(int32 index, Vst::Event& event) override {
+        if (index < 0 || static_cast<std::size_t>(index) >= events_.size()) return kInvalidArgument;
+        event = events_[static_cast<std::size_t>(index)];
+        return kResultOk;
+    }
+    tresult PLUGIN_API addEvent(Vst::Event& event) override {
+        if (events_.size() >= kMaxMidiEvents) return kOutOfMemory;
+        events_.push_back(event);
+        return kResultOk;
+    }
+    void clear() { events_.clear(); }
+
+private:
+    std::vector<Vst::Event> events_;
+};
+
 class ParameterQueue final : public Vst::IParamValueQueue {
 public:
     explicit ParameterQueue(Vst::ParamID id) : id_(id) {}
@@ -468,7 +542,13 @@ private:
 
 static fs::path resolve_binary(const fs::path& supplied) {
     if (!fs::is_directory(supplied)) return supplied;
+    // The VST3 bundle layout names the folder by architecture; this worker only
+    // ever loads binaries of its own bitness (a 32-bit build hosts x86-win).
+#if defined(_WIN64)
     const auto contents = supplied / "Contents" / "x86_64-win";
+#else
+    const auto contents = supplied / "Contents" / "x86-win";
+#endif
     fs::path result;
     for (const auto& entry : fs::directory_iterator(contents)) {
         if (entry.is_regular_file() && entry.path().extension() == L".vst3") {
@@ -476,7 +556,7 @@ static fs::path resolve_binary(const fs::path& supplied) {
             result = entry.path();
         }
     }
-    if (result.empty()) throw std::runtime_error("VST3 bundle has no x64 binary");
+    if (result.empty()) throw std::runtime_error("VST3 bundle has no binary for this worker's architecture");
     return result;
 }
 
@@ -599,11 +679,43 @@ static std::atomic<bool> g_latency_restart_failed{false};
 // re-activation itself, not for a UI thread busy elsewhere.
 static std::mutex g_processing_mutex;
 
-class ComponentHandler final : public Vst::IComponentHandler {
+// Which restart requests need the component switched off and on again. A
+// latency change must be re-read after re-activation (SDK rule); an I/O change
+// and a reload request get the same treatment so the plugin can rebuild its
+// processing. Bus counts and layouts are fixed when the worker starts, so a
+// plugin that changes them keeps the layout it was given.
+static bool restart_needs_reactivation(int32 flags) {
+    return (flags & (Vst::kLatencyChanged | Vst::kIoChanged | Vst::kReloadComponent)) != 0;
+}
+
+template <typename Interface>
+struct PluginInterfaceReleaser {
+    void operator()(Interface* value) const noexcept {
+        if (value) value->release();
+    }
+};
+
+class ComponentHandler final : public Vst::IComponentHandler, public Vst::IComponentHandler2,
+                               public Vst::IComponentHandler3 {
 public:
     tresult PLUGIN_API queryInterface(const TUID iid, void** object) override {
+        if (object && FUnknownPrivate::iidEqual(iid, Vst::IComponentHandler3_iid)) {
+            *object = static_cast<Vst::IComponentHandler3*>(this);
+            return kResultOk;
+        }
+        if (object && FUnknownPrivate::iidEqual(iid, Vst::IComponentHandler2_iid)) {
+            *object = static_cast<Vst::IComponentHandler2*>(this);
+            return kResultOk;
+        }
         return host_query<Vst::IComponentHandler>(this, iid, object, Vst::IComponentHandler_iid);
     }
+    // IComponentHandler2. The route's saved state is taken when the editor
+    // closes or the user saves, so "dirty" needs no action; group edits arrive
+    // as ordinary edits; the host opens editors only on the user's request.
+    tresult PLUGIN_API setDirty(TBool) override { return kResultOk; }
+    tresult PLUGIN_API requestOpenEditor(FIDString) override { return kResultFalse; }
+    tresult PLUGIN_API startGroupEdit() override { return kResultOk; }
+    tresult PLUGIN_API finishGroupEdit() override { return kResultOk; }
     uint32 PLUGIN_API addRef() override { return 1; }
     uint32 PLUGIN_API release() override { return 1; }
     tresult PLUGIN_API beginEdit(Vst::ParamID) override { return kResultOk; }
@@ -612,12 +724,18 @@ public:
         return kResultOk;
     }
     tresult PLUGIN_API endEdit(Vst::ParamID) override { return kResultOk; }
-    // Called by the controller, usually on the UI thread. Only a latency
-    // change needs host action; the SDK requires a re-activation before the
-    // new value applies, done between quanta by the next Latency request.
+    // Called by the controller, usually on the UI thread. The re-activation
+    // is done between quanta by the next Latency request. kParamValuesChanged
+    // needs nothing: the worker keeps no copy of the values, it reads them from
+    // the controller when it saves.
     tresult PLUGIN_API restartComponent(int32 flags) override {
-        if (flags & Vst::kLatencyChanged) g_latency_restart_pending.store(true, std::memory_order_release);
+        if (restart_needs_reactivation(flags)) g_latency_restart_pending.store(true, std::memory_order_release);
         return kResultOk;
+    }
+    // Safe stub: never opens a native or plugin-defined popup. The plugin's
+    // own editor remains available for controls that need its context menu.
+    Vst::IContextMenu* PLUGIN_API createContextMenu(IPlugView*, const Vst::ParamID*) override {
+        return nullptr;
     }
 };
 
@@ -686,14 +804,18 @@ class Vst3Effect final {
 public:
     Vst3Effect(const fs::path& supplied, double sample_rate,
                const std::vector<uint16_t>& input_channels,
-               const std::vector<uint16_t>& output_channels, const std::string& class_id = {})
-        : requested_input_channels_(input_channels), requested_output_channels_(output_channels) {
+               const std::vector<uint16_t>& output_channels, const std::string& class_id = {},
+               bool instrument = false)
+        : requested_input_channels_(input_channels), requested_output_channels_(output_channels),
+          instrument_(instrument) {
         context_.sampleRate = sample_rate;
         context_.tempo = 120.0;
         context_.timeSigNumerator = 4;
         context_.timeSigDenominator = 4;
         context_.state = Vst::ProcessContext::kPlaying | Vst::ProcessContext::kTempoValid | Vst::ProcessContext::kTimeSigValid | Vst::ProcessContext::kProjectTimeMusicValid;
-        if (input_channels.empty() || output_channels.empty() || input_channels.size() > 4 ||
+        // An instrument has no audio input; an effect needs at least one.
+        if ((input_channels.empty() && !instrument) || output_channels.empty() ||
+            input_channels.size() > 4 ||
             output_channels.size() > 4 ||
             std::accumulate(input_channels.begin(), input_channels.end(), std::size_t{0}) > 8 ||
             std::accumulate(output_channels.begin(), output_channels.end(), std::size_t{0}) > 8) {
@@ -712,47 +834,82 @@ public:
         if (!get_factory) throw std::runtime_error("VST3 GetPluginFactory export is missing");
         factory_ = get_factory();
         if (!factory_) throw std::runtime_error("VST3 factory is null");
+        IPluginFactory2* factory2 = nullptr;
+        factory_->queryInterface(IPluginFactory2_iid, reinterpret_cast<void**>(&factory2));
+        const std::unique_ptr<IPluginFactory2, PluginInterfaceReleaser<IPluginFactory2>> factory2_owner(
+            factory2);
+        IPluginFactory3* factory3 = nullptr;
+        factory_->queryInterface(IPluginFactory3_iid, reinterpret_cast<void**>(&factory3));
+        const std::unique_ptr<IPluginFactory3, PluginInterfaceReleaser<IPluginFactory3>> factory3_owner(
+            factory3);
+        auto get_class_info = [&](int32 index, PClassInfo& info) {
+            if (factory_->getClassInfo(index, &info) == kResultOk) return true;
+            if (factory3) {
+                PClassInfoW unicode_info{};
+                if (factory3->getClassInfoUnicode(index, &unicode_info) == kResultOk) {
+                    std::memcpy(info.cid, unicode_info.cid, sizeof(info.cid));
+                    info.cardinality = unicode_info.cardinality;
+                    std::strncpy(info.category, unicode_info.category, sizeof(info.category) - 1);
+                    std::strncpy(info.name, "VST3 plug-in", sizeof(info.name) - 1);
+                    return true;
+                }
+            }
+            if (factory2) {
+                PClassInfo2 version2_info{};
+                if (factory2->getClassInfo2(index, &version2_info) == kResultOk) {
+                    std::memcpy(info.cid, version2_info.cid, sizeof(info.cid));
+                    info.cardinality = version2_info.cardinality;
+                    std::strncpy(info.category, version2_info.category, sizeof(info.category) - 1);
+                    std::strncpy(info.name, version2_info.name, sizeof(info.name) - 1);
+                    return true;
+                }
+            }
+            return false;
+        };
         // The requested class comes from the bundle's moduleinfo.json, which
         // is not part of the verified binary and may be stale or written in
-        // the other byte order. Accept both spellings; when no class of this
-        // binary matches at all, load its first usable effect as before
-        // rather than refuse a plugin that used to work.
+        // the other byte order. Accept both spellings, but never replace an
+        // explicitly requested class with another effect: its parameters,
+        // state and audio buses can have entirely different meanings.
         std::string requested_class = class_id;
         if (!requested_class.empty()) {
             bool listed = false;
             for (int32 index = 0; index < factory_->countClasses(); ++index) {
                 PClassInfo info{};
-                if (factory_->getClassInfo(index, &info) == kResultOk &&
-                    class_id_matches(info.cid, requested_class)) {
+                if (get_class_info(index, info) && class_id_matches(info.cid, requested_class)) {
                     listed = true;
                     break;
                 }
             }
             if (!listed) {
-                std::cerr << "VST3 class " << requested_class
-                          << " is not in this binary; using its first usable effect\n";
-                requested_class.clear();
+                throw std::runtime_error("Requested VST3 class " + requested_class +
+                                         " is not in this binary; scan the plugin again and select its class");
             }
         }
         std::ostringstream class_failures;
         bool found_audio_class = false;
         bool found_instrument = false;
-        IPluginFactory2* factory2 = nullptr;
-        factory_->queryInterface(IPluginFactory2_iid, reinterpret_cast<void**>(&factory2));
         for (int32 index = 0; index < factory_->countClasses(); ++index) {
             PClassInfo info{};
-            require_result("getClassInfo", factory_->getClassInfo(index, &info));
+            if (!get_class_info(index, info)) {
+                throw std::runtime_error("VST3 factory did not provide class info through versions 1-3");
+            }
             if (std::strcmp(info.category, kVstAudioEffectClass) != 0) continue;
             if (!requested_class.empty() && !class_id_matches(info.cid, requested_class)) continue;
             // Instruments share the audio-module category; their
-            // sub-categories say "Instrument". AudioRouter has no MIDI input.
+            // sub-categories say "Instrument". An effect worker skips them
+            // and an instrument worker skips everything else.
             PClassInfo2 info2{};
-            if (factory2 && factory2->getClassInfo2(index, &info2) == kResultOk &&
-                std::strstr(info2.subCategories, "Instrument") != nullptr) {
-                found_instrument = true;
+            const bool is_instrument_class =
+                factory2 && factory2->getClassInfo2(index, &info2) == kResultOk &&
+                std::strstr(info2.subCategories, "Instrument") != nullptr;
+            if (is_instrument_class != instrument) {
+                if (is_instrument_class) found_instrument = true;
+                else found_audio_class = true;
                 continue;
             }
-            found_audio_class = true;
+            found_audio_class = instrument ? found_audio_class : true;
+            found_instrument = instrument ? true : found_instrument;
             if (factory_->createInstance(info.cid, Vst::IComponent_iid,
                                          reinterpret_cast<void**>(&component_)) != kResultOk) {
                 class_failures << " class " << index << " (" << info.name
@@ -783,13 +940,17 @@ public:
             }
             break;
         }
-        if (factory2) factory2->release();
         if (!component_) {
-            if (!found_audio_class && found_instrument) {
-                throw std::runtime_error(
-                    "VST3 plugin is an instrument; AudioRouter hosts audio effects only");
+            if (instrument && !found_instrument) {
+                throw std::runtime_error(found_audio_class
+                                             ? "VST3 plugin is an effect, not an instrument"
+                                             : "VST3 factory has no instrument class");
             }
-            if (!found_audio_class) {
+            if (!instrument && !found_audio_class && found_instrument) {
+                throw std::runtime_error(
+                    "VST3 plugin is an instrument; add it with the Instrument tool to play it with MIDI");
+            }
+            if (!found_audio_class && !instrument) {
                 throw std::runtime_error("VST3 factory has no audio effect class");
             }
             throw std::runtime_error("VST3 audio effect classes were unusable:" +
@@ -832,13 +993,21 @@ public:
         }
         require_result("processor interface", component_->queryInterface(
             Vst::IAudioProcessor_iid, reinterpret_cast<void**>(&processor_)));
+        if (instrument_ && controller_) {
+            // Optional: lets controller changes (pitch bend, CC) reach the plugin.
+            controller_->queryInterface(Vst::IMidiMapping::iid,
+                                        reinterpret_cast<void**>(&midi_mapping_));
+        }
         // A single-stream node is mono or stereo, and so is almost every
         // effect, but not always the same way (UADx effects are stereo-only).
         // Ask for the node's layout; if the plugin keeps its own, adapt
         // between them in process().
         auto effective_inputs = input_channels;
         auto effective_outputs = output_channels;
-        if (input_channels.size() == 1 && output_channels.size() == 1) {
+        if (instrument && output_channels.size() == 1) {
+            negotiate_main_output(output_channels[0]);
+            effective_outputs[0] = plugin_output_channels_;
+        } else if (input_channels.size() == 1 && output_channels.size() == 1) {
             negotiate_main_bus(input_channels[0], output_channels[0]);
             effective_inputs[0] = plugin_input_channels_;
             effective_outputs[0] = plugin_output_channels_;
@@ -879,12 +1048,29 @@ public:
             require_notification("optional output bus deactivation", component_->activateBus(
                 Vst::kAudio, Vst::kOutput, bus, false));
         }
+        if (instrument && component_->getBusCount(Vst::kEvent, Vst::kInput) > 0) {
+            require_notification("event input bus activation",
+                                 component_->activateBus(Vst::kEvent, Vst::kInput, 0, true));
+        }
         Vst::ProcessSetup setup{};
         setup.processMode = Vst::kRealtime;
         setup.symbolicSampleSize = Vst::kSample32;
         setup.maxSamplesPerBlock = static_cast<int32>(kMaxFrames);
         setup.sampleRate = sample_rate;
-        require_result("setupProcessing", processor_->setupProcessing(setup));
+        // AudioRouter processes 32-bit float only. A plugin that requires
+        // 64-bit samples must be refused with a plain reason instead of a
+        // generic VST3 result, and never silently converted.
+        if (processor_->canProcessSampleSize(Vst::kSample32) == kResultFalse) {
+            throw std::runtime_error(
+                "sampleFormatUnsupported: the plugin does not accept the 32-bit sample format "
+                "AudioRouter uses");
+        }
+        const auto setup_result = processor_->setupProcessing(setup);
+        if (setup_result != kResultOk && setup_result != kNotImplemented) {
+            throw std::runtime_error(
+                "sampleFormatUnsupported: the plugin does not accept the 32-bit sample format "
+                "AudioRouter uses");
+        }
         require_result("component activation", component_->setActive(true));
         active_ = true;
         require_notification("processor activation", processor_->setProcessing(true));
@@ -900,6 +1086,7 @@ public:
         }
         if (component_connection_) component_connection_->release();
         if (controller_connection_) controller_connection_->release();
+        if (midi_mapping_) midi_mapping_->release();
         if (processor_) processor_->release();
         if (controller_) {
             if (controller_initialized_) controller_->terminate();
@@ -931,13 +1118,25 @@ public:
             component_state.size() + controller_state.size() + 16 > kMaxStateBytes) {
             throw protocol_error("VST3 state exceeds the bounded contract");
         }
+        const auto snapshot = parameter_snapshot();
         std::vector<uint8_t> state;
-        state.reserve(16 + component_state.size() + controller_state.size());
-        state.insert(state.end(), {'A', 'R', 'S', 'T', '1', 0, 0, 0});
+        state.reserve(20 + component_state.size() + controller_state.size() + snapshot.size() * 12);
+        state.insert(state.end(), {'A', 'R', 'S', 'T', '2', 0, 0, 0});
         append_u32(state, static_cast<uint32_t>(component_state.size()));
         append_u32(state, static_cast<uint32_t>(controller_state.size()));
         state.insert(state.end(), component_state.begin(), component_state.end());
         state.insert(state.end(), controller_state.begin(), controller_state.end());
+        // Version 2 ends with the parameter values, a fallback for plugins that
+        // reject their own saved state (the host then restores the sliders).
+        append_u32(state, static_cast<uint32_t>(snapshot.size()));
+        for (const auto& [id, value] : snapshot) {
+            append_u32(state, id);
+            uint64_t bits = 0;
+            std::memcpy(&bits, &value, sizeof(bits));
+            append_u32(state, static_cast<uint32_t>(bits & 0xffffffffu));
+            append_u32(state, static_cast<uint32_t>(bits >> 32));
+        }
+        if (state.size() > kMaxStateBytes) throw protocol_error("VST3 state exceeds the bounded contract");
         return state;
     }
 
@@ -947,16 +1146,37 @@ public:
         }
         std::vector<uint8_t> component_state;
         std::vector<uint8_t> controller_state;
-        if (bytes.size() >= 16 && std::equal(bytes.begin(), bytes.begin() + 8,
-                                             std::array<uint8_t, 8>{'A', 'R', 'S', 'T', '1', 0, 0, 0}.begin())) {
+        std::vector<std::pair<Vst::ParamID, double>> snapshot;
+        const bool version1 = bytes.size() >= 16 && std::equal(bytes.begin(), bytes.begin() + 8,
+                                             std::array<uint8_t, 8>{'A', 'R', 'S', 'T', '1', 0, 0, 0}.begin());
+        const bool version2 = bytes.size() >= 20 && std::equal(bytes.begin(), bytes.begin() + 8,
+                                             std::array<uint8_t, 8>{'A', 'R', 'S', 'T', '2', 0, 0, 0}.begin());
+        if (version1 || version2) {
             const auto component_size = read_u32(bytes, 8);
             const auto controller_size = read_u32(bytes, 12);
             if (component_size > kMaxStateBytes || controller_size > kMaxStateBytes ||
-                static_cast<std::size_t>(component_size) + controller_size + 16 != bytes.size()) {
+                static_cast<std::size_t>(component_size) + controller_size + 16 > bytes.size()) {
                 throw protocol_error("VST3 state envelope is malformed");
             }
+            const std::size_t sections_end = 16 + static_cast<std::size_t>(component_size) + controller_size;
+            if (version1 && sections_end != bytes.size()) throw protocol_error("VST3 state envelope is malformed");
             component_state.assign(bytes.begin() + 16, bytes.begin() + 16 + component_size);
-            controller_state.assign(bytes.begin() + 16 + component_size, bytes.end());
+            controller_state.assign(bytes.begin() + 16 + component_size, bytes.begin() + sections_end);
+            if (version2) {
+                if (sections_end + 4 > bytes.size()) throw protocol_error("VST3 state envelope is malformed");
+                const auto count = read_u32(bytes, sections_end);
+                if (count > kMaxParameters || sections_end + 4 + static_cast<std::size_t>(count) * 12 != bytes.size()) {
+                    throw protocol_error("VST3 state envelope is malformed");
+                }
+                for (uint32_t index = 0; index < count; ++index) {
+                    const auto at = sections_end + 4 + static_cast<std::size_t>(index) * 12;
+                    const uint64_t bits = static_cast<uint64_t>(read_u32(bytes, at + 4)) |
+                                          (static_cast<uint64_t>(read_u32(bytes, at + 8)) << 32);
+                    double value = 0.0;
+                    std::memcpy(&value, &bits, sizeof(value));
+                    if (std::isfinite(value)) snapshot.emplace_back(read_u32(bytes, at), std::clamp(value, 0.0, 1.0));
+                }
+            }
         } else {
             component_state = bytes;
         }
@@ -997,6 +1217,12 @@ public:
             if (was_processing) {
                 require_notification("VST3 processor resume after rejected state", processor_->setProcessing(true));
                 processing_ = true;
+            }
+            // The plugin rejected its own state: put its parameters back from
+            // the snapshot saved beside it, when there is one.
+            if (!snapshot.empty()) {
+                apply_parameter_snapshot(snapshot);
+                return;
             }
             throw;
         }
@@ -1118,6 +1344,7 @@ public:
     }
 
     Vst::IEditController* controller() const { return controller_; }
+    Vst::IComponent* component() const { return component_; }
 
     uint32_t latency_samples() const { return processor_ ? processor_->getLatencySamples() : 0; }
 
@@ -1140,6 +1367,42 @@ public:
     }
 
 private:
+    // The controller's writable parameters and their current normalized values.
+    std::vector<std::pair<Vst::ParamID, double>> parameter_snapshot() {
+        std::vector<std::pair<Vst::ParamID, double>> values;
+        if (!controller_) return values;
+        const auto count = controller_->getParameterCount();
+        if (count < 0 || count > static_cast<int32>(kMaxScannedParameters)) return values;
+        for (int32 index = 0; index < count && values.size() < kMaxParameters; ++index) {
+            Vst::ParameterInfo info{};
+            if (controller_->getParameterInfo(index, info) != kResultOk) continue;
+            if (info.flags & (Vst::ParameterInfo::kIsReadOnly | Vst::ParameterInfo::kIsProgramChange)) continue;
+            const double value = controller_->getParamNormalized(info.id);
+            if (std::isfinite(value)) values.emplace_back(info.id, std::clamp(value, 0.0, 1.0));
+        }
+        return values;
+    }
+
+    void apply_parameter_snapshot(const std::vector<std::pair<Vst::ParamID, double>>& values) {
+        for (const auto& [id, value] : values) {
+            if (controller_) controller_->setParamNormalized(id, value);
+        }
+        pending_snapshot_ = values;
+    }
+
+    // Hands the restored values to the processor with the next block.
+    void drain_pending_snapshot() {
+        if (pending_snapshot_.empty()) return;
+        for (const auto& [id, value] : pending_snapshot_) {
+            int32 queue_index = -1;
+            auto* queue = changes_.addParameterData(id, queue_index);
+            if (!queue) break;
+            int32 point_index = -1;
+            queue->addPoint(0, value, point_index);
+        }
+        pending_snapshot_.clear();
+    }
+
     static void append_u32(std::vector<uint8_t>& output, uint32_t value) {
         output.push_back(static_cast<uint8_t>(value & 0xff));
         output.push_back(static_cast<uint8_t>((value >> 8) & 0xff));
@@ -1193,9 +1456,172 @@ private:
         plugin_output_channels_ = static_cast<uint16_t>(output_info.channelCount);
     }
 
+    // Instrument: sets plugin_output_channels_ for the main output bus.
+    void negotiate_main_output(uint16_t requested_output) {
+        Vst::BusInfo output_info{};
+        require_result("output bus info", component_->getBusInfo(Vst::kAudio, Vst::kOutput, 0, output_info));
+        if (output_info.channelCount != requested_output) {
+            std::vector<Vst::SpeakerArrangement> inputs(
+                static_cast<std::size_t>(component_->getBusCount(Vst::kAudio, Vst::kInput)));
+            std::vector<Vst::SpeakerArrangement> outputs(
+                static_cast<std::size_t>(component_->getBusCount(Vst::kAudio, Vst::kOutput)));
+            for (std::size_t bus = 0; bus < inputs.size(); ++bus) {
+                processor_->getBusArrangement(Vst::kInput, static_cast<int32>(bus), inputs[bus]);
+            }
+            for (std::size_t bus = 0; bus < outputs.size(); ++bus) {
+                processor_->getBusArrangement(Vst::kOutput, static_cast<int32>(bus), outputs[bus]);
+            }
+            outputs[0] = arrangement_for(requested_output);
+            // A refusal is normal; the plugin then keeps its own layout.
+            processor_->setBusArrangements(inputs.data(), static_cast<int32>(inputs.size()),
+                                           outputs.data(), static_cast<int32>(outputs.size()));
+            require_result("output bus info", component_->getBusInfo(Vst::kAudio, Vst::kOutput, 0, output_info));
+        }
+        if (output_info.channelCount < 1 || output_info.channelCount > 2) {
+            throw std::runtime_error("native VST3 instrument main output is neither mono nor stereo (" +
+                                     std::to_string(output_info.channelCount) + " out)");
+        }
+        plugin_output_channels_ = static_cast<uint16_t>(output_info.channelCount);
+    }
+
+    // Translates one MIDI message for the segment that starts at the current
+    // cut: notes become events, pitch bend / CC / pressure become a
+    // controller change when the plugin maps that controller.
+    void queue_midi(const MidiEvent& message) {
+        const auto kind = static_cast<uint8_t>(message.status & 0xF0);
+        const auto channel = static_cast<int16>(message.status & 0x0F);
+        if (kind == 0x90 || kind == 0x80) {
+            Vst::Event event{};
+            event.busIndex = 0;
+            event.sampleOffset = 0;
+            event.ppqPosition = 0.0;
+            event.flags = Vst::Event::kIsLive;
+            if (kind == 0x90 && message.data2 > 0) {
+                event.type = Vst::Event::kNoteOnEvent;
+                event.noteOn.channel = channel;
+                event.noteOn.pitch = message.data1;
+                event.noteOn.tuning = 0.0f;
+                event.noteOn.velocity = static_cast<float>(message.data2) / 127.0f;
+                event.noteOn.length = 0;
+                event.noteOn.noteId = -1;
+            } else {
+                event.type = Vst::Event::kNoteOffEvent;
+                event.noteOff.channel = channel;
+                event.noteOff.pitch = message.data1;
+                event.noteOff.velocity = static_cast<float>(message.data2) / 127.0f;
+                event.noteOff.noteId = -1;
+                event.noteOff.tuning = 0.0f;
+            }
+            if (events_.addEvent(event) != kResultOk) throw protocol_error("MIDI event list is full");
+            return;
+        }
+        int32 controller = -1;
+        double value = 0.0;
+        if (kind == 0xB0) {
+            controller = message.data1;
+            value = static_cast<double>(message.data2) / 127.0;
+        } else if (kind == 0xE0) {
+            controller = Vst::kPitchBend;
+            value = static_cast<double>(message.data1 | (message.data2 << 7)) / 16383.0;
+        } else if (kind == 0xD0) {
+            controller = Vst::kAfterTouch;
+            value = static_cast<double>(message.data1) / 127.0;
+        }
+        if (controller < 0 || !midi_mapping_) return;
+        Vst::ParamID id = 0;
+        if (midi_mapping_->getMidiControllerAssignment(0, channel, static_cast<Vst::CtrlNumber>(controller), id) != kResultTrue) {
+            return;
+        }
+        int32 queue_index = -1;
+        auto* queue = changes_.addParameterData(id, queue_index);
+        if (!queue) throw protocol_error("parameter queue limit exceeded");
+        int32 point_index = -1;
+        queue->addPoint(0, value, point_index);
+    }
+
+public:
+    // Instrument: the block is cut at every parameter and MIDI offset; the
+    // events at a cut are delivered with the segment that starts there.
+    std::vector<float> process_instrument(const std::vector<float>& samples, uint16_t channels,
+                                          const std::vector<ParameterEvent>& events,
+                                          const std::vector<MidiEvent>& midi) {
+        if (!instrument_) throw protocol_error("MIDI sent to an effect worker");
+        if (samples.size() % channels != 0) throw protocol_error("interleaved sample shape is invalid");
+        const auto frames = samples.size() / channels;
+        if (frames == 0 || frames > kMaxFrames) throw protocol_error("frame count is invalid");
+        std::vector<std::size_t> cuts{0};
+        for (const auto& event : events) {
+            if (event.offset >= frames) throw protocol_error("parameter offset exceeds frame count");
+            cuts.push_back(event.offset);
+        }
+        for (const auto& message : midi) {
+            if (message.offset >= frames) throw protocol_error("MIDI offset exceeds frame count");
+            cuts.push_back(message.offset);
+        }
+        std::sort(cuts.begin(), cuts.end());
+        cuts.erase(std::unique(cuts.begin(), cuts.end()), cuts.end());
+        std::vector<std::vector<float>> output(plugin_output_channels_, std::vector<float>(frames));
+        for (std::size_t cut = 0; cut < cuts.size(); ++cut) {
+            const auto start = cuts[cut];
+            const auto end = cut + 1 < cuts.size() ? cuts[cut + 1] : frames;
+            for (const auto& event : events) {
+                if (event.offset != start) continue;
+                int32 queue_index = -1;
+                auto* queue = changes_.addParameterData(event.id, queue_index);
+                if (!queue) throw protocol_error("parameter queue limit exceeded");
+                int32 point_index = -1;
+                if (queue->addPoint(0, event.value, point_index) != kResultOk) {
+                    throw protocol_error("parameter event could not be queued");
+                }
+            }
+            for (const auto& message : midi) {
+                if (message.offset == start) queue_midi(message);
+            }
+            std::vector<Vst::Sample32*> outputs;
+            for (auto& channel : output) outputs.push_back(&channel[start]);
+            Vst::AudioBusBuffers output_bus{};
+            output_bus.numChannels = static_cast<int32>(outputs.size());
+            output_bus.channelBuffers32 = outputs.data();
+            Vst::ProcessData data{};
+            data.processMode = Vst::kRealtime;
+            data.symbolicSampleSize = Vst::kSample32;
+            data.numSamples = static_cast<int32>(end - start);
+            data.numInputs = 0;
+            data.numOutputs = 1;
+            data.inputs = nullptr;
+            data.outputs = &output_bus;
+            data.inputParameterChanges = changes_.getParameterCount() > 0 ? &changes_ : nullptr;
+            data.inputEvents = events_.getEventCount() > 0 ? &events_ : nullptr;
+            data.processContext = &context_;
+            const auto result = processor_->process(data);
+            events_.clear();
+            if (result != kResultFalse) require_result("VST3 instrument process", result);
+            advance_context(end - start);
+            changes_ = ParameterChanges{};
+        }
+        std::vector<float> result(samples.size());
+        for (std::size_t frame = 0; frame < frames; ++frame) {
+            for (uint16_t channel = 0; channel < channels; ++channel) {
+                float sample;
+                if (plugin_output_channels_ == channels) {
+                    sample = output[channel][frame];
+                } else if (plugin_output_channels_ == 2) {
+                    sample = 0.5f * (output[0][frame] + output[1][frame]);
+                } else {
+                    sample = output[0][frame];
+                }
+                if (!std::isfinite(sample)) throw std::runtime_error("VST3 produced non-finite output");
+                result[frame * channels + channel] = sample;
+            }
+        }
+        return result;
+    }
+
+private:
     void process_segment(const std::vector<std::vector<float>>& input,
                          std::vector<std::vector<float>>& output, std::size_t start, std::size_t end,
                          const std::vector<ParameterEvent>& events, std::size_t& event_index) {
+        drain_pending_snapshot();
         while (event_index < events.size() && events[event_index].offset == start) {
             int32 queue_index = -1;
             auto* queue = changes_.addParameterData(events[event_index].id, queue_index);
@@ -1238,6 +1664,7 @@ private:
         const std::vector<std::vector<std::vector<float>>>& input,
         std::vector<std::vector<std::vector<float>>>& output, std::size_t start, std::size_t end,
         const std::vector<ParameterEvent>& events, std::size_t& event_index) {
+        drain_pending_snapshot();
         while (event_index < events.size() && events[event_index].offset == start) {
             int32 queue_index = -1;
             auto* queue = changes_.addParameterData(events[event_index].id, queue_index);
@@ -1311,6 +1738,10 @@ private:
     uint16_t plugin_input_channels_ = 0;
     uint16_t plugin_output_channels_ = 0;
     ParameterChanges changes_;
+    std::vector<std::pair<Vst::ParamID, double>> pending_snapshot_;
+    bool instrument_ = false;
+    Vst::IMidiMapping* midi_mapping_ = nullptr;
+    EventList events_;
 };
 
 static std::string quote_json(const std::string& value) {
@@ -1354,6 +1785,36 @@ static std::string quote_vst3_title(const Vst::String128& title) {
     return quote_json(value);
 }
 
+static std::string bus_descriptors_message(Vst::IComponent* component) {
+    std::ostringstream output;
+    output << "{\"type\":\"Buses\",\"payload\":{";
+    for (const auto direction : {Vst::kInput, Vst::kOutput}) {
+        output << (direction == Vst::kInput ? "\"inputs\":[" : ",\"outputs\":[");
+        const auto count = component->getBusCount(Vst::kAudio, direction);
+        if (count < 1 || count > 4) throw protocol_error("unsupported VST3 audio bus count");
+        bool first = true;
+        for (int32 index = 0; index < count; ++index) {
+            Vst::BusInfo info{};
+            require_result("discovered bus info", component->getBusInfo(Vst::kAudio, direction, index, info));
+            // Additional main buses are not sidechains. Keep native indices
+            // even when an unsupported bus is omitted from this description.
+            if (index > 0 && (direction == Vst::kOutput || info.busType != Vst::kAux)) continue;
+            if ((index == 0 && info.busType != Vst::kMain) ||
+                info.channelCount < 1 || info.channelCount > 2) {
+                throw protocol_error("unsupported VST3 audio bus role or channel count");
+            }
+            if (!first) output << ',';
+            first = false;
+            output << "{\"nativeIndex\":" << index << ",\"name\":" << quote_vst3_title(info.name)
+                   << ",\"channels\":" << info.channelCount << ",\"role\":\""
+                   << (index == 0 ? "main" : "auxiliary") << "\"}";
+        }
+        output << ']';
+    }
+    output << "}}";
+    return output.str();
+}
+
 static std::string parameter_descriptors_message(Vst::IEditController* controller) {
     if (!controller) return "{\"type\":\"Parameters\",\"payload\":{\"descriptors\":[]}}";
     const auto count = controller->getParameterCount();
@@ -1388,6 +1849,132 @@ static std::string parameter_descriptors_message(Vst::IEditController* controlle
         output << "{\"parameter_id\":" << info.id << ",\"title\":"
                << quote_vst3_title(info.title) << ",\"default_value\":"
                << default_value << ",\"minimum\":0,\"maximum\":1}";
+    }
+    output << "]}}";
+    return output.str();
+}
+
+// Read-only unit and program metadata from IUnitInfo. Counts are bounded and
+// malformed unit records are skipped; no program is selected.
+// The first program list of the root unit is used, else the first list.
+static std::string program_descriptors_message(Vst::IEditController* controller) {
+    constexpr int32 kMaxProgramLists = 64;
+    constexpr int32 kMaxUnits = 256;
+    constexpr int32 kMaxProgramsListed = 256;
+    std::ostringstream output;
+    output << "{\"type\":\"Programs\",\"payload\":{\"units\":[";
+    Vst::IUnitInfo* units = nullptr;
+    if (controller &&
+        controller->queryInterface(Vst::IUnitInfo::iid, reinterpret_cast<void**>(&units)) ==
+            kResultOk &&
+        units) {
+        const auto list_count = units->getProgramListCount();
+        const auto unit_count = units->getUnitCount();
+        if (unit_count > 0 && unit_count <= kMaxUnits && list_count >= 0 &&
+            list_count <= kMaxProgramLists) {
+            bool first_unit = true;
+            int32 total_programs = 0;
+            for (int32 index = 0; index < unit_count; ++index) {
+                Vst::UnitInfo unit{};
+                if (units->getUnitInfo(index, unit) != kResultOk) continue;
+                std::string name;
+                for (const auto code_unit : unit.name) {
+                    if (code_unit == 0) break;
+                    name.push_back(code_unit >= 0x20 && code_unit <= 0x7e
+                                       ? static_cast<char>(code_unit)
+                                       : '?');
+                }
+                if (unit.id != Vst::kRootUnitId && name.empty()) continue;
+                int32 program_count = 0;
+                std::vector<std::string> program_names;
+                if (unit.programListId != Vst::kNoProgramListId) {
+                    for (int32 list_index = 0; list_index < list_count; ++list_index) {
+                        Vst::ProgramListInfo list{};
+                        if (units->getProgramListInfo(list_index, list) == kResultOk &&
+                            list.id == unit.programListId && list.programCount >= 0 &&
+                            list.programCount <= kMaxProgramsListed) {
+                            program_count = std::min(list.programCount, kMaxProgramsListed - total_programs);
+                            for (int32 program = 0; program < program_count; ++program) {
+                                Vst::String128 program_name{};
+                                std::string text;
+                                if (units->getProgramName(list.id, program, program_name) == kResultOk) {
+                                    for (const auto code_unit : program_name) {
+                                        if (code_unit == 0) break;
+                                        text.push_back(code_unit >= 0x20 && code_unit <= 0x7e
+                                                           ? static_cast<char>(code_unit)
+                                                           : '?');
+                                    }
+                                }
+                                if (text.empty()) text = "Program " + std::to_string(program + 1);
+                                program_names.push_back(std::move(text));
+                            }
+                            total_programs += program_count;
+                            break;
+                        }
+                    }
+                }
+                if (!first_unit) output << ',';
+                first_unit = false;
+                output << "{\"id\":" << unit.id << ",\"parent_id\":"
+                       << unit.parentUnitId << ",\"name\":" << quote_json(name)
+                       << ",\"program_list_id\":";
+                if (unit.programListId == Vst::kNoProgramListId) output << "null";
+                else output << unit.programListId;
+                output << ",\"program_count\":" << program_count << ",\"programs\":[";
+                for (int32 program = 0; program < program_count; ++program) {
+                    if (program) output << ',';
+                    output << "{\"id\":" << program << ",\"name\":"
+                           << quote_json(program_names[static_cast<std::size_t>(program)]) << '}';
+                }
+                output << "]}";
+            }
+        }
+        output << "],\"programs\":[";
+        if (list_count > 0 && list_count <= kMaxProgramLists) {
+            Vst::ProgramListID wanted = Vst::kNoProgramListId;
+            for (int32 unit = 0; unit < unit_count && unit < kMaxUnits; ++unit) {
+                Vst::UnitInfo info{};
+                if (units->getUnitInfo(unit, info) == kResultOk &&
+                    info.id == Vst::kRootUnitId && info.programListId != Vst::kNoProgramListId) {
+                    wanted = info.programListId;
+                    break;
+                }
+            }
+            Vst::ProgramListInfo chosen{};
+            bool found = false;
+            for (int32 index = 0; index < list_count; ++index) {
+                Vst::ProgramListInfo list{};
+                if (units->getProgramListInfo(index, list) != kResultOk) continue;
+                if (!found && (wanted == Vst::kNoProgramListId || list.id == wanted)) {
+                    chosen = list;
+                    found = true;
+                }
+            }
+            if (found && chosen.programCount > 0) {
+                const auto count = std::min(chosen.programCount, kMaxProgramsListed);
+                for (int32 program = 0; program < count; ++program) {
+                    Vst::String128 name{};
+                    if (units->getProgramName(chosen.id, program, name) != kResultOk) {
+                        output << (program ? "," : "") << "{\"id\":" << program
+                               << ",\"name\":\"Program " << program + 1 << "\"}";
+                        continue;
+                    }
+                    std::string text;
+                    for (const auto code_unit : name) {
+                        if (code_unit == 0) break;
+                        text.push_back(code_unit >= 0x20 && code_unit <= 0x7e
+                                           ? static_cast<char>(code_unit)
+                                           : '?');
+                    }
+                    if (text.empty()) text = "Program " + std::to_string(program + 1);
+                    output << (program ? "," : "") << "{\"id\":" << program
+                           << ",\"name\":" << quote_json(text) << "}";
+                }
+            }
+        }
+        units->release();
+    } else {
+        output << "],\"programs\":[";
     }
     output << "]}}";
     return output.str();
@@ -1711,6 +2298,8 @@ struct Arguments {
     double sample_rate = 0.0;
     std::vector<uint16_t> input_buses;
     std::vector<uint16_t> output_buses;
+    // Hosts an instrument played with MIDI instead of an effect.
+    bool instrument = false;
 };
 
 static std::vector<uint16_t> parse_bus_list(const std::wstring& value) {
@@ -1750,6 +2339,7 @@ static Arguments parse_arguments(int argc, wchar_t** argv) {
         else if (argument == L"--sample-rate" && index + 1 < argc) result.sample_rate = std::stod(argv[++index]);
         else if (argument == L"--input-buses" && index + 1 < argc) result.input_buses = parse_bus_list(argv[++index]);
         else if (argument == L"--output-buses" && index + 1 < argc) result.output_buses = parse_bus_list(argv[++index]);
+        else if (argument == L"--instrument") result.instrument = true;
         else throw std::runtime_error("unknown or incomplete worker argument");
     }
     if (result.plugin.empty() || result.channels < 1 || result.channels > 2 ||
@@ -1758,6 +2348,9 @@ static Arguments parse_arguments(int argc, wchar_t** argv) {
     }
     if (result.input_buses.empty() != result.output_buses.empty()) {
         throw std::runtime_error("input and output bus lists must be supplied together");
+    }
+    if (result.instrument && !result.input_buses.empty()) {
+        throw std::runtime_error("an instrument worker is single-stream");
     }
     return result;
 }
@@ -1798,8 +2391,17 @@ static std::string handle_ui_request(const std::string& json, bool& shutdown) {
         return {};
     }
     if (json == "{\"type\":\"DescribeEditor\"}") return editor.describe();
+    if (json == "{\"type\":\"DescribeBuses\"}") {
+        return bus_descriptors_message(effect.component());
+    }
     if (json == "{\"type\":\"DescribeParameters\"}") {
         return parameter_descriptors_message(effect.controller());
+    }
+    if (json == "{\"type\":\"DescribePrograms\"}") {
+        return program_descriptors_message(effect.controller());
+    }
+    if (json.find("\"type\":\"SelectProgram\"") != std::string::npos) {
+        return "{\"type\":\"Failure\",\"payload\":{\"code\":\"vst3ProgramSelectionUnsupported\"}}";
     }
     if (json.find("\"type\":\"EditorOpen\"") != std::string::npos) {
         const auto parent_window = required_uint_field(json, "\"parent_window\":");
@@ -1929,15 +2531,34 @@ static bool is_audio_message(const std::string& json) {
     return json.rfind("{\"type\":\"Process", 0) == 0;
 }
 
+// One-way MIDI for the next Process message (instrument workers).
+static bool is_midi_message(const std::string& json) {
+    return json.rfind("{\"type\":\"Midi\"", 0) == 0;
+}
+
 // Reads every host message. Audio is processed here, so a busy plugin window
 // never delays a quantum; everything else is answered by the UI thread.
 static int audio_thread_main(const Arguments& arguments, const std::vector<uint16_t>& input_buses,
                              const std::vector<uint16_t>& output_buses, bool multi_bus) {
     AudioThreadScheduling scheduling;
     auto& effect = *g_ui.effect;
+    std::vector<MidiEvent> pending_midi;
     while (true) {
         const auto payload = read_frame();
         const std::string json(payload.begin(), payload.end());
+        if (is_midi_message(json)) {
+            // No reply. An effect worker drops the events. An instrument
+            // rejects overflow rather than evicting note-offs and risking a
+            // stuck note.
+            if (arguments.instrument) {
+                auto more = parse_midi_events(json);
+                if (more.size() > kMaxMidiEvents - std::min(kMaxMidiEvents, pending_midi.size())) {
+                    throw protocol_error("pending MIDI event backlog exceeds the bounded contract");
+                }
+                pending_midi.insert(pending_midi.end(), more.begin(), more.end());
+            }
+            continue;
+        }
         if (g_latency_restart_failed.load(std::memory_order_acquire)) {
             throw std::runtime_error("VST3 latency restart failed");
         }
@@ -2021,9 +2642,12 @@ static int audio_thread_main(const Arguments& arguments, const std::vector<uint1
             const auto channels = required_uint_field(json, "\"channels\":");
             if (channels != arguments.channels || channels > 2) throw protocol_error("channel mismatch");
             const auto samples = parse_samples(json);
+            const auto block_midi = std::exchange(pending_midi, {});
             const auto output = [&] {
                 std::lock_guard<std::mutex> processing(g_processing_mutex);
-                return effect.process(samples, arguments.channels, events);
+                return arguments.instrument
+                           ? effect.process_instrument(samples, arguments.channels, events, block_midi)
+                           : effect.process(samples, arguments.channels, events);
             }();
             write_frame(processed_message(sequence, deadline, arguments.channels, output));
         }
@@ -2038,6 +2662,22 @@ static int audio_thread_main(const Arguments& arguments, const std::vector<uint1
 
 static int self_test_host() {
     HostApplication host;
+    struct ReleaseProbe {
+        int* releases;
+        uint32 PLUGIN_API release() {
+            ++*releases;
+            return 1;
+        }
+    } release_probe{};
+    int factory_interface_releases = 0;
+    release_probe.releases = &factory_interface_releases;
+    {
+        const std::unique_ptr<ReleaseProbe, PluginInterfaceReleaser<ReleaseProbe>> owner(
+            &release_probe);
+    }
+    if (factory_interface_releases != 1) {
+        throw std::runtime_error("factory interface ownership regression");
+    }
     void* queried = nullptr;
     if (host.queryInterface(Vst::IHostApplication_iid, &queried) != kResultOk || !queried) throw std::runtime_error("host QI regression");
     auto* application = static_cast<Vst::IHostApplication*>(queried);
@@ -2069,6 +2709,26 @@ static int self_test_host() {
     ComponentHandler handler;
     if (handler.queryInterface(Vst::IComponentHandler_iid, &queried) != kResultOk) throw std::runtime_error("handler QI regression");
     static_cast<Vst::IComponentHandler*>(queried)->release();
+    if (handler.queryInterface(Vst::IComponentHandler3_iid, &queried) != kResultOk || !queried) throw std::runtime_error("handler context-menu stub QI regression");
+    auto* context_handler = static_cast<Vst::IComponentHandler3*>(queried);
+    if (context_handler->createContextMenu(nullptr, nullptr) != nullptr) throw std::runtime_error("context-menu stub unexpectedly opened a menu");
+    context_handler->release();
+    if (handler.queryInterface(Vst::IComponentHandler2_iid, &queried) != kResultOk || !queried) throw std::runtime_error("handler2 QI regression");
+    auto* handler2 = static_cast<Vst::IComponentHandler2*>(queried);
+    if (handler2->setDirty(1) != kResultOk || handler2->startGroupEdit() != kResultOk ||
+        handler2->finishGroupEdit() != kResultOk || handler2->requestOpenEditor(Vst::ViewType::kEditor) != kResultFalse) {
+        throw std::runtime_error("handler2 answers regression");
+    }
+    if (!restart_needs_reactivation(Vst::kLatencyChanged) || !restart_needs_reactivation(Vst::kIoChanged) ||
+        !restart_needs_reactivation(Vst::kReloadComponent) || restart_needs_reactivation(Vst::kParamValuesChanged) ||
+        restart_needs_reactivation(Vst::kParamTitlesChanged) || restart_needs_reactivation(0)) {
+        throw std::runtime_error("restart flag regression");
+    }
+    g_latency_restart_pending.store(false);
+    handler.restartComponent(Vst::kParamValuesChanged);
+    if (g_latency_restart_pending.load()) throw std::runtime_error("a value change must not restart the component");
+    handler.restartComponent(Vst::kIoChanged);
+    if (!g_latency_restart_pending.exchange(false)) throw std::runtime_error("an I/O change must schedule a re-activation");
     require_notification("optional notification", kResultFalse);
     const TUID sample_class{0x01, 0x23, 0x45, 0x67, char(0x89), char(0xAB), char(0xCD), char(0xEF),
                             0x10, 0x32, 0x54, 0x76, char(0x98), char(0xBA), char(0xDC), char(0xFE)};
@@ -2111,7 +2771,9 @@ int wmain(int argc, wchar_t** argv) {
                                       : arguments.output_buses;
         int exit_code = 1;
         {
-            Vst3Effect effect(arguments.plugin, arguments.sample_rate, input_buses, output_buses, arguments.class_id);
+            Vst3Effect effect(arguments.plugin, arguments.sample_rate,
+                              arguments.instrument ? std::vector<uint16_t>{} : input_buses, output_buses,
+                              arguments.class_id, arguments.instrument);
             const auto multi_bus = !arguments.input_buses.empty();
             if (multi_bus) {
                 write_frame(hello_buses_message(arguments.hash, input_buses, output_buses));

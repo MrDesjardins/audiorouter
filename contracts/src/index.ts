@@ -27,6 +27,7 @@ export type NodeKind =
   | "plugin"
   | "audioFile"
   | "soundboard"
+  | "instrument"
   | "volume"
   | "bassTreble"
   | "dehum"
@@ -115,8 +116,11 @@ export interface PluginScanEntry {
     compatibility:
       | "supportedVst3X64"
       | "supportedVst2X64Gated"
-      | "unsupportedFormat"
-      | "unsupportedInstrument";
+      | "supportedVst3X86"
+      | "supportedVst2X86"
+      | "unsupportedFormat";
+    /** A synth or sampler: add it with the Instrument tool. A VST2 file only shows as one after a load attempt. */
+    instrument: boolean;
   } | null;
   error: string | null;
   errorCode:
@@ -1486,6 +1490,8 @@ export type ImplementedMethod =
   | "audioMedia.importTemporaryRecording"
   | "audioMedia.delete"
   | "audioSources.transport"
+  | "midi.devices"
+  | "midi.sendEvents"
   | "soundboard.trigger"
   | "soundboard.stop"
   | "soundboard.status"
@@ -1556,6 +1562,12 @@ export type ImplementedMethod =
   | "plugins.openEditor"
   | "plugins.closeEditor"
   | "plugins.resume"
+  | "plugins.buses"
+  | "plugins.addSidechainPort"
+  | "plugins.removeSidechainPort"
+  | "plugins.programs"
+  | "plugins.selectProgram"
+  | "plugins.applyPreset"
   | "plugins.retry"
   | "plugins.inspect"
   | "plugins.parameters"
@@ -1625,6 +1637,14 @@ export type ImplementedMethod =
  */
 export type MethodDeadline = "quick" | "long";
 export const METHOD_DEADLINES: Readonly<Record<ImplementedMethod, MethodDeadline>> = {
+  "midi.devices": "long",
+  "midi.sendEvents": "long",
+  "plugins.buses": "long",
+  "plugins.removeSidechainPort": "long",
+  "plugins.addSidechainPort": "long",
+  "plugins.programs": "long",
+  "plugins.selectProgram": "long",
+  "plugins.applyPreset": "long",
   "applications.list": "quick",
   "apps.list": "quick",
   "audioMedia.beginUpload": "long",
@@ -1801,6 +1821,32 @@ export type MethodParams = {
   "audioMedia.delete": { mediaId: EntityId };
   "timeShift.transport": { sessionId?: EntityId; nodeId: EntityId; action: "pause" | "resume" | "back" | "forward" | "live" | "status" };
   "audioSources.transport": { sessionId?: EntityId; nodeId: EntityId; action: "play" | "pause" | "stop" | "status" };
+  "midi.devices": undefined;
+  "midi.sendEvents": {
+    /** Optional: the active session. `nodeId` may also be the node's exact name. */
+    sessionId?: EntityId;
+    nodeId: EntityId;
+    /** One to 64 events. Notes start at the next audio block, or `afterMs` later. */
+    events: Array<{
+      type: "noteOn" | "noteOff" | "controlChange" | "pitchBend" | "aftertouch" | "allNotesOff";
+      /** MIDI channel 1-16 (1 when omitted). */
+      channel?: number;
+      /** 0-127; 60 is middle C. */
+      note?: number;
+      /** 1-127 (100 when omitted). */
+      velocity?: number;
+      /** noteOn only: release the note after this many milliseconds (up to 30000). */
+      durationMs?: number;
+      /** Start the event this many milliseconds after the call (up to 30000). */
+      afterMs?: number;
+      /** controlChange: 0-127 (1 modulation, 64 sustain pedal). */
+      controller?: number;
+      /** controlChange or aftertouch value, 0-127. */
+      value?: number;
+      /** pitchBend: -1 (down) to 1 (up). */
+      bend?: number;
+    }>;
+  };
   "soundboard.trigger": {
     /** Optional: the active session. `nodeId` may also be the node's exact name. */
     sessionId?: EntityId;
@@ -1898,9 +1944,15 @@ export type MethodParams = {
   "plugins.openEditor": { sessionId: EntityId; nodeId: EntityId; parentWindow: number; ownerProcessId: number };
   "plugins.closeEditor": { sessionId: EntityId; nodeId: EntityId };
   "plugins.resume": { sessionId?: EntityId; nodeId: EntityId };
+  "plugins.buses": { path: string; classId?: string };
+  "plugins.addSidechainPort": { sessionId?: EntityId; nodeId: EntityId };
+  "plugins.removeSidechainPort": { sessionId?: EntityId; nodeId: EntityId };
+  "plugins.programs": { sessionId?: EntityId; nodeId: EntityId };
+  "plugins.selectProgram": { sessionId?: EntityId; nodeId: EntityId; program: number };
+  "plugins.applyPreset": { sessionId?: EntityId; nodeId: EntityId; presetPath: string };
   "plugins.retry": { directory: string; idempotencyKey: string };
   "plugins.inspect": { path: string };
-  "plugins.parameters": { path: string; classId?: string };
+  "plugins.parameters": { path: string; classId?: string; instrument?: boolean };
   "plugins.prepareUpdate": { sessionId?: EntityId; nodeId: EntityId; resetState?: boolean };
   "virtualDevices.list": { cursor?: string; limit?: number } | undefined;
   "virtualDevices.plan": { operation: VirtualDeviceOperation };
@@ -2023,6 +2075,13 @@ export type MethodResult = {
   "audioMedia.delete": { deleted: boolean };
   "timeShift.transport": { sessionId: EntityId; nodeId: EntityId; state: "live" | "delayed" | "paused"; delaySeconds: number; bufferedSeconds: number; capacitySeconds: number };
   "audioSources.transport": { sessionId: EntityId; nodeId: EntityId; state: "playing" | "paused" | "stopped"; loop: boolean };
+  "midi.devices": {
+    /** Names of the MIDI keyboards connected now. */
+    devices: string[];
+    /** Instruments of playing routes and the device each listens to. */
+    instruments: Array<{ sessionId: EntityId; nodeId: EntityId; midiInput: string; connected: boolean }>;
+  };
+  "midi.sendEvents": { sessionId: EntityId; nodeId: EntityId; accepted: number; scheduled: number; heldNotes: number };
   "soundboard.trigger": { sessionId: EntityId; nodeId: EntityId; slot: number; accepted: boolean };
   "soundboard.stop": { sessionId: EntityId; nodeId: EntityId; stopped: boolean };
   "soundboard.status": {
@@ -2110,6 +2169,17 @@ export type MethodResult = {
   "plugins.openEditor": { sessionId: EntityId; nodeId: EntityId; state: "open" | "closed" };
   "plugins.closeEditor": { sessionId: EntityId; nodeId: EntityId; state: "open" | "closed" };
   "plugins.resume": { sessionId: EntityId; nodeId: EntityId; resumed: boolean };
+  "plugins.buses": { path: string; sha256: string; format: "vst2" | "vst3" | "unknown"; buses: { inputs: { nativeIndex: number; name: string; channels: number; role: "main" | "auxiliary" }[]; outputs: { nativeIndex: number; name: string; channels: number; role: "main" | "auxiliary" }[] } };
+  "plugins.removeSidechainPort": { sessionId: EntityId; nodeId: EntityId; removed: boolean; revision?: unknown; activation?: unknown };
+  "plugins.addSidechainPort": { sessionId: EntityId; nodeId: EntityId; port: string; channels: number; revision?: unknown; activation?: unknown };
+  "plugins.programs": {
+    sessionId: EntityId;
+    nodeId: EntityId;
+    programs: { id: number; name: string }[];
+    units: { id: number; parent_id: number; name: string; program_list_id: number | null; program_count: number; programs: { id: number; name: string }[] }[];
+  };
+  "plugins.selectProgram": { sessionId: EntityId; nodeId: EntityId; program: number };
+  "plugins.applyPreset": { sessionId: EntityId; nodeId: EntityId; presetPath: string };
   "plugins.retry": PluginScanResult;
   "plugins.inspect": PluginScanEntry;
   "plugins.parameters": PluginParametersResult;

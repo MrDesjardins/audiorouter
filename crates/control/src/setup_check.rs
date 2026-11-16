@@ -121,6 +121,7 @@ fn device_use(kind: NodeKind) -> Option<DeviceUse> {
         | NodeKind::NetworkReceive
         | NodeKind::Duck
         | NodeKind::FunVoiceChanger
+        | NodeKind::Instrument
         | NodeKind::Soundboard => None,
     }
 }

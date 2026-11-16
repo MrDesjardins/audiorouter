@@ -1,0 +1,26 @@
+[package]
+name = "vst2-test-instrument"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "A tiny VST2 instrument used only by AudioRouter's tests (no third-party code)."
+
+# Not part of the main workspace: it builds a DLL that the plugin-host tests
+# load through the real worker.
+[workspace]
+
+[features]
+# Metadata-only effect variant: four input pins; parameter 0 chooses whether
+# the extra pair is explicitly labeled Key or unlabeled surround channels.
+bus-fixture = []
+# Shell variant: one DLL that presents three named sub-effects through
+# `effGetPlugCategory` and `effShellGetNextPlugin`.
+shell-fixture = []
+
+[lib]
+name = "ar_test_instrument"
+crate-type = ["cdylib", "rlib"]
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"
+missing_safety_doc = "deny"

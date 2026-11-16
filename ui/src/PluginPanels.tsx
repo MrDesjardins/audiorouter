@@ -1,9 +1,9 @@
 import { ToolGuideLink } from "./ToolGuideLink";
 // Plug-in scanning, tool list and inspector panels (moved from App.tsx).
 import { useEffect, useRef, useState } from "react";
-import type { Node } from "@audiorouter/contracts";
+import type { MethodResult, Node } from "@audiorouter/contracts";
 import { formatUiError, type UiBackend } from "./backend";
-import { pluginCatalog, STANDARD_PLUGIN_FOLDERS } from "./draft";
+import { pluginCatalog, STANDARD_PLUGIN_FOLDERS, SUPPORTED_PLUGIN_COMPATIBILITY } from "./draft";
 import { uiIdempotencyKey } from "./idempotency";
 import { PanelMessage } from "./PanelMessage";
 import { BooleanField } from "./BooleanField";
@@ -149,11 +149,7 @@ export function PluginScanPanel({
     setMessage("Selected the discovered path; inspect it explicitly when ready.");
   };
   const addToDraft = (entry: import("@audiorouter/contracts").PluginScanEntry) => {
-    if (
-      entry.identity &&
-      ["supportedVst2X64Gated", "supportedVst3X64"].includes(entry.identity.compatibility) &&
-      onAddPlaceholder
-    ) {
+    if (entry.identity && SUPPORTED_PLUGIN_COMPATIBILITY.includes(entry.identity.compatibility) && onAddPlaceholder) {
       onAddPlaceholder(entry);
     }
   };
@@ -196,9 +192,7 @@ export function PluginScanPanel({
             <li className="muted">No VST3, VST2, or other DLL candidates found.</li>
           ) : (
             result.entries.map((entry) => {
-              const supported =
-                entry.identity?.compatibility === "supportedVst2X64Gated" ||
-                entry.identity?.compatibility === "supportedVst3X64";
+              const supported = SUPPORTED_PLUGIN_COMPATIBILITY.includes(entry.identity?.compatibility ?? "");
               return (
                 <li key={entry.path}>
                   <strong>{entry.path}</strong>{" "}
@@ -349,62 +343,77 @@ export function PluginToolsGroup({
       !query ||
       `${item.name} ${item.format} ${item.entry.identity?.vendor ?? ""} plugin vst`.toLocaleLowerCase().includes(query),
   );
-  return (
-    <div className="tool-plugin-group" aria-label="Plugins">
-      <div className="tool-library-entry">
-        <h4>Plugins (VST2/VST3)</h4>
-        <ToolGuideLink kind="plugin" compact toolName="VST plugin" />
-      </div>
-      {catalog.map((item) => {
-        const help = `${item.format}${item.entry.identity?.vendor ? ` · ${item.entry.identity.vendor}` : ""} · ${item.folder}`;
-        return (
-          <div
-            className="tool-library-entry"
-            key={`${item.entry.identity?.sha256}-${item.entry.path}-${item.entry.identity?.classIds?.[0] ?? "default"}`}
-          >
-            <button
-              className="tool-card"
-              type="button"
-              disabled={!connected}
-              title={help}
-              aria-description={help}
-              // Click adds the plugin; drag places it where it is dropped on the canvas.
-              draggable={connected}
-              onDragStart={(event) => startPluginDrag(event, item.entry, item.name)}
-              onDragEnd={endLibraryDrag}
-              onClick={() => onAdd(item.entry)}
-            >
-              <span className="tool-card-icon tool-card-plugin-badge" aria-hidden="true">
-                {item.format === "VST3" ? "V3" : "V2"}
-              </span>
-              <span>
-                <strong>{item.name}</strong>
-                <small>{help}</small>
-              </span>
-            </button>
-            {/* No per-row guide: every row opened the same generic VST guide under
-                the plugin's own name, beside the section's "?" (owner, 2026-11-07). */}
-          </div>
-        );
-      })}
-      {catalog.length === 0 && !query && (
-        <p className="muted">No plugins found yet. Scan Windows' standard plugin folders, or pick another folder.</p>
-      )}
-      <div className="actions">
-        <button
-          type="button"
-          className="secondary"
-          disabled={!connected || busy}
-          onClick={() => void scanStandardFolders()}
+  const renderRows = (items: typeof catalog) =>
+    items.map((item) => {
+      const help = `${item.format}${item.entry.identity?.vendor ? ` · ${item.entry.identity.vendor}` : ""} · ${item.folder}`;
+      return (
+        <div
+          className="tool-library-entry"
+          key={`${item.entry.identity?.sha256}-${item.entry.path}-${item.entry.identity?.classIds?.[0] ?? "default"}`}
         >
-          {busy ? "Scanning…" : "Scan standard folders"}
-        </button>
-        <button type="button" className="secondary" disabled={!connected} onClick={onOpenPicker}>
-          Scan another folder…
-        </button>
+          <button
+            className="tool-card"
+            type="button"
+            disabled={!connected}
+            title={help}
+            aria-description={help}
+            // Click adds the plugin; drag places it where it is dropped on the canvas.
+            draggable={connected}
+            onDragStart={(event) => startPluginDrag(event, item.entry, item.name)}
+            onDragEnd={endLibraryDrag}
+            onClick={() => onAdd(item.entry)}
+          >
+            <span className="tool-card-icon tool-card-plugin-badge" aria-hidden="true">
+              {item.format === "VST3" ? "V3" : "V2"}
+            </span>
+            <span>
+              <strong>{item.name}</strong>
+              <small>{help}</small>
+            </span>
+          </button>
+          {/* No per-row guide: every row opened the same generic VST guide under
+                the plugin's own name, beside the section's "?" (owner, 2026-11-07). */}
+        </div>
+      );
+    });
+  const effects = catalog.filter((item) => !item.instrument);
+  const instruments = catalog.filter((item) => item.instrument);
+  return (
+    <>
+      {instruments.length > 0 && (
+        <div className="tool-plugin-group" aria-label="Instruments">
+          <div className="tool-library-entry">
+            <h4>Instruments (VST2/VST3)</h4>
+            <ToolGuideLink kind="instrument" compact toolName="Instrument" />
+          </div>
+          {renderRows(instruments)}
+        </div>
+      )}
+      <div className="tool-plugin-group" aria-label="Plugins">
+        <div className="tool-library-entry">
+          <h4>Plugins (VST2/VST3)</h4>
+          <ToolGuideLink kind="plugin" compact toolName="VST plugin" />
+        </div>
+        {renderRows(effects)}
+        {effects.length === 0 && !query && (
+          <p className="muted">No plugins found yet. Scan Windows' standard plugin folders, or pick another folder.</p>
+        )}
+        <div className="actions">
+          <button
+            type="button"
+            className="secondary"
+            disabled={!connected || busy}
+            onClick={() => void scanStandardFolders()}
+          >
+            {busy ? "Scanning…" : "Scan standard folders"}
+          </button>
+          <button type="button" className="secondary" disabled={!connected} onClick={onOpenPicker}>
+            Scan another folder…
+          </button>
+        </div>
+        {message && <PanelMessage message={message} small />}
       </div>
-      {message && <PanelMessage message={message} small />}
-    </div>
+    </>
   );
 }
 
@@ -551,13 +560,11 @@ export function PluginEditorControls({
       <div className="actions">
         <button
           type="button"
-          disabled={busy || !running || !inShell}
+          disabled={busy || !inShell}
           title={
             !inShell
               ? "The plugin's window opens only in the desktop app."
-              : !running
-                ? "Press Play first."
-                : "Open the plugin's own window"
+              : "Open the plugin's own window (no need to press Play first)"
           }
           onClick={() => void openEditor()}
         >
@@ -581,11 +588,13 @@ export function PluginEditorControls({
         <PanelMessage message={message} small />
       ) : (
         <small className="muted">
-          {!inShell
-            ? "The plugin's window opens only in the desktop app. You can still use the sliders below."
-            : !running
-              ? "Press Play to open the plugin's window, or use the sliders below. Your changes are kept."
-              : "Open the plugin's window, or use the sliders below. Your changes are kept."}
+          {node.kind === "instrument"
+            ? !inShell
+              ? "The instrument's window opens only in the desktop app. You can still play it with the keyboard below."
+              : "Open the instrument's window to change its sound. Your changes are kept, even before you press Play."
+            : !inShell
+              ? "The plugin's window opens only in the desktop app. You can still use the sliders below."
+              : "Open the plugin's window, or use the sliders below. Your changes are kept, even before you press Play."}
         </small>
       )}
     </div>
@@ -674,6 +683,7 @@ export function PluginNodeInspector({
   snapshot,
   backend,
   sessionId,
+  sidechainBlockedReason,
   onChange,
   onRemove,
 }: {
@@ -681,8 +691,18 @@ export function PluginNodeInspector({
   disabled: boolean;
   onUnload: () => void;
   snapshot: import("@audiorouter/contracts").DiagnosticsSnapshot | null;
-  backend?: Pick<UiBackend, "resumePlugin">;
+  backend?: Pick<
+    UiBackend,
+    | "resumePlugin"
+    | "listPluginPrograms"
+    | "selectPluginProgram"
+    | "applyPluginPreset"
+    | "addPluginSidechainPort"
+    | "removePluginSidechainPort"
+  >;
   sessionId?: string;
+  /** Why adding a sidechain port is unavailable right now (for example unsaved changes). */
+  sidechainBlockedReason?: string;
   onChange?: (name: string, value: boolean) => void;
   /** Remove settings from the node; "off" removes the key so older builds can still load the route. */
   onRemove?: (names: string[]) => void;
@@ -696,6 +716,85 @@ export function PluginNodeInspector({
   const silenced = health?.silencedUnchanged === true;
   const healthAlert = health?.state === "failed" || health?.state === "quarantined";
   const passThroughAllowed = node.parameters.passThroughAllowed === true;
+  const isVst2 = format === "vst2";
+  const [programs, setPrograms] = useState<{ id: number; name: string }[] | null>(null);
+  const [units, setUnits] = useState<MethodResult["plugins.programs"]["units"]>([]);
+  const [selectedProgram, setSelectedProgram] = useState("");
+  const [programBusy, setProgramBusy] = useState(false);
+  const [programError, setProgramError] = useState<string | null>(null);
+  const [presetPath, setPresetPath] = useState("");
+  const loadPrograms = async () => {
+    if (!backend?.listPluginPrograms || !sessionId) return;
+    setProgramBusy(true);
+    setProgramError(null);
+    try {
+      const result = await backend.listPluginPrograms(sessionId, node.id);
+      setPrograms(result.programs);
+      setUnits(result.units);
+      setSelectedProgram(result.programs.length > 0 ? String(result.programs[0].id) : "");
+    } catch (error) {
+      setProgramError(formatUiError(error, "Programs could not be listed."));
+    } finally {
+      setProgramBusy(false);
+    }
+  };
+  const chooseProgram = async (raw: string) => {
+    if (!backend?.selectPluginProgram || !sessionId) return;
+    const program = Number(raw);
+    setSelectedProgram(raw);
+    setProgramError(null);
+    try {
+      await backend.selectPluginProgram(sessionId, node.id, program);
+    } catch (error) {
+      setProgramError(formatUiError(error, "The program could not be selected."));
+    }
+  };
+  const applyPreset = async () => {
+    if (!backend?.applyPluginPreset || !sessionId || presetPath.trim() === "") return;
+    setProgramBusy(true);
+    setProgramError(null);
+    try {
+      await backend.applyPluginPreset(sessionId, node.id, presetPath.trim());
+    } catch (error) {
+      setProgramError(formatUiError(error, "The preset could not be imported."));
+    } finally {
+      setProgramBusy(false);
+    }
+  };
+  const hasSidechainPort = node.ports.some((port) => port.name === "sidechain");
+  const [sidechain, setSidechain] = useState<{ busy: boolean; error: string | null; added: boolean }>({
+    busy: false,
+    error: null,
+    added: false,
+  });
+  const addSidechain = async () => {
+    if (!backend?.addPluginSidechainPort || !sessionId) return;
+    setSidechain({ busy: true, error: null, added: false });
+    try {
+      await backend.addPluginSidechainPort(sessionId, node.id);
+      setSidechain({ busy: false, error: null, added: true });
+    } catch (error) {
+      setSidechain({
+        busy: false,
+        error: formatUiError(error, "This plugin has no sidechain input to add."),
+        added: false,
+      });
+    }
+  };
+  const removeSidechain = async () => {
+    if (!backend?.removePluginSidechainPort || !sessionId) return;
+    setSidechain({ busy: true, error: null, added: false });
+    try {
+      await backend.removePluginSidechainPort(sessionId, node.id);
+      setSidechain({ busy: false, error: null, added: false });
+    } catch (error) {
+      setSidechain({
+        busy: false,
+        error: formatUiError(error, "The sidechain input could not be removed."),
+        added: false,
+      });
+    }
+  };
   // The result of the last Retry while this plugin stays silenced.
   const [retry, setRetry] = useState<{ pending: boolean; refused: boolean; error: string | null }>({
     pending: false,
@@ -746,6 +845,143 @@ export function PluginNodeInspector({
         SHA-256 fingerprint
         <input aria-label="Plugin fingerprint" value={fingerprint} readOnly />
       </label>
+      {isVst2 || format === "vst3" ? (
+        <section className="plugin-programs" aria-label={`${formatLabel} programs and presets`}>
+          <span className="eyebrow">{formatLabel} programs</span>
+          <button
+            type="button"
+            disabled={programBusy || !backend?.listPluginPrograms || !sessionId}
+            onClick={() => void loadPrograms()}
+          >
+            {programBusy ? "Reading programs..." : "Load programs"}
+          </button>
+          {programs ? (
+            programs.length === 0 ? (
+              <small>This plugin reports no programs.</small>
+            ) : (
+              <label>
+                Program
+                <select
+                  aria-label={`${formatLabel} program`}
+                  value={selectedProgram}
+                  disabled={!isVst2 || !backend?.selectPluginProgram || !sessionId}
+                  onChange={(event) => void chooseProgram(event.target.value)}
+                >
+                  {programs.map((program) => (
+                    <option key={program.id} value={String(program.id)}>
+                      {program.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )
+          ) : null}
+          {format === "vst3" && units.length > 0 ? (
+            <ul aria-label="VST3 unit hierarchy" className="plugin-unit-list">
+              {units.map((unit) => {
+                const parent = units.find((candidate) => candidate.id === unit.parent_id);
+                return (
+                  <li key={unit.id}>
+                    <span>{unit.name || "Root unit"}</span>
+                    {parent ? <small>Within {parent.name}</small> : null}
+                    {unit.program_list_id !== null ? (
+                      <>
+                        <small>
+                          Program list · {unit.program_count} {unit.program_count === 1 ? "program" : "programs"}
+                        </small>
+                        {unit.programs.length > 0 ? (
+                          <small>
+                            Programs:{" "}
+                            {unit.programs
+                              .slice(0, 6)
+                              .map((program) => program.name)
+                              .join(", ")}
+                            {unit.programs.length > 6 ? `, and ${unit.programs.length - 6} more` : ""}
+                          </small>
+                        ) : null}
+                      </>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+          {isVst2 ? (
+            <>
+              <label>
+                Preset file (.fxp or .fxb, beside the plugin)
+                <input
+                  aria-label="VST2 preset path"
+                  value={presetPath}
+                  onChange={(event) => setPresetPath(event.target.value)}
+                  placeholder="Full path to the preset file"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={programBusy || !backend?.applyPluginPreset || !sessionId || presetPath.trim() === ""}
+                onClick={() => void applyPreset()}
+              >
+                Import preset
+              </button>
+            </>
+          ) : (
+            <small>VST3 units and programs are read-only; choose a program in the plugin&apos;s own window.</small>
+          )}
+          {programError ? <small role="alert">{programError}</small> : null}
+        </section>
+      ) : null}
+      {format === "vst3" ? (
+        <section className="plugin-programs" aria-label="Sidechain input">
+          <span className="eyebrow">Sidechain input</span>
+          {hasSidechainPort || sidechain.added ? (
+            <>
+              <small>
+                This plugin has a sidechain input named &quot;sidechain&quot;. Connect a source to it on the canvas; it
+                is not mixed into the main signal.
+              </small>
+              <button
+                type="button"
+                disabled={
+                  disabled ||
+                  sidechain.busy ||
+                  !backend?.removePluginSidechainPort ||
+                  !sessionId ||
+                  sidechainBlockedReason !== undefined
+                }
+                onClick={() => void removeSidechain()}
+              >
+                {sidechain.busy ? "Removing..." : "Remove sidechain input"}
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                disabled={
+                  disabled ||
+                  sidechain.busy ||
+                  !backend?.addPluginSidechainPort ||
+                  !sessionId ||
+                  sidechainBlockedReason !== undefined
+                }
+                onClick={() => void addSidechain()}
+              >
+                {sidechain.busy ? "Checking the plugin..." : "Add sidechain input"}
+              </button>
+              <div className="plugin-guard-stack">
+                <small {...shownWhen(sidechainBlockedReason === undefined)}>
+                  Works only for a VST3 plugin that declares an auxiliary input.
+                </small>
+                <small {...shownWhen(sidechainBlockedReason !== undefined)}>
+                  {sidechainBlockedReason ?? "Save or discard changes to this tool before adding a sidechain input."}
+                </small>
+              </div>
+            </>
+          )}
+          {sidechain.error ? <small role="alert">{sidechain.error}</small> : null}
+        </section>
+      ) : null}
       <section
         className={`plugin-voice-guard${silenced ? " is-alert" : ""}`}
         role={silenced ? "alert" : undefined}
