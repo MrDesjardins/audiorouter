@@ -431,7 +431,13 @@ impl ControlPlane {
         base_revision: u64,
         idempotency_key: &str,
     ) -> Result<Value, ControlError> {
-        self.commit_graph_scoped(plan_id, base_revision, idempotency_key, idempotency_key)
+        self.commit_graph_scoped(
+            plan_id,
+            base_revision,
+            idempotency_key,
+            idempotency_key,
+            None,
+        )
     }
 
     pub(crate) fn commit_graph_scoped(
@@ -440,10 +446,19 @@ impl ControlPlane {
         base_revision: u64,
         idempotency_key: &str,
         display_operation_id: &str,
+        require_stopped_session: Option<EntityId>,
     ) -> Result<Value, ControlError> {
         let commit_started = Instant::now();
         let checkpoint = self.store.clone();
-        let fingerprint = format!("graph.commit:{}:{}", plan_id.as_str(), base_revision);
+        let fingerprint = match &require_stopped_session {
+            Some(session_id) => format!(
+                "graph.commit:{}:{}:requireStoppedSessionId:{}",
+                plan_id.as_str(),
+                base_revision,
+                session_id.as_str()
+            ),
+            None => format!("graph.commit:{}:{}", plan_id.as_str(), base_revision),
+        };
         let request_hash = audiorouter_storage::lower_hex(&Sha256::digest(fingerprint.as_bytes()));
         if let Some(storage) = &self.storage {
             if let Some(result) = storage
@@ -455,6 +470,18 @@ impl ControlPlane {
                 response["idempotentReplay"] = json!(true);
                 response["activation"] = json!({ "state": "pending", "runtime": "fake" });
                 return Ok(response);
+            }
+        }
+        if let Some(session_id) = &require_stopped_session {
+            if self
+                .runtimes
+                .get(session_id)
+                .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+                || self.native_worker_attached_to(session_id)
+            {
+                return Err(ControlError::InvalidRequest(
+                    "this graph commit requires its session to be stopped".into(),
+                ));
             }
         }
         let result = match self
@@ -766,6 +793,20 @@ impl ControlPlane {
                 None => None,
             },
         };
+        let require_stopped_session = params
+            .get("requireStoppedSessionId")
+            .and_then(Value::as_str)
+            .filter(|id| !id.is_empty() && id.len() <= audiorouter_domain::MAX_ENTITY_ID_BYTES)
+            .map(EntityId::new);
+        if candidate.as_ref().is_some_and(|candidate| {
+            require_stopped_session
+                .as_ref()
+                .is_some_and(|session_id| candidate.id != *session_id)
+        }) {
+            return Err(ControlError::InvalidRequest(
+                "requireStoppedSessionId does not match the graph plan".into(),
+            ));
+        }
         let expected_warnings = candidate
             .as_ref()
             .map(|candidate| self.endpoint_feedback_warnings(candidate))
@@ -824,7 +865,13 @@ impl ControlPlane {
             .and_then(Value::as_str)
             .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
         let scoped_key = self.scoped_idempotency_key("graph.commit", key);
-        self.commit_graph_scoped(&plan_id, base_revision, &scoped_key, key)
+        self.commit_graph_scoped(
+            &plan_id,
+            base_revision,
+            &scoped_key,
+            key,
+            require_stopped_session,
+        )
     }
 
     pub(crate) fn dispatch_meter_reset(

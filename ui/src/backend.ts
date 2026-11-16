@@ -221,6 +221,7 @@ export interface UiBackend {
     baseRevision: number,
     idempotencyKey: string,
     acknowledgments?: string[],
+    requireStoppedSessionId?: string,
   ): Promise<GraphCommitResult>;
   listGraphHistory(sessionId: string, cursor?: string, limit?: number): Promise<GraphHistoryPage>;
   undoGraphPlan(sessionId: string, baseRevision: number): Promise<GraphUndoPlanResult>;
@@ -273,7 +274,7 @@ export interface UiBackend {
   obsPreview?(changes: MethodParams["obs.preview"]["changes"]): Promise<MethodResult["obs.preview"]>;
   obsApply?(previewId: string): Promise<MethodResult["obs.apply"]>;
   obsRestore?(): Promise<MethodResult["obs.restore"]>;
-  listDevices(): Promise<DeviceListItem[]>;
+  listDevices(includeInactive?: boolean): Promise<DeviceListItem[]>;
   prepareNativeEndpoint?(
     sessionId: string,
     captureEndpointId: string,
@@ -873,12 +874,13 @@ export function createLiveBackend(
         candidate,
       });
     },
-    async commitGraph(planId, baseRevision, idempotencyKey, acknowledgments) {
+    async commitGraph(planId, baseRevision, idempotencyKey, acknowledgments, requireStoppedSessionId) {
       return client.request("graph.commit", {
         planId,
         baseRevision,
         idempotencyKey,
         ...(acknowledgments === undefined ? {} : { acknowledgments }),
+        ...(requireStoppedSessionId === undefined ? {} : { requireStoppedSessionId }),
       });
     },
     async listGraphHistory(historySessionId, cursor, limit) {
@@ -985,9 +987,13 @@ export function createLiveBackend(
     async obsRestore() {
       return client.request("obs.restore", { idempotencyKey: uiIdempotencyKey("obs-restore") });
     },
-    async listDevices() {
+    async listDevices(includeInactive = false) {
       const devices: DeviceListItem[] = await collectPagedRows((cursor) =>
-        client.request("devices.list", cursor === null ? { limit: 500 } : { limit: 500, cursor }),
+        client.request("devices.list", {
+          limit: 500,
+          ...(cursor === null ? {} : { cursor }),
+          ...(includeInactive ? { includeInactive: true } : {}),
+        }),
       );
       rememberDeviceNames(devices);
       return devices;

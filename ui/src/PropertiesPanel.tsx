@@ -76,6 +76,7 @@ export function PropertiesPanel({
   devices,
   refreshDevices,
   setCaptureEndpointId,
+  inputBindingFocusRequest,
   renderEndpointId,
   applications,
   applicationsError,
@@ -122,6 +123,7 @@ export function PropertiesPanel({
   devices: DeviceListItem[];
   refreshDevices: ({ announce }?: { announce?: boolean }) => void;
   setCaptureEndpointId: Dispatch<SetStateAction<string>>;
+  inputBindingFocusRequest: number;
   renderEndpointId: string;
   applications: ApplicationRow[];
   applicationsError: string | null;
@@ -349,12 +351,26 @@ export function PropertiesPanel({
               selectedNode.parameters.spatialMode === "headphones" || selectedNode.parameters.spatialMode === "speakers"
             }
             value={typeof selectedNode.parameters.endpointId === "string" ? selectedNode.parameters.endpointId : ""}
+            focusRequest={inputBindingFocusRequest}
             disabled={!backend.connected || sessionRunning}
             onRefresh={refreshDevices}
-            onChange={(value) => {
+            onChange={(value, _name) => {
               setCaptureEndpointId(value);
               writeEndpointBindingHint(session.id, value, renderEndpointId);
-              if (value) changeNodeParameterOn(selectedNode.id, "endpointId", value);
+              if (value) {
+                recordDraftChange(
+                  {
+                    ...draft,
+                    nodes: draft.nodes.map((node) =>
+                      node.id === selectedNode.id
+                        ? { ...node, parameters: { ...node.parameters, endpointId: value } }
+                        : node,
+                    ),
+                  },
+                  `${selectedNode.id}:endpointBinding`,
+                );
+                setActionMessage("Input device changed. Save to confirm this binding.");
+              }
             }}
           />
         )}

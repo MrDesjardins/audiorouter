@@ -204,7 +204,7 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "sessions.createFromGoal" => "Make a new stopped session from a goal. It chooses no devices, starts no audio and arms no recorder, and returns what the person must still choose.",
         "sessions.delete" => "Delete a stopped session resource and its history.",
         "graph.plan" => "Validate and preview a graph candidate without mutation.",
-        "graph.commit" => "Commit an unexpired graph plan with idempotent mutation.",
+        "graph.commit" => "Commit an unexpired graph plan with idempotent mutation. Optional requireStoppedSessionId rejects if its saved session or native worker is running or attached.",
         "session.start" | "sessions.start" => {
             "Start an already-prepared committed route. For a saved multi-path audio session, call nativePaths.prepare (HTTP POST /api/v1/nativePaths/prepare) with sessionId first; preparation requires deviceAdministration and does not start playback. Desktop Play performs preparation first. Alternatively temporarily preview a validated candidate graph without saving a new session revision; candidate preview requires both sessionControl and graphWrite grants plus a prepared single-endpoint native route."
         }
@@ -1018,6 +1018,7 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
                 "planId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "baseRevision": { "type": "integer", "minimum": 0 },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES },
+                "requireStoppedSessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Optional commit-time precondition: reject if this planned session is running or owns a native worker. Used for stopped-session recovery edits." },
                 "acknowledgments": {
                     "type": ["array", "null"],
                     "items": { "type": "string", "minLength": 1, "maxLength": 2048 },

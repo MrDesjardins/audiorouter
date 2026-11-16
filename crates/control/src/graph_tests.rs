@@ -147,6 +147,58 @@ fn feedback_selection_can_be_saved_only_after_review_but_not_prepared() {
 }
 
 #[test]
+fn graph_commit_can_require_its_session_to_be_stopped_for_recovery_edits() {
+    let original = feedback_fixture();
+    let mut plane = ControlPlane::new("stopped-commit-guard");
+    plane.insert_session(original.clone()).unwrap();
+    let request = |method: &str, params| JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: method.into(),
+        params: Some(params),
+    };
+    let mut candidate = original.clone();
+    candidate.nodes[0].name = "Renamed input".into();
+    let plan = plane
+        .dispatch(request(
+            "graph.plan",
+            json!({"sessionId":original.id,"baseRevision":0,"candidate":candidate}),
+        ))
+        .result
+        .unwrap();
+    let mismatched = plane.dispatch(request(
+        "graph.commit",
+        json!({
+            "planId":plan["planId"],
+            "baseRevision":0,
+            "idempotencyKey":"wrong-session-guard",
+            "requireStoppedSessionId":"another-session"
+        }),
+    ));
+    assert!(mismatched
+        .error
+        .unwrap()
+        .message
+        .contains("does not match the graph plan"));
+    plane.session_start(&original.id).unwrap();
+    let response = plane.dispatch(request(
+        "graph.commit",
+        json!({
+            "planId":plan["planId"],
+            "baseRevision":0,
+            "idempotencyKey":"stopped-only-rebind",
+            "requireStoppedSessionId":"feedback"
+        }),
+    ));
+    assert!(response
+        .error
+        .unwrap()
+        .message
+        .contains("session to be stopped"));
+    assert_eq!(plane.get_session(&original.id).unwrap().revision, 0);
+}
+
+#[test]
 #[cfg(windows)]
 #[ignore = "requires installed VB-Cable B; reads endpoint metadata only"]
 fn installed_cable_feedback_is_rejected_before_opening_audio() {

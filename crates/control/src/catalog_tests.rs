@@ -520,7 +520,7 @@ fn describe_exposes_input_and_output_schemas_for_methods() {
         .unwrap();
     assert_eq!(
         commit["description"],
-        "Commit an unexpired graph plan with idempotent mutation."
+        "Commit an unexpired graph plan with idempotent mutation. Optional requireStoppedSessionId rejects if its saved session or native worker is running or attached."
     );
     assert_eq!(
         commit["inputSchema"]["required"],
@@ -1117,6 +1117,43 @@ fn describe_exposes_input_and_output_schemas_for_methods() {
             "{method_name} output identity bound"
         );
     }
+}
+
+#[test]
+fn graph_commit_discovery_describes_optional_stopped_session_precondition() {
+    let method = ControlPlane::default().describe()["methods"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|method| method["name"] == "graph.commit")
+        .unwrap()
+        .clone();
+    assert_eq!(
+        method["inputSchema"]["properties"]["requireStoppedSessionId"]["type"],
+        "string"
+    );
+    assert_eq!(
+        method["inputSchema"]["properties"]["requireStoppedSessionId"]["description"],
+        "Optional commit-time precondition: reject if this planned session is running or owns a native worker. Used for stopped-session recovery edits."
+    );
+    assert!(!method["inputSchema"]["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|field| field == "requireStoppedSessionId"));
+}
+
+#[test]
+fn setup_check_output_schema_exposes_optional_name_matched_input_proposals() {
+    let schema = method_output_schema("system.checkSetup");
+    let properties = &schema["properties"]["findings"]["items"]["properties"];
+    assert_eq!(properties["suggestedEndpointId"]["type"], "string");
+    assert_eq!(properties["suggestedEndpointName"]["type"], "string");
+    assert!(!schema["properties"]["findings"]["items"]["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|field| field == "suggestedEndpointId" || field == "suggestedEndpointName"));
 }
 
 /// Once the backend service runs, `apps.list` reads the list its inventory

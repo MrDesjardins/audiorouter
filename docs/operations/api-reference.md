@@ -47,7 +47,7 @@ See [network privacy and permissions](privacy-permissions.md#audio-privacy-bound
 | `system.handshake` | `read` | read-only |
 | `status.get` | `read` | read-only |
 | `system.diagnostics` | `read` | read-only |
-| `system.checkSetup` | `read` | read-only; judges saved sessions against the active devices (UI-27): outputs and Surround inputs Play would refuse, feedback loops (also across sessions), missing devices, cables not at 48 kHz; optional `sessionId`; MCP tool `check_setup` |
+| `system.checkSetup` | `read` | read-only; judges saved sessions against the active devices (UI-27): outputs and Surround inputs Play would refuse, feedback loops (also across sessions), missing devices, cables not at 48 kHz; a missing Physical Input may include `suggestedEndpointId`/`suggestedEndpointName` for one exact friendly-name match; optional `sessionId`; MCP tool `check_setup` |
 | `diagnostics.getVerbose` | `read` | read-only; whether opt-in verbose logging is on and the seconds left |
 | `diagnostics.setVerbose` | `sessionControl` | mutating; `{enabled}` turns verbose logging on for one hour (it expires by itself) or off; logs only, never audio or the saved graph |
 | `system.quit` | `sessionControl` | external operation; requires an idempotency key; finalizes active recorders before stopping running sessions |
@@ -210,7 +210,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `connections.remove` | `graphWrite` | mutating; removes connections between nodes, optionally limited by `fromOutput` and `toInput` port names |
 | `meters.levels` | `read` | read-only; peak/RMS dBFS, clipping and reduction per playing node |
 | `graph.plan` | `graphWrite` | plan-only |
-| `graph.commit` | `graphWrite` | mutating; requires an idempotency key |
+| `graph.commit` | `graphWrite` | mutating; requires an idempotency key; optional `requireStoppedSessionId` rejects at commit if that session is running or owns a native worker |
 | `session.start` | `sessionControl` | external operation; requires an idempotency key; optional `candidate` starts a temporary preview without saving the session revision |
 | `sessions.start` | `sessionControl` | external operation; requires an idempotency key; optional `candidate` starts a temporary preview without saving the session revision |
 | `session.stop` | `sessionControl` | external operation; requires an idempotency key |
