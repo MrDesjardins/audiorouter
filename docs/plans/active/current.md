@@ -6,14 +6,15 @@ Owner requested a full review of the November 12–15 changes, priority-ranked
 findings and repairs. The [review record](review-2026-11-15.md) captures the
 findings, regressions, validation and remaining platform gates. The branch is
 based on current `origin/main`; device-binding recovery and theme preview had
-already landed separately in PRs #154 and #153. Post-rebase validation passes:
-the full UI suite (1,113 tests), 24 bundled Edge scenarios, strict Clippy,
-contract drift, focused control/plugin-host regressions and formatting. Earlier
-workspace checks found two UDP continuity assertions that failed under
-concurrent load; isolated reruns and the full serial Windows-audio suite
-passed. Live audio, sleep/device, driver-helper elevation, signed-driver and
-installer qualification remain separate gates. Next: commit the scoped review
-fixes and open the authorized PR.
+already landed separately in PRs #154 and #153. Post-rebase validation: a full
+UI suite passed 1,113 tests; the final full rerun passed 1,111 and timed out in
+one unrelated `LogFilesPanel` test, which passed in isolation. The 24 bundled
+Edge scenarios, strict Clippy, contract drift, focused control/plugin-host
+regressions and formatting pass. Earlier workspace checks found two UDP
+continuity assertions that failed under concurrent load; isolated reruns and
+the full serial Windows-audio suite passed. Live audio, sleep/device,
+driver-helper elevation, signed-driver and installer qualification remain
+separate gates. PR #158 is open; hosted checks remain to be reviewed.
 
 ## Device binding recovery — 2026-11-15
 
