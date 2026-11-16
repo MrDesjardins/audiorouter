@@ -4257,6 +4257,21 @@ input[aria-invalid="true"]:focus-visible {
   box-shadow: inset 1px 1px 0 var(--ambient-key);
   box-sizing: border-box;
 }
+.node-binding-editor.is-focus-target {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+  animation: binding-target-pulse 1.2s ease-in-out 2;
+}
+@keyframes binding-target-pulse {
+  50% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--focus-ring) 24%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .node-binding-editor.is-focus-target {
+    animation: none;
+  }
+}
 .node-binding-editor > * {
   min-width: 0;
   max-width: 100%;

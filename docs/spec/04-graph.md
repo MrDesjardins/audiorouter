@@ -9,7 +9,7 @@ Milestone ownership: M01 model/compiler contracts; M02 live graph activation; M0
 | Session | UUID, name, schema version, revision, nodes, edges, safety/startup policies | run state, active revision, graph generation, health |
 | Node | UUID, type/version, name, enabled, bypass policy, parameters, port definitions | resolved device/plugin, health, latency, meter snapshot |
 | Edge | UUID, source/destination node and port, channel matrix, enabled | compiled route, effective latency |
-| Device binding | endpoint ID or default-role selector, expected direction, fallback policy | resolved endpoint ID, availability, negotiated format |
+| Device binding | endpoint ID or default-role selector, expected direction, fallback policy | resolved endpoint ID, availability, negotiated format; CAP-02 may consult the local endpoint-name cache or Windows inactive endpoint identity for an unambiguous saved-input rebind |
 | App binding | verified executable/package identity, instance policy, include/exclude mode | PID + creation time, process tree, capture state |
 | Virtual bus | UUID, display name, driver endpoint identities, channel count, enabled | owner lease, clients, health, restart requirement |
 | Recording | UUID, session/node IDs, file references, format, start frame | bytes, duration, gaps, state, recovery result |

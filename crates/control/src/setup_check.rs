@@ -14,11 +14,12 @@ pub(crate) const MAX_SETUP_FINDINGS: usize = 100;
 /// The rate virtual cables should run at (the engine's internal rate).
 const CABLE_RATE_HZ: u32 = 48_000;
 
-/// What the check reads about one active device. Built from the Windows
-/// inventory in the dispatcher and by hand in tests.
+/// What the check reads about one device record. Inactive entries contribute
+/// only the friendly name used to match the old exact endpoint ID.
 #[derive(Clone, Debug)]
 pub(crate) struct DeviceFacts {
     pub id: String,
+    pub active: bool,
     /// A playback (render) device; otherwise a recording (capture) device.
     pub render: bool,
     pub name: String,
@@ -56,6 +57,12 @@ pub(crate) struct SetupFinding {
     pub device_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub device_name: Option<String>,
+    /// Unique active capture endpoint with the exact saved friendly name;
+    /// proposal only, the caller must commit it deliberately.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub suggested_endpoint_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub suggested_endpoint_name: Option<String>,
     /// The other session of a loop across sessions.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub other_session_id: Option<String>,
@@ -123,11 +130,17 @@ fn device_use(kind: NodeKind) -> Option<DeviceUse> {
 /// render end comes out of the capture end.
 pub(crate) fn cable_returns(devices: &[DeviceFacts]) -> Vec<(String, String)> {
     let mut returns = Vec::new();
-    for render in devices.iter().filter(|device| device.render) {
+    for render in devices
+        .iter()
+        .filter(|device| device.active && device.render)
+    {
         let Some(key) = &render.cable_key else {
             continue;
         };
-        for capture in devices.iter().filter(|device| !device.render) {
+        for capture in devices
+            .iter()
+            .filter(|device| device.active && !device.render)
+        {
             if capture.cable_key.as_ref() == Some(key) {
                 returns.push((render.id.clone(), capture.id.clone()));
             }
@@ -160,8 +173,8 @@ pub(crate) fn check_setup(
 ) -> Vec<SetupFinding> {
     let returns = cable_returns(devices);
     let mut findings = Vec::new();
-    for &(session, _) in sessions {
-        check_session_devices(session, devices, &mut findings);
+    for &(session, running) in sessions {
+        check_session_devices(session, running, devices, &mut findings);
         if let Err(ControlError::InvalidRequest(message)) =
             reject_endpoint_feedback(session, &returns)
         {
@@ -174,6 +187,8 @@ pub(crate) fn check_setup(
                 node_name: None,
                 device_id: None,
                 device_name: None,
+                suggested_endpoint_id: None,
+                suggested_endpoint_name: None,
                 other_session_id: None,
                 message,
                 fix: "Send the output to a different cable, or remove the connection that returns to the input.".into(),
@@ -191,6 +206,7 @@ pub(crate) fn check_setup(
 
 fn check_session_devices(
     session: &Session,
+    running: bool,
     devices: &[DeviceFacts],
     findings: &mut Vec<SetupFinding>,
 ) {
@@ -206,7 +222,8 @@ fn check_session_devices(
         };
         let surround = node_spatial_options(node).is_some();
         let device = devices.iter().find(|device| {
-            device.id == endpoint_id
+            device.active
+                && device.id == endpoint_id
                 && match usage {
                     DeviceUse::Output | DeviceUse::Loopback => device.render,
                     DeviceUse::Input => !device.render || surround,
@@ -223,19 +240,50 @@ fn check_session_devices(
                     node_name: Some(node.name.clone()),
                     device_id: Some(endpoint_id.to_owned()),
                     device_name: device.map(|device| device.name.clone()),
+                    suggested_endpoint_id: None,
+                    suggested_endpoint_name: None,
                     other_session_id: None,
                     message,
                     fix,
                 }
             };
         let Some(device) = device else {
-            findings.push(finding(
+            let mut missing = finding(
                 "deviceMissing",
                 Severity::Problem,
                 None,
                 format!("The device chosen for \"{}\" is not connected or is turned off in Windows.", node.name),
-                "Plug it in or enable it in Windows Sound settings. After a driver update Windows gives devices new IDs: choose the device again in the node's Properties.".into(),
-            ));
+                "Plug it in or enable it in Windows Sound settings. If Windows assigned a new ID, choose the proposed matching input in this tool's Properties and Save; otherwise select the correct input manually.".into(),
+            );
+            if node.kind == NodeKind::PhysicalInput && !surround && !running {
+                let saved_name = devices
+                    .iter()
+                    .find(|candidate| {
+                        !candidate.active && !candidate.render && candidate.id == endpoint_id
+                    })
+                    .map(|candidate| candidate.name.as_str());
+                let matches = saved_name
+                    .map(|saved_name| {
+                        devices
+                            .iter()
+                            .filter(|candidate| {
+                                candidate.active
+                                    && !candidate.render
+                                    && candidate.name.to_lowercase() == saved_name.to_lowercase()
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                if let [candidate] = matches.as_slice() {
+                    missing.suggested_endpoint_id = Some(candidate.id.clone());
+                    missing.suggested_endpoint_name = Some(candidate.name.clone());
+                    missing.fix = format!(
+                        "AudioRouter found one active input named {}. It can update this stopped session to that new ID. The session stays stopped until you press Play; if this is not your microphone, open the tool and choose the correct one manually.",
+                        candidate.name
+                    );
+                }
+            }
+            findings.push(missing);
             continue;
         };
         match usage {
@@ -421,6 +469,8 @@ fn cross_session_loops(
                 node_name: None,
                 device_id: None,
                 device_name: None,
+                suggested_endpoint_id: None,
+                suggested_endpoint_name: None,
                 other_session_id: Some(session_b.id.as_str().to_owned()),
                 message,
                 fix,
@@ -498,6 +548,7 @@ fn cross_session_loops(
                         code: "crossSessionLoop", severity: Severity::Warning,
                         session_id: session.id.as_str().to_owned(), session_name: session.name.clone(),
                         node_id: None, node_name: None, device_id: None, device_name: None,
+                        suggested_endpoint_id: None, suggested_endpoint_name: None,
                         other_session_id: Some(sessions[cycle[(position + 1) % cycle.len()]].0.id.as_str().to_owned()),
                         message: message.clone(),
                         fix: "Stop a route in this loop, or change a return connection so these routes cannot feed back into each other.".into(),
@@ -602,7 +653,9 @@ impl ControlPlane {
             "findings": findings,
             "truncated": truncated,
             "sessionsChecked": if filter.is_some() { 1 } else { sessions.len() },
-            "devicesChecked": devices.as_ref().map_or(0, Vec::len),
+            "devicesChecked": devices
+                .as_ref()
+                .map_or(0, |devices| devices.iter().filter(|device| device.active).count()),
             "notChecked": not_checked,
         }))
     }
@@ -613,7 +666,7 @@ impl ControlPlane {
 fn setup_devices() -> Result<Vec<DeviceFacts>, ControlError> {
     let endpoints =
         audiorouter_windows_audio::enumerate_active_endpoints().map_err(audio_control_error)?;
-    let display = audiorouter_windows_audio::enumerate_active_endpoint_display_info()
+    let display = audiorouter_windows_audio::enumerate_endpoint_display_info()
         .map_err(audio_control_error)?;
     Ok(endpoints
         .into_iter()
@@ -622,6 +675,7 @@ fn setup_devices() -> Result<Vec<DeviceFacts>, ControlError> {
                 .iter()
                 .find(|info| info.id == endpoint.id && info.direction == endpoint.direction);
             DeviceFacts {
+                active: true,
                 render: endpoint.direction == audiorouter_windows_audio::EndpointDirection::Render,
                 name: info.map_or_else(|| "Unknown audio device".into(), |info| info.name.clone()),
                 sample_rate_hz: endpoint.sample_rate_hz,
@@ -637,6 +691,34 @@ fn setup_devices() -> Result<Vec<DeviceFacts>, ControlError> {
                 id: endpoint.id,
             }
         })
+        .chain(
+            audiorouter_windows_audio::enumerate_endpoint_states()
+                .map_err(audio_control_error)?
+                .into_iter()
+                .filter(|endpoint| {
+                    endpoint.state != audiorouter_windows_audio::EndpointState::Active
+                })
+                .map(|endpoint| {
+                    let info = display.iter().find(|info| {
+                        info.id == endpoint.id && info.direction == endpoint.direction
+                    });
+                    DeviceFacts {
+                        id: endpoint.id,
+                        active: false,
+                        render: endpoint.direction
+                            == audiorouter_windows_audio::EndpointDirection::Render,
+                        name: info.map_or_else(
+                            || "Unknown audio device".into(),
+                            |info| info.name.clone(),
+                        ),
+                        sample_rate_hz: 0,
+                        channels: 0,
+                        is_float32: false,
+                        channel_mask: 0,
+                        cable_key: None,
+                    }
+                }),
+        )
         .collect())
 }
 

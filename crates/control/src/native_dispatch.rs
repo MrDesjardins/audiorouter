@@ -224,8 +224,12 @@ impl ControlPlane {
         }
         let defaults = audiorouter_windows_audio::enumerate_default_endpoint_bindings()
             .map_err(audio_control_error)?;
-        let display_info = audiorouter_windows_audio::enumerate_active_endpoint_display_info()
-            .map_err(audio_control_error)?;
+        let display_info = if include_inactive {
+            audiorouter_windows_audio::enumerate_endpoint_display_info()
+        } else {
+            audiorouter_windows_audio::enumerate_active_endpoint_display_info()
+        }
+        .map_err(audio_control_error)?;
         let endpoint_states = include_inactive
             .then(audiorouter_windows_audio::enumerate_endpoint_states)
             .transpose()

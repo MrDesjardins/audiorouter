@@ -154,6 +154,8 @@ impl ControlPlane {
     pub(crate) fn native_worker_attached_to(&self, session_id: &EntityId) -> bool {
         self.native_endpoint_session.as_ref() == Some(session_id)
             || self.native_endpoint_session_secondary.as_ref() == Some(session_id)
+            || self.native_output_fanout_session.as_ref() == Some(session_id)
+            || self.cable_route_prepared_for(session_id)
             || {
                 #[cfg(windows)]
                 {

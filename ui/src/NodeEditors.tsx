@@ -1,5 +1,5 @@
 // Property editors of the selected node (moved from App.tsx).
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import type { Node, NodeKind, PluginParametersResult } from "@audiorouter/contracts";
 import { formatUiError, type ApplicationRow, type UiBackend } from "./backend";
 import type { DeviceListItem } from "@audiorouter/contracts";
@@ -15,6 +15,7 @@ import { SliderField } from "./Slider";
 import { AdvancedEqEditor } from "./AdvancedEqEditor";
 import { EqBackendContext, PluginParameterContext } from "./appContext";
 import { deviceChoiceLabel, sortDevicesAlphabetically } from "./endpointBinding";
+import { scrollBehavior } from "./reducedMotion";
 import { useHiddenDevices, visibleDevices } from "./hiddenDevices";
 import type { VirtualCableStatus } from "@audiorouter/contracts";
 import { cableEndpointName, cableUnavailableReason } from "./virtualCableStatus";
@@ -767,13 +768,15 @@ export function PhysicalInputBinding({
   disabled,
   onChange,
   onRefresh,
+  focusRequest = 0,
   surround = false,
 }: {
   devices: DeviceListItem[];
   value: string;
   disabled: boolean;
-  onChange: (value: string) => void;
+  onChange: (value: string, name: string) => void;
   onRefresh: () => void;
+  focusRequest?: number;
   surround?: boolean;
 }) {
   const hidden = useHiddenDevices();
@@ -805,19 +808,46 @@ export function PhysicalInputBinding({
   );
   const surroundPlayback = playback.visible;
   const hiddenCount = capture.hiddenCount + playback.hiddenCount;
+  const bindingRef = useRef<HTMLDivElement>(null);
+  const selectRef = useRef<HTMLSelectElement>(null);
+  useEffect(() => {
+    if (focusRequest === 0) return;
+    const container = bindingRef.current;
+    const selector = selectRef.current;
+    if (!container || !selector) return;
+    container.scrollIntoView?.({ block: "center", behavior: scrollBehavior() });
+    if (selector.disabled) container.focus({ preventScroll: true });
+    else selector.focus({ preventScroll: true });
+    container.classList.add("is-focus-target");
+    const timeout = window.setTimeout(() => container.classList.remove("is-focus-target"), 2400);
+    return () => window.clearTimeout(timeout);
+  }, [focusRequest]);
   return (
-    <div className="node-binding-editor" aria-label="Input device binding">
+    <div ref={bindingRef} className="node-binding-editor" aria-label="Input device binding" tabIndex={-1}>
       <div>
         <p className="eyebrow">Capture source</p>
         <strong>Choose a microphone, input, or virtual capture bus</strong>
       </div>
       <select
+        ref={selectRef}
         aria-label="Input device endpoint"
         value={value}
         disabled={disabled || activeCapture.length === 0}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          const device =
+            activeCapture.find((item) => item.id === event.target.value) ??
+            surroundPlayback.find((item) => item.id === event.target.value);
+          if (device) onChange(device.id, device.name);
+        }}
       >
         <option value="">Choose an input device</option>
+        {value &&
+          !activeCapture.some((device) => device.id === value) &&
+          !surroundPlayback.some((device) => device.id === value) && (
+            <option value={value} disabled>
+              Previously selected input is unavailable — choose an active device
+            </option>
+          )}
         {surroundPlayback.length > 0 ? (
           <optgroup label="Recording devices">
             {activeCapture.map((device) => (

@@ -806,6 +806,9 @@ export interface SetupFinding {
   nodeName?: string;
   deviceId?: string;
   deviceName?: string;
+  /** One active capture endpoint with an exact friendly-name match; proposal only. */
+  suggestedEndpointId?: string;
+  suggestedEndpointName?: string;
   /** The other session of a loop across sessions. */
   otherSessionId?: string;
   message: string;
@@ -2035,6 +2038,7 @@ export type MethodParams = {
     baseRevision: number;
     idempotencyKey: string;
     acknowledgments?: string[] | null;
+    requireStoppedSessionId?: EntityId;
   };
   "session.start": { sessionId: EntityId; idempotencyKey?: string; candidate?: Session };
   "sessions.start": { sessionId: EntityId; idempotencyKey?: string; candidate?: Session };

@@ -8378,8 +8378,8 @@ pub fn enumerate_default_endpoint_bindings() -> Result<Vec<DefaultEndpointBindin
     }
 }
 
-/// Read bounded friendly names for the active endpoint snapshot. Names are
-/// presentation only and never participate in endpoint identity or binding.
+/// Read bounded friendly names for active and inactive endpoint records. Names
+/// are presentation/recovery hints only; exact endpoint IDs remain primary.
 pub fn enumerate_active_endpoint_display_info() -> Result<Vec<EndpointDisplayInfo>, AudioError> {
     // SAFETY: CoInitializeEx takes no pointers. CoUninitialize runs only after it
     // succeeded, and only after the helper has returned and released every COM
@@ -8390,7 +8390,24 @@ pub fn enumerate_active_endpoint_display_info() -> Result<Vec<EndpointDisplayInf
             windows::Win32::System::Com::COINIT_MULTITHREADED,
         );
         initialized.ok()?;
-        let result = enumerate_display_info_after_com_init();
+        let result = enumerate_display_info_after_com_init(true);
+        windows::Win32::System::Com::CoUninitialize();
+        result
+    }
+}
+
+/// Read friendly names for all endpoint records, including inactive endpoints
+/// whose IDs may still identify a temporarily unplugged device.
+pub fn enumerate_endpoint_display_info() -> Result<Vec<EndpointDisplayInfo>, AudioError> {
+    // SAFETY: COM initialization is balanced; the helper releases interfaces
+    // and copies property strings before returning.
+    unsafe {
+        let initialized = windows::Win32::System::Com::CoInitializeEx(
+            None,
+            windows::Win32::System::Com::COINIT_MULTITHREADED,
+        );
+        initialized.ok()?;
+        let result = enumerate_display_info_after_com_init(false);
         windows::Win32::System::Com::CoUninitialize();
         result
     }
@@ -9211,7 +9228,9 @@ unsafe fn enumerate_defaults_after_com_init() -> Result<Vec<DefaultEndpointBindi
     Ok(bindings)
 }
 
-unsafe fn enumerate_display_info_after_com_init() -> Result<Vec<EndpointDisplayInfo>, AudioError> {
+unsafe fn enumerate_display_info_after_com_init(
+    active_only: bool,
+) -> Result<Vec<EndpointDisplayInfo>, AudioError> {
     use windows::Win32::Devices::FunctionDiscovery::{
         PKEY_Device_DeviceDesc, PKEY_Device_DriverInfSection, PKEY_Device_FriendlyName,
     };
@@ -9229,8 +9248,15 @@ unsafe fn enumerate_display_info_after_com_init() -> Result<Vec<EndpointDisplayI
         (EndpointDirection::Capture, eCapture),
         (EndpointDirection::Render, eRender),
     ] {
+        let state_mask = if active_only {
+            DEVICE_STATE_ACTIVE
+        } else {
+            windows::Win32::Media::Audio::DEVICE_STATE(
+                windows::Win32::Media::Audio::DEVICE_STATEMASK_ALL,
+            )
+        };
         let devices = enumerator
-            .EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE)
+            .EnumAudioEndpoints(flow, state_mask)
             .map_err(inventory_operation("inventory.enumerateActiveEndpoints"))?;
         for index in 0..devices
             .GetCount()

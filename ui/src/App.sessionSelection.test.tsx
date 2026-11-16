@@ -1,9 +1,16 @@
 /** @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { AudioRouterRpcError, type EventsSubscribeResult, type Session, type StateEvent } from "@audiorouter/contracts";
+import {
+  AudioRouterRpcError,
+  type EventsSubscribeResult,
+  type Session,
+  type SetupCheckResult,
+  type StateEvent,
+} from "@audiorouter/contracts";
 import { App } from "./App";
 import { createDisconnectedBackend } from "./backend";
+import { rememberDeviceNames } from "./endpointBinding";
 import { demoSession } from "./fixtures";
 
 /** An error the backend answered with, as opposed to no answer at all. */
@@ -85,14 +92,124 @@ async function backendWithSavedActiveSession() {
       })),
     ),
   };
-  return { backend, active: () => active };
+  return { backend, active: () => active, sessions };
 }
 
 describe("startup session selection", () => {
+  it("rebinds all four matching inputs across ten stopped saved sessions without starting audio", async () => {
+    const { backend, sessions } = await backendWithSavedActiveSession();
+    const affectedSessionIds = ["main-session", "missing-voice-2", "missing-voice-3", "missing-voice-4"];
+    for (const id of [
+      ...affectedSessionIds.slice(1),
+      "saved-5",
+      "saved-6",
+      "saved-7",
+      "saved-8",
+      "saved-9",
+      "saved-10",
+    ]) {
+      sessions[id] = { ...structuredClone(sessions["main-session"]), id, name: id, revision: 50 };
+    }
+    for (const id of affectedSessionIds) {
+      const input = sessions[id].nodes.find((node) => node.kind === "physicalInput")!;
+      input.parameters = { endpointId: "old-mic-id" };
+    }
+    const oldDevice = {
+      id: "old-mic-id",
+      name: "Studio Microphone",
+      direction: "capture" as const,
+      state: "active" as const,
+      defaultRoles: [],
+      format: {
+        sampleRateHz: 48000,
+        channels: 1,
+        bitsPerSample: 32,
+        formatTag: 3,
+        isFloat32: true,
+        bytesPerFrame: 4,
+      },
+      periods: { default100ns: 100000, minimum100ns: 30000 },
+    };
+    rememberDeviceNames([oldDevice]);
+    const planned = new Map<string, Session>();
+    const candidate = vi.fn(async (session: Session) => session);
+    backend.planGraph = vi.fn(async (session: Session) => {
+      await candidate(session);
+      const planId = `name-rebind-${session.id}`;
+      planned.set(planId, session);
+      return {
+        planId,
+        baseRevision: session.revision,
+        expiresInMs: 300_000,
+        diff: [],
+        affectedDestinations: [],
+        warnings: [],
+        requiredScopes: [],
+      };
+    });
+    const commit = vi.fn(async (planId: string) => {
+      const session = planned.get(planId)!;
+      sessions[session.id] = { ...session, revision: session.revision + 1 };
+      return { sessionId: session.id, revision: session.revision + 1 };
+    });
+    backend.commitGraph = commit;
+    backend.listDevices = vi.fn(async () => [{ ...oldDevice, id: "new-mic-id", name: "studio microphone" }]);
+    const startSession = vi.spyOn(backend, "startSession");
+    const stopSession = vi.spyOn(backend, "stopSession");
+    backend.checkSetup = vi.fn<() => Promise<SetupCheckResult>>(async () => ({
+      sessionsChecked: Object.keys(sessions).length,
+      devicesChecked: 1,
+      truncated: 0,
+      notChecked: [],
+      findings: affectedSessionIds.map((sessionId) => ({
+        code: "deviceMissing" as const,
+        severity: "problem" as const,
+        sessionId,
+        sessionName: sessions[sessionId].name,
+        nodeId: sessions[sessionId].nodes[0].id,
+        nodeName: sessions[sessionId].nodes[0].name,
+        deviceId: "old-mic-id",
+        suggestedEndpointId: "new-mic-id",
+        suggestedEndpointName: "studio microphone",
+        message: "The selected device is not active.",
+        fix: "Use the suggested input.",
+      })),
+    }));
+    render(<App backend={backend} />);
+    await waitFor(() => expect(commit).toHaveBeenCalledTimes(4), { timeout: 30_000 });
+    expect(candidate).toHaveBeenCalledTimes(4);
+    for (const id of affectedSessionIds) {
+      expect(sessions[id].nodes.find((node) => node.kind === "physicalInput")?.parameters.endpointId).toBe(
+        "new-mic-id",
+      );
+    }
+    expect(startSession).not.toHaveBeenCalled();
+    expect(stopSession).not.toHaveBeenCalled();
+    expect(screen.getByText(/route remains stopped/i)).toBeTruthy();
+  }, 15_000);
+
   it("opens a setup finding by node ID and focuses Properties without stopping audio", async () => {
     const { backend } = await backendWithSavedActiveSession();
+    backend.listDevices = vi.fn(async () => [
+      {
+        id: "test-microphone",
+        name: "Test microphone",
+        direction: "capture" as const,
+        state: "active" as const,
+        defaultRoles: [],
+        format: {
+          sampleRateHz: 48000,
+          channels: 1,
+          bitsPerSample: 32,
+          formatTag: 3,
+          isFloat32: true,
+          bytesPerFrame: 4,
+        },
+        periods: { default100ns: 100000, minimum100ns: 30000 },
+      },
+    ]);
     const stopSession = vi.fn(backend.stopSession);
-    const node = demoSession.nodes[1];
+    const node = demoSession.nodes[0];
     render(
       <App
         backend={{
@@ -127,9 +244,51 @@ describe("startup session selection", () => {
     await waitFor(() =>
       expect(screen.getByRole("tab", { name: /Properties/ }).getAttribute("aria-selected")).toBe("true"),
     );
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("tab", { name: /Properties/ })));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("Input device endpoint")));
+    expect(document.querySelector(".node-binding-editor.is-focus-target")).toBeTruthy();
     expect(stopSession).not.toHaveBeenCalled();
     expect(screen.getByText(/Opened the affected tool/)).toBeTruthy();
+  }, 15_000);
+
+  it("focuses the input binding panel without opening the select when audio is running", async () => {
+    const { backend } = await backendWithSavedActiveSession();
+    const snapshot = backend.snapshot;
+    backend.snapshot = vi.fn(async (id?: string) => {
+      const value = await snapshot(id);
+      return { ...value, status: { ...value.status, activeSessionIds: ["main-session"] } };
+    });
+    const mic = demoSession.nodes[0];
+    render(
+      <App
+        backend={{
+          ...backend,
+          checkSetup: async () => ({
+            sessionsChecked: 2,
+            devicesChecked: 1,
+            truncated: 0,
+            notChecked: [],
+            findings: [
+              {
+                code: "deviceMissing",
+                severity: "problem",
+                sessionId: "main-session",
+                sessionName: "Main session",
+                nodeId: mic.id,
+                nodeName: mic.name,
+                deviceId: "old-mic",
+                message: "The selected input is missing.",
+                fix: "Stop audio and review the input.",
+              },
+            ],
+          }),
+        }}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("tab", { name: /Status/ }, { timeout: 5000 }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open affected tool" }, { timeout: 5000 }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("Input device binding")));
+    expect((screen.getByLabelText("Input device endpoint") as HTMLSelectElement).disabled).toBe(true);
+    expect(screen.getByText(/Stop audio before changing its input device/)).toBeTruthy();
   }, 15_000);
   it("opens the saved active session and does not flip between sessions", async () => {
     // A fresh WebView profile (first launch, or cleared data): nothing remembered.

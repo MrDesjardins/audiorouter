@@ -3318,7 +3318,7 @@ impl ControlPlane {
         }
         let plan = self.plan_graph(&session_id, session.revision, candidate)?;
         let key = format!("plugins.removeSidechainPort:{}", plan.as_str());
-        let commit = self.commit_graph_scoped(&plan, session.revision, &key, &key)?;
+        let commit = self.commit_graph_scoped(&plan, session.revision, &key, &key, None)?;
         Ok(json!({
             "sessionId": session_id,
             "nodeId": node_id,
@@ -3427,7 +3427,7 @@ impl ControlPlane {
                 &binding,
             )?;
             let key = format!("plugins.addSidechainPort:{}", plan.as_str());
-            let commit = self.commit_graph_scoped(&plan, session.revision, &key, &key)?;
+            let commit = self.commit_graph_scoped(&plan, session.revision, &key, &key, None)?;
             Ok(json!({
                 "sessionId": session_id,
                 "nodeId": node_id,

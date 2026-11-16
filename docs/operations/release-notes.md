@@ -35,6 +35,24 @@ input has not been heard on a real route; hardware MIDI input, a live listening
 check and the hosted 32-bit build are still to do. Roll back by installing the
 previous version; saved routes without Instrument or sidechain nodes load in
 older builds.
+- **Recover a microphone whose Windows ID changed.** Stopped saved routes can
+  recover a missing input from its remembered name when exactly one active
+  capture device matches. Audio stays stopped until Play. Missing name metadata
+  or ambiguous matches still require manual selection.
+- **Go straight to the input that needs fixing.** Open affected tool brings
+  the input selector into view, focuses it and briefly highlights it.
+
+- **See a custom theme before using it.** Settings → Appearance now shows a
+  live workspace preview while you edit a theme: a small canvas with flowing,
+  silent and paused connections, plus tool text, a field, a slider and a
+  primary action. Choosing any colour repaints the preview immediately.
+- **Contrast warnings take you to the color.** Click either color name in a
+  warning such as "Secondary text on app background" and that picker opens,
+  scrolls into view, takes focus and briefly lights up.
+- **The color picker shows the contrast line.** The saturation square now
+  dims the shades that miss the guidance and draws the boundary as a white
+  line with a dark edge. It names the worst pair and suggests a lighter or
+  darker shade when that is enough.
 
 ## 0.0.29 — 2026-11-12 (unsigned experimental preview)
 

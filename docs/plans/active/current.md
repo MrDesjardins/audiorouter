@@ -1,6 +1,50 @@
 # Active plan — current priorities (2026-11-04)
 
+## Device binding recovery — 2026-11-15
+
+Requirements CAP-02/11/12, STATE-03, UI-05/08/11/17/27, ENG-02/04.
+See [the execution plan](device-binding-recovery.md) for the owner decision,
+implementation, validation and rollback. Stopped saved sessions can recover a
+missing microphone ID from a unique exact-name match; ambiguous or uncached
+devices remain manual. Open affected tool focuses and highlights the input
+selector. Physical reboot and attended audio qualification remain open.
+
+## Theme editor live preview — 2026-11-15
+
+Main's theme preview work remains in place (UI-07/17): Settings → Appearance
+shows a scoped workspace using the edited palette. Contrast warnings open and
+focus either named colour picker, scroll it into view and flash it for 1.6 s.
+The custom picker shows a saturation/brightness square, hue slider, shaded
+failing colours and a contrast boundary. Main's validation covers UI format,
+lint/typecheck, `theme-preview.pw.ts` at both base appearances and 640 px,
+`theme-contrast.pw.ts`, and the colour/contrast unit tests. Screenshots remain
+in the Playwright results folder. Next: owner visual check in the desktop
+shell. Rollback: revert the scoped theme preview/picker, colour helpers, CSS,
+tests and release notes; no API or stored-format change.
+
 ## VST review defect fixes — owner requested
+
+Main synchronization (owner, 2026-11-16): merge `origin/main` at `16b83a432`
+into this feature branch, preserving device-binding recovery and VST hosting.
+Only release notes and this plan have textual conflicts; retain both sets of
+entries. Validate merged control code, UI typecheck/lint, contract drift,
+formatting/docs, and device-binding/plugin browser scenarios before pushing.
+Requirements PLUG-03/04/05/07, CAP-02/11/12, STATE-03, UI-17, ENG-02/04 and
+AUTO-18. Rollback: reviewed revert of this merge; no device/audio state change.
+Next: finish merge validation, commit and push; hosted CI remains required.
+
+Merged-head validation: control library 438 passed / 22 opt-in ignored;
+focused device-binding, session-selection and Plugin inspector UI tests 36/36;
+rebuilt e2e_backend and compiled browser assets, then Edge Plugin inspector,
+Sidechain and combined device UX tests 24/24 across three themes and two
+viewport sizes. Workspace and shell strict Clippy, both Rust format checks,
+UI format/lint/full typecheck, contract drift (156 methods / 38 kinds), docs
+(276 files / 1,518 links) and both staged/unstaged diff checks pass. Logs use
+`target/main-sync-*`. Updated the two sidechain commit calls with `None` for
+main's new optional stopped-session requirement, preserving their existing
+live-edit behavior. Final fetch confirms MERGE_HEAD still equals origin/main
+at `16b83a432`. No live endpoint, attended editor or new installer run. Next:
+commit/push the resolved merge and require new-head hosted CI.
 
 Remaining CI repair (owner, 2026-11-16; run 43796875006): retain all gates.
 Release now reaches a second guard that incorrectly requires x64 on the two
