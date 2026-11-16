@@ -1452,9 +1452,9 @@ impl ControlPlane {
 
     /// Whether a plugin worker of this session has stopped.
     pub(crate) fn session_has_failed_plugin(&self, id: &EntityId) -> bool {
-        self.plugin_bridges.lock().is_ok_and(|bridges| {
+        self.plugin_bridges.lock().map_or(true, |bridges| {
             bridges.iter().any(|((session, _), bridge)| {
-                session == id && bridge.upgrade().is_some_and(|bridge| bridge.failed())
+                session == id && bridge.upgrade().is_none_or(|bridge| bridge.failed())
             })
         })
     }

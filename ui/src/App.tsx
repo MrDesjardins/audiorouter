@@ -970,7 +970,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   useEffect(() => {
     if (backendPrivacyMuted !== undefined) setPrivacyMuted(backendPrivacyMuted);
   }, [backendPrivacyMuted]);
-  const availableSessions = mergeSessionInventory(listedSessions, snapshot?.session ?? null, createdSessions);
+  const savedSnapshotSession = snapshot?.session ?? null;
+  const availableSessions = useMemo(
+    () => mergeSessionInventory(listedSessions, savedSnapshotSession, createdSessions),
+    [listedSessions, savedSnapshotSession, createdSessions],
+  );
   const rememberedInputBindingKey = JSON.stringify(
     availableSessions.flatMap((saved) =>
       saved.nodes
@@ -1071,6 +1075,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const routeChanged = !sameSessionDraft(draft, session);
   const reconcileNamedInputs = useEffectEvent(async () => {
     if (!backend.connected || !setupCheck.result) return;
+    if (!setupCheck.result.findings.some((finding) => finding.code === "deviceMissing" && finding.nodeId)) return;
     if (sessionBusy.current || sessionActionBusy || graphBusy) return;
     let currentDevices: import("@audiorouter/contracts").DeviceListItem[];
     try {

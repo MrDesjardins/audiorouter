@@ -872,9 +872,20 @@ impl ControlPlane {
         };
         let require_stopped_session = params
             .get("requireStoppedSessionId")
-            .and_then(Value::as_str)
-            .filter(|id| !id.is_empty() && id.len() <= audiorouter_domain::MAX_ENTITY_ID_BYTES)
-            .map(EntityId::new);
+            .map(|value| {
+                value
+                    .as_str()
+                    .filter(|id| {
+                        !id.is_empty() && id.len() <= audiorouter_domain::MAX_ENTITY_ID_BYTES
+                    })
+                    .map(EntityId::new)
+                    .ok_or_else(|| {
+                        ControlError::InvalidRequest(
+                            "requireStoppedSessionId must be a non-empty session ID".into(),
+                        )
+                    })
+            })
+            .transpose()?;
         if candidate.as_ref().is_some_and(|candidate| {
             require_stopped_session
                 .as_ref()

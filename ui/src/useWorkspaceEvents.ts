@@ -108,16 +108,21 @@ export function useWorkspaceEvents({
           eventCursor.current.backendEpoch,
           [...WORKSPACE_EVENT_CATEGORIES],
         );
-        if (!active) return;
-        const bindingInvalidatedEvent = result.events.find((event) => event.category === "devices.bindingInvalidated");
+        if (!active || reconnectRunning()) return;
         const selectionChangedEvent = result.events.find((event) => event.category === "session.selectionChanged");
         const activeSession =
           selectionChangedEvent && backend.getActiveSession ? await backend.getActiveSession() : null;
-        if (!active) return;
+        if (!active || reconnectRunning()) return;
         const adoptedSessionId =
           activeSession?.sessionId && follow(activeSession.sessionId) ? activeSession.sessionId : session.id;
-        const recoveredEvent = result.events.find((event) => event.category === "runtime.recovered");
-        const recoveryFailedEvent = result.events.find((event) => event.category === "runtime.recoveryFailed");
+        const routeOutcome = result.events
+          .filter(
+            (event) =>
+              event.category === "devices.bindingInvalidated" ||
+              event.category === "runtime.recovered" ||
+              event.category === "runtime.recoveryFailed",
+          )
+          .at(-1);
         const bridgeEvent = result.events.find(
           (event) => event.category === "virtualBridge.failed" || event.category === "virtualBridge.expired",
         );
@@ -125,15 +130,15 @@ export function useWorkspaceEvents({
         // showed a green check and closed itself after 8 s (owner, 2026-11-07).
         // The latest outcome wins: a recovery reported in the same batch as
         // the device change that caused it.
-        if (recoveryFailedEvent) {
+        if (routeOutcome?.category === "runtime.recoveryFailed") {
           showMessage(
             markErrorMessage(
               "AudioRouter could not restart the route: the device it uses did not come back with the same identity. Check the device in Properties, then press Play.",
             ),
           );
-        } else if (recoveredEvent) {
+        } else if (routeOutcome?.category === "runtime.recovered") {
           showMessage("The audio device came back, so AudioRouter restarted the route.");
-        } else if (bindingInvalidatedEvent) {
+        } else if (routeOutcome?.category === "devices.bindingInvalidated") {
           showMessage(
             markErrorMessage(
               "An audio device this route uses was disconnected or changed, so audio stopped. AudioRouter restarts the route when the same device is back, for up to two minutes; after that, reconnect it and press Play.",
@@ -151,7 +156,7 @@ export function useWorkspaceEvents({
         }
         if (subscriptionFailed || result.resyncRequired || result.events.length > 0) {
           const nextState = await snapshotCache.refresh(backend, adoptedSessionId);
-          if (active) {
+          if (active && !reconnectRunning()) {
             updateSnapshot(nextState);
             refreshInventories();
             void backend
@@ -179,7 +184,7 @@ export function useWorkspaceEvents({
         }
       } catch (error) {
         subscriptionFailed = true;
-        if (active)
+        if (active && !reconnectRunning())
           updateSnapshot((current) => ({
             ...current,
             stale: true,

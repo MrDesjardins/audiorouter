@@ -96,6 +96,28 @@ async function backendWithSavedActiveSession() {
 }
 
 describe("startup session selection", () => {
+  it("does not enumerate inactive devices when setup has no missing-device findings", async () => {
+    const { backend } = await backendWithSavedActiveSession();
+    backend.listDevices = vi.fn(async () => []);
+    backend.checkSetup = vi.fn(async () => ({
+      sessionsChecked: 2,
+      devicesChecked: 0,
+      truncated: 0,
+      notChecked: [],
+      findings: [],
+    }));
+    const view = render(<App backend={backend} />);
+    await waitFor(() => expect(backend.checkSetup).toHaveBeenCalled());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    view.rerender(<App backend={backend} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(vi.mocked(backend.listDevices).mock.calls.filter(([includeInactive]) => includeInactive)).toHaveLength(0);
+  });
+
   it("rebinds all four matching inputs across ten stopped saved sessions without starting audio", async () => {
     const { backend, sessions } = await backendWithSavedActiveSession();
     const affectedSessionIds = ["main-session", "missing-voice-2", "missing-voice-3", "missing-voice-4"];

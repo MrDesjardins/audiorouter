@@ -600,14 +600,17 @@ export function useUpdateCheck(
   // Enabled/channel changes rebuild the visible state from the cache right
   // away, then check now when there is no fresh answer for this version.
   useEffect(() => {
+    // A request's cached fallback and retry history belong to its original
+    // channel. Retire it before starting a check for the new preference,
+    // including when a fetcher finishes after ignoring AbortSignal.
+    const active = controllerRef.current;
+    if (active) {
+      active.cancelled = true;
+      active.controller.abort();
+    }
+    controllerRef.current = null;
+    checkingRef.current = null;
     if (!enabled) {
-      const active = controllerRef.current;
-      if (active) {
-        active.cancelled = true;
-        active.controller.abort();
-      }
-      controllerRef.current = null;
-      checkingRef.current = null;
       clearUpdateCache();
       setState(offData());
       return;

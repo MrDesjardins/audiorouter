@@ -76,6 +76,16 @@ describe("physical input name recovery", () => {
     expect(findReplacementCaptureEndpoint([input("new-id", "Studio Mic")], "old-id", "studio mic")?.id).toBe("new-id");
   });
 
+  it("does not suggest a different endpoint when the exact saved ID is active again", () => {
+    rememberDeviceNames([input("old-id", "Studio Microphone")]);
+    expect(
+      findReplacementCaptureEndpoint(
+        [input("old-id", "Studio Microphone"), input("new-id", "Studio Microphone")],
+        "old-id",
+      ),
+    ).toBeNull();
+  });
+
   it("remembers a manually confirmed replacement name for sibling saved sessions", () => {
     rememberDeviceNameBinding("old-id", "Studio Mic", "capture");
     expect(findReplacementCaptureEndpoint([input("new-id", "studio mic")], "old-id")?.id).toBe("new-id");

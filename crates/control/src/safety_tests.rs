@@ -874,3 +874,36 @@ fn the_running_witness_lists_playing_sessions_without_recordings() {
     assert!(response.error.is_none(), "{:?}", response.error);
     assert!(witness.lock().unwrap().is_empty());
 }
+
+#[test]
+fn recovery_witness_drops_a_route_when_its_plugin_bridge_disappears() {
+    let mut plane = ControlPlane::default();
+    let value = session();
+    let id = value.id.clone();
+    plane.insert_session(value).unwrap();
+    plane.session_start(&id).unwrap();
+    let witness = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    plane.set_running_witness(witness.clone());
+    assert_eq!(*witness.lock().unwrap(), vec![id.clone()]);
+    plane
+        .plugin_bridges
+        .lock()
+        .unwrap()
+        .insert((id, EntityId::new("failed-plugin")), std::sync::Weak::new());
+    plane.service_running_native_audio(Instant::now());
+    assert!(witness.lock().unwrap().is_empty());
+}
+
+#[cfg(windows)]
+#[test]
+fn sleep_never_arms_recovery_for_an_unavailable_plugin() {
+    let mut plane = ControlPlane::default();
+    let id = running_multi_path_route(&mut plane);
+    plane
+        .plugin_bridges
+        .lock()
+        .unwrap()
+        .insert((id, EntityId::new("failed-plugin")), std::sync::Weak::new());
+    plane.handle_os_transition(OsTransition::Sleep).unwrap();
+    assert!(plane.sleep_route_recovery.is_none());
+}
