@@ -204,13 +204,15 @@ impl KeybindDispatch {
         })
     }
 
-    fn enqueue(&self, invocation: KeybindInvocation) {
+    /// Returns false only when a press was dropped because the queue is full.
+    /// The caller must then leave that input unswallowed.
+    fn enqueue(&self, invocation: KeybindInvocation) -> bool {
         let Ok(mut items) = self.items.lock() else {
-            return;
+            return false;
         };
         if items.len() >= DISPATCH_CAPACITY {
             if !invocation.release {
-                return;
+                return false;
             }
             if let Some(index) = items.iter().position(|queued| !queued.release) {
                 items.remove(index);
@@ -218,6 +220,7 @@ impl KeybindDispatch {
         }
         items.push_back(invocation);
         self.available.notify_one();
+        true
     }
 
     fn recv(&self) -> Option<KeybindInvocation> {
@@ -256,6 +259,29 @@ fn select_invocations(
         .into_iter()
         .filter(|invocation| invocation.release)
         .collect()
+}
+
+/// Queue the matcher's invocations and report what the hook must do with the
+/// original input event.
+///
+/// A press the full queue rejects never reaches the backend, so the key must
+/// not be swallowed: blocking it would drop the user's input entirely. Its
+/// recorded hold is cancelled too, or the key-up would be swallowed after a
+/// press that never ran and the foreground app would see a key held down.
+fn dispatch_invocations(
+    queue: &KeybindDispatch,
+    suspended: bool,
+    invocations: Vec<KeybindInvocation>,
+    swallow: bool,
+) -> (bool, Vec<String>) {
+    let mut dropped = Vec::new();
+    for invocation in select_invocations(suspended, invocations) {
+        let rule_id = invocation.rule_id.clone();
+        if !queue.enqueue(invocation) {
+            dropped.push(rule_id);
+        }
+    }
+    (!suspended && swallow && dropped.is_empty(), dropped)
 }
 
 /// Parse a trigger string such as `"Control+Shift+F1"` or `"Mouse4"` into
@@ -484,6 +510,18 @@ impl HookMatcherState {
                 });
             }
             (invocations, swallow)
+        }
+    }
+
+    /// Forget the hold a dropped press recorded, so its key-up produces no
+    /// release invocation and is not swallowed.
+    fn cancel_press(&mut self, code: TriggerCode, rule_id: &str) {
+        let Some(holds) = self.active_holds.get_mut(&code) else {
+            return;
+        };
+        holds.retain(|(held_rule, _, _)| held_rule != rule_id);
+        if holds.is_empty() {
+            self.active_holds.remove(&code);
         }
     }
 }
@@ -856,10 +894,16 @@ mod windows_hook {
             }
             state.handle_event(code, is_down, rules_slice)
         });
-        for invocation in select_invocations(suspended, invocations) {
-            ctx.queue.enqueue(invocation);
+        let (swallow, dropped) = dispatch_invocations(&ctx.queue, suspended, invocations, swallow);
+        if !dropped.is_empty() {
+            MATCHER_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                for rule_id in &dropped {
+                    state.cancel_press(code, rule_id);
+                }
+            });
         }
-        !suspended && swallow
+        swallow
     }
 
     unsafe extern "system" fn keyboard_hook_proc(
@@ -1121,6 +1165,33 @@ mod tests {
         }
         assert_eq!(last.rule_id, "held");
         assert!(last.release);
+    }
+
+    #[test]
+    fn a_dropped_press_is_not_swallowed_and_leaves_no_hold() {
+        let rules =
+            compile_rules(&[sample_rule("hold-1", "F1", KeybindMode::Hold, false)]).unwrap();
+        let mut state = HookMatcherState::default();
+        let queue = KeybindDispatch::new();
+        for index in 0..DISPATCH_CAPACITY {
+            queue.enqueue(invocation(&index.to_string(), false));
+        }
+
+        let (pressed, swallow) = state.handle_event(TriggerCode::Keyboard(0x70), true, &rules);
+        assert!(swallow, "the matcher wants to block this key");
+        let (swallow, dropped) = dispatch_invocations(&queue, false, pressed, swallow);
+        assert!(!swallow, "a key whose action never ran must reach the app");
+        assert_eq!(dropped, vec!["hold-1".to_owned()]);
+
+        for rule_id in &dropped {
+            state.cancel_press(TriggerCode::Keyboard(0x70), rule_id);
+        }
+        let (released, swallow) = state.handle_event(TriggerCode::Keyboard(0x70), false, &rules);
+        assert!(
+            released.is_empty(),
+            "the dropped press must not deliver a release"
+        );
+        assert!(!swallow, "the key-up must not be blocked after its press");
     }
 
     #[test]
