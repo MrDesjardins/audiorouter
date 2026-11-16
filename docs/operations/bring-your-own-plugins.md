@@ -271,6 +271,9 @@ press Play.
   only**, **Every connected MIDI keyboard**, or one keyboard by name. A keyboard
   that is not plugged in is never swapped for another one: the choice stays and
   is marked "not connected".
+  If a keyboard is unplugged, stop and play the route again after reconnecting
+  it to open a new connection. If Windows lists several keyboards with the same
+  name, AudioRouter cannot distinguish them and leaves that choice disconnected.
 - **On-screen keyboard.** Two octaves, enabled while the route plays. **Stop all
   notes** silences anything ringing, and leaving the panel releases held keys.
 - **Scripts and assistants.** `midi.devices` lists keyboards and what each

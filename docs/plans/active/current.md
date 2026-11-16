@@ -1,5 +1,182 @@
 # Active plan — current priorities (2026-11-04)
 
+## Release readiness repairs — 2026-11-16
+
+Objective: integrate Dependabot PRs #155, #156 and #157 on current main and
+repair the prioritized release review findings. Requirements: PLUG-05,
+STATE-10/11, CAP-11, ENG-02/04 and MIDI/instrument routing. Branch
+`fix/release-readiness-2026-11-16` starts at main `6d0deb9b`; merged exact
+heads `da95493f`, `2b30e2ed` and `33aa20b9`. Preserve untracked build output.
+
+Tasks: reproduce failed sidechain recovery eligibility, disconnected or
+ambiguous MIDI inputs and cancellation of timed sequences; repair and test
+the owning boundaries. Verify the three dependency updates, focused and broad
+tests, contract drift, Rust/UI formatting and lint, Clippy, docs, and inspect
+the complete diff. Windows hardware MIDI, physical audio/sleep, installer
+and driver qualification remain distinct gates; do not alter the owner's live
+audio. Rollback: revert scoped fixes and dependency merge commits. No new PR
+is authorized by the request to integrate existing PRs.
+
+Fixes: sidechain bridge failure and vanished bridge state now block automatic
+sleep/device/backend recovery, with a regression that failed before the fix.
+Timed MIDI sequences check cancellation at intervals of at most 20 ms while
+waiting; their eight global
+slots are released promptly. A returned MIDI name cannot revive a stale
+handle, and duplicate names are rejected rather than choosing the first device.
+Tests cover canceled capacity, disconnect/reappearance, ambiguous names and
+the real sidechain recovery witness/sleep boundaries. Restarting the route
+opens fresh MIDI connections; real unplug/replug remains unverified.
+
+Windows results: npm ci installed the exact merged UI dependencies with zero
+audit vulnerabilities; Node 22.22.3 meets their declared floors. UI 125 files /
+1,112 tests, lint, format, all-source typecheck and production build passed
+(647.15 kB main bundle advisory). Control library passed with 22 opt-in ignores;
+storage 113 passed / 1 ignored; shell 114 passed / 4 ignored; source and tool
+combinations 6 each; real MCP stdio 5; focused MIDI 13 and Windows MIDI 4.
+Both all-feature/all-target strict Clippy runs and Rust format checks pass.
+Contracts drift (156 methods, 38 kinds), docs validation and diff checks pass.
+The WASAPI probe lockfile passes `cargo check --locked` with rusqlite 0.42.0.
+The merged shell resolves zip 9.5.1. `tools/build-desktop.ps1 -Profile debug`
+built the shell, CLI and four x64/x86 workers with the new dependencies and
+fresh UI. The isolated fresh-install shell/pipe test passed: backend ready in
+135 ms, no device permission granted to the raw client. This does not exercise
+actual audio, a plugin UI or a packaged installer. No audio hardware, driver
+install, signed artifact, installer or production database was changed.
+
+App-only release preparation (Windows, source commit `20503e066`): the first
+attempt in the original checkout correctly rejected its three pre-existing
+untracked artifacts. Created isolated worktree
+`C:/code/audiorouter-release-readiness-check` at the same commit, installed
+locked UI dependencies and the pinned VST3 SDK, then ran
+`tests/acceptance/m08-release.ps1 -AppOnly`: unsigned 23 MiB NSIS bundle and
+all release artifact verification passed. An initial SDK copy lacked Git
+provenance and was correctly rejected; the pinned installer obtained the real
+checkout and its submodules before the successful run. The fresh-install pipe
+test against the built release shell passed with an isolated database and
+WebView profile (84 ms to backend response, raw device consent denied).
+This smoke did not run the installer or open audio devices.
+The acceptance script cleans its temporary artifact output afterward; no
+installer is being handed off as a release candidate from this run.
+
+VM automation follow-up (2026-11-16): cloned `01-clean-windows` from
+`AR-DriverTest` into the separate full clone `AR-ReleaseQualification-20261116`
+under `C:/VMs`, leaving the source and its snapshots intact. Host audio is
+disabled for the clone. A retained app-only candidate from source `20503e066`
+was prepared and verified at `%TEMP%/audiorouter-vm-candidate-23873d955dd54ae7bf36582539be96f2`;
+its NSIS SHA-256 is `4ac481cac4fabb7f8e9e507f66dd65a4db74efa78369352a6d9ebcee575663c1`.
+The clean snapshot lacked Guest Additions; version 7.2.20 was installed in
+the clone. Its first restart lost the guest heartbeat and needed a reset;
+guest control then worked. Created `arrelease` in the clone and verified its
+medium-integrity token belongs to Users, not Administrators. Guest hash matched
+the candidate. Silent standard-user fresh install passed; the installed CLI
+imported `tests/fixtures/valid-session.json` into the real default
+`%LOCALAPPDATA%/AudioRouter/state.sqlite`. The published 0.0.29 installer,
+SHA-256 `f2c43d115f04fdef00f55ef96862eba41d581464db24785cde5f69755ba209d8`
+(matching its release manifest and guest copy), silently downgraded the app;
+the installed 0.0.29 CLI read the fixture. The candidate silently upgraded it
+to 0.0.30 and read the same fixture. Silent uninstall preserved the database,
+and candidate reinstall read the fixture again. These steps were driven with
+VirtualBox guest-control commands, not yet a reusable test harness. No audio
+device was used. The first registry lookup did not locate the uninstall key;
+registration/removal was not established. No recording or missing-WebView2
+case was tested. The clone was asked to shut down after the test.
+
+Next make the guest-control sequence repeatable with retained structured logs,
+snapshot the prepared baseline, and extend it to registration, real recording
+retention, repair and missing-WebView2 cases. A VM does
+not replace the required physical-device, endurance and second-Windows-build
+evidence. Roll back VM preparation by restoring its own baseline; do not alter
+the source VM.
+
+Automation task (DIST-02/08, NFR-16): use a dedicated disposable guest and a
+fresh non-administrator account; guard its initial state and both installer
+hashes; test install, repair, downgrade, upgrade, uninstall and database and
+recording preservation with bounded guest commands and retained evidence.
+Verify registration only when the user's registry hive is actually loaded.
+Keep credentials out of logs and source; snapshot before exercising the guest.
+Run the harness and its negative guards, inspect results, and document missing
+WebView2 and interactive shell limitations. Rollback: restore this clone's
+own snapshot or revert the harness changes; never touch the source VM.
+
+Unattended continuation: create a dedicated, signed-in standard-user saved
+state, then add a bounded wrapper that verifies the exact disposable VM UUID,
+requires it powered off, restores the specified snapshot, starts it, waits for
+the expected guest login, runs the lifecycle harness and requests graceful
+shutdown. Retain step outcomes even on failure; do not force-stop a stuck guest
+or modify another VM. Validate with a full restore/run and negative identity
+guard. The snapshot contains a live guest session and must remain private.
+
+Unattended results (2026-11-16): snapshot `lifecycle-ready-20261116`
+(`74a7f354-c6c4-4be1-ac2d-81a734c08996`) contains fresh standard user
+`arqual4` signed in. The first restore, lifecycle and graceful shutdown passed;
+evidence `%TEMP%/ar-unattended-lifecycle-20261116/result.json`. A repeat hung
+inside VBoxManage guest control and needed its owned process stopped. A third
+run passed the guest lifecycle but initially revealed a null child exit code;
+the wrapper retains the process handle to fix it. A fourth hit the same guest
+control hang, and the 120-second host timeout stopped only its owned process
+tree and shut down the VM; evidence `%TEMP%/ar-unattended-lifecycle-20261116-final/result.json`.
+The corrected success path has not completed a full rerun; do not treat this
+intermittent VirtualBox setup as a reliable gate. The wrong-snapshot identity
+guard passed. Next investigate guest-control stalls after restoring saved state,
+and qualify a repeatable timeout/recovery path before claiming unattended CI.
+Missing-WebView2 and application-captured-recording cases remain open.
+
+Automation result: `tools/vm/installer-lifecycle.ps1` and its guest companion
+passed on the independent Windows 11 clone under `arqual3`, a medium-integrity
+non-administrator signed into the guest desktop. Snapshot
+`pre-harness-20261116` (`31d9cb3b-05b4-48b3-ae9f-97a016cbe17f`) preserves the
+clone before the harness accounts; it is not a clean preinstalled-tools baseline.
+The harness passed fresh install, session import, same-version reinstall,
+rollback to 0.0.29, upgrade to 0.0.30, uninstall and reinstall, checking
+registration and preserving the real default database plus generated WAV hash
+through each step. Evidence: `%TEMP%/ar-lifecycle-qualification-20261116-3/result.json`.
+Repeat staging and host hash rejection guards passed. An initial attempt showed
+PowerShell returns before a GUI installer finishes; the harness now waits for
+the process tree. Another attempt found that VirtualBox guest-control alone
+does not load the account's HKCU hive; preflight now requires the actual user
+hive, and the passing run used a desktop sign-in. These earlier failures and
+their evidence remain in `%TEMP%/ar-lifecycle-qualification-20261116` and
+`%TEMP%/ar-lifecycle-qualification-20261116-2`. The WAV is a generated file,
+not a captured application recording. Snapshot/user setup and desktop sign-in
+are separate, and absent WebView2, actual recording capture, installer UI and
+other hardware/release gates are not covered. Usage and rollback are documented
+in `docs/operations/release-qualification.md`.
+
+The packaged WebView2 smoke also passed against that release shell on Windows
+11 as a standard user, with isolated database and browser profile: native
+bridge, stopped first launch, canvas, session save and restart passed, with no
+uncaught UI errors and both child processes exiting cleanly. Evidence:
+`%TEMP%/audiorouter-release-readiness-ui-f26f94aff31d4934aad2692b95be74e0/result.json`.
+The result's Git SHA describes the invoking checkout (`91045374a`); the shell
+was built from `20503e066` and has SHA-256
+`64b7648a9a0859d1b9d7e80f234a0d5cc7c0571176835d55091e66b62c0bef8a`.
+
+UDP follow-up: on Windows, `cargo test -p audiorouter-windows-audio
+plays_back_continuously -- --nocapture --test-threads=1` passed both paired and
+unpaired loopback tests with zero discontinuities and underruns while one
+bounded CPU-load job ran. This does not reproduce or resolve the earlier
+failures under heavier concurrent build/test load; that risk remains open.
+
+Stream Deck `npm ci` reports two low advisories: build-only
+`@rollup/plugin-node-resolve` 16.0.3 depends on `deepmerge` 4.3.1
+(GHSA-gcqx-w48m-w2h4). npm's offered fix is a major-version downgrade to 7.1.3;
+it is not applied blindly. `npm audit --omit=dev --audit-level=low` reports zero
+production vulnerabilities. Rollup also reports two Zod PURE-comment notices;
+the Stream Deck typecheck, 35 tests, validation and packaging pass. The UI
+build's 647.15 kB main-chunk advisory remains recorded above.
+
+Remaining M08 gates: candidate installer install/upgrade/rollback/uninstall and
+data retention on a clean standard-user Windows system, WebView2 absence, real
+MIDI unplug/replug and duplicate names, sidechain plugin failure on a protected
+voice path, sleep/device recovery, and current-head CI. UDP continuity under
+concurrent load remains unqualified after the earlier intermittent failures.
+The separate older installer qualification VM is not registered here; the
+new isolated clone provides the limited lifecycle evidence above.
+Next: complete the remaining M08 gates on isolated systems, then review
+the complete branch and current-head CI; do not call the candidate release-ready
+until those gates have evidence. The isolated worktree remains in place and
+must be removed only with the prescribed merged-worktree cleanup script.
+
 ## Three-day code review and repairs — 2026-11-15
 
 Owner requested a full review of the November 12–15 changes, priority-ranked

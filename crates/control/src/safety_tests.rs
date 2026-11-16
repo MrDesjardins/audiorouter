@@ -907,3 +907,24 @@ fn sleep_never_arms_recovery_for_an_unavailable_plugin() {
     plane.handle_os_transition(OsTransition::Sleep).unwrap();
     assert!(plane.sleep_route_recovery.is_none());
 }
+
+#[cfg(windows)]
+#[test]
+fn recovery_witness_excludes_an_unavailable_sidechain_worker() {
+    let mut plane = ControlPlane::default();
+    let value = session();
+    let id = value.id.clone();
+    plane.insert_session(value).unwrap();
+    plane.session_start(&id).unwrap();
+    let witness = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    plane.set_running_witness(witness.clone());
+    plane.sidechain_bridges.lock().unwrap().insert(
+        (id.clone(), EntityId::new("sidechain")),
+        std::sync::Weak::new(),
+    );
+    plane.service_running_native_audio(Instant::now());
+    assert!(witness.lock().unwrap().is_empty());
+    plane.native_multi_input_worker_session = Some(id);
+    plane.handle_os_transition(OsTransition::Sleep).unwrap();
+    assert!(plane.sleep_route_recovery.is_none());
+}

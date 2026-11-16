@@ -292,8 +292,11 @@ pub(crate) fn play_events(
                 let started = Instant::now();
                 for (at, event) in timeline {
                     let due = started + std::time::Duration::from_millis(at);
-                    if let Some(wait) = due.checked_duration_since(Instant::now()) {
-                        std::thread::sleep(wait);
+                    while let Some(wait) = due.checked_duration_since(Instant::now()) {
+                        if queue_for_thread.schedule_generation() != Some(generation) {
+                            return;
+                        }
+                        std::thread::sleep(wait.min(std::time::Duration::from_millis(20)));
                     }
                     if queue_for_thread.push_scheduled(generation, &[event]) == 0 {
                         break;
@@ -342,13 +345,26 @@ fn midi_connection_is_open(
         MidiSource::All => {
             !available_names.is_empty()
                 && opened_names.len() == available_names.len()
-                && available_names
-                    .iter()
-                    .all(|available| opened_names.iter().any(|opened| opened == available))
+                && available_names.iter().all(|available| {
+                    opened_names
+                        .iter()
+                        .filter(|opened| *opened == available)
+                        .count()
+                        == 1
+                        && available_names
+                            .iter()
+                            .filter(|name| *name == available)
+                            .count()
+                            == 1
+                })
         }
         MidiSource::Device(name) => {
-            available_names.iter().any(|available| available == name)
-                && opened_names.iter().any(|opened| opened == name)
+            available_names
+                .iter()
+                .filter(|available| *available == name)
+                .count()
+                == 1
+                && opened_names.iter().filter(|opened| *opened == name).count() == 1
         }
     }
 }
@@ -388,18 +404,19 @@ fn update_midi_connection(
     available: &[String],
     mut release_notes: impl FnMut(),
 ) -> bool {
-    let connected = midi_connection_is_open(requested, opened_names, available);
     for opened in opened_names {
         let device_is_available = available.iter().any(|available| available == opened);
-        if device_is_available {
-            lost_opened_names.remove(opened);
-        } else if lost_opened_names.insert(opened.clone()) {
+        if !device_is_available && lost_opened_names.insert(opened.clone()) {
             // An "All" source may already be reported disconnected because
             // one requested device failed to open. Still release notes when
             // any successfully opened device disappears later.
             release_notes();
         }
     }
+    // An old winmm handle is not re-opened when its name returns. Require a
+    // new connection (created when the route is prepared again).
+    let connected =
+        lost_opened_names.is_empty() && midi_connection_is_open(requested, opened_names, available);
     *last_connected = connected;
     connected
 }
@@ -701,6 +718,7 @@ impl ControlPlane {
 #[cfg(test)]
 mod tests {
     use super::*;
+    static SEQUENCE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     fn parsed(events: Value) -> Vec<ParsedEvent> {
         parse_events(&events).unwrap()
@@ -791,6 +809,7 @@ mod tests {
 
     #[test]
     fn immediate_events_reach_the_queue_and_timed_notes_release_themselves() {
+        let _guard = SEQUENCE_TEST_LOCK.lock().unwrap();
         let queue = Arc::new(MidiQueue::default());
         let (accepted, scheduled) = play_events(
             &queue,
@@ -811,6 +830,36 @@ mod tests {
         // The panic button releases the rest explicitly.
         play_events(&queue, parsed(json!([{ "type": "allNotesOff" }]))).unwrap();
         assert_eq!(queue.held_notes(), 0);
+    }
+
+    #[test]
+    fn cancelled_timed_sequences_release_capacity_promptly() {
+        let _guard = SEQUENCE_TEST_LOCK.lock().unwrap();
+        let queue = Arc::new(MidiQueue::default());
+        for note in 0..MAX_SEQUENCES {
+            play_events(
+                &queue,
+                parsed(json!([{ "type": "noteOn", "note": note, "afterMs": 2000 }])),
+            )
+            .unwrap();
+        }
+        queue.release_all_notes();
+        let deadline = Instant::now() + std::time::Duration::from_millis(500);
+        while ACTIVE_SEQUENCES.load(Ordering::Acquire) != 0 && Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(ACTIVE_SEQUENCES.load(Ordering::Acquire), 0);
+        assert!(play_events(
+            &queue,
+            parsed(json!([{ "type": "noteOn", "note": 60, "durationMs": 1 }]))
+        )
+        .is_ok());
+        queue.release_all_notes();
+        let deadline = Instant::now() + std::time::Duration::from_millis(500);
+        while ACTIVE_SEQUENCES.load(Ordering::Acquire) != 0 && Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(ACTIVE_SEQUENCES.load(Ordering::Acquire), 0);
     }
 
     #[test]
@@ -842,8 +891,7 @@ mod tests {
             0,
             "lost input must enqueue note release"
         );
-        // Repeated polling while disconnected must not enqueue duplicate panic
-        // transitions; reconnect is reported, and a subsequent loss is handled.
+        // A returned name does not prove the old Windows handle reconnected.
         let mut releases = 0;
         update_midi_connection(
             &mut connected,
@@ -854,7 +902,7 @@ mod tests {
             || releases += 1,
         );
         assert_eq!(releases, 0);
-        assert!(update_midi_connection(
+        assert!(!update_midi_connection(
             &mut connected,
             &mut lost_opened_names,
             &MidiSource::Device("USB Keyboard".into()),
@@ -870,7 +918,7 @@ mod tests {
             &[],
             || releases += 1,
         ));
-        assert_eq!(releases, 1);
+        assert_eq!(releases, 0);
     }
 
     #[test]
@@ -1137,6 +1185,11 @@ mod tests {
             &device,
             &["Launchkey".into()],
             &[]
+        ));
+        assert!(!midi_connection_is_open(
+            &device,
+            &["Launchkey".into()],
+            &["Launchkey".into(), "Launchkey".into()]
         ));
 
         let all = MidiSource::All;
