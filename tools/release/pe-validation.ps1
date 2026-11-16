@@ -1,5 +1,8 @@
-function Assert-X64PortableExecutable {
-    param([Parameter(Mandatory = $true)][string]$Path)
+function Assert-PortableExecutableArchitecture {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][ValidateSet('x64', 'x86')][string]$Architecture
+    )
 
     $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
     if ($item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
@@ -29,11 +32,17 @@ function Assert-X64PortableExecutable {
             throw "release executable does not have a valid PE signature: $Path"
         }
         $machine = [BitConverter]::ToUInt16($coffPrefix, 4)
-        if ($machine -ne 0x8664) {
-            throw "release executable is not x64 (machine 0x$('{0:X4}' -f $machine)): $Path"
+        $expectedMachine = if ($Architecture -eq 'x86') { 0x014c } else { 0x8664 }
+        if ($machine -ne $expectedMachine) {
+            throw "release executable is not $Architecture (machine 0x$('{0:X4}' -f $machine)): $Path"
         }
     }
     finally {
         $stream.Dispose()
     }
+}
+
+function Assert-X64PortableExecutable {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    Assert-PortableExecutableArchitecture -Path $Path -Architecture x64
 }

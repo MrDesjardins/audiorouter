@@ -68,6 +68,14 @@ try {
 
     $wrongMachine = Join-Path $root 'wrong-machine.bin'
     New-TestPe $wrongMachine 0x014c
+    Assert-PortableExecutableArchitecture -Path $wrongMachine -Architecture x86
+    Assert-PortableExecutableArchitecture -Path $validPe -Architecture x64
+    try {
+        Assert-PortableExecutableArchitecture -Path $validPe -Architecture x86
+        throw 'PE validator accepted x64 for an x86 worker'
+    } catch {
+        if ($_.Exception.Message -notmatch 'not x86') { throw }
+    }
     try {
         Assert-X64PortableExecutable $wrongMachine
         throw 'PE validator accepted a non-x64 machine type'

@@ -969,9 +969,14 @@ export function PluginNodeInspector({
               >
                 {sidechain.busy ? "Checking the plugin..." : "Add sidechain input"}
               </button>
-              <small>
-                {sidechainBlockedReason ?? "Works only for a VST3 plugin that declares an auxiliary input."}
-              </small>
+              <div className="plugin-guard-stack">
+                <small {...shownWhen(sidechainBlockedReason === undefined)}>
+                  Works only for a VST3 plugin that declares an auxiliary input.
+                </small>
+                <small {...shownWhen(sidechainBlockedReason !== undefined)}>
+                  {sidechainBlockedReason ?? "Save or discard changes to this tool before adding a sidechain input."}
+                </small>
+              </div>
             </>
           )}
           {sidechain.error ? <small role="alert">{sidechain.error}</small> : null}

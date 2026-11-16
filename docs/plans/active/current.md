@@ -2,6 +2,51 @@
 
 ## VST review defect fixes — owner requested
 
+Remaining CI repair (owner, 2026-11-16; run 43796875006): retain all gates.
+Release now reaches a second guard that incorrectly requires x64 on the two
+x86 workers; declare/check each packaged binary's expected architecture and
+test cross-architecture rejection. Browser shard 3: reproduce the 16.8 px
+plugin toggle shift and reserve the sidechain guidance slot (UI-17); derive
+guide catalogue expectations from its manifest; wait for all fixture edges
+before taking a sidechain replacement baseline. Validate exact CI browser
+assets, all themes, release scripts and current annotations, then push and
+watch. Evidence: `target/ci-43796875006-failures.log`. Rollback: scoped revert
+of these repairs; no installer, driver or device state is changed locally.
+
+Reproduction and repair: the plugin layout test failed locally in all three
+themes. A clean sidechain hint occupies one line, while editing the plugin
+substitutes two-line draft guidance above Voice protection, shifting the
+checkbox 16.8 px. Both messages now occupy the same reserved grid slot;
+existing exact bounding-box assertions pass unchanged. The guide index has
+39 entries after Instrument was added; its browser test now checks every
+manifest entry's link as well as the derived count and existing search.
+The flaky sidechain test initially counted six decorative legend edges before
+the actual route edge mounted. It now waits for the fixture's expected count
+and scopes every assertion to the canvas, excluding the legend. All seven
+failed/flaky cases pass with compiled CI assets; full shard 3/4 is running
+with CI retries/fail-on-flake policy (`target/ci-browser-shard3-round2.log`).
+
+Packaging declares x64/x86 per binary and requires an exact corresponding PE
+machine match. Tests prove both expected machines pass and each wrong-machine
+direction fails, retaining DOS/PE bounds and non-reparse checks. The six real
+local shell/CLI/worker executables all pass their expected-architecture checks.
+All four release-tooling checks, docs, 86 policy tests, UI format/lint/full
+typecheck and 14 PluginNodeInspector tests pass. Current-head annotations were
+read: failure summaries plus hosted Ubuntu-label notices, no code warnings.
+No new compiled installer qualification is claimed; require new-head hosted
+installer checks. The UI change only reserves existing guidance space; it
+adds no setting, changes no audio behavior, and needs no new guide recording.
+
+Full affected shard result: `CI=true npx playwright test
+--config=playwright.ci.config.ts --shard=3/4` passed on Windows Edge with
+191 passed / 4 existing opt-in skipped, zero failures or flaky retries (9.3 min).
+This includes all Plugin inspector and Sidechain scenarios, guide playback,
+layout, contrast and theme coverage. Dark/light/high-contrast switch screenshots
+were inspected. Full local UI formatting/lint/typecheck and release/doc/policy
+checks pass. Complete diff inspected and whitespace check clean. Push this
+repair and watch the new hosted head; hosted installer packaging and all-shard
+success are still required before reporting CI green.
+
 CI repair authorized 2026-11-16 (PR #152, run 43790820298): reproduce and
 repair ENG-02/04, AUTO-18 and M08 failures without weakening gates. Evidence:
 `target/ci-43790820298-failures.log`; all check annotations read (failure

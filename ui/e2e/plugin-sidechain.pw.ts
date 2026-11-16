@@ -99,7 +99,9 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     );
     await page.setViewportSize({ width: 1500, height: 950 });
     await page.goto("/route-harness.html");
-    const originalEdgeCount = await page.locator(".react-flow__edge").count();
+    const originalEdgeCount = replacementSession.edges.length;
+    const edges = page.locator(".session-flow-canvas .react-flow__edge");
+    await expect(edges).toHaveCount(originalEdgeCount);
 
     const connect = async () => {
       await openConnectionForm(page);
@@ -121,7 +123,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(decision).toContainText("will not add a Mixer");
     await decision.screenshot({ path: testInfo.outputPath(`sidechain-replace-${theme}.png`) });
     await decision.getByRole("button", { name: "Keep current source" }).click();
-    await expect(page.locator(".react-flow__edge")).toHaveCount(originalEdgeCount);
+    await expect(edges).toHaveCount(originalEdgeCount);
     await expect(page.locator(".react-flow__node").filter({ hasText: "Mixer" })).toHaveCount(0);
 
     await connect();
@@ -130,7 +132,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       .getByRole("button", { name: "Replace sidechain source" })
       .click();
     await expect(page.getByText(/Replaced the Sidechain input source/)).toBeVisible();
-    await expect(page.locator(".react-flow__edge")).toHaveCount(originalEdgeCount);
+    await expect(edges).toHaveCount(originalEdgeCount);
     await expect(page.locator(".react-flow__node").filter({ hasText: "Mixer" })).toHaveCount(0);
   });
 }

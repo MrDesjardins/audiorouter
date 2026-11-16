@@ -223,15 +223,15 @@ try {
     New-Item -ItemType Directory -Path $output | Out-Null
 
     $binaries = @(
-        @{ Name = "audiorouter-cli.exe"; Source = (Join-Path $workspace "target/release/audiorouter-cli.exe") }
-        @{ Name = "audiorouter-plugin-worker.exe"; Source = (Join-Path $workspace "target/release/audiorouter-plugin-worker.exe") }
-        @{ Name = "audiorouter-vst3-worker.exe"; Source = (Join-Path $workspace "target/release/audiorouter-vst3-worker.exe") }
-        @{ Name = "audiorouter-plugin-worker-x86.exe"; Source = (Join-Path $workspace "target/release/audiorouter-plugin-worker-x86.exe") }
-        @{ Name = "audiorouter-vst3-worker-x86.exe"; Source = (Join-Path $workspace "target/release/audiorouter-vst3-worker-x86.exe") }
-        @{ Name = "audiorouter-shell.exe"; Source = (Join-Path $workspace "src-tauri/target/release/audiorouter-shell.exe") }
+        @{ Name = "audiorouter-cli.exe"; Architecture = 'x64'; Source = (Join-Path $workspace "target/release/audiorouter-cli.exe") }
+        @{ Name = "audiorouter-plugin-worker.exe"; Architecture = 'x64'; Source = (Join-Path $workspace "target/release/audiorouter-plugin-worker.exe") }
+        @{ Name = "audiorouter-vst3-worker.exe"; Architecture = 'x64'; Source = (Join-Path $workspace "target/release/audiorouter-vst3-worker.exe") }
+        @{ Name = "audiorouter-plugin-worker-x86.exe"; Architecture = 'x86'; Source = (Join-Path $workspace "target/release/audiorouter-plugin-worker-x86.exe") }
+        @{ Name = "audiorouter-vst3-worker-x86.exe"; Architecture = 'x86'; Source = (Join-Path $workspace "target/release/audiorouter-vst3-worker-x86.exe") }
+        @{ Name = "audiorouter-shell.exe"; Architecture = 'x64'; Source = (Join-Path $workspace "src-tauri/target/release/audiorouter-shell.exe") }
     )
     if (-not $AppOnly) {
-        $binaries += @{ Name = "audiorouter-driver-helper.exe"; Source = (Join-Path $workspace "target/release/audiorouter-driver-helper.exe") }
+        $binaries += @{ Name = "audiorouter-driver-helper.exe"; Architecture = 'x64'; Source = (Join-Path $workspace "target/release/audiorouter-driver-helper.exe") }
     }
     foreach ($binary in $binaries) {
         $source = $binary.Source
@@ -239,7 +239,7 @@ try {
             throw "Expected release binary was not produced: $source"
         }
         # These ship inside the installer; they are not separate release assets.
-        Assert-X64PortableExecutable $source
+        Assert-PortableExecutableArchitecture -Path $source -Architecture $binary.Architecture
     }
     $installerName = "AudioRouter_${appVersion}_x64-setup.exe"
     $installerSource = Join-Path $workspace "src-tauri/target/release/bundle/nsis/$installerName"
