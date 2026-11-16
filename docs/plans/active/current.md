@@ -19,7 +19,8 @@ is authorized by the request to integrate existing PRs.
 
 Fixes: sidechain bridge failure and vanished bridge state now block automatic
 sleep/device/backend recovery, with a regression that failed before the fix.
-Timed MIDI sequences notice cancellation within 20 ms; their eight global
+Timed MIDI sequences check cancellation at intervals of at most 20 ms while
+waiting; their eight global
 slots are released promptly. A returned MIDI name cannot revive a stale
 handle, and duplicate names are rejected rather than choosing the first device.
 Tests cover canceled capacity, disconnect/reappearance, ambiguous names and
@@ -41,13 +42,42 @@ fresh UI. The isolated fresh-install shell/pipe test passed: backend ready in
 135 ms, no device permission granted to the raw client. This does not exercise
 actual audio, a plugin UI or a packaged installer. No audio hardware, driver
 install, signed artifact, installer or production database was changed.
+
+App-only release preparation (Windows, source commit `20503e066`): the first
+attempt in the original checkout correctly rejected its three pre-existing
+untracked artifacts. Created isolated worktree
+`C:/code/audiorouter-release-readiness-check` at the same commit, installed
+locked UI dependencies and the pinned VST3 SDK, then ran
+`tests/acceptance/m08-release.ps1 -AppOnly`: unsigned 23 MiB NSIS bundle and
+all release artifact verification passed. An initial SDK copy lacked Git
+provenance and was correctly rejected; the pinned installer obtained the real
+checkout and its submodules before the successful run. The fresh-install pipe
+test against the built release shell passed with an isolated database and
+WebView profile (84 ms to backend response, raw device consent denied).
+This smoke did not run the installer or open audio devices.
+The acceptance script cleans its temporary artifact output afterward; no
+installer is being handed off as a release candidate from this run.
+
+Stream Deck `npm ci` reports two low advisories: build-only
+`@rollup/plugin-node-resolve` 16.0.3 depends on `deepmerge` 4.3.1
+(GHSA-gcqx-w48m-w2h4). npm's offered fix is a major-version downgrade to 7.1.3;
+it is not applied blindly. `npm audit --omit=dev --audit-level=low` reports zero
+production vulnerabilities. Rollup also reports two Zod PURE-comment notices;
+the Stream Deck typecheck, 35 tests, validation and packaging pass. The UI
+build's 647.15 kB main-chunk advisory remains recorded above.
+
 Remaining M08 gates: candidate installer install/upgrade/rollback/uninstall and
 data retention on a clean standard-user Windows system, WebView2 absence, real
 MIDI unplug/replug and duplicate names, sidechain plugin failure on a protected
 voice path, sleep/device recovery, and current-head CI. UDP continuity under
 concurrent load remains unqualified after the earlier intermittent failures.
-Next: inspect the final diff and preserve this branch for review; do not call
-the candidate release-ready until its applicable gates have evidence.
+`VBoxManage list vms` found only the powered-off `AR-DriverTest` with its
+driver-testing snapshots; the separate installer qualification VM described
+in the older plan is not registered here. No VM was started or changed.
+Next: run the applicable attended M08 gates on an isolated machine, then review
+the complete branch and current-head CI; do not call the candidate release-ready
+until those gates have evidence. The isolated worktree remains in place and
+must be removed only with the prescribed merged-worktree cleanup script.
 
 ## Three-day code review and repairs — 2026-11-15
 
