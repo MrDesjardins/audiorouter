@@ -88,6 +88,37 @@ not replace the required physical-device, endurance and second-Windows-build
 evidence. Roll back VM preparation by restoring its own baseline; do not alter
 the source VM.
 
+Automation task (DIST-02/08, NFR-16): use a dedicated disposable guest and a
+fresh non-administrator account; guard its initial state and both installer
+hashes; test install, repair, downgrade, upgrade, uninstall and database and
+recording preservation with bounded guest commands and retained evidence.
+Verify registration only when the user's registry hive is actually loaded.
+Keep credentials out of logs and source; snapshot before exercising the guest.
+Run the harness and its negative guards, inspect results, and document missing
+WebView2 and interactive shell limitations. Rollback: restore this clone's
+own snapshot or revert the harness changes; never touch the source VM.
+
+Automation result: `tools/vm/installer-lifecycle.ps1` and its guest companion
+passed on the independent Windows 11 clone under `arqual3`, a medium-integrity
+non-administrator signed into the guest desktop. Snapshot
+`pre-harness-20261116` (`31d9cb3b-05b4-48b3-ae9f-97a016cbe17f`) preserves the
+clone before the harness accounts; it is not a clean preinstalled-tools baseline.
+The harness passed fresh install, session import, same-version reinstall,
+rollback to 0.0.29, upgrade to 0.0.30, uninstall and reinstall, checking
+registration and preserving the real default database plus generated WAV hash
+through each step. Evidence: `%TEMP%/ar-lifecycle-qualification-20261116-3/result.json`.
+Repeat staging and host hash rejection guards passed. An initial attempt showed
+PowerShell returns before a GUI installer finishes; the harness now waits for
+the process tree. Another attempt found that VirtualBox guest-control alone
+does not load the account's HKCU hive; preflight now requires the actual user
+hive, and the passing run used a desktop sign-in. These earlier failures and
+their evidence remain in `%TEMP%/ar-lifecycle-qualification-20261116` and
+`%TEMP%/ar-lifecycle-qualification-20261116-2`. The WAV is a generated file,
+not a captured application recording. Snapshot/user setup and desktop sign-in
+are separate, and absent WebView2, actual recording capture, installer UI and
+other hardware/release gates are not covered. Usage and rollback are documented
+in `docs/operations/release-qualification.md`.
+
 The packaged WebView2 smoke also passed against that release shell on Windows
 11 as a standard user, with isolated database and browser profile: native
 bridge, stopped first launch, canvas, session save and restart passed, with no
