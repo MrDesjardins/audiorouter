@@ -295,6 +295,8 @@ fn method_output_schema_impl(name: &str) -> Value {
                                 "nodeName": optional_text,
                                 "deviceId": text,
                                 "deviceName": optional_text,
+                                "suggestedEndpointId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                                "suggestedEndpointName": optional_text,
                                 "otherSessionId": text,
                                 "message": text,
                                 "fix": text

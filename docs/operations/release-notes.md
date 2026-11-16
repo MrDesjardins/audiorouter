@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Recover a microphone whose Windows ID changed.** Stopped saved routes can
+  recover a missing input from its remembered name when exactly one active
+  capture device matches. Audio stays stopped until Play. Missing name metadata
+  or ambiguous matches still require manual selection.
+- **Go straight to the input that needs fixing.** Open affected tool brings
+  the input selector into view, focuses it and briefly highlights it.
+
 - **See a custom theme before using it.** Settings → Appearance now shows a
   live workspace preview while you edit a theme: a small canvas with flowing,
   silent and paused connections, plus tool text, a field, a slider and a

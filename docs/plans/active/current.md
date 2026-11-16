@@ -1,5 +1,14 @@
 # Active plan — current priorities (2026-11-04)
 
+## Device binding recovery — 2026-11-15
+
+Requirements CAP-02/11/12, STATE-03, UI-05/08/11/17/27, ENG-02/04.
+See [the execution plan](device-binding-recovery.md) for the owner decision,
+implementation, validation and rollback. Stopped saved sessions can recover a
+missing microphone ID from a unique exact-name match; ambiguous or uncached
+devices remain manual. Open affected tool focuses and highlights the input
+selector. Physical reboot and attended audio qualification remain open.
+
 ## Theme editor live preview — 2026-11-15
 
 Owner request: choosing a custom-theme colour should show its effect before

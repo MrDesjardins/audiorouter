@@ -208,6 +208,7 @@ pub(crate) fn validate_method_params(
             "baseRevision",
             "idempotencyKey",
             "acknowledgments",
+            "requireStoppedSessionId",
         ],
         "system.handshake" => &["protocolVersion"],
         "system.quit" => &["idempotencyKey"],

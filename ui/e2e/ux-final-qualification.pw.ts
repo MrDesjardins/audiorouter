@@ -29,8 +29,8 @@ for (const theme of ["dark", "light", "high-contrast"]) {
                   severity: "problem",
                   sessionId: session.id,
                   sessionName: session.name,
-                  nodeId: "voice",
-                  nodeName: "Voice gain",
+                  nodeId: "mic",
+                  nodeName: "Microphone",
                   message: "Inspect this saved tool before playing.",
                   fix: "Review its Properties.",
                 },
@@ -96,9 +96,9 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       await page.getByRole("tab", { name: "Status", exact: true }).click();
       await page.getByRole("button", { name: "Open affected tool", exact: true }).click();
       await expect(page.getByRole("tab", { name: "Properties", exact: true })).toHaveAttribute("aria-selected", "true");
-      await expect(page.getByRole("tab", { name: "Properties", exact: true })).toBeFocused();
-      await page.keyboard.press("Tab");
-      await expect(page.locator("#workbench-properties")).toBeFocused();
+      await expect(page.locator(".node-binding-editor[aria-label='Input device binding']")).toBeFocused();
+      await expect(page.locator(".node-binding-editor.is-focus-target")).toBeVisible();
+      await expect(page.locator("#workbench-properties")).toBeVisible();
       await page.evaluate(() => {
         const exit = document.createElement("button");
         exit.id = "keyboard-exit-probe";

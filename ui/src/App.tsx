@@ -52,6 +52,7 @@ import {
   type ApplicationRow,
   type RecorderStatus,
   type UiBackend,
+  type UiBackendSnapshot,
 } from "./backend";
 import type { DeviceListItem } from "@audiorouter/contracts";
 import { LiveTelemetry, useTelemetryStore } from "./liveTelemetry";
@@ -179,7 +180,17 @@ import {
 } from "./clientDiagnostics";
 import { ErrorBoundary, RootRecoveryPanel } from "./ErrorBoundary";
 import { EqBackendContext, PluginParameterContext, defaultBackend } from "./appContext";
-import { findVbCableEndpointPair, readEndpointBindingHint, routeEndpointBinding } from "./endpointBinding";
+import {
+  findReplacementCaptureEndpoint,
+  findVbCableEndpointPair,
+  captureEndpointName,
+  readEndpointBindingHint,
+  rememberDeviceNames,
+  rememberDeviceNameBinding,
+  rememberSessionDeviceNames,
+  rememberedDeviceName,
+  routeEndpointBinding,
+} from "./endpointBinding";
 
 import { PluginScanPanel, PluginToolsGroup } from "./PluginPanels";
 export { formatRecordingDuration, recorderHasCaptureSource } from "./RecordingPanels";
@@ -548,6 +559,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setWorkbenchTab("properties");
   };
   const [setupTarget, setSetupTarget] = useState<{ sessionId: string; nodeId?: string } | null>(null);
+  const [inputBindingFocusRequest, setInputBindingFocusRequest] = useState(0);
   const openLoadedSetupTarget = useEffectEvent(() => {
     if (!setupTarget || draft.id !== setupTarget.sessionId) return;
     setSetupTarget(null);
@@ -562,14 +574,25 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       }
       selectNodeProperties(setupTarget.nodeId);
       setActionMessage("Opened the affected tool. Setup checks describe saved routes; unsaved edits are not checked.");
+      const needsInputSelector =
+        draftRef.current.nodes.find((node) => node.id === setupTarget.nodeId)?.kind === "physicalInput";
+      if (needsInputSelector) setInputBindingFocusRequest((current) => current + 1);
+      if (needsInputSelector && snapshot?.status.activeSessionIds.includes(setupTarget.sessionId)) {
+        setActionMessage("Opened the affected tool. Stop audio before changing its input device.");
+      }
     } else {
       setWorkbenchTab("session");
       setActionMessage("Opened the affected route for inspection. Review its connections; no wiring was changed.");
     }
-    window.setTimeout(
-      () => document.querySelector<HTMLElement>('.right-workbench [role="tab"][aria-selected="true"]')?.focus(),
-      0,
-    );
+    const isPhysicalInput = setupTarget.nodeId
+      ? draftRef.current.nodes.find((node) => node.id === setupTarget.nodeId)?.kind === "physicalInput"
+      : false;
+    if (!isPhysicalInput) {
+      window.setTimeout(
+        () => document.querySelector<HTMLElement>('.right-workbench [role="tab"][aria-selected="true"]')?.focus(),
+        0,
+      );
+    }
   });
   useEffect(() => {
     openLoadedSetupTarget();
@@ -702,6 +725,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       .listDevices()
       .then((items) => {
         if (generation !== deviceRefreshGeneration.current) return;
+        rememberDeviceNames(items);
         setDevices(items);
         setDevicesError(null);
         if (announce)
@@ -935,6 +959,21 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     if (backendPrivacyMuted !== undefined) setPrivacyMuted(backendPrivacyMuted);
   }, [backendPrivacyMuted]);
   const availableSessions = mergeSessionInventory(listedSessions, snapshot?.session ?? null, createdSessions);
+  const rememberedInputBindingKey = JSON.stringify(
+    availableSessions.flatMap((saved) =>
+      saved.nodes
+        .filter((node) => node.kind === "physicalInput" && typeof node.parameters.endpointId === "string")
+        .map((node) => [saved.id, node.id, node.parameters.endpointId]),
+    ),
+  );
+  const rememberCurrentSessionDeviceNames = useEffectEvent(() => {
+    if (devices.length > 0 && availableSessions.length > 0) {
+      rememberSessionDeviceNames(availableSessions, devices);
+    }
+  });
+  useEffect(() => {
+    rememberCurrentSessionDeviceNames();
+  }, [devices, rememberedInputBindingKey]);
   // A fresh install holds only the untouched starter session, or nothing yet.
   const looksLikeFirstRun =
     backend.connected &&
@@ -1010,6 +1049,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   }, [selectedSessionId, selectedSessionListed, diagnosticStorage]);
   currentSessionIdRef.current = session.id;
   const selectedNode = draft.nodes.find((node) => node.id === selectedNodeId) ?? (draft.nodes[0] as Node | undefined);
+  const attemptedDeviceRebinds = useRef(new Set<string>());
   useEffect(() => {
     recordUiDiagnostic(
       `Graph checkpoint: ${draft.nodes.length} nodes, ${draft.edges.length} connections; revision ${session.revision}`,
@@ -1017,6 +1057,123 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   }, [draft.nodes.length, draft.edges.length, session.revision, recordUiDiagnostic]);
   const sessionRunning = snapshot?.status.activeSessionIds.includes(session.id) ?? false;
   const routeChanged = !sameSessionDraft(draft, session);
+  const reconcileNamedInputs = useEffectEvent(async () => {
+    if (!backend.connected || !setupCheck.result) return;
+    if (sessionBusy.current || sessionActionBusy || graphBusy) return;
+    let currentDevices: import("@audiorouter/contracts").DeviceListItem[];
+    try {
+      currentDevices = await backend.listDevices(true);
+      rememberDeviceNames(currentDevices);
+    } catch {
+      return;
+    }
+    for (const finding of setupCheck.result?.findings ?? []) {
+      if (finding.code !== "deviceMissing" || !finding.nodeId) continue;
+      const saved = availableSessions.find((item) => item.id === finding.sessionId);
+      if (!saved || snapshot?.status.activeSessionIds.includes(saved.id)) continue;
+      if (saved.id === draft.id && routeChanged) continue;
+      let latest: UiBackendSnapshot;
+      try {
+        latest = await backend.snapshot(saved.id);
+      } catch {
+        continue;
+      }
+      if (
+        latest.status.activeSessionIds.includes(saved.id) ||
+        latest.session.revision !== saved.revision ||
+        !sameSessionDraft(latest.session, saved)
+      ) {
+        continue;
+      }
+      const node = latest.session.nodes.find((item) => item.id === finding.nodeId);
+      if (
+        !node ||
+        node.kind !== "physicalInput" ||
+        typeof node.parameters.endpointId !== "string" ||
+        (finding.deviceId && node.parameters.endpointId !== finding.deviceId)
+      ) {
+        continue;
+      }
+      const savedEndpointName =
+        captureEndpointName(currentDevices, node.parameters.endpointId) ??
+        finding.suggestedEndpointName ??
+        rememberedDeviceName(String(node.parameters.endpointId));
+      if (!savedEndpointName) continue;
+      // The Setup Check result is only a hint and may be stale by the time the
+      // graph commit is planned. Re-resolve against this fresh inventory and
+      // require exactly one active capture match before proceeding.
+      const candidate = findReplacementCaptureEndpoint(currentDevices, node.parameters.endpointId, savedEndpointName);
+      if (!candidate || (finding.suggestedEndpointId && candidate.id !== finding.suggestedEndpointId)) continue;
+      const attemptKey = `${saved.id}/${saved.revision}/${node.id}/${candidate.id}`;
+      if (attemptedDeviceRebinds.current.has(attemptKey)) continue;
+      attemptedDeviceRebinds.current.add(attemptKey);
+      const updated: import("@audiorouter/contracts").Session = {
+        ...latest.session,
+        nodes: latest.session.nodes.map((item) =>
+          item.id === node.id ? { ...item, parameters: { ...item.parameters, endpointId: candidate.id } } : item,
+        ),
+      };
+      try {
+        const plan = await backend.planGraph(updated);
+        if (plan.baseRevision !== saved.revision || plan.warnings.length > 0) {
+          attemptedDeviceRebinds.current.delete(attemptKey);
+          continue;
+        }
+        const beforeCommit = await backend.snapshot(saved.id);
+        const liveDiagnostics = await backend.refreshDiagnostics();
+        if (
+          sessionBusy.current ||
+          graphBusy ||
+          beforeCommit.status.activeSessionIds.includes(saved.id) ||
+          (liveDiagnostics.nativeSessionId === saved.id && liveDiagnostics.nativeAdapter === "running") ||
+          beforeCommit.session.revision !== plan.baseRevision ||
+          (saved.id === draftRef.current.id && !sameSessionDraft(draftRef.current, authoritativeSession.current))
+        ) {
+          attemptedDeviceRebinds.current.delete(attemptKey);
+          continue;
+        }
+        const result = await backend.commitGraph(
+          plan.planId,
+          plan.baseRevision,
+          uiIdempotencyKey("device-name-rebind"),
+          undefined,
+          saved.id,
+        );
+        rememberDeviceNameBinding(String(node.parameters.endpointId), savedEndpointName, "capture");
+        setActionMessage(
+          `Updated ${node.name} to the one active input named ${candidate.name}. The route remains stopped; press Play when ready.`,
+        );
+        await refreshSessions();
+        if (currentSessionIdRef.current === saved.id) await refresh();
+        recordUiDiagnostic(`Exact-name input binding updated for ${node.id}; revision ${result.revision}`);
+        return;
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("session to be stopped")) {
+          attemptedDeviceRebinds.current.delete(attemptKey);
+        }
+        if (currentSessionIdRef.current === saved.id) {
+          setActionMessage(
+            formatUiError(
+              error,
+              `Could not save the matching input for ${node.name}. Open its Properties to choose it manually.`,
+            ),
+          );
+        }
+      }
+    }
+  });
+  useEffect(() => {
+    void reconcileNamedInputs();
+  }, [
+    backend.connected,
+    setupCheck.result,
+    devices,
+    availableSessions,
+    draft.id,
+    routeChanged,
+    graphBusy,
+    sessionActionBusy,
+  ]);
   const routeMicMuted =
     sessionRunning &&
     privacyMuted &&
@@ -1308,6 +1465,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       .listDevices()
       .then((items) => {
         if (active) {
+          rememberDeviceNames(items);
           setDevices(items);
           setDevicesError(null);
         }
@@ -3415,7 +3573,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           setSetupTarget({ sessionId: finding.sessionId, nodeId: finding.nodeId });
         } else {
           void switchSession(finding.sessionId).then(({ switched }) => {
-            if (switched) setSetupTarget({ sessionId: finding.sessionId, nodeId: finding.nodeId });
+            if (switched) {
+              setSetupTarget({ sessionId: finding.sessionId, nodeId: finding.nodeId });
+            }
           });
         }
       }}
@@ -4223,6 +4383,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                       devices={devices}
                       refreshDevices={refreshDevices}
                       setCaptureEndpointId={setCaptureEndpointId}
+                      inputBindingFocusRequest={inputBindingFocusRequest}
                       renderEndpointId={renderEndpointId}
                       applications={applications}
                       applicationsError={applicationsError}
