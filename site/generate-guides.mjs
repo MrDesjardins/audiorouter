@@ -142,6 +142,7 @@ const visualTypes = {
   meter: "meter",
   recorder: "recording",
   plugin: "plugin",
+  instrument: "plugin",
   testSignal: "tone",
   audioFile: "media",
   soundboard: "media",
@@ -308,6 +309,7 @@ const searchTitles = {
   networkSend: "Send audio to another PC over your home network",
   networkReceive: "Receive audio from another PC (two-PC streaming)",
   plugin: "Use VST plugins on your microphone, crash-safe",
+  instrument: "Play a VST instrument or synth into your audio route",
   group: "Organize your audio routing canvas with groups",
 };
 const pageTitle = (t) => {

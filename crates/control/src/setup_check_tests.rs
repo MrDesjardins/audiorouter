@@ -11,6 +11,7 @@ const MASK_7_1: u32 = 0x63f;
 fn device(id: &str, render: bool, channels: u16, cable: Option<&str>) -> DeviceFacts {
     DeviceFacts {
         id: id.into(),
+        active: true,
         render,
         name: id.into(),
         sample_rate_hz: 48_000,
@@ -145,7 +146,113 @@ fn a_device_that_is_gone_is_reported_once_per_node() {
     let findings = check_setup(&[(&route, false)], &devices());
     assert_eq!(codes(&findings), ["deviceMissing"]);
     assert_eq!(findings[0].node_id.as_deref(), Some("voice-in"));
-    assert!(findings[0].fix.contains("driver update"));
+    assert!(findings[0].suggested_endpoint_id.is_none());
+}
+
+#[test]
+fn missing_input_proposes_one_case_insensitive_exact_name_match_only() {
+    let saved = route("voice", "old-mic-id", false, "cable-a-in");
+    let mut inventory = devices();
+    let mut old = device("old-mic-id", false, 1, None);
+    old.active = false;
+    old.name = "Studio Microphone".into();
+    inventory.push(old);
+    let mut candidate = device("new-mic-id", false, 1, None);
+    candidate.name = "studio microphone".into();
+    inventory.push(candidate);
+
+    let findings = check_setup(&[(&saved, false)], &inventory);
+
+    assert_eq!(codes(&findings), ["deviceMissing"]);
+    assert_eq!(findings[0].device_id.as_deref(), Some("old-mic-id"));
+    assert_eq!(
+        findings[0].suggested_endpoint_id.as_deref(),
+        Some("new-mic-id")
+    );
+    assert_eq!(
+        findings[0].suggested_endpoint_name.as_deref(),
+        Some("studio microphone")
+    );
+    assert!(findings[0].fix.contains("stays stopped"));
+    assert_eq!(saved.nodes[0].parameters["endpointId"], "old-mic-id");
+}
+
+#[test]
+fn missing_legacy_input_uses_its_inactive_inventory_name_when_available() {
+    let saved = route("voice", "old-mic-id", false, "cable-a-in");
+    let mut inactive = device("old-mic-id", false, 1, None);
+    inactive.active = false;
+    inactive.name = "Studio Microphone".into();
+    let mut active = device("new-mic-id", false, 1, None);
+    active.name = "studio microphone".into();
+    let mut inventory = devices();
+    inventory.push(inactive);
+    inventory.push(active);
+
+    let findings = check_setup(&[(&saved, false)], &inventory);
+    assert_eq!(
+        findings[0].suggested_endpoint_id.as_deref(),
+        Some("new-mic-id")
+    );
+}
+
+#[test]
+fn setup_check_counts_only_active_endpoints_when_inactive_records_are_present() {
+    let saved = route("voice", "old-mic-id", false, "cable-a-in");
+    let mut inactive = device("old-mic-id", false, 1, None);
+    inactive.active = false;
+    inactive.name = "Old microphone".into();
+    let mut inventory = devices();
+    inventory.push(inactive);
+    assert_eq!(
+        inventory.iter().filter(|device| device.active).count(),
+        devices().len()
+    );
+    assert_eq!(
+        check_setup(&[(&saved, false)], &inventory)[0].suggested_endpoint_id,
+        None
+    );
+}
+
+#[test]
+fn missing_input_does_not_propose_duplicate_or_render_name_matches() {
+    let saved = route("voice", "old-mic-id", false, "cable-a-in");
+    let mut inventory = devices();
+    let mut old = device("old-mic-id", false, 1, None);
+    old.active = false;
+    old.name = "Studio Microphone".into();
+    inventory.push(old);
+    for id in ["new-mic-a", "new-mic-b"] {
+        let mut candidate = device(id, false, 1, None);
+        candidate.name = "Studio Microphone".into();
+        inventory.push(candidate);
+    }
+    let duplicate = check_setup(&[(&saved, false)], &inventory);
+    assert!(duplicate[0].suggested_endpoint_id.is_none());
+
+    inventory.retain(|candidate| candidate.id != "new-mic-b" && candidate.id != "new-mic-a");
+    let mut render = device("render-mic", true, 2, None);
+    render.name = "Studio Microphone".into();
+    inventory.push(render);
+    let wrong_direction = check_setup(&[(&saved, false)], &inventory);
+    assert!(wrong_direction[0].suggested_endpoint_id.is_none());
+}
+
+#[test]
+fn a_running_session_does_not_receive_an_automatic_input_rebind_proposal() {
+    let saved = route("voice", "old-mic-id", false, "cable-a-in");
+    let mut candidate = device("new-mic-id", false, 1, None);
+    candidate.name = "Studio Microphone".into();
+    let mut inventory = devices();
+    let mut old = device("old-mic-id", false, 1, None);
+    old.active = false;
+    old.name = "Studio Microphone".into();
+    inventory.push(old);
+    inventory.push(candidate);
+
+    let findings = check_setup(&[(&saved, true)], &inventory);
+    assert_eq!(findings[0].code, "deviceMissing");
+    assert!(findings[0].suggested_endpoint_id.is_none());
 }
 
 #[test]

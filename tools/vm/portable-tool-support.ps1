@@ -9,8 +9,15 @@ function Get-VmToolImports {
     $sectionCount = [BitConverter]::ToUInt16($bytes,$pe+6)
     $optional = $pe + 24
     $optionalSize = [BitConverter]::ToUInt16($bytes,$pe+20)
-    if ($sectionCount -lt 1 -or $sectionCount -gt 96 -or $optionalSize -lt 128 -or
-        [BitConverter]::ToUInt16($bytes,$optional) -ne 523 -or [BitConverter]::ToUInt32($bytes,$optional+108) -lt 2) { throw 'Expected bounded PE32+ headers.' }
+    if ($optionalSize -lt 2 -or $optional + $optionalSize -gt $bytes.Length) { throw 'Truncated PE optional header.' }
+    $magic = [BitConverter]::ToUInt16($bytes,$optional)
+    switch ($magic) {
+        267 { $directoryCountOffset = 92; $importOffset = 104 } # PE32
+        523 { $directoryCountOffset = 108; $importOffset = 120 } # PE32+
+        default { throw 'Expected PE32 or PE32+ headers.' }
+    }
+    if ($sectionCount -lt 1 -or $sectionCount -gt 96 -or $optionalSize -lt $importOffset + 8 -or
+        [BitConverter]::ToUInt32($bytes,$optional+$directoryCountOffset) -lt 2) { throw 'Expected bounded PE import directories.' }
     $table = $optional + $optionalSize
     if ($table + $sectionCount * 40 -gt $bytes.Length) { throw 'Truncated PE section table.' }
     $sections = @()
@@ -28,8 +35,8 @@ function Get-VmToolImports {
         }
         throw 'PE import RVA is outside file-backed sections.'
     }
-    $importRva = [BitConverter]::ToUInt32($bytes,$optional+120)
-    $importSize = [BitConverter]::ToUInt32($bytes,$optional+124)
+    $importRva = [BitConverter]::ToUInt32($bytes,$optional+$importOffset)
+    $importSize = [BitConverter]::ToUInt32($bytes,$optional+$importOffset+4)
     if ($importRva -eq 0 -or $importSize -lt 20 -or $importSize -gt 5120) { throw 'Missing or oversized PE import table.' }
     $imports = @()
     for ($i=0; $i -lt [Math]::Floor($importSize/20); $i++) {

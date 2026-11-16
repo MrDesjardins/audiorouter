@@ -3,6 +3,32 @@
 use super::*;
 
 #[test]
+fn discovery_dispatch_keeps_stack_headroom_for_its_callers() {
+    std::thread::Builder::new()
+        .stack_size(512 * 1024)
+        .spawn(|| {
+            let mut plane = ControlPlane::default();
+            let response = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "system.describe".into(),
+                params: None,
+            });
+            assert!(response.error.is_none());
+            assert_eq!(
+                response.result.unwrap()["methods"]
+                    .as_array()
+                    .unwrap()
+                    .len(),
+                API_METHODS.len()
+            );
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+#[test]
 fn describe_exposes_versions_methods_limits_and_unavailable_nodes() {
     let plane = ControlPlane::new("test-build");
     let description = plane.describe();
@@ -520,7 +546,7 @@ fn describe_exposes_input_and_output_schemas_for_methods() {
         .unwrap();
     assert_eq!(
         commit["description"],
-        "Commit an unexpired graph plan with idempotent mutation."
+        "Commit an unexpired graph plan with idempotent mutation. Optional requireStoppedSessionId rejects if its saved session or native worker is running or attached."
     );
     assert_eq!(
         commit["inputSchema"]["required"],
@@ -1119,6 +1145,43 @@ fn describe_exposes_input_and_output_schemas_for_methods() {
     }
 }
 
+#[test]
+fn graph_commit_discovery_describes_optional_stopped_session_precondition() {
+    let method = ControlPlane::default().describe()["methods"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|method| method["name"] == "graph.commit")
+        .unwrap()
+        .clone();
+    assert_eq!(
+        method["inputSchema"]["properties"]["requireStoppedSessionId"]["type"],
+        "string"
+    );
+    assert_eq!(
+        method["inputSchema"]["properties"]["requireStoppedSessionId"]["description"],
+        "Optional commit-time precondition: reject if this planned session is running or owns a native worker. Used for stopped-session recovery edits."
+    );
+    assert!(!method["inputSchema"]["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|field| field == "requireStoppedSessionId"));
+}
+
+#[test]
+fn setup_check_output_schema_exposes_optional_name_matched_input_proposals() {
+    let schema = method_output_schema("system.checkSetup");
+    let properties = &schema["properties"]["findings"]["items"]["properties"];
+    assert_eq!(properties["suggestedEndpointId"]["type"], "string");
+    assert_eq!(properties["suggestedEndpointName"]["type"], "string");
+    assert!(!schema["properties"]["findings"]["items"]["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|field| field == "suggestedEndpointId" || field == "suggestedEndpointName"));
+}
+
 /// Once the backend service runs, `apps.list` reads the list its inventory
 /// thread built; this thread never enumerates (30-100 ms on a real PC).
 #[cfg(windows)]
@@ -1260,7 +1323,7 @@ fn has_no_settings(kind: audiorouter_domain::NodeKind) -> bool {
         | ParametricEq | Compressor | Gate | Limiter | Delay | GraphicEq | Pitch | Recorder
         | AudioFile | Soundboard | Volume | BassTreble | Dehum | Declick | InputSwitch
         | OutputSwitch | Denoise | SpeechDenoise | FirFilter | SpectralGate | TimeShift
-        | NetworkSend | NetworkReceive | Duck | FunVoiceChanger => false,
+        | NetworkSend | NetworkReceive | Duck | FunVoiceChanger | Instrument => false,
     }
 }
 

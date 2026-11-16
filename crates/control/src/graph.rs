@@ -425,13 +425,90 @@ impl ControlPlane {
         Ok(plan_id)
     }
 
+    /// Prepare a reversible port edit from live worker discovery. This is an
+    /// internal backend building block; adapters must not synthesize a binding
+    /// from request JSON. The existing plan/commit boundary owns persistence,
+    /// revision conflicts and undo. Preparing the plan never publishes audio.
+    pub fn plan_bound_plugin_sidechain(
+        &mut self,
+        session_id: &EntityId,
+        base_revision: u64,
+        node_id: &EntityId,
+        binding: &audiorouter_plugin_host::bus_discovery::VerifiedSidechainBinding,
+    ) -> Result<EntityId, ControlError> {
+        self.ensure_session_loaded(session_id)?;
+        let mut candidate = self.get_session(session_id)?.clone();
+        let node = candidate
+            .nodes
+            .iter_mut()
+            .find(|node| &node.id == node_id)
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("sidechain plugin node was not found".into())
+            })?;
+        let format = node.parameters.get("format").and_then(Value::as_str);
+        let class_matches = match format {
+            Some("vst3") => {
+                node.parameters.get("classId").and_then(Value::as_str) == binding.class_id()
+            }
+            Some("vst2") => binding.class_id().is_none(),
+            _ => false,
+        };
+        if node.kind != NodeKind::Plugin
+            || node.parameters.get("fingerprint").and_then(Value::as_str)
+                != Some(binding.fingerprint())
+            || !class_matches
+        {
+            return Err(ControlError::InvalidRequest(
+                "sidechain binding does not match this plugin's fingerprint and class".into(),
+            ));
+        }
+        let layout = binding.layout();
+        let main = node
+            .ports
+            .iter()
+            .find(|port| port.direction == PortDirection::Input && port.name != "sidechain");
+        let output = node
+            .ports
+            .iter()
+            .find(|port| port.direction == PortDirection::Output);
+        if layout.input_buses().len() != 2
+            || main.is_none_or(|port| u16::from(port.channels) != layout.input_buses()[0])
+            || output.is_none_or(|port| u16::from(port.channels) != layout.output_buses()[0])
+        {
+            return Err(ControlError::InvalidRequest(
+                "discovered plugin buses do not match the graph's main ports".into(),
+            ));
+        }
+        let channels = layout.input_buses()[1] as u8;
+        if let Some(port) = node.plugin_sidechain_port() {
+            if port.channels != channels {
+                return Err(ControlError::InvalidRequest("existing sidechain port width differs from discovery; remove its connections before changing the port".into()));
+            }
+        } else {
+            node.ports.push(audiorouter_domain::Port {
+                name: "sidechain".into(),
+                direction: PortDirection::Input,
+                channels,
+            });
+        }
+        // Validation includes the entire candidate and every incident edge;
+        // no existing channel map is rewritten to accommodate the new port.
+        self.plan_graph(session_id, base_revision, candidate)
+    }
+
     pub fn commit_graph(
         &mut self,
         plan_id: &EntityId,
         base_revision: u64,
         idempotency_key: &str,
     ) -> Result<Value, ControlError> {
-        self.commit_graph_scoped(plan_id, base_revision, idempotency_key, idempotency_key)
+        self.commit_graph_scoped(
+            plan_id,
+            base_revision,
+            idempotency_key,
+            idempotency_key,
+            None,
+        )
     }
 
     pub(crate) fn commit_graph_scoped(
@@ -440,10 +517,25 @@ impl ControlPlane {
         base_revision: u64,
         idempotency_key: &str,
         display_operation_id: &str,
+        require_stopped_session: Option<EntityId>,
     ) -> Result<Value, ControlError> {
-        let commit_started = Instant::now();
+        let commit_started = std::time::Instant::now();
+        // A plan can wait between preparation and commit. Re-check that every
+        // plugin placeholder still has a current explicit scan result, so a
+        // queued port or graph edit cannot bypass capability verification.
+        if let Some(candidate) = self.store.plan_candidate(plan_id) {
+            self.validate_plugin_placeholders(candidate)?;
+        }
         let checkpoint = self.store.clone();
-        let fingerprint = format!("graph.commit:{}:{}", plan_id.as_str(), base_revision);
+        let fingerprint = match &require_stopped_session {
+            Some(session_id) => format!(
+                "graph.commit:{}:{}:requireStoppedSessionId:{}",
+                plan_id.as_str(),
+                base_revision,
+                session_id.as_str()
+            ),
+            None => format!("graph.commit:{}:{}", plan_id.as_str(), base_revision),
+        };
         let request_hash = audiorouter_storage::lower_hex(&Sha256::digest(fingerprint.as_bytes()));
         if let Some(storage) = &self.storage {
             if let Some(result) = storage
@@ -455,6 +547,18 @@ impl ControlPlane {
                 response["idempotentReplay"] = json!(true);
                 response["activation"] = json!({ "state": "pending", "runtime": "fake" });
                 return Ok(response);
+            }
+        }
+        if let Some(session_id) = &require_stopped_session {
+            if self
+                .runtimes
+                .get(session_id)
+                .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+                || self.native_worker_attached_to(session_id)
+            {
+                return Err(ControlError::InvalidRequest(
+                    "this graph commit requires its session to be stopped".into(),
+                ));
             }
         }
         let result = match self
@@ -766,6 +870,31 @@ impl ControlPlane {
                 None => None,
             },
         };
+        let require_stopped_session = params
+            .get("requireStoppedSessionId")
+            .map(|value| {
+                value
+                    .as_str()
+                    .filter(|id| {
+                        !id.is_empty() && id.len() <= audiorouter_domain::MAX_ENTITY_ID_BYTES
+                    })
+                    .map(EntityId::new)
+                    .ok_or_else(|| {
+                        ControlError::InvalidRequest(
+                            "requireStoppedSessionId must be a non-empty session ID".into(),
+                        )
+                    })
+            })
+            .transpose()?;
+        if candidate.as_ref().is_some_and(|candidate| {
+            require_stopped_session
+                .as_ref()
+                .is_some_and(|session_id| candidate.id != *session_id)
+        }) {
+            return Err(ControlError::InvalidRequest(
+                "requireStoppedSessionId does not match the graph plan".into(),
+            ));
+        }
         let expected_warnings = candidate
             .as_ref()
             .map(|candidate| self.endpoint_feedback_warnings(candidate))
@@ -824,7 +953,13 @@ impl ControlPlane {
             .and_then(Value::as_str)
             .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
         let scoped_key = self.scoped_idempotency_key("graph.commit", key);
-        self.commit_graph_scoped(&plan_id, base_revision, &scoped_key, key)
+        self.commit_graph_scoped(
+            &plan_id,
+            base_revision,
+            &scoped_key,
+            key,
+            require_stopped_session,
+        )
     }
 
     pub(crate) fn dispatch_meter_reset(

@@ -7,6 +7,77 @@
   Keyboard shortcuts and work while AudioRouter is minimized. The old in-app
   Ctrl+Shift+S and Ctrl+Shift+M bindings and their Local shortcuts panel are
   removed.
+- **Sidechain failures stay stopped during recovery.** A route with a failed
+  sidechain plugin is no longer restarted automatically after sleep, device
+  loss or a backend failure.
+- **MIDI recovery is more reliable.** Stop all notes releases canceled timed
+  sequences promptly. MIDI status reports a reconnected keyboard as disconnected
+  until the route opens a new connection; identical device names are not guessed.
+
+- **Recovery keeps failed plugin routes stopped.** A route with an unavailable
+  plugin is no longer restarted automatically after sleep or a device change.
+- **Late replies respect the current action.** An event poll cannot replace a
+  reconnect snapshot, and a stable update check cannot inherit a prerelease
+  result from an earlier request.
+- **Recovery notices follow the latest event.** A later successful restart is
+  no longer shown as a failure because an older failure appeared in the same
+  event batch.
+- **Stopped-session checks reject malformed guards.** Invalid graph-commit
+  preconditions can no longer be silently treated as absent.
+- **VST2 plugins get the calling thread's processing status.** Opening an
+  editor while audio is processing no longer makes its thread appear realtime.
+
+Plugin support work on the `feature/vst-plugin-experience` branch. Nothing here
+is released, signed or tested on a clean install yet.
+
+- **Instruments and MIDI.** A new Instrument tool plays VST2 and VST3 synths and
+  samplers from the on-screen keyboard, a MIDI keyboard or an assistant
+  (`play_notes`). Plugins that declare themselves instruments, including DPF
+  ones with a bare `Instrument` category, are kept out of the effect tool.
+- **32-bit plugins.** 32-bit VST2 and VST3 plugins run in their own 32-bit
+  isolated worker.
+- **Plugin census.** A generated page lists how every tested plugin behaved:
+  172 of 190 effects passed every step and 3 of 4 instruments played a note
+  ([plugin census](plugin-census.md), [compatibility](plugin-compatibility.md)).
+  Known problems: AmplitudeImposer is silent, ProM and ZamAutoSat do not
+  restore saved state, ReaControlMIDI crashes when its state is restored (a
+  plugin bug), and PolyMAX needs the UA Connect sign-in.
+- **VST2 programs and presets.** The plugin's Properties can list VST2
+  programs, choose one, and import a `.fxp` or `.fxb` file kept beside the
+  plugin. VST3 programs are listed read-only.
+- **Sidechain input (VST3).** A VST3 plugin that declares an auxiliary input
+  can be given a named `sidechain` port, and have it removed, from its
+  Properties, over the API or from an assistant. It creates no Mixer and no
+  connection of its own.
+- **Safer VST3 hosting.** The worker asks a plugin whether it accepts 32-bit
+  audio before starting it and refuses plainly if not; the saved state of
+  plugins that reject it is recovered from their parameters.
+
+Known limits: shell VST2 plugins and `.fxp` files are covered by fixtures but
+not by a real third-party shell DLL; there is no VST3 unit tree or context menu;
+editors cannot be resized or follow monitor scaling changes yet; the sidechain
+input has not been heard on a real route; hardware MIDI input, a live listening
+check and the hosted 32-bit build are still to do. Roll back by installing the
+previous version; saved routes without Instrument or sidechain nodes load in
+older builds.
+- **Recover a microphone whose Windows ID changed.** Stopped saved routes can
+  recover a missing input from its remembered name when exactly one active
+  capture device matches. Audio stays stopped until Play. Missing name metadata
+  or ambiguous matches still require manual selection.
+- **Go straight to the input that needs fixing.** Open affected tool brings
+  the input selector into view, focuses it and briefly highlights it.
+
+- **See a custom theme before using it.** Settings → Appearance now shows a
+  live workspace preview while you edit a theme: a small canvas with flowing,
+  silent and paused connections, plus tool text, a field, a slider and a
+  primary action. Choosing any colour repaints the preview immediately.
+- **Contrast warnings take you to the color.** Click either color name in a
+  warning such as "Secondary text on app background" and that picker opens,
+  scrolls into view, takes focus and briefly lights up.
+- **The color picker shows the contrast line.** The saturation square now
+  dims the shades that miss the guidance and draws the boundary as a white
+  line with a dark edge. It names the worst pair and suggests a lighter or
+  darker shade when that is enough.
 
 ## 0.0.29 — 2026-11-12 (unsigned experimental preview)
 
@@ -30,7 +101,7 @@
   sessions are quarantined without losing data, recordings finish after audio
   stops, the stereo Limiter's linked detection is corrected, and inserting or
   removing a tool keeps ports, Mixer volumes and disabled links.
-- **The new-version check now shows what it is doing.** Settings → New versions now shows what it is doing.** Settings → New versions
+- **The new-version check now shows what it is doing.** Settings → New versions
   shows the last successful check, the next attempt and a Check now button. A
   missing connection is no longer silent: the check retries with increasing
   waits for up to 12 hours, then waits for the next day and says so. You can

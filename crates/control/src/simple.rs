@@ -73,7 +73,9 @@ pub(crate) fn node_template(kind: NodeKind) -> Option<(&'static str, Vec<Port>, 
         NodeKind::FirFilter => tool("FIR Filter", "Applies a room or speaker impulse response."),
         NodeKind::TimeShift => tool("Time Shift", "A live-audio DVR: pause, jump back and return to live."),
         NodeKind::FunVoiceChanger => tool("Fun Voice Changer", "Playful voice presets: pitch correct, deep, robot, radio and more; tweak any of them."),
+        // Plugin-backed kinds are created from a scanned plugin, not by name.
         NodeKind::Plugin
+        | NodeKind::Instrument
         | NodeKind::ApplicationCapture
         | NodeKind::EndpointLoopback
         | NodeKind::VirtualRenderSource
@@ -262,8 +264,19 @@ fn connect_ports(
         .iter()
         .filter(|port| port.direction == PortDirection::Input)
         .filter(|port| to_input.is_none_or(|name| port.name == name))
+        // A plugin's sidechain input is only ever connected by name: a second
+        // source for the main input must never become the key by accident.
+        .filter(|port| {
+            to_input.is_some() || !(target.kind == NodeKind::Plugin && port.name == "sidechain")
+        })
         .find(|port| target.kind == NodeKind::Mixer || !session.edges.iter().any(|edge| edge.destination_node == *to && edge.destination_port == port.name))
         .ok_or_else(|| {
+            if to_input == Some("sidechain") && target.kind == NodeKind::Plugin {
+                return ControlError::InvalidRequest(format!(
+                    "the sidechain input of \"{}\" already has a source; disconnect it first, then connect the new one",
+                    target.name
+                ));
+            }
             ControlError::InvalidRequest(format!(
                 "\"{}\" already has an input connected; remove that connection first or add a Mixer",
                 target.name
@@ -981,8 +994,13 @@ impl ControlPlane {
             _ => return Err(ControlError::InvalidRequest("method not found".into())),
         }
         let plan = self.plan_graph(session_id, current.revision, candidate)?;
-        let commit =
-            self.commit_graph_scoped(&plan, current.revision, &format!("{method}:{key}"), key)?;
+        let commit = self.commit_graph_scoped(
+            &plan,
+            current.revision,
+            &format!("{method}:{key}"),
+            key,
+            None,
+        )?;
         let mut result = detail;
         if let Some(object) = result.as_object_mut() {
             object.insert("sessionId".into(), json!(session_id));

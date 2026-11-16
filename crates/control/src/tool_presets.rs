@@ -39,6 +39,7 @@ fn takes_presets(kind: NodeKind) -> bool {
         | NodeKind::VirtualCaptureSink
         | NodeKind::TestSignal
         | NodeKind::Soundboard
+        | NodeKind::Instrument
         | NodeKind::AudioFile
         | NodeKind::NetworkSend
         | NodeKind::NetworkReceive

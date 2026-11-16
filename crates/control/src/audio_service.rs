@@ -126,6 +126,7 @@ impl ControlPlane {
         self.expire_comparison(now);
         #[cfg(windows)]
         self.service_sleep_route_recovery(now);
+        self.service_instrument_midi_connections(now);
         self.audio_service.recorder_drain_micros = 0;
         let running = |plane: &Self, session: &Option<EntityId>| -> Option<(EntityId, u64)> {
             let session = session.as_ref()?;
@@ -197,6 +198,9 @@ impl ControlPlane {
         // all of them so a queue never fills while audio plays.
         let _ = self.drain_attached_recorders();
         self.maintain_node_recordings(now);
+        // Plugin workers can fail between API calls. Withdraw recovery
+        // eligibility before a later backend failure can revive them.
+        self.publish_running_witness();
         self.audio_service.record(now, serviced != 0);
         serviced
     }

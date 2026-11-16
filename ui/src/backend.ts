@@ -221,6 +221,7 @@ export interface UiBackend {
     baseRevision: number,
     idempotencyKey: string,
     acknowledgments?: string[],
+    requireStoppedSessionId?: string,
   ): Promise<GraphCommitResult>;
   listGraphHistory(sessionId: string, cursor?: string, limit?: number): Promise<GraphHistoryPage>;
   undoGraphPlan(sessionId: string, baseRevision: number): Promise<GraphUndoPlanResult>;
@@ -246,8 +247,33 @@ export interface UiBackend {
   ): Promise<MethodResult["soundboard.trigger"]>;
   soundboardStop?(sessionId: string, nodeId: string, slot?: number): Promise<MethodResult["soundboard.stop"]>;
   soundboardStatus?(sessionId: string, nodeId: string): Promise<MethodResult["soundboard.status"]>;
+  /** Instrument: MIDI keyboards connected now, and the notes the on-screen keyboard sends. */
+  midiDevices?(): Promise<MethodResult["midi.devices"]>;
+  midiSendEvents?(
+    sessionId: string,
+    nodeId: string,
+    events: MethodParams["midi.sendEvents"]["events"],
+  ): Promise<MethodResult["midi.sendEvents"]>;
   /** Retry a plugin silenced for passing a recording device's audio through unchanged. */
   resumePlugin?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.resume"]>;
+  /** Give a VST3 plugin node its declared auxiliary input as a named sidechain port. */
+  addPluginSidechainPort?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.addSidechainPort"]>;
+  /** Remove a plugin node's sidechain port; refused while a connection uses it. */
+  removePluginSidechainPort?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.removeSidechainPort"]>;
+  /** Bounded VST2 programs of a plugin in a playing route. */
+  listPluginPrograms?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.programs"]>;
+  /** Select one VST2 program by its bounded index. */
+  selectPluginProgram?(
+    sessionId: string,
+    nodeId: string,
+    program: number,
+  ): Promise<MethodResult["plugins.selectProgram"]>;
+  /** Apply a VST2 .fxp or .fxb preset from the plugin's own directory. */
+  applyPluginPreset?(
+    sessionId: string,
+    nodeId: string,
+    presetPath: string,
+  ): Promise<MethodResult["plugins.applyPreset"]>;
   soundLibraryList?(): Promise<MethodResult["soundLibrary.list"]>;
   soundLibraryRead?(id: string): Promise<MethodResult["soundLibrary.read"]>;
   transportTimeShift?(
@@ -273,7 +299,7 @@ export interface UiBackend {
   obsPreview?(changes: MethodParams["obs.preview"]["changes"]): Promise<MethodResult["obs.preview"]>;
   obsApply?(previewId: string): Promise<MethodResult["obs.apply"]>;
   obsRestore?(): Promise<MethodResult["obs.restore"]>;
-  listDevices(): Promise<DeviceListItem[]>;
+  listDevices(includeInactive?: boolean): Promise<DeviceListItem[]>;
   prepareNativeEndpoint?(
     sessionId: string,
     captureEndpointId: string,
@@ -873,12 +899,13 @@ export function createLiveBackend(
         candidate,
       });
     },
-    async commitGraph(planId, baseRevision, idempotencyKey, acknowledgments) {
+    async commitGraph(planId, baseRevision, idempotencyKey, acknowledgments, requireStoppedSessionId) {
       return client.request("graph.commit", {
         planId,
         baseRevision,
         idempotencyKey,
         ...(acknowledgments === undefined ? {} : { acknowledgments }),
+        ...(requireStoppedSessionId === undefined ? {} : { requireStoppedSessionId }),
       });
     },
     async listGraphHistory(historySessionId, cursor, limit) {
@@ -916,8 +943,29 @@ export function createLiveBackend(
     async soundboardStatus(currentSessionId, nodeId) {
       return client.request("soundboard.status", { sessionId: currentSessionId, nodeId });
     },
+    async midiDevices() {
+      return client.request("midi.devices", undefined);
+    },
+    async midiSendEvents(currentSessionId, nodeId, events) {
+      return client.request("midi.sendEvents", { sessionId: currentSessionId, nodeId, events });
+    },
     async resumePlugin(currentSessionId, nodeId) {
       return client.request("plugins.resume", { sessionId: currentSessionId, nodeId });
+    },
+    async addPluginSidechainPort(currentSessionId, nodeId) {
+      return client.request("plugins.addSidechainPort", { sessionId: currentSessionId, nodeId });
+    },
+    async removePluginSidechainPort(currentSessionId, nodeId) {
+      return client.request("plugins.removeSidechainPort", { sessionId: currentSessionId, nodeId });
+    },
+    async listPluginPrograms(currentSessionId, nodeId) {
+      return client.request("plugins.programs", { sessionId: currentSessionId, nodeId });
+    },
+    async selectPluginProgram(currentSessionId, nodeId, program) {
+      return client.request("plugins.selectProgram", { sessionId: currentSessionId, nodeId, program });
+    },
+    async applyPluginPreset(currentSessionId, nodeId, presetPath) {
+      return client.request("plugins.applyPreset", { sessionId: currentSessionId, nodeId, presetPath });
     },
     async soundLibraryList() {
       return client.request("soundLibrary.list", undefined);
@@ -985,9 +1033,13 @@ export function createLiveBackend(
     async obsRestore() {
       return client.request("obs.restore", { idempotencyKey: uiIdempotencyKey("obs-restore") });
     },
-    async listDevices() {
+    async listDevices(includeInactive = false) {
       const devices: DeviceListItem[] = await collectPagedRows((cursor) =>
-        client.request("devices.list", cursor === null ? { limit: 500 } : { limit: 500, cursor }),
+        client.request("devices.list", {
+          limit: 500,
+          ...(cursor === null ? {} : { cursor }),
+          ...(includeInactive ? { includeInactive: true } : {}),
+        }),
       );
       rememberDeviceNames(devices);
       return devices;

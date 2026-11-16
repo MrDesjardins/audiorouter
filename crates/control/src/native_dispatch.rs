@@ -224,8 +224,12 @@ impl ControlPlane {
         }
         let defaults = audiorouter_windows_audio::enumerate_default_endpoint_bindings()
             .map_err(audio_control_error)?;
-        let display_info = audiorouter_windows_audio::enumerate_active_endpoint_display_info()
-            .map_err(audio_control_error)?;
+        let display_info = if include_inactive {
+            audiorouter_windows_audio::enumerate_endpoint_display_info()
+        } else {
+            audiorouter_windows_audio::enumerate_active_endpoint_display_info()
+        }
+        .map_err(audio_control_error)?;
         let endpoint_states = include_inactive
             .then(audiorouter_windows_audio::enumerate_endpoint_states)
             .transpose()
@@ -781,6 +785,7 @@ impl ControlPlane {
                 NodeKind::TestSignal
                 | NodeKind::AudioFile
                 | NodeKind::Soundboard
+                | NodeKind::Instrument
                 | NodeKind::PhysicalOutput
                 | NodeKind::VirtualCaptureSink
                 | NodeKind::NetworkSend
@@ -1447,11 +1452,26 @@ impl ControlPlane {
 
     /// Whether a plugin worker of this session has stopped.
     pub(crate) fn session_has_failed_plugin(&self, id: &EntityId) -> bool {
-        self.plugin_bridges.lock().is_ok_and(|bridges| {
+        let failed = self.plugin_bridges.lock().map_or(true, |bridges| {
             bridges.iter().any(|((session, _), bridge)| {
-                session == id && bridge.upgrade().is_some_and(|bridge| bridge.failed())
+                session == id && bridge.upgrade().is_none_or(|bridge| bridge.failed())
             })
-        })
+        });
+        #[cfg(windows)]
+        let failed = failed
+            || self.sidechain_bridges.lock().map_or(true, |bridges| {
+                bridges.iter().any(|((session, _), bridge)| {
+                    session == id
+                        && bridge.upgrade().is_none_or(|bridge| {
+                            matches!(
+                                bridge.health_state(),
+                                audiorouter_plugin_host::WorkerState::Failed
+                                    | audiorouter_plugin_host::WorkerState::Quarantined
+                            )
+                        })
+                })
+            });
+        failed
     }
 
     /// Poll endpoint notifications from a mutating native lifecycle boundary.

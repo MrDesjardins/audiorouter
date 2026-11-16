@@ -3051,6 +3051,9 @@ export function SessionFlowCanvas({
                   );
                 });
               })}
+            {node.ports.some((port) => port.name === "sidechain" && port.direction === "input") ? (
+              <span className="flow-node-sidechain-label">Sidechain input</span>
+            ) : null}
             {pendingNodeIds?.has(node.id) && (
               <span
                 className="node-save-indicator"

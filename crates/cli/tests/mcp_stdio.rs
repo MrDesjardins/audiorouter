@@ -22,6 +22,28 @@ fn cli_path() -> String {
     })
 }
 
+fn assert_advanced_tool_catalog(tools: &Value) {
+    let tools = tools.as_array().expect("tool catalogue array");
+    let names = tools
+        .iter()
+        .map(|tool| tool["name"].as_str().unwrap())
+        .collect::<std::collections::HashSet<_>>();
+    assert_eq!(names.len(), tools.len(), "tool names must be unique");
+    for name in [
+        "get_recipes",
+        "list_sessions",
+        "play_notes",
+        "add_plugin_sidechain_port",
+        "remove_plugin_sidechain_port",
+        "call_api",
+    ] {
+        assert!(names.contains(name), "missing tool {name}");
+    }
+    for tool in tools {
+        assert_eq!(tool["inputSchema"]["type"], "object", "{tool}");
+    }
+}
+
 fn send(input: &mut impl Write, output: &mut impl BufRead, message: Value) -> Value {
     writeln!(input, "{}", serde_json::to_string(&message).unwrap()).unwrap();
     input.flush().unwrap();
@@ -114,10 +136,7 @@ fn assert_stdio_client(client_id: &str) {
             "params": { "_meta": modern_meta }
         }),
     );
-    assert_eq!(
-        modern_tools["result"]["tools"].as_array().unwrap().len(),
-        99
-    );
+    assert_advanced_tool_catalog(&modern_tools["result"]["tools"]);
     assert_eq!(modern_tools["result"]["resultType"], "complete");
     assert_eq!(modern_tools["result"]["cacheScope"], "public");
 
@@ -300,7 +319,7 @@ fn assert_stdio_client(client_id: &str) {
         &mut output,
         json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": { "_meta": { "example.com/trace": "legacy-list" } } }),
     );
-    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 99);
+    assert_advanced_tool_catalog(&tools["result"]["tools"]);
 
     // A malformed line gets a JSON-RPC parse error and the session continues.
     writeln!(input, "{{ not json").unwrap();

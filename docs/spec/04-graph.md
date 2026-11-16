@@ -9,7 +9,7 @@ Milestone ownership: M01 model/compiler contracts; M02 live graph activation; M0
 | Session | UUID, name, schema version, revision, nodes, edges, safety/startup policies | run state, active revision, graph generation, health |
 | Node | UUID, type/version, name, enabled, bypass policy, parameters, port definitions | resolved device/plugin, health, latency, meter snapshot |
 | Edge | UUID, source/destination node and port, channel matrix, enabled | compiled route, effective latency |
-| Device binding | endpoint ID or default-role selector, expected direction, fallback policy | resolved endpoint ID, availability, negotiated format |
+| Device binding | endpoint ID or default-role selector, expected direction, fallback policy | resolved endpoint ID, availability, negotiated format; CAP-02 may consult the local endpoint-name cache or Windows inactive endpoint identity for an unambiguous saved-input rebind |
 | App binding | verified executable/package identity, instance policy, include/exclude mode | PID + creation time, process tree, capture state |
 | Virtual bus | UUID, display name, driver endpoint identities, channel count, enabled | owner lease, clients, health, restart requirement |
 | Recording | UUID, session/node IDs, file references, format, start frame | bytes, duration, gaps, state, recovery result |
@@ -37,6 +37,28 @@ IDs are opaque strings, independent of names, array position, PID, or screen coo
 - **GRAPH-16 — Network Send and Network Receive.** A Network Send node is a sink that streams its input over UDP to one configured IPv4/IPv6 literal and port on the local network. A Network Receive node is a source that plays the stream from one configured sender address on a local port, through a bounded jitter buffer (10–500 ms, default 40 ms). The stream carries mono or stereo float32 quanta at the internal 48 kHz rate in a versioned, length-checked datagram. Lost packets are concealed with silence; late or duplicate packets are dropped; small sender/receiver clock differences are corrected without audible steps. Host names are never resolved. Both nodes run on the multi-path worker; privacy mute and disabled flags apply as for any sink/source. Address, port and buffer changes saved while playing take effect without Stop/Play, and a session whose only outputs are Network Send nodes is a complete route. A receiver names the address of authenticated AudioRouter audio it ignored so the user can correct the sender. Both nodes take an optional `pairingKey` (blank, or 16–128 printable characters); with the same key on both, version-3 datagrams are encrypted and authenticated and replays are dropped, including after receiver restart through fresh authenticated receiver-token negotiation (SEC-13). The key can change while playing. Paired peers must update together; there is no unencrypted pairing fallback. Blank keys retain plaintext version 1 with a visible warning.
 
 ## Node registry minimum
+
+### Plugin sidechain saved topology
+
+The sidechain representation is port-derived: an effect Plugin may store one
+input port named `sidechain`, with one or two channels, beside one main input
+and one same-width main output. Do not duplicate this width or enablement in
+node parameters. A missing port retains the legacy single-stream topology;
+loading a session never adds the port or changes its edges. Each input accepts
+one edge independently; the key input is never implicitly summed with main.
+The complete dependency graph, including key edges, remains acyclic. Deliberate
+bypass maps only main input to main output, never the key input.
+
+Saved topology is not evidence that an installed plugin supports an auxiliary
+input. Before creating or activating the port, the backend must verify the
+current plugin fingerprint/class and its isolated worker's discovered bus
+metadata. VST3 requires a declared auxiliary input; VST2 requires explicit
+sidechain/key pin labels. User-authored port names and additional channel counts
+do not establish that capability. Missing key connections supply silence.
+Until graph-to-worker auxiliary binding is implemented, this build refuses
+plugin preparation for a saved sidechain port with the affected node named;
+it does not claim playable sidechain support. This paragraph records the
+VSTC-01 staging boundary for GRAPH-01/02/03/06, not a completed release gate.
 
 M02: Physical Input, Application Capture, Endpoint Loopback, Physical Output, Mixer, Gain, Mute, Meter; Network Send and Network Receive (GRAPH-16, added 2026-09-26). M03: Virtual Render Source, Virtual Capture Sink. M04: Parametric EQ, Graphic EQ, Gate/Expander, Compressor, Limiter, Delay, Recorder. M06: Pitch Shift and VST3 Effect. Template/group/preset are authoring concepts that expand to regular nodes, not opaque code execution.
 

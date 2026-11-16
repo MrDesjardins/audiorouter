@@ -38,6 +38,7 @@ pub fn slug(kind: &str) -> Option<&'static str> {
         "networkSend" => "network-send",
         "networkReceive" => "network-receive",
         "plugin" => "plugin",
+        "instrument" => "instrument",
         "group" => "group",
         _ => return None,
     })

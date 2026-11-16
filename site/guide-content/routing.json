@@ -938,7 +938,7 @@
       "kind": "plugin",
       "title": "VST Plugin",
         "purpose": "Use a compatible installed x64 VST effect in an isolated worker.",
-      "concept": "Each plugin defines its own automatable controls; scanning discovers metadata, while adding and preparing a plugin is a separate action.",
+      "concept": "Each plugin defines its own automatable controls; scanning discovers metadata, while adding and preparing a plugin is a separate action. For VST3, Load programs also shows the plugin's declared unit hierarchy and program names when available.",
       "signalBehavior": "An effect processes the branch through its isolated worker. A failed processor on protected voice produces silence until deliberate recovery.",
       "properties": [
         {
@@ -984,6 +984,20 @@
             "caution": "A newer plugin may reject its previous state. Start from defaults is an explicit fallback, never an automatic dry-microphone bypass."
           },
           {
+            "key": "sidechain",
+            "label": "Sidechain input",
+            "type": "action",
+            "unit": null,
+            "minimum": null,
+            "maximum": null,
+            "default": null,
+            "meaning": "Add the named sidechain input only when the VST3 plugin declares an auxiliary bus. Connect the key source to that input on the canvas; the key is not summed into the plugin's main signal. Disconnect it before removing the port.",
+            "increase": "",
+            "decrease": "",
+            "example": "Connect a voice source to the plugin's main input and a music source to Sidechain input for a ducking effect.",
+            "caution": "This control is available only for a VST3 plugin with an auxiliary input. Replacing an occupied key asks first and never adds a Mixer."
+          },
+          {
             "key": "pluginParameter:<parameterId>",
           "label": "Plugin-provided parameter title",
           "type": "number",
@@ -1014,12 +1028,31 @@
             "Match perceived loudness before judging the result.",
             "If the plugin faults, inspect the error and recover deliberately."
           ]
+        },
+        {
+          "title": "Read VST3 program structure",
+          "steps": [
+            "Open the plugin's Properties while the route is playing and choose Load programs.",
+            "Review any unit hierarchy and program names the plugin reports.",
+            "Choose a VST3 program in the plugin's own window; AudioRouter lists VST3 metadata for reference only."
+          ]
+        },
+        {
+          "title": "Set up a VST3 sidechain",
+          "steps": [
+            "Add a VST3 plugin that declares an auxiliary input, then save the route.",
+            "In Properties, choose Add sidechain input and save the route again.",
+            "Connect the program audio to the plugin's main input, then connect the key source to the canvas handle labeled Sidechain input.",
+            "The key controls the plugin through its auxiliary bus; it is not summed into the main signal. If a key is already connected, confirm Replace sidechain source to switch it."
+          ]
         }
       ],
       "commonMistakes": [
         "Scan completion does not mean plugin code has been loaded or has processed audio.",
         "A running session can contain a silent failed plugin path.",
-        "Do not use another plugin’s values as though parameter IDs or scales were shared."
+        "Do not use another plugin’s values as though parameter IDs or scales were shared.",
+        "Plugin-specific VST3 context-menu commands are unavailable in AudioRouter; use the plugin's own window.",
+        "A second connection to an occupied main input is a Mixer/sum choice. For ducking, add the plugin's named Sidechain input and connect the key to that handle."
       ],
       "suggestedVisual": {
         "type": "plugin",
@@ -1030,6 +1063,103 @@
         "ui/src/NodeEditors.tsx",
         "docs/spec/07-processing.md",
         "docs/spec/13-security.md"
+      ]
+    },
+    {
+      "kind": "instrument",
+      "title": "Instrument",
+      "purpose": "Play an installed VST instrument (a synth or sampler) as a sound source in your route.",
+      "concept": "An instrument makes sound from notes instead of changing incoming audio. It has an output and no input. Notes come from the on-screen keyboard, a connected MIDI keyboard, or a script or assistant.",
+      "signalBehavior": "The instrument runs in its own isolated worker and is silent until it receives a note. Stopping the route, or a worker restart, releases every held note.",
+      "properties": [
+        {
+          "key": "path",
+          "label": "Scanned instrument",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "increase": "",
+          "decrease": "",
+          "meaning": "Scan a plugin folder, then pick the instrument under Instruments (VST2/VST3) and add it. The exact file you picked is remembered.",
+          "example": "Scan your VST3 folder and add a synth you already own.",
+          "caution": "Some instruments are only recognised after the first attempt to use them as an effect is refused; they then move to the Instruments list."
+        },
+        {
+          "key": "midiInput",
+          "label": "Notes come from",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "keyboard",
+          "increase": "",
+          "decrease": "",
+          "meaning": "Chooses the note source: the on-screen keyboard only, every connected MIDI device, or one named MIDI device. The on-screen keyboard and the API always work.",
+          "example": "Choose your MIDI keyboard by name so a second controller does not also play this instrument.",
+          "caution": "A saved device that is unplugged stays selected and is shown as not connected; the instrument is silent until it returns or you choose another source."
+        },
+        {
+          "key": "keyboard",
+          "label": "On-screen keyboard",
+          "type": "action",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "increase": "",
+          "decrease": "",
+          "meaning": "Two octaves from C4. Press a key to play a note and release it to stop. The keys work while the route plays.",
+          "example": "Press Play, then hold C4 to check the instrument reaches your output.",
+          "caution": "An instrument with a long release keeps sounding for a moment after you let go."
+        },
+        {
+          "key": "stopAllNotes",
+          "label": "Stop all notes",
+          "type": "action",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "increase": "",
+          "decrease": "",
+          "meaning": "Releases every held note on this instrument at once.",
+          "example": "Use it if a note keeps sounding after a MIDI device was unplugged mid-note.",
+          "caution": ""
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Play a synth to your headphones",
+          "steps": [
+            "Scan your plugin folder and add the synth from the Instruments list.",
+            "Connect Instrument → Physical Output, choose the output and Save.",
+            "Press Play, then press keys on the on-screen keyboard."
+          ]
+        },
+        {
+          "title": "Use a MIDI keyboard",
+          "steps": [
+            "Plug in the keyboard before opening Properties.",
+            "Choose it under Notes come from and Save.",
+            "Press Play and play; use Stop all notes if a note hangs."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "The keys are disabled until the route plays.",
+        "An instrument has no input: connect its output to a Mixer or an output, not after a microphone.",
+        "A licensed instrument can load and stay silent until its vendor app is signed in."
+      ],
+      "suggestedVisual": {
+        "type": "plugin",
+        "caption": "Show notes entering the isolated worker and a waveform leaving it; with no notes the output is silent."
+      },
+      "sources": [
+        "ui/src/InstrumentNodeEditor.tsx",
+        "ui/src/PluginPanels.tsx",
+        "docs/plans/active/vst-midi-instruments-design.md"
       ]
     },
     {

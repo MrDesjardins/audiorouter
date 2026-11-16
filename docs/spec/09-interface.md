@@ -121,7 +121,7 @@ as a failed current-profile setup.
 - **UI-05 — Inspector.** Offer sliders plus precise text entry, unit labels, reset, presets, pre/post meters, and an effect of change summary. Rejected values remain an editable draft with a reason; do not display them as active. Expensive rebuild operations show progress and preserve last committed values on failure. Audio File settings include descriptive source state, a WAV/MP3 picker, and a loop toggle that remains editable while the session is running; loop changes use the live parameter-save path. Decoding is backend-owned and bounded. Temporary voice takes use an already-connected Recorder node on a running route and become expiring backend media after the temporary WAV and library row are removed, kept for good once a saved session plays them. A Play the backend refuses for one node (`nodeNotReady`) marks that node on the canvas with an outline and a "Cannot play" tag over its edge, without resizing it, selects it and opens its Properties; the mark stays until that node changes or Play succeeds; Sound Check is limited to 10 seconds (UI-24). The local shell may request `Record`; it does not gain capture-device or endpoint-administration authority. Voice recording controls may not capture through renderer/browser APIs.
 - **UI-06 — Routing explanation.** Selecting an output shows “Receives audio from” with all source paths, processing, muted/bypassed sections, and latency estimates. `Voice Chat` must visibly exclude desktop/call-return in the reference template. Explanations come from `routes.inspect` and remain available headlessly.
 - **UI-07 — Live editing.** Parameter changes use bounded/coalesced requests during dragging and one final committed target. Topology edits use backend plan/commit; the UI presents one Save route action and requests a second confirmation only for warnings. Local UI optimism never overrides a backend conflict. When another client edits, merge nonconflicting presentation state and render the new authoritative graph. Show who changed what using client identity, not guessed person names. Automatic parameter saving is optional: Settings → Appearance → Live autosave (default on). When off, parameter edits stay as an unsaved draft until Save, while enabled/bypass changes remain immediate. At most one automatic save runs at a time; edits made during it collapse into the latest draft and must not raise a review warning.
-- **UI-08 — Safety and errors.** Feedback/duplicate warnings identify actual paths and remedies. Missing devices remain on the canvas. Offer rebind, retry, inspect, or stop according to backend capability. No hidden fallback to a new microphone. An emergency privacy mute affects physical capture contributions immediately through the backend; clearing it never starts stopped sessions or recorders.
+- **UI-08 — Safety and errors.** Feedback/duplicate warnings identify actual paths and remedies. Missing devices remain on the canvas. Offer rebind, retry, inspect, or stop according to backend capability. A stopped saved physical input may be rebound automatically only by CAP-02's unique exact-name rule, through graph plan/commit; audio remains stopped until Play. Dirty drafts, running routes, and unmatched or ambiguous bindings remain unchanged and require manual repair. No hidden fallback to a new microphone. An emergency privacy mute affects physical capture contributions immediately through the backend; clearing it never starts stopped sessions or recorders.
 - **UI-09 — Sessions/presets.** Create, duplicate, rename, export/import, start/stop, and designate startup sessions. Imports open stopped with unresolved bindings highlighted. Include templates for UC-01, processed mic, app recording, and mix-minus. Presets expand into inspectable ordinary nodes. Header Play/Stop starts or stops the visible canvas route; it does not start a stopped Test Signal or Audio File source. Test Signal Play/Stop controls only that tone through the authorized source transport and may first start a stopped route. A routed, enabled Test Signal Play remains actionable when endpoint readiness is missing so the backend can report the specific start failure. Audio playback still requires the session's exact native endpoint preparation.
 - **UI-10 — Background controls.** Tray controls list session states, recording states, and open/quit actions. Omit the global mute toggle; privacy mute remains available through Properties and a global keybind. Keep the menu short (owner, 2026-11-07): a session/mic status line and a recording line ("Not recording" when idle), then Open, one item that names its action ("Play" when stopped, "Stop audio" when playing; a greyed twin was too subtle), then “Quit and stop audio”, which explicitly stops the backend after recorder finalization. The status refreshes when the menu opens; there is no Refresh item or backend pipe line. Closing the window with its own close button keeps audio running. Keyboard control is Windows-wide only (owner, 2026-11-16): Settings → Keyboard shortcuts defines global keybinds that start or stop the session, toggle privacy mute, push to talk, or trigger a soundboard slot; there are no separate in-app audio shortcuts. Offer optional always-on-top compact meters and global shortcuts, with conflict/rebinding support. Shortcuts dispatch API actions.
 - **UI-11 — Accessibility.** All essential actions work without dragging or a mouse. Provide a structured list/tree view of routes, descriptive accessible names, logical focus order, focus restoration after dialogs, high-contrast/light/dark modes, 200% zoom, and non-color status cues. Target WCAG 2.2 AA applicable criteria plus Windows Narrator testing; record the exact audit checklist in M05.
@@ -492,7 +492,12 @@ audio readiness and explains the exact endpoint and authorization steps.
       sessions where at least one of them is running (warning: "playing A
       while B plays").
     - A saved device ID that is not an active device (problem, Play is
-      refused: unplugged, disabled, or a new ID after a driver update).
+      refused: unplugged, disabled, or a new ID after a driver update). A
+      stopped saved Physical Input may be updated before Play only when Windows'
+      inactive inventory or the per-user cache associates the exact old ID with
+      a friendly name and exactly one active capture endpoint matches it. A
+      legacy ID forgotten by Windows before it was cached, duplicate names and
+      no matches remain manual.
     - A virtual cable a session uses that is not at 48 kHz (tip).
   - **Limits:** settings inside other apps are not visible; the result says
     so. Discord's own devices stay on the Apps view (UI-26). The check is a
@@ -502,9 +507,13 @@ audio readiness and explains the exact endpoint and authorization steps.
     or running-session changes, including with Status closed; Check again
     requests a fresh read. A reserved red dot on Status indicates problem
     findings and has an accessible description. Unsaved
-    drafts are not checked, and Play retains its separate authoritative
-    validation. It keeps the last result
-    through a failed read, and reserves its first lines (UI-17).
+   drafts are not checked, and Play retains its separate authoritative
+   validation. Open affected tool selects the reported node, opens Properties,
+   scrolls the implicated endpoint selector into view, focuses it and gives it
+   a temporary visible highlight. If automatic recovery did not run, the active
+   inputs remain available for manual selection; focus/navigation does not
+   change the binding, opens the native menu or starts audio. It keeps the last result
+   through a failed read, and reserves its first lines (UI-17).
 
 While a connected backend's initial snapshot is pending, show loading status
 and withhold the editable graph. Failure offers reconnect rather than editable

@@ -41,6 +41,7 @@ import { NetworkNodeEditor } from "./NetworkNodeEditor";
 import { EqSpectrumContext } from "./AdvancedEqEditor";
 import { writeEndpointBindingHint } from "./endpointBinding";
 import { recorderHasCaptureSource } from "./RecordingPanels";
+import { InstrumentNodeEditor } from "./InstrumentNodeEditor";
 import { PluginEditorControls, PluginNodeInspector, PluginRecoveryControls } from "./PluginPanels";
 import {
   ApplicationCaptureBinding,
@@ -76,6 +77,7 @@ export function PropertiesPanel({
   devices,
   refreshDevices,
   setCaptureEndpointId,
+  inputBindingFocusRequest,
   renderEndpointId,
   applications,
   applicationsError,
@@ -122,6 +124,7 @@ export function PropertiesPanel({
   devices: DeviceListItem[];
   refreshDevices: ({ announce }?: { announce?: boolean }) => void;
   setCaptureEndpointId: Dispatch<SetStateAction<string>>;
+  inputBindingFocusRequest: number;
   renderEndpointId: string;
   applications: ApplicationRow[];
   applicationsError: string | null;
@@ -349,12 +352,26 @@ export function PropertiesPanel({
               selectedNode.parameters.spatialMode === "headphones" || selectedNode.parameters.spatialMode === "speakers"
             }
             value={typeof selectedNode.parameters.endpointId === "string" ? selectedNode.parameters.endpointId : ""}
+            focusRequest={inputBindingFocusRequest}
             disabled={!backend.connected || sessionRunning}
             onRefresh={refreshDevices}
-            onChange={(value) => {
+            onChange={(value, _name) => {
               setCaptureEndpointId(value);
               writeEndpointBindingHint(session.id, value, renderEndpointId);
-              if (value) changeNodeParameterOn(selectedNode.id, "endpointId", value);
+              if (value) {
+                recordDraftChange(
+                  {
+                    ...draft,
+                    nodes: draft.nodes.map((node) =>
+                      node.id === selectedNode.id
+                        ? { ...node, parameters: { ...node.parameters, endpointId: value } }
+                        : node,
+                    ),
+                  },
+                  `${selectedNode.id}:endpointBinding`,
+                );
+                setActionMessage("Input device changed. Save to confirm this binding.");
+              }
             }}
           />
         )}
@@ -614,6 +631,25 @@ export function PropertiesPanel({
             }
           />
         )}
+        {selectedNode.kind === "instrument" && (
+          <>
+            <PluginEditorControls
+              node={selectedNode}
+              backend={backend}
+              sessionId={session.id}
+              running={sessionRunning}
+              onStateSaved={(stateId) => changeNodeParameterOn(selectedNode.id, "stateId", stateId)}
+            />
+            <InstrumentNodeEditor
+              node={selectedNode}
+              backend={backend}
+              sessionId={session.id}
+              running={sessionRunning}
+              disabled={!backend.connected}
+              onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+            />
+          </>
+        )}
         {selectedNode.kind === "plugin" && (
           <>
             <PluginEditorControls
@@ -642,6 +678,12 @@ export function PropertiesPanel({
               snapshot={liveDiagnostics ?? null}
               backend={backend}
               sessionId={session.id}
+              sidechainBlockedReason={
+                JSON.stringify(session.nodes.find((node) => node.id === selectedNode.id)) !==
+                JSON.stringify(selectedNode)
+                  ? "Save or discard changes to this tool before adding a sidechain input."
+                  : undefined
+              }
               onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
               onRemove={(names) =>
                 recordDraftChange(removeNodeDraftParameters(draft, selectedNode.id, names), `${selectedNode.id}:remove`)

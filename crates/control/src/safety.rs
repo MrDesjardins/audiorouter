@@ -63,7 +63,9 @@ impl ControlPlane {
             .runtimes
             .iter()
             .filter(|(id, runtime)| {
-                runtime.state() == RuntimeState::Running && !self.session_is_recording(id)
+                runtime.state() == RuntimeState::Running
+                    && !self.session_is_recording(id)
+                    && !self.session_has_failed_plugin(id)
             })
             .map(|(id, _)| id.clone())
             .collect::<Vec<_>>();
@@ -108,6 +110,7 @@ impl ControlPlane {
             .get_session(id)
             .map_or(true, |session| session.revision != recovery.revision)
             || self.session_is_recording(id)
+            || self.session_has_failed_plugin(id)
         {
             return;
         }
@@ -463,7 +466,9 @@ impl ControlPlane {
                         .native_multi_input_worker_session
                         .as_ref()
                         .filter(|id| {
-                            running_sessions.contains(id) && !self.session_is_recording(id)
+                            running_sessions.contains(id)
+                                && !self.session_is_recording(id)
+                                && !self.session_has_failed_plugin(id)
                         })
                     {
                         let id = id.clone();

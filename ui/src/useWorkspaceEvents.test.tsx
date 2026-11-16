@@ -74,12 +74,19 @@ it("reports an automatic route recovery and its failure", async () => {
         events: [event("devices.bindingInvalidated"), event("runtime.recovered")],
         resyncRequired: false,
       })
-      .mockResolvedValue({
+      .mockResolvedValueOnce({
         backendEpoch: 1,
         nextSequence: 3,
         events: [event("runtime.recoveryFailed")],
         resyncRequired: false,
-      }),
+      })
+      .mockResolvedValueOnce({
+        backendEpoch: 1,
+        nextSequence: 5,
+        events: [event("runtime.recoveryFailed"), event("runtime.recovered")],
+        resyncRequired: false,
+      })
+      .mockResolvedValue({ backendEpoch: 1, nextSequence: 6, events: [], resyncRequired: false }),
   };
   const cache = new SnapshotCache();
   await cache.refresh(backend);
@@ -112,6 +119,10 @@ it("reports an automatic route recovery and its failure", async () => {
       await vi.advanceTimersByTimeAsync(1000);
     });
     expect(message).toHaveBeenLastCalledWith(expect.stringContaining("could not restart the route"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(message).toHaveBeenLastCalledWith(expect.stringContaining("restarted the route"));
   } finally {
     hook.unmount();
     vi.useRealTimers();
@@ -161,6 +172,64 @@ it("does not poll while a user reconnect is running, so it cannot supersede that
       await vi.advanceTimersByTimeAsync(1000);
     });
     expect(backend.subscribe).toHaveBeenCalled();
+  } finally {
+    hook.unmount();
+    vi.useRealTimers();
+  }
+});
+
+it("discards an in-flight subscription when reconnect starts before its response", async () => {
+  vi.useFakeTimers();
+  const base = createDisconnectedBackend();
+  const snapshot = await base.snapshot();
+  let finish!: (value: Awaited<ReturnType<typeof base.subscribe>>) => void;
+  const backend = {
+    ...base,
+    connected: true,
+    snapshot: vi.fn().mockResolvedValue(snapshot),
+    subscribe: vi.fn(
+      () =>
+        new Promise<Awaited<ReturnType<typeof base.subscribe>>>((resolve) => {
+          finish = resolve;
+        }),
+    ),
+  };
+  const update = vi.fn();
+  const cache = new SnapshotCache();
+  const cursor = { current: { backendEpoch: 1, sequence: 0 } };
+  const hook = renderHook(
+    ({ reconnecting }) =>
+      useWorkspaceEvents({
+        backend,
+        hasSnapshot: true,
+        session: demoSession,
+        snapshotCache: cache,
+        eventCursor: cursor,
+        setSnapshotState: update,
+        followBackendActiveSession: () => false,
+        setActionMessage: vi.fn(),
+        refreshApplications: vi.fn(),
+        refreshDevices: vi.fn(),
+        refreshSessions: async () => [],
+        setRecordings: vi.fn(),
+        setRecordingsError: vi.fn(),
+        setRecorderStatuses: vi.fn(),
+        setRecorderStatusAvailable: vi.fn(),
+        reconnecting,
+      }),
+    { initialProps: { reconnecting: false } },
+  );
+  try {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(backend.subscribe).toHaveBeenCalledTimes(1);
+    hook.rerender({ reconnecting: true });
+    await act(async () => {
+      finish({ backendEpoch: 1, nextSequence: 1, events: [], resyncRequired: true });
+    });
+    expect(backend.snapshot).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
   } finally {
     hook.unmount();
     vi.useRealTimers();

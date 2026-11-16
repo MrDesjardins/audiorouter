@@ -71,6 +71,48 @@ prepares and verifies the signed-driver NSIS artifacts; without it, the package
 step is explicitly skipped. It does not execute the installer or establish the
 WP-11 VM install, upgrade, or uninstall gates.
 
+## Disposable VirtualBox installer lifecycle
+
+`tools/vm/installer-lifecycle.ps1` exercises app-only installer behavior in a
+running disposable Windows guest. Start from a snapshot, create a fresh local
+standard user and sign that user into the guest desktop so its registry hive is
+loaded. Take or retain a recoverable snapshot; do not use a personal account or
+the driver-test VM. Guest Additions and guest-control authentication are needed.
+Store the guest password in a host-only file outside the repository and remove
+it after use. Obtain both installer SHA-256 values from their verified manifests.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/vm/installer-lifecycle.ps1 `
+  -Vm <disposable-vm> -Username <fresh-standard-user> -PasswordFile <host-password-file> `
+  -Candidate <candidate-installer> -CandidateHash <sha256> -CandidateVersion <version> `
+  -Previous <previous-installer> -PreviousHash <sha256> -PreviousVersion <version> `
+  -OutputDirectory <new-evidence-directory>
+```
+
+The harness refuses an existing staging directory or app directory, an
+administrator account, an unloaded user hive, or mismatched hashes. It checks
+install, same-version reinstall, rollback, upgrade, uninstall and reinstall;
+uninstall registration; the installed CLI reading a real session database; and
+the SHA-256 of a generated PCM WAV. It retains `result.json` and guest output,
+including failures. It does not reset or delete the VM, create users, sign in,
+test an actual captured recording, remove WebView2, exercise an interactive
+installer or validate audio hardware. Restore the dedicated VM snapshot before
+repeating with the same account. Sign-in and snapshot preparation are currently
+separate steps.
+
+For repeat runs, `tools/vm/installer-lifecycle-unattended.ps1` accepts the same
+installer, version, hash, credential and output arguments, plus `-VmId`,
+`-SnapshotId` (both exact UUIDs), and `-RestoreDisposableSnapshot`. Prepare a
+private saved-state snapshot with the fresh standard user already signed in;
+the snapshot contains a live Windows session and must be protected accordingly.
+The wrapper requires the VM to be powered off, verifies snapshot ownership and
+installer hashes, restores the snapshot, waits for that user, runs the lifecycle
+and requests graceful shutdown. It bounds the host-side runner as well as the
+guest commands and leaves a failed shutdown running for inspection. Restoring a
+snapshot discards the clone's current disk state; use only a dedicated test VM.
+One end-to-end run passed on the reference host, but a subsequent restore hung
+in VirtualBox guest control; see the active plan before relying on it as a gate.
+
 ## Current qualification snapshot
 
 The 2026-09-17 refresh is the authoritative current status: M05 passes

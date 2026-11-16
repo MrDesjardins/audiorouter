@@ -24,6 +24,7 @@ import {
   appendEndpointLoopbackNode,
   appendLibraryNode,
   appendPluginPlaceholderNode,
+  replaceDraftSidechainConnection,
   appendVirtualBusNode,
   copyDraftNode,
   duplicateDraftNode,
@@ -40,7 +41,7 @@ import {
 } from "./draft";
 import { demoSession } from "./fixtures";
 import { unfedRouteNodes } from "./draft";
-import { insertDraftProcessor } from "./draft";
+import { insertDraftPluginProcessor, insertDraftProcessor } from "./draft";
 
 describe("Meter insertion", () => {
   it.each([1, 2] as const)("preserves downstream mixing and source channels (%i)", (channels) => {
@@ -158,6 +159,7 @@ describe("output fan-out across library tools", () => {
           version: "1.0",
           classIds: ["test-class"],
           compatibility: "supportedVst2X64Gated",
+          instrument: false,
         },
         error: null,
         errorCode: null,
@@ -258,6 +260,7 @@ describe("appendLibraryNode", () => {
         version: "1.0",
         classIds: ["test-class"],
         compatibility: "supportedVst2X64Gated",
+        instrument: false,
       },
       error: null,
       errorCode: null,
@@ -513,6 +516,49 @@ describe("destination connection creation", () => {
         expect.objectContaining({ sourceNode: mixer?.id, destinationNode: "headphones" }),
       ]),
     );
+  });
+
+  it("replaces an occupied plugin sidechain edge without inserting a Mixer", () => {
+    const pluginEntry: PluginScanEntry = {
+      path: "C:\\Plugins\\sidechain.vst3",
+      identity: {
+        path: "C:\\Plugins\\sidechain.vst3",
+        binaryPath: "C:\\Plugins\\sidechain.vst3\\Contents\\x86_64-win\\sidechain.vst3",
+        format: "vst3",
+        architecture: "x64",
+        fileBytes: 10,
+        sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        vendor: "Test vendor",
+        version: "1.0",
+        classIds: ["test-class"],
+        compatibility: "supportedVst3X64",
+        instrument: false,
+      },
+      error: null,
+      errorCode: null,
+    };
+    let session = appendPluginPlaceholderNode({ ...demoSession, edges: [] }, pluginEntry);
+    session = {
+      ...session,
+      nodes: session.nodes.map((node) =>
+        node.id === "plugin-1"
+          ? { ...node, ports: [...node.ports, { name: "sidechain", direction: "input" as const, channels: 1 }] }
+          : node,
+      ),
+    };
+    session = appendLibraryNode(session, "testSignal");
+    session = appendDraftConnection(session, "mic", "out", "plugin-1", "sidechain");
+    const before = session;
+    const replaced = replaceDraftSidechainConnection(session, "edge-1", "testSignal-1", "out", "plugin-1", "sidechain");
+
+    expect(replaced.edges).toHaveLength(1);
+    expect(replaced.edges[0]).toMatchObject({
+      sourceNode: "testSignal-1",
+      destinationNode: "plugin-1",
+      destinationPort: "sidechain",
+    });
+    expect(replaced.nodes.filter((node) => node.kind === "mixer")).toHaveLength(0);
+    expect(before.edges[0]).toMatchObject({ sourceNode: "mic", destinationPort: "sidechain" });
   });
 });
 
@@ -929,6 +975,7 @@ describe("pluginCatalog", () => {
     sha256: string,
     format: "vst3" | "vst2",
     compatibility: "supportedVst3X64" | "supportedVst2X64Gated" | "unsupportedFormat",
+    instrument = false,
   ): PluginScanEntry => ({
     path,
     identity: {
@@ -942,6 +989,7 @@ describe("pluginCatalog", () => {
       version: "1",
       classIds: [],
       compatibility,
+      instrument,
     },
     error: null,
     errorCode: null,
@@ -977,6 +1025,31 @@ describe("pluginCatalog", () => {
     const catalog = pluginCatalog([{ directory: "C:\\B", entries: [module] }]);
     expect(catalog).toHaveLength(2);
     expect(catalog.map((item) => item.entry.identity?.classIds[0])).toEqual(identity.classIds);
+  });
+  it("marks scanned instruments so the picker can list them apart from effects", () => {
+    const catalog = pluginCatalog([
+      {
+        directory: "C:\\B",
+        entries: [
+          entry("C:\\B\\Synth.vst3", "dd", "vst3", "supportedVst3X64", true),
+          entry("C:\\B\\Comp.vst3", "ee", "vst3", "supportedVst3X64"),
+        ],
+      },
+    ]);
+    expect(catalog.map((item) => [item.name, item.instrument])).toEqual([
+      ["Comp", false],
+      ["Synth", true],
+    ]);
+  });
+  it("adds a scanned instrument as an Instrument node with an output only", () => {
+    const synth = entry("C:\\B\\Synth.vst3", "dd", "vst3", "supportedVst3X64", true);
+    const next = appendPluginPlaceholderNode({ ...demoSession, nodes: [], edges: [] }, synth);
+    const node = next.nodes[0];
+    expect(node.kind).toBe("instrument");
+    expect(node.id).toBe("instrument-1");
+    expect(node.parameters.midiInput).toBe("keyboard");
+    expect(node.ports).toEqual([{ name: "out", direction: "output", channels: 2 }]);
+    expect(() => insertDraftPluginProcessor(demoSession, "any-edge", synth)).toThrow(/instrument/i);
   });
 });
 

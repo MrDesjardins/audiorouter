@@ -257,6 +257,13 @@
       "kind": "plugin",
       "title": "VST Plugin",
       "path": "tools/plugin.html",
+      "propertyCount": 5,
+      "audioRelevant": false
+    },
+    {
+      "kind": "instrument",
+      "title": "Instrument",
+      "path": "tools/instrument.html",
       "propertyCount": 4,
       "audioRelevant": false
     },

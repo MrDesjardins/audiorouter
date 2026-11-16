@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FlowAnimationSetting } from "./FlowAnimationSetting";
 import { LiveAutosaveSetting } from "./LiveAutosaveSetting";
 import { type FlowAnimationMode, type ThemeMode } from "./preferences";
@@ -17,20 +17,47 @@ import {
   type ThemeColor,
 } from "./customTheme";
 import { TextField } from "./TextField";
+import { ThemeColorPicker } from "./ThemeColorPicker";
+import { ThemePreview } from "./ThemePreview";
 import { themeContrastWarnings } from "./themeContrast";
 
-function ThemeContrastReport({ theme }: { theme: CustomTheme }) {
+function ThemeContrastReport({
+  theme,
+  onSelectColor,
+}: {
+  theme: CustomTheme;
+  onSelectColor: (color: ThemeColor) => void;
+}) {
   const warnings = themeContrastWarnings(theme);
   return (
-    <div className={`theme-contrast${warnings.length ? " has-warnings" : ""}`} role="status">
+    <div className={`theme-contrast${warnings.length ? " has-warnings" : ""}`}>
       {warnings.length === 0 ? (
-        <p>Text in this theme is easy to read: every pair meets the WCAG contrast guideline.</p>
+        <p role="status">Text in this theme is easy to read: every checked pair meets the WCAG contrast guideline.</p>
       ) : (
         <>
-          <p>Some text may be hard to read. Make these colors lighter or darker:</p>
+          <p role="status">Some text may be hard to read. Select a color name to change it:</p>
           <ul>
             {warnings.map((warning) => (
-              <li key={`${warning.fore}-${warning.back}`}>{warning.text}</li>
+              <li key={`${warning.fore}-${warning.back}`}>
+                <button
+                  type="button"
+                  className="theme-contrast-jump"
+                  title={`Go to ${THEME_COLORS[warning.fore]} color`}
+                  onClick={() => onSelectColor(warning.fore)}
+                >
+                  {THEME_COLORS[warning.fore]}
+                </button>
+                {" on "}
+                <button
+                  type="button"
+                  className="theme-contrast-jump"
+                  title={`Go to ${THEME_COLORS[warning.back]} color`}
+                  onClick={() => onSelectColor(warning.back)}
+                >
+                  {THEME_COLORS[warning.back].toLowerCase()}
+                </button>
+                {`: ${warning.ratio.toFixed(1)}:1, needs ${warning.minimum}:1`}
+              </li>
             ))}
           </ul>
         </>
@@ -63,8 +90,40 @@ export function UiOptionsWorkbench({
   const [message, setMessage] = useState("");
   const [error, setError] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [highlightColor, setHighlightColor] = useState<ThemeColor | null>(null);
+  const [pickerColor, setPickerColor] = useState<ThemeColor | null>(null);
+  const highlightTimer = useRef<number | null>(null);
   const selected = selectedCustomTheme(customThemes);
   const active = theme === "custom" ? selected : null;
+  useEffect(
+    () => () => {
+      if (highlightTimer.current !== null) window.clearTimeout(highlightTimer.current);
+    },
+    [],
+  );
+  useEffect(() => {
+    setPickerColor(null);
+  }, [active?.id]);
+  useEffect(() => {
+    if (!pickerColor) return;
+    const frame = window.requestAnimationFrame(() => {
+      const item = document.getElementById(`theme-color-${pickerColor}`)?.closest(".theme-color-item");
+      item?.querySelector<HTMLElement>(".theme-color-popover")?.scrollIntoView({ block: "nearest" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pickerColor]);
+  /** Bring a contrast warning's colour picker into view, open it and focus its field. */
+  const selectColor = (color: ThemeColor) => {
+    setHighlightColor(color);
+    if (highlightTimer.current !== null) window.clearTimeout(highlightTimer.current);
+    highlightTimer.current = window.setTimeout(() => {
+      highlightTimer.current = null;
+      setHighlightColor(null);
+    }, 1600);
+    setPickerColor(color);
+    const input = document.getElementById(`theme-color-${color}`);
+    if (input instanceof HTMLInputElement) input.focus({ preventScroll: true });
+  };
   const report = (text: string, isError = false) => {
     setError(isError);
     setMessage(text);
@@ -205,30 +264,33 @@ export function UiOptionsWorkbench({
                 <option value="light">Light</option>
               </select>
             </label>
-            <div className="theme-preview" aria-label="Custom theme preview">
-              <strong>Your sound. Your workspace.</strong>
-              <span>Panel text and fields use this palette.</span>
-              <span className="theme-preview-accent">Selected tool</span>
+            <div className="theme-preview-block">
+              <p className="theme-preview-heading">Preview</p>
+              <ThemePreview theme={active.theme} />
             </div>
-            <details>
+            <details
+              onToggle={(event) => {
+                if (!event.currentTarget.open) setPickerColor(null);
+              }}
+            >
               <summary>Edit palette colors</summary>
               <div className="theme-palette">
-                {(Object.entries(THEME_COLORS) as [ThemeColor, string][]).map(([key, label]) => (
-                  <label key={key}>
-                    {label}
-                    <input
-                      type="color"
-                      aria-label={label + " color"}
-                      value={active.theme.colors[key]}
-                      onChange={(event) =>
-                        updateActive({ ...active.theme, colors: { ...active.theme.colors, [key]: event.target.value } })
-                      }
-                    />
-                    <output>{active.theme.colors[key]}</output>
-                  </label>
+                {(Object.keys(THEME_COLORS) as ThemeColor[]).map((key) => (
+                  <ThemeColorPicker
+                    key={key}
+                    colorKey={key}
+                    theme={active.theme}
+                    value={active.theme.colors[key]}
+                    open={pickerColor === key}
+                    onOpenChange={(open) => setPickerColor(open ? key : null)}
+                    onChange={(hex) =>
+                      updateActive({ ...active.theme, colors: { ...active.theme.colors, [key]: hex } })
+                    }
+                    highlighted={highlightColor === key}
+                  />
                 ))}
               </div>
-              <ThemeContrastReport theme={active.theme} />
+              <ThemeContrastReport theme={active.theme} onSelectColor={selectColor} />
             </details>
             {confirmDelete ? (
               <div className="theme-delete-confirmation" role="group" aria-label="Confirm theme deletion">

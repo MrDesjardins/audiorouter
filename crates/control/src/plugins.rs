@@ -9,6 +9,9 @@ use super::*;
 pub(crate) enum PluginWorkerKind {
     Vst2,
     Vst3,
+    /// The 32-bit builds of the two workers, for x86 plugins.
+    Vst2X86,
+    Vst3X86,
 }
 
 impl PluginWorkerKind {
@@ -19,12 +22,30 @@ impl PluginWorkerKind {
         }
     }
 
+    /// The worker for a scanned plugin: its format and its bitness (a 32-bit
+    /// plugin cannot load into a 64-bit process).
+    pub(crate) fn for_identity(
+        format: audiorouter_plugin_host::PluginFormat,
+        architecture: audiorouter_plugin_host::PeArchitecture,
+    ) -> Self {
+        let x86 = architecture == audiorouter_plugin_host::PeArchitecture::X86;
+        match (Self::for_format(format), x86) {
+            (Self::Vst3, true) => Self::Vst3X86,
+            (_, true) => Self::Vst2X86,
+            (kind, false) => kind,
+        }
+    }
+
     pub(crate) fn file_name(self) -> &'static str {
         match (self, cfg!(windows)) {
             (Self::Vst2, true) => "audiorouter-plugin-worker.exe",
             (Self::Vst2, false) => "audiorouter-plugin-worker",
             (Self::Vst3, true) => "audiorouter-vst3-worker.exe",
             (Self::Vst3, false) => "audiorouter-vst3-worker",
+            (Self::Vst2X86, true) => "audiorouter-plugin-worker-x86.exe",
+            (Self::Vst2X86, false) => "audiorouter-plugin-worker-x86",
+            (Self::Vst3X86, true) => "audiorouter-vst3-worker-x86.exe",
+            (Self::Vst3X86, false) => "audiorouter-vst3-worker-x86",
         }
     }
 
@@ -32,6 +53,8 @@ impl PluginWorkerKind {
         match self {
             Self::Vst2 => "AUDIOROUTER_PLUGIN_WORKER_PATH",
             Self::Vst3 => "AUDIOROUTER_VST3_WORKER_PATH",
+            Self::Vst2X86 => "AUDIOROUTER_PLUGIN_WORKER_X86_PATH",
+            Self::Vst3X86 => "AUDIOROUTER_VST3_WORKER_X86_PATH",
         }
     }
 }
@@ -232,7 +255,7 @@ fn plugin_parameters_valid(events: &[audiorouter_plugin_host::ParameterEvent]) -
 /// The live-bridge operations plugin reuse needs. `PluginRuntimeBridge` is the
 /// production implementation; a test double lets reuse be exercised without a
 /// worker process, so a parameter save can be proven to reuse a loaded plugin.
-pub(crate) trait LivePluginBridge: RealtimePluginProcessor {
+pub(crate) trait ReusablePluginBridge: RealtimePluginProcessor {
     /// Published worker health. A failed or quarantined bridge is not reused.
     fn bridge_health(&self) -> audiorouter_plugin_host::WorkerState;
     /// Push a slider template into the loaded plugin.
@@ -251,7 +274,7 @@ pub(crate) trait LivePluginBridge: RealtimePluginProcessor {
     ) -> Option<Arc<audiorouter_plugin_host::PluginRuntimeBridge>>;
 }
 
-impl LivePluginBridge for audiorouter_plugin_host::PluginRuntimeBridge {
+impl ReusablePluginBridge for audiorouter_plugin_host::PluginRuntimeBridge {
     fn bridge_health(&self) -> audiorouter_plugin_host::WorkerState {
         self.health_state()
     }
@@ -285,7 +308,7 @@ impl LivePluginBridge for audiorouter_plugin_host::PluginRuntimeBridge {
 
 /// One live plugin bridge whose control state is applied only after the new
 /// graph has replaced the playing one.
-struct DeferredPluginUpdate<B: LivePluginBridge> {
+struct DeferredPluginUpdate<B: ReusablePluginBridge> {
     bridge: Arc<B>,
     /// Only sliders that differ from the previously saved node, so values
     /// changed in the plugin's own editor are not overwritten.
@@ -296,19 +319,22 @@ struct DeferredPluginUpdate<B: LivePluginBridge> {
 
 /// The plugin stages of one prepared graph, plus the live control changes
 /// that must wait for its atomic publication.
-pub(crate) struct PluginStageSet<B: LivePluginBridge = audiorouter_plugin_host::PluginRuntimeBridge>
-{
+pub(crate) struct PluginStageSet<
+    B: ReusablePluginBridge = audiorouter_plugin_host::PluginRuntimeBridge,
+> {
     pub(crate) stages: HashMap<EntityId, Arc<dyn RealtimePluginProcessor>>,
     started: Vec<(EntityId, Arc<B>)>,
     updates: Vec<DeferredPluginUpdate<B>>,
+    auxiliary: Vec<(EntityId, PreparedPluginBridge)>,
 }
 
-impl<B: LivePluginBridge> PluginStageSet<B> {
+impl<B: ReusablePluginBridge> PluginStageSet<B> {
     pub(crate) fn empty() -> Self {
         Self {
             stages: HashMap::new(),
             started: Vec::new(),
             updates: Vec::new(),
+            auxiliary: Vec::new(),
         }
     }
 
@@ -356,7 +382,7 @@ impl<B: LivePluginBridge> PluginStageSet<B> {
     /// not counted; reported with `graph.commit` so a live save can prove it
     /// did not reload unrelated plugins.
     pub(crate) fn started_count(&self) -> usize {
-        self.started.len()
+        self.started.len() + self.auxiliary.len()
     }
 
     /// Publish the new worker handles and apply the deferred control changes.
@@ -367,6 +393,15 @@ impl<B: LivePluginBridge> PluginStageSet<B> {
         plane: &ControlPlane,
         session_id: &EntityId,
     ) -> Result<(), ControlError> {
+        #[cfg(windows)]
+        if let Ok(mut bridges) = plane.sidechain_bridges.lock() {
+            bridges.retain(|_, bridge| bridge.strong_count() > 0);
+            for (id, bridge) in &self.auxiliary {
+                if let Some(bridge) = bridge.sidechain() {
+                    bridges.insert((session_id.clone(), id.clone()), Arc::downgrade(bridge));
+                }
+            }
+        }
         if let Ok(mut bridges) = plane.plugin_bridges.lock() {
             bridges.retain(|(owner, _), bridge| owner != session_id || bridge.strong_count() > 0);
             for (id, bridge) in &self.started {
@@ -408,9 +443,232 @@ pub(crate) struct PluginStageRequest {
     parameters: Vec<audiorouter_plugin_host::ParameterEvent>,
 }
 
-/// The worker groups a preparation must start: only groups with a requested
-/// member, and never a partial shared VST2 chain (a chain is restarted as a
-/// whole). Groups of only reused bridges are already playing and are skipped.
+pub(crate) enum PreparedPluginBridge {
+    Standard(Arc<audiorouter_plugin_host::PluginRuntimeBridge>),
+    #[cfg(windows)]
+    Sidechain(Arc<audiorouter_plugin_host::sidechain_bridge::SidechainRuntimeBridge>),
+}
+
+impl PreparedPluginBridge {
+    #[cfg(test)]
+    fn standard(&self) -> Option<&Arc<audiorouter_plugin_host::PluginRuntimeBridge>> {
+        match self {
+            Self::Standard(bridge) => Some(bridge),
+            #[cfg(windows)]
+            Self::Sidechain(_) => None,
+        }
+    }
+    #[cfg(windows)]
+    fn sidechain(
+        &self,
+    ) -> Option<&Arc<audiorouter_plugin_host::sidechain_bridge::SidechainRuntimeBridge>> {
+        match self {
+            Self::Standard(_) => None,
+            Self::Sidechain(bridge) => Some(bridge),
+        }
+    }
+}
+
+/// Control surface shared by the ordinary and multi-bus plugin bridges.
+pub(crate) enum LivePluginBridge {
+    Standard(Arc<audiorouter_plugin_host::PluginRuntimeBridge>),
+    #[cfg(windows)]
+    Sidechain(Arc<audiorouter_plugin_host::sidechain_bridge::SidechainRuntimeBridge>),
+}
+
+impl LivePluginBridge {
+    pub(crate) fn save_state(&self) -> Result<audiorouter_plugin_host::PluginStateAsset, String> {
+        match self {
+            Self::Standard(bridge) => bridge.save_state(),
+            #[cfg(windows)]
+            Self::Sidechain(bridge) => bridge.save_state(),
+        }
+    }
+
+    pub(crate) fn open_editor(
+        &self,
+        authorization: audiorouter_plugin_host::EditorParentAuthorization,
+    ) -> Result<(), String> {
+        match self {
+            Self::Standard(bridge) => bridge.open_editor(authorization),
+            #[cfg(windows)]
+            Self::Sidechain(bridge) => bridge.open_editor(authorization),
+        }
+    }
+
+    pub(crate) fn close_editor(&self) -> Result<(), String> {
+        match self {
+            Self::Standard(bridge) => bridge.close_editor(),
+            #[cfg(windows)]
+            Self::Sidechain(bridge) => bridge.close_editor(),
+        }
+    }
+
+    pub(crate) fn programs(&self) -> Result<audiorouter_plugin_host::PluginProgramList, String> {
+        match self {
+            Self::Standard(bridge) => bridge.programs(),
+            #[cfg(windows)]
+            Self::Sidechain(_) => Err("programs are only available for VST2 plugins".into()),
+        }
+    }
+
+    pub(crate) fn select_program(&self, index: u32) -> Result<(), String> {
+        match self {
+            Self::Standard(bridge) => bridge.select_program(index),
+            #[cfg(windows)]
+            Self::Sidechain(_) => Err("programs are only available for VST2 plugins".into()),
+        }
+    }
+
+    pub(crate) fn apply_preset(&self, bytes: &[u8]) -> Result<(), String> {
+        match self {
+            Self::Standard(bridge) => bridge.apply_preset(bytes),
+            #[cfg(windows)]
+            Self::Sidechain(_) => Err("preset import is only available for VST2 plugins".into()),
+        }
+    }
+
+    pub(crate) fn resume_after_unchanged(&self) -> bool {
+        match self {
+            Self::Standard(bridge) => bridge.resume_after_unchanged(),
+            #[cfg(windows)]
+            Self::Sidechain(bridge) => bridge.resume_after_unchanged(),
+        }
+    }
+
+    pub(crate) fn passes_audio_unchanged(&self) -> bool {
+        match self {
+            Self::Standard(bridge) => bridge.passes_audio_unchanged(),
+            #[cfg(windows)]
+            Self::Sidechain(bridge) => bridge.passes_audio_unchanged(),
+        }
+    }
+
+    pub(crate) fn silenced_for_unchanged_audio(&self) -> bool {
+        match self {
+            Self::Standard(bridge) => bridge.silenced_for_unchanged_audio(),
+            #[cfg(windows)]
+            Self::Sidechain(bridge) => bridge.silenced_for_unchanged_audio(),
+        }
+    }
+
+    pub(crate) fn set_silence_if_unchanged(&self, silence: bool) {
+        match self {
+            Self::Standard(bridge) => bridge.set_silence_if_unchanged(silence),
+            #[cfg(windows)]
+            Self::Sidechain(bridge) => bridge.set_silence_if_unchanged(silence),
+        }
+    }
+
+    pub(crate) fn continuity_counts(&self) -> (u32, u32) {
+        match self {
+            Self::Standard(bridge) => bridge.continuity_counts(),
+            #[cfg(windows)]
+            Self::Sidechain(bridge) => bridge.continuity_counts(),
+        }
+    }
+
+    pub(crate) fn failure_reason(&self) -> Option<String> {
+        match self {
+            Self::Standard(bridge) => bridge.failure_reason(),
+            #[cfg(windows)]
+            Self::Sidechain(bridge) => bridge.failure_reason(),
+        }
+    }
+}
+
+/// Re-hash each plugin binary, start its worker process (one per exclusive
+/// VST2 chain), restore saved state and start the runtime bridges. Needs no
+/// control-plane state, so it can run while audio keeps being serviced. On
+/// error the bridges started so far are dropped, which stops their workers.
+#[cfg(windows)]
+fn start_sidechain_bridge(
+    node: &audiorouter_domain::Node,
+    request: &PluginStageRequest,
+    identity: &audiorouter_plugin_host::PluginIdentity,
+    sample_rate_hz: u32,
+) -> Result<Arc<audiorouter_plugin_host::sidechain_bridge::SidechainRuntimeBridge>, ControlError> {
+    let not_ready = |message: String| ControlError::NodeNotReady {
+        node_id: node.id.as_str().into(),
+        message: format!("\"{}\" cannot prepare its sidechain: {message}", node.name),
+    };
+    if node.kind != NodeKind::Plugin
+        || identity.format != audiorouter_plugin_host::PluginFormat::Vst3
+    {
+        return Err(not_ready(
+            "multi-bus processing currently requires a declared VST3 auxiliary bus".into(),
+        ));
+    }
+    let class_id = node
+        .parameters
+        .get("classId")
+        .and_then(Value::as_str)
+        .filter(|id| *id != "default")
+        .ok_or_else(|| {
+            not_ready("select the exact VST3 class before connecting its auxiliary input".into())
+        })?;
+    let key = node
+        .plugin_sidechain_port()
+        .ok_or_else(|| not_ready("the sidechain input port is missing".into()))?;
+    let executable = require_plugin_worker(PluginWorkerKind::for_identity(
+        identity.format,
+        identity.architecture,
+    ))?;
+    let roots = std::slice::from_ref(&request.configured_root);
+    let mut discovery = audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
+        executable.as_path(), identity, roots, request.channels as u16, sample_rate_hz, Instant::now(),
+    ).map_err(|error| not_ready(error.to_string()))?;
+    if let Some(state) = &request.state {
+        discovery
+            .restore_state(state.clone(), Instant::now())
+            .map_err(|error| not_ready(format!("saved state restore failed: {error}")))?;
+    }
+    let binding = discovery
+        .verify_sidechain_binding(
+            roots,
+            &request.fingerprint,
+            Some(class_id),
+            (request.channels as u16, u16::from(key.channels)),
+            Instant::now(),
+        )
+        .map_err(|error| not_ready(error.to_string()))?;
+    discovery
+        .shutdown()
+        .map_err(|error| not_ready(error.to_string()))?;
+    let mut worker = audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_bound_vst3(
+        executable.as_path(),
+        identity,
+        roots,
+        &binding,
+        sample_rate_hz,
+        Instant::now(),
+    )
+    .map_err(|error| not_ready(error.to_string()))?;
+    if let Some(state) = &request.state {
+        worker
+            .restore_state(state.clone(), Instant::now())
+            .map_err(|error| not_ready(format!("saved state restore failed: {error}")))?;
+        let buses = worker
+            .describe_buses(Instant::now())
+            .map_err(|error| not_ready(error.to_string()))?;
+        if buses.processing_layout().ok().as_ref() != Some(binding.layout())
+            || buses.inputs.get(1).map(|bus| bus.native_index) != Some(binding.native_index())
+        {
+            return Err(not_ready("saved state changed the discovered bus layout; reconnect the auxiliary input deliberately".into()));
+        }
+    }
+    // This scheduler is private to this bridge and never reused on graph
+    // replacement. Its local epoch cannot publish into another bridge.
+    audiorouter_plugin_host::sidechain_bridge::SidechainRuntimeBridge::spawn_with_parameters(
+        worker,
+        RuntimeGeneration::new(1),
+        audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+        8,
+        request.parameters.clone(),
+    )
+    .map_err(|error| not_ready(format!("bridge startup failed: {error:?}")))
+}
+
 fn requested_plugin_groups(
     session: &Session,
     eligible: &HashMap<EntityId, usize>,
@@ -432,16 +690,16 @@ fn requested_plugin_groups(
     Ok(groups_to_start)
 }
 
-/// Re-hash each plugin binary, start its worker process (one per exclusive
-/// VST2 chain), restore saved state and start the runtime bridges. Needs no
-/// control-plane state, so it can run while audio keeps being serviced. On
-/// error the bridges started so far are dropped, which stops their workers.
 pub(crate) fn start_plugin_bridges(
     session: &Session,
     requests: Vec<PluginStageRequest>,
     sample_rate_hz: u32,
-) -> Result<Vec<(EntityId, Arc<audiorouter_plugin_host::PluginRuntimeBridge>)>, ControlError> {
+) -> Result<Vec<(EntityId, PreparedPluginBridge)>, ControlError> {
     let mut prepared = HashMap::new();
+    #[cfg(windows)]
+    let mut sidechains = Vec::new();
+    #[cfg(not(windows))]
+    let sidechains = Vec::new();
     for request in requests {
         let mut verified = audiorouter_plugin_host::inspect_binary(
             &request.scanned_path,
@@ -464,18 +722,38 @@ pub(crate) fn start_plugin_bridges(
                 .and_then(Value::as_str)
                 .filter(|id| *id != "default")
             {
-                let index = verified
-                    .metadata
-                    .class_ids
-                    .iter()
-                    .position(|id| id.eq_ignore_ascii_case(class_id))
-                    .ok_or_else(|| {
-                        ControlError::InvalidRequest(
-                            "Selected VST3 class is no longer listed by this plugin; scan it again"
-                                .into(),
-                        )
-                    })?;
-                verified.metadata.class_ids.swap(0, index);
+                // Optional module metadata can omit audio classes. It is not
+                // execution authority: the verified binary's isolated factory
+                // must accept this exact class or refuse, never substitute it.
+                verified.metadata.class_ids = vec![class_id.to_owned()];
+            }
+        }
+        if let Some(node) = session
+            .nodes
+            .iter()
+            .find(|node| node.id == request.node_id && node.plugin_sidechain_port().is_some())
+        {
+            #[cfg(windows)]
+            {
+                let bridge = start_sidechain_bridge(node, &request, &verified, sample_rate_hz)?;
+                // The same protected-microphone policy as an ordinary plugin:
+                // an unlicensed effect must not pass the dry voice through.
+                bridge.set_silence_if_unchanged(plugin_silences_unchanged_audio(
+                    session,
+                    &request.node_id,
+                ));
+                sidechains.push((
+                    request.node_id.clone(),
+                    PreparedPluginBridge::Sidechain(bridge),
+                ));
+                continue;
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = node;
+                return Err(ControlError::InvalidRequest(
+                    "sidechain workers require Windows".into(),
+                ));
             }
         }
         prepared.insert(
@@ -493,20 +771,26 @@ pub(crate) fn start_plugin_bridges(
         .iter()
         .filter(|(id, (identity, _, _, _, _))| {
             identity.format == audiorouter_plugin_host::PluginFormat::Vst2
+                // A chain is one process, so it cannot mix bitness; each 32-bit
+                // plugin runs in its own 32-bit worker.
+                && identity.architecture == audiorouter_plugin_host::PeArchitecture::X64
+                // An instrument is a source with its own MIDI-fed worker; it
+                // never shares a chain process with effects.
                 && session
                     .nodes
                     .iter()
-                    .any(|node| &node.id == *id && !node.bypass)
+                    .any(|node| &node.id == *id && !node.bypass && node.kind == NodeKind::Plugin)
         })
         .map(|(id, (_, _, channels, _, _))| (id.clone(), *channels))
         .collect();
-    let requested = prepared
-        .keys()
-        .cloned()
-        .collect::<std::collections::HashSet<_>>();
-    let mut started = Vec::new();
-    let mut started_ids = std::collections::HashSet::new();
-    for group in requested_plugin_groups(session, &eligible, &requested)? {
+    let mut started = sidechains;
+    for group in requested_plugin_groups(session, &eligible, &prepared.keys().cloned().collect())? {
+        // The grouping helper includes standalone effects. Only this request
+        // set belongs to the legacy path; auxiliary effects were prepared
+        // above and nodes without requests must not acquire a worker here.
+        if group.iter().any(|id| !prepared.contains_key(id)) {
+            continue;
+        }
         let members = group
             .iter()
             .map(|id| {
@@ -527,8 +811,9 @@ pub(crate) fn start_plugin_bridges(
             node_id: node.id.as_str().to_owned(),
             message: format!("\"{}\" cannot play: {message}", node.name),
         };
-        let worker_executable = require_plugin_worker(PluginWorkerKind::for_format(
+        let worker_executable = require_plugin_worker(PluginWorkerKind::for_identity(
             verified.format,
+            verified.architecture,
         ))
         .map_err(|error| match error {
             ControlError::InvalidRequest(message) => not_ready(message),
@@ -569,7 +854,13 @@ pub(crate) fn start_plugin_bridges(
                 Instant::now(),
             )
         }
-        .map_err(|error| not_ready(format!("Plugin worker launch failed: {error}")))?;
+        .map_err(|error| {
+            let message = format!("Plugin worker launch failed: {error}");
+            if members.len() == 1 {
+                audiorouter_plugin_host::note_instrument_refusal(&members[0].0.sha256, &message);
+            }
+            not_ready(message)
+        })?;
         for (index, (_, _, _, state, _)) in members.iter().enumerate() {
             if let Some(asset) = state {
                 if members.len() > 1 {
@@ -617,14 +908,66 @@ pub(crate) fn start_plugin_bridges(
                 ))
             })?;
             bridge.set_silence_if_unchanged(plugin_silences_unchanged_audio(session, id));
-            started_ids.insert(id.clone());
-            started.push((id.clone(), bridge));
+            started.push((id.clone(), PreparedPluginBridge::Standard(bridge)));
         }
     }
-    if started_ids.len() != requested.len() {
-        return Err(ControlError::Internal(
-            "prepared plugin is missing from its worker group",
-        ));
+    // Instruments: one worker each, started with `--instrument`, fed by the
+    // bridge's MIDI queue (played from the keyboard, a MIDI device or the API).
+    for node in session
+        .nodes
+        .iter()
+        .filter(|node| node.kind == NodeKind::Instrument)
+    {
+        let Some((verified, configured_root, channels, state, parameters)) = prepared.get(&node.id)
+        else {
+            continue;
+        };
+        let not_ready = |message: String| ControlError::NodeNotReady {
+            node_id: node.id.as_str().to_owned(),
+            message: format!("\"{}\" cannot play: {message}", node.name),
+        };
+        let worker_executable = require_plugin_worker(PluginWorkerKind::for_identity(
+            verified.format,
+            verified.architecture,
+        ))
+        .map_err(|error| match error {
+            ControlError::InvalidRequest(message) => not_ready(message),
+            other => other,
+        })?;
+        let mut worker =
+            audiorouter_plugin_host::SupervisedWorkerProcess::spawn_instrument_verified(
+                worker_executable.as_path(),
+                verified,
+                std::slice::from_ref(configured_root),
+                *channels as u16,
+                sample_rate_hz,
+                Instant::now(),
+            )
+            .map_err(|error| not_ready(format!("Instrument worker launch failed: {error}")))?;
+        if let Some(asset) = state {
+            worker
+                .restore_state(asset.clone(), Instant::now())
+                .map_err(|error| {
+                    not_ready(format!(
+                        "Instrument state restore failed: {error}. Start from defaults is available in Properties; your previous state files are kept"
+                    ))
+                })?;
+        }
+        let bridge = audiorouter_plugin_host::PluginRuntimeBridge::start_instrument(
+            worker,
+            *channels,
+            audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+            8,
+        )
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!("instrument runtime bridge failed: {error:?}"))
+        })?;
+        bridge.set_parameters(parameters.clone()).map_err(|error| {
+            ControlError::InvalidRequest(format!(
+                "instrument parameter template rejected: {error:?}"
+            ))
+        })?;
+        started.push((node.id.clone(), PreparedPluginBridge::Standard(bridge)));
     }
     Ok(started)
 }
@@ -680,6 +1023,7 @@ pub(crate) fn plugin_unchanged_guards(session: &Session) -> std::collections::Ha
     session
         .nodes
         .iter()
+        // Effects only: an instrument has no input to pass through.
         .filter(|node| node.kind == NodeKind::Plugin)
         .filter(|node| plugin_silences_unchanged_audio(session, &node.id))
         .map(|node| node.id.clone())
@@ -699,6 +1043,7 @@ fn records_from_a_device(kind: NodeKind) -> bool {
         | NodeKind::NetworkReceive
         | NodeKind::TestSignal
         | NodeKind::AudioFile
+        | NodeKind::Instrument
         | NodeKind::Soundboard => false,
         NodeKind::PhysicalOutput
         | NodeKind::VirtualCaptureSink
@@ -825,6 +1170,60 @@ pub(crate) fn plugin_chain_groups(
 mod plugin_chain_group_tests {
     use super::*;
     use audiorouter_domain::{Edge, Node, Port};
+
+    #[derive(Debug, Default)]
+    struct ReuseProbe(std::sync::atomic::AtomicUsize);
+
+    impl RealtimePluginProcessor for ReuseProbe {
+        fn process(&self, _: &mut audiorouter_engine::AudioBlock) {}
+    }
+
+    impl ReusablePluginBridge for ReuseProbe {
+        fn bridge_health(&self) -> audiorouter_plugin_host::WorkerState {
+            audiorouter_plugin_host::WorkerState::Running
+        }
+        fn apply_parameters(
+            &self,
+            _: Vec<audiorouter_plugin_host::ParameterEvent>,
+        ) -> Result<(), String> {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        }
+        fn apply_silence_if_unchanged(&self, _: bool) {}
+        fn apply_processing_active(&self, _: bool) {}
+        fn into_processor(self: Arc<Self>) -> Arc<dyn RealtimePluginProcessor> {
+            self
+        }
+        fn into_registered_bridge(
+            self: Arc<Self>,
+        ) -> Option<Arc<audiorouter_plugin_host::PluginRuntimeBridge>> {
+            None
+        }
+    }
+
+    #[test]
+    fn merged_preparation_reuses_worker_and_defers_slider_changes_until_publication() {
+        let before = graph();
+        let mut after = before.clone();
+        let id = after.nodes[0].id.clone();
+        after.nodes[0]
+            .parameters
+            .insert("pluginParameter:0".into(), json!(0.75));
+        let bridge = Arc::new(ReuseProbe::default());
+        let live = HashMap::from([(id.clone(), Arc::clone(&bridge))]);
+        let mut plane = ControlPlane::default();
+        let prepared = plane
+            .prepare_plugin_stages_with(&after, Some(&before), &live, Some(&id), |_, requests| {
+                assert!(requests.is_empty(), "a reused plugin must not be reloaded");
+                Ok(Vec::new())
+            })
+            .unwrap();
+        assert_eq!(prepared.started_count(), 0);
+        assert_eq!(prepared.stages.len(), 1);
+        assert_eq!(bridge.0.load(std::sync::atomic::Ordering::SeqCst), 0);
+        prepared.publish(&plane, &after.id).unwrap();
+        assert_eq!(bridge.0.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
     fn graph() -> Session {
         let nodes = ["c", "a", "b", "d"]
             .into_iter()
@@ -957,6 +1356,33 @@ mod plugin_chain_group_tests {
         });
         let message = response.error.expect("unknown node").message;
         assert!(!message.contains("while its route is playing"), "{message}");
+    }
+
+    #[test]
+    fn sidechain_plugins_require_scan_identity_but_are_not_rejected_by_topology() {
+        let mut session = graph();
+        let node = &mut session.nodes[0];
+        node.parameters = serde_json::from_value(json!({
+            "path": "C:\\fixture\\effect.vst3",
+            "fingerprint": "a".repeat(64),
+            "format": "vst3"
+        }))
+        .unwrap();
+        node.ports.push(audiorouter_domain::Port {
+            name: "sidechain".into(),
+            direction: audiorouter_domain::PortDirection::Input,
+            channels: 1,
+        });
+        let mut plane = ControlPlane::default();
+        let error = plane
+            .prepare_plugin_stages(&session, 48_000, None)
+            .err()
+            .expect("unscanned plugin identity must not be loaded");
+        assert!(
+            matches!(&error, ControlError::InvalidRequest(message)
+            if message.contains("matching scan identity")),
+            "{error:?}"
+        );
     }
 
     #[test]
@@ -1331,7 +1757,7 @@ impl ControlPlane {
         for node in session
             .nodes
             .iter()
-            .filter(|node| node.kind == NodeKind::Plugin)
+            .filter(|node| audiorouter_engine::hosts_plugin_worker(node.kind))
         {
             let path = node
                 .parameters
@@ -1379,6 +1805,31 @@ impl ControlPlane {
                     "plugin placeholder requires a current explicit scan result".into(),
                 ));
             }
+            // A scan that knows the plugin is an instrument keeps it out of
+            // the effect tool; the Instrument tool plays it. (A VST2 file is
+            // unknown until a load attempt, and the worker refuses it then.)
+            let known_instrument = node.kind == NodeKind::Plugin
+                && self.plugin_inventories.values().any(|inventory| {
+                    inventory
+                        .get("entries")
+                        .and_then(Value::as_array)
+                        .into_iter()
+                        .flatten()
+                        .any(|entry| {
+                            scan_entry_matches_path(entry, path)
+                                && entry
+                                    .get("identity")
+                                    .and_then(|identity| identity.get("instrument"))
+                                    .and_then(Value::as_bool)
+                                    == Some(true)
+                        })
+                });
+            if known_instrument {
+                return Err(ControlError::InvalidRequest(format!(
+                    "\"{}\" is an instrument (a synth or sampler); add it with the Instrument tool to play it with MIDI",
+                    node.name
+                )));
+            }
         }
         Ok(())
     }
@@ -1397,47 +1848,131 @@ impl ControlPlane {
         sample_rate_hz: u32,
         previous: Option<&Session>,
     ) -> Result<PluginStageSet, ControlError> {
-        // Preparing never mutates the live bridges: control changes are
-        // deferred to `PluginStageSet::publish`, after the graph swap.
+        // A route is starting: workers kept alive only for a stopped-session
+        // editor would duplicate its plugins.
+        self.release_editor_only_plugins(&session.id);
+        self.prepare_plugin_stages_for(session, sample_rate_hz, None, previous)
+    }
+
+    /// Start one plugin node's worker without a route, so its editor can open
+    /// while the session is stopped. The worker stays until the editor is
+    /// closed or the route starts.
+    fn start_editor_only_plugin(
+        &mut self,
+        session: &Session,
+        node_id: &EntityId,
+    ) -> Result<(), ControlError> {
+        let started = self.prepare_plugin_stages_for(
+            session,
+            audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
+            Some(node_id),
+            None,
+        )?;
+        started.publish(self, &session.id)?;
+        if let Ok(mut held) = self.editor_only_plugins.lock() {
+            for (id, processor) in started.stages {
+                held.insert((session.id.clone(), id), processor);
+            }
+        }
+        Ok(())
+    }
+
+    /// Drop the workers kept only for stopped-session editors of a session.
+    pub(crate) fn release_editor_only_plugins(&self, session_id: &EntityId) {
+        if let Ok(mut held) = self.editor_only_plugins.lock() {
+            held.retain(|(session, _), _| session != session_id);
+        }
+    }
+
+    fn prepare_plugin_stages_for(
+        &mut self,
+        session: &Session,
+        sample_rate_hz: u32,
+        only: Option<&EntityId>,
+        previous: Option<&Session>,
+    ) -> Result<PluginStageSet, ControlError> {
         let live = session
             .nodes
             .iter()
-            .filter(|node| node.enabled && node.kind == NodeKind::Plugin)
             .filter_map(|node| {
                 self.plugin_bridge(&session.id, &node.id)
                     .ok()
                     .map(|bridge| (node.id.clone(), bridge))
             })
-            .collect::<HashMap<_, _>>();
-        self.prepare_plugin_stages_with(session, previous, &live, |session, requests| {
-            start_plugin_bridges(session, requests, sample_rate_hz)
-        })
+            .collect();
+        let auxiliary = std::sync::Mutex::new(Vec::new());
+        let mut stages = self.prepare_plugin_stages_with(
+            session,
+            previous,
+            &live,
+            only,
+            |session, requests| {
+                let mut standard = Vec::new();
+                for (id, bridge) in start_plugin_bridges(session, requests, sample_rate_hz)? {
+                    match bridge {
+                        PreparedPluginBridge::Standard(bridge) => standard.push((id, bridge)),
+                        #[cfg(windows)]
+                        bridge @ PreparedPluginBridge::Sidechain(_) => auxiliary
+                            .lock()
+                            .map_err(|_| {
+                                ControlError::Internal("plugin preparation lock poisoned")
+                            })?
+                            .push((id, bridge)),
+                    }
+                }
+                Ok(standard)
+            },
+        )?;
+        stages.auxiliary = auxiliary
+            .into_inner()
+            .map_err(|_| ControlError::Internal("plugin preparation lock poisoned"))?;
+        for (id, bridge) in &stages.auxiliary {
+            #[cfg(windows)]
+            if let Some(bridge) = bridge.sidechain() {
+                stages.stages.insert(
+                    id.clone(),
+                    Arc::clone(bridge) as Arc<dyn RealtimePluginProcessor>,
+                );
+            }
+        }
+        self.prune_instrument_midi();
+        for (id, bridge) in &stages.started {
+            if let Some(node) = session
+                .nodes
+                .iter()
+                .find(|node| &node.id == id && node.kind == NodeKind::Instrument)
+            {
+                self.connect_instrument_midi(&session.id, node, bridge);
+            }
+        }
+        Ok(stages)
     }
 
-    /// Prepare the plugin stages of `session`, reusing the live bridges in
-    /// `live` whose plugin identity and saved state are unchanged and starting
-    /// the rest through `start`. Split from [`Self::prepare_plugin_stages`] so
-    /// a test can supply a bridge double and prove reuse without a worker.
-    fn prepare_plugin_stages_with<B>(
+    fn prepare_plugin_stages_with<B: ReusablePluginBridge + 'static>(
         &mut self,
         session: &Session,
         previous: Option<&Session>,
         live: &HashMap<EntityId, Arc<B>>,
+        only: Option<&EntityId>,
         start: impl Fn(&Session, Vec<PluginStageRequest>) -> Result<Vec<(EntityId, Arc<B>)>, ControlError>
             + Send
             + Sync,
-    ) -> Result<PluginStageSet<B>, ControlError>
-    where
-        B: LivePluginBridge,
-        B: 'static,
-    {
-        let session = audiorouter_engine::prune_unfed_upstream(session);
-        let session = session.as_ref();
-        if !session
-            .nodes
-            .iter()
-            .any(|node| node.enabled && node.kind == NodeKind::Plugin)
-        {
+    ) -> Result<PluginStageSet<B>, ControlError> {
+        let pruned;
+        let session = if only.is_some() {
+            session
+        } else {
+            pruned = audiorouter_engine::prune_unfed_upstream(session);
+            pruned.as_ref()
+        };
+        let wanted = |node: &&audiorouter_domain::Node| {
+            audiorouter_engine::hosts_plugin_worker(node.kind)
+                && match only {
+                    Some(id) => &node.id == id,
+                    None => node.enabled,
+                }
+        };
+        if !session.nodes.iter().any(|node| wanted(&node)) {
             return Ok(PluginStageSet::empty());
         }
         let guards = plugin_unchanged_guards(session);
@@ -1493,11 +2028,7 @@ impl ControlPlane {
         }
         let mut stages = PluginStageSet::empty();
         let mut requests = Vec::new();
-        for node in session
-            .nodes
-            .iter()
-            .filter(|node| node.enabled && node.kind == NodeKind::Plugin)
-        {
+        for node in session.nodes.iter().filter(wanted) {
             if let Some((bridge, before)) = reused.remove(&node.id) {
                 let parameters = reused_parameter_events(before, node);
                 if !plugin_parameters_valid(&parameters) {
@@ -1505,15 +2036,13 @@ impl ControlPlane {
                         "plugin parameter template is out of range".into(),
                     ));
                 }
-                stages.updates.push(DeferredPluginUpdate {
-                    bridge: Arc::clone(&bridge),
+                stages.defer_reuse(
+                    node.id.clone(),
+                    bridge,
                     parameters,
-                    silence_unchanged: guards.contains(&node.id),
-                    processing_active: node.enabled && !node.bypass,
-                });
-                stages
-                    .stages
-                    .insert(node.id.clone(), bridge.into_processor());
+                    guards.contains(&node.id),
+                    node.enabled && !node.bypass,
+                );
                 continue;
             }
             let path = node
@@ -1553,7 +2082,19 @@ impl ControlPlane {
             let scanned_path =
                 std::path::PathBuf::from(entry.get("path").and_then(Value::as_str).unwrap_or(path));
             let configured_root = std::path::PathBuf::from(root);
-            let channels = plugin_input_channels(node);
+            // An effect follows its input port; an instrument has only an
+            // output port.
+            let channel_direction = if node.kind == NodeKind::Instrument {
+                audiorouter_domain::PortDirection::Output
+            } else {
+                audiorouter_domain::PortDirection::Input
+            };
+            let channels = node
+                .ports
+                .iter()
+                .find(|port| port.direction == channel_direction && port.name != "sidechain")
+                .map(|port| usize::from(port.channels))
+                .unwrap_or(1);
             // The node's latest capture (editor close, Save state, Stop) wins;
             // a capture from a different plugin binary is ignored. Otherwise
             // the state saved with the route (or imported with it) applies.
@@ -1611,11 +2152,7 @@ impl ControlPlane {
                 parameters: plugin_parameter_events(node, captured_sliders.as_ref()),
             });
         }
-        let started = if requests.is_empty() {
-            Vec::new()
-        } else {
-            self.while_servicing_audio(|| start(session, requests))?
-        };
+        let started = self.while_servicing_audio(|| start(session, requests))?;
         for (id, bridge) in started {
             stages.started.push((id.clone(), Arc::clone(&bridge)));
             stages.stages.insert(id, bridge.into_processor());
@@ -1634,7 +2171,7 @@ impl ControlPlane {
             .get_session(&session_id)?
             .nodes
             .iter()
-            .find(|node| node.id == node_id && node.kind == NodeKind::Plugin)
+            .find(|node| node.id == node_id && audiorouter_engine::hosts_plugin_worker(node.kind))
             .cloned()
             .ok_or_else(|| ControlError::InvalidRequest("nodeId must name a plugin".into()))?;
         let path = node
@@ -1751,9 +2288,110 @@ impl ControlPlane {
         };
         let (session_id, node_id) = (field("sessionId")?, field("nodeId")?);
         let resumed = self
-            .plugin_bridge(&session_id, &node_id)?
+            .plugin_live_bridge(&session_id, &node_id)?
             .resume_after_unchanged();
         Ok(json!({ "sessionId": session_id, "nodeId": node_id, "resumed": resumed }))
+    }
+
+    /// `plugins.programs`: the bounded VST2 program list of a playing plugin.
+    pub(crate) fn dispatch_plugins_programs(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let (session_id, node_id) = Self::plugin_node_request(&params)?;
+        let listing = self
+            .plugin_live_bridge(&session_id, &node_id)?
+            .programs()
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!("plugin programs unavailable: {error}"))
+            })?;
+        Ok(
+            json!({ "sessionId": session_id, "nodeId": node_id, "programs": listing.programs, "units": listing.units }),
+        )
+    }
+
+    /// `plugins.selectProgram`: choose one bounded VST2 program.
+    pub(crate) fn dispatch_plugins_select_program(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params =
+            params.ok_or_else(|| ControlError::InvalidRequest("nodeId is required".into()))?;
+        let program = params
+            .get("program")
+            .and_then(Value::as_u64)
+            .and_then(|value| u32::try_from(value).ok())
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("program must be a non-negative index".into())
+            })?;
+        let (session_id, node_id) = Self::plugin_node_request(&Some(params))?;
+        self.plugin_live_bridge(&session_id, &node_id)?
+            .select_program(program)
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!("plugin program selection failed: {error}"))
+            })?;
+        Ok(json!({ "sessionId": session_id, "nodeId": node_id, "program": program }))
+    }
+
+    /// `plugins.applyPreset`: import a bounded `.fxp`/`.fxb` from the plugin's
+    /// own directory into a playing VST2 node.
+    pub(crate) fn dispatch_plugins_apply_preset(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params =
+            params.ok_or_else(|| ControlError::InvalidRequest("nodeId is required".into()))?;
+        let preset_path = params
+            .get("presetPath")
+            .and_then(Value::as_str)
+            .map(std::path::PathBuf::from)
+            .ok_or_else(|| ControlError::InvalidRequest("presetPath is required".into()))?;
+        let (session_id, node_id) = Self::plugin_node_request(&Some(params))?;
+        let plugin_path = self
+            .get_session(&session_id)?
+            .nodes
+            .iter()
+            .find(|node| node.id == node_id)
+            .and_then(|node| node.parameters.get("path"))
+            .and_then(Value::as_str)
+            .map(std::path::PathBuf::from)
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("nodeId is not a plugin with a path".into())
+            })?;
+        let plugin_directory = plugin_path
+            .parent()
+            .ok_or_else(|| ControlError::InvalidRequest("plugin path has no directory".into()))?
+            .canonicalize()
+            .map_err(|_| ControlError::InvalidRequest("plugin directory is unavailable".into()))?;
+        let preset_path = preset_path.canonicalize().map_err(|_| {
+            ControlError::InvalidRequest("presetPath does not name a readable file".into())
+        })?;
+        if preset_path.parent() != Some(plugin_directory.as_path()) {
+            return Err(ControlError::InvalidRequest(
+                "presetPath must be inside the plugin's own directory".into(),
+            ));
+        }
+        let metadata = std::fs::metadata(&preset_path).map_err(|_| {
+            ControlError::InvalidRequest("presetPath does not name a readable file".into())
+        })?;
+        if metadata.len() == 0
+            || metadata.len() > audiorouter_plugin_host::vst2_preset::MAX_VST2_PRESET_BYTES as u64
+        {
+            return Err(ControlError::InvalidRequest(
+                "preset file size is outside the accepted range".into(),
+            ));
+        }
+        let bytes = std::fs::read(&preset_path)
+            .map_err(|_| ControlError::InvalidRequest("preset file could not be read".into()))?;
+        audiorouter_plugin_host::vst2_preset::parse(&bytes).map_err(|error| {
+            ControlError::InvalidRequest(format!("preset file is invalid: {error}"))
+        })?;
+        self.plugin_live_bridge(&session_id, &node_id)?
+            .apply_preset(&bytes)
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!("plugin preset import failed: {error}"))
+            })?;
+        Ok(json!({ "sessionId": session_id, "nodeId": node_id, "presetPath": preset_path }))
     }
 
     /// The live runtime bridge of a plugin node in a playing route.
@@ -1775,6 +2413,66 @@ impl ControlPlane {
                     "the plugin is available while its route is playing".into(),
                 )
             })
+    }
+
+    /// The live multi-bus bridge of a node with an auxiliary input.
+    #[cfg(windows)]
+    pub(crate) fn sidechain_bridge(
+        &self,
+        session_id: &EntityId,
+        node_id: &EntityId,
+    ) -> Result<Arc<audiorouter_plugin_host::sidechain_bridge::SidechainRuntimeBridge>, ControlError>
+    {
+        self.sidechain_bridges
+            .lock()
+            .ok()
+            .and_then(|bridges| {
+                bridges
+                    .get(&(session_id.clone(), node_id.clone()))
+                    .and_then(std::sync::Weak::upgrade)
+            })
+            .ok_or_else(|| {
+                ControlError::InvalidRequest(
+                    "the plugin is available while its route is playing".into(),
+                )
+            })
+    }
+
+    /// Either kind of live plugin bridge, for control operations that are the
+    /// same on both (state, editor, recovery, telemetry).
+    pub(crate) fn plugin_live_bridge(
+        &self,
+        session_id: &EntityId,
+        node_id: &EntityId,
+    ) -> Result<LivePluginBridge, ControlError> {
+        if let Ok(bridge) = self.plugin_bridge(session_id, node_id) {
+            return Ok(LivePluginBridge::Standard(bridge));
+        }
+        #[cfg(windows)]
+        if let Ok(bridge) = self.sidechain_bridge(session_id, node_id) {
+            return Ok(LivePluginBridge::Sidechain(bridge));
+        }
+        Err(ControlError::InvalidRequest(
+            "the plugin is available while its route is playing".into(),
+        ))
+    }
+
+    /// Continuity counters, unchanged-audio verdict, silence policy state and
+    /// failure reason of either bridge kind, for status telemetry.
+    pub(crate) fn plugin_bridge_telemetry(
+        &self,
+        session_id: &EntityId,
+        node_id: &EntityId,
+    ) -> Option<(u32, u32, bool, bool, Option<String>)> {
+        let bridge = self.plugin_live_bridge(session_id, node_id).ok()?;
+        let (output_misses, input_drops) = bridge.continuity_counts();
+        Some((
+            output_misses,
+            input_drops,
+            bridge.passes_audio_unchanged(),
+            bridge.silenced_for_unchanged_audio(),
+            bridge.failure_reason(),
+        ))
     }
 
     /// The slider values saved with a captured state, when it has them
@@ -1881,9 +2579,11 @@ impl ControlPlane {
                     "compatibility": match identity.compatibility() {
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst3X64 => "supportedVst3X64",
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst2X64Gated => "supportedVst2X64Gated",
+                        audiorouter_plugin_host::PluginCompatibility::SupportedVst3X86 => "supportedVst3X86",
+                        audiorouter_plugin_host::PluginCompatibility::SupportedVst2X86 => "supportedVst2X86",
                         audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat => "unsupportedFormat",
-                        audiorouter_plugin_host::PluginCompatibility::UnsupportedInstrument => "unsupportedInstrument",
-                    }
+                    },
+                    "instrument": identity.is_instrument()
                 }));
                 json!({
                     "path": entry.path,
@@ -1999,9 +2699,11 @@ impl ControlPlane {
                     "compatibility": match identity.compatibility() {
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst3X64 => "supportedVst3X64",
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst2X64Gated => "supportedVst2X64Gated",
+                        audiorouter_plugin_host::PluginCompatibility::SupportedVst3X86 => "supportedVst3X86",
+                        audiorouter_plugin_host::PluginCompatibility::SupportedVst2X86 => "supportedVst2X86",
                         audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat => "unsupportedFormat",
-                        audiorouter_plugin_host::PluginCompatibility::UnsupportedInstrument => "unsupportedInstrument",
-                    }
+                    },
+                    "instrument": identity.is_instrument()
                 },
                 "error": null,
                 "errorCode": null
@@ -2056,18 +2758,15 @@ impl ControlPlane {
                 "plugin fingerprint changed since scan".into(),
             ));
         }
-        match identity.compatibility() {
-            audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat => {
-                return Err(ControlError::InvalidRequest(
-                    "plugin format or architecture is unsupported".into(),
-                ));
-            }
-            audiorouter_plugin_host::PluginCompatibility::UnsupportedInstrument => {
-                return Err(ControlError::InvalidRequest(
-                    "plugin is an instrument; AudioRouter hosts audio effects only".into(),
-                ));
-            }
-            _ => {}
+        // Effects and instruments are both hostable; each tool checks the
+        // kind where it adds the plugin (`validate_plugin_placeholders`)
+        // and the worker refuses the wrong role with its own reason.
+        if identity.compatibility()
+            == audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat
+        {
+            return Err(ControlError::InvalidRequest(
+                "plugin format or architecture is unsupported".into(),
+            ));
         }
         Ok((identity, root))
     }
@@ -2146,7 +2845,7 @@ impl ControlPlane {
             .get_session(&session_id)?
             .nodes
             .iter()
-            .find(|node| node.id == node_id && node.kind == NodeKind::Plugin)
+            .find(|node| node.id == node_id && audiorouter_engine::hosts_plugin_worker(node.kind))
             .and_then(|node| {
                 let fingerprint = node
                     .parameters
@@ -2159,7 +2858,7 @@ impl ControlPlane {
                 ControlError::InvalidRequest("nodeId is not a plugin node in this session".into())
             })?;
         let asset = self
-            .plugin_bridge(&session_id, &node_id)?
+            .plugin_live_bridge(&session_id, &node_id)?
             .save_state()
             .map_err(|error| {
                 ControlError::InvalidRequest(format!("plugin state capture failed: {error}"))
@@ -2323,7 +3022,21 @@ impl ControlPlane {
         open: bool,
     ) -> Result<Value, ControlError> {
         let (session_id, node_id) = Self::plugin_node_request(&params)?;
-        let bridge = self.plugin_bridge(&session_id, &node_id)?;
+        let started_here = open && self.plugin_live_bridge(&session_id, &node_id).is_err();
+        if started_here {
+            // Stopped session: start only this plugin, without audio.
+            let session = self.get_session(&session_id)?.clone();
+            self.start_editor_only_plugin(&session, &node_id)?;
+        }
+        let bridge = self.plugin_live_bridge(&session_id, &node_id)?;
+        // A worker started only for this editor must not outlive a failed open.
+        let release_if_started_here = |plane: &Self| {
+            if started_here {
+                if let Ok(mut held) = plane.editor_only_plugins.lock() {
+                    held.remove(&(session_id.clone(), node_id.clone()));
+                }
+            }
+        };
         if open {
             let number = |name: &str| {
                 params
@@ -2332,17 +3045,27 @@ impl ControlPlane {
                     .and_then(Value::as_u64)
                     .filter(|value| *value > 0)
             };
-            let parent_window = number("parentWindow")
-                .ok_or_else(|| ControlError::InvalidRequest("parentWindow is required".into()))?;
-            let owner_process_id = number("ownerProcessId")
-                .and_then(|value| u32::try_from(value).ok())
-                .ok_or_else(|| ControlError::InvalidRequest("ownerProcessId is required".into()))?;
+            let (Some(parent_window), Some(owner_process_id)) = (
+                number("parentWindow"),
+                number("ownerProcessId").and_then(|value| u32::try_from(value).ok()),
+            ) else {
+                drop(bridge);
+                release_if_started_here(self);
+                return Err(ControlError::InvalidRequest(
+                    "parentWindow and ownerProcessId are required".into(),
+                ));
+            };
             let authorization = editor_authorization_issuer()
                 .issue(parent_window, owner_process_id)
                 .map_err(|error| {
                     ControlError::InvalidRequest(format!("editor authorization failed: {error:?}"))
                 })?;
-            bridge.open_editor(authorization).map_err(|error| {
+            let opened = bridge.open_editor(authorization);
+            drop(bridge);
+            if opened.is_err() {
+                release_if_started_here(self);
+            }
+            opened.map_err(|error| {
                 ControlError::InvalidRequest(if error.contains("editorUnavailable") || error.contains("UnsupportedFeature") {
                     "this plugin has no editor window AudioRouter can open; use its parameters in Properties".into()
                 } else {
@@ -2357,6 +3080,10 @@ impl ControlPlane {
             // Keep what the user set in the editor for the next Play.
             if let Err(error) = self.capture_plugin_state(&session_id, &node_id, true) {
                 eprintln!("AudioRouter plugin state capture after editor close failed: {error:?}");
+            }
+            // A worker started only for this editor ends with it.
+            if let Ok(mut held) = self.editor_only_plugins.lock() {
+                held.remove(&(session_id.clone(), node_id.clone()));
             }
         }
         Ok(
@@ -2393,8 +3120,25 @@ impl ControlPlane {
                 })?;
             identity.metadata.class_ids.swap(0, index);
         }
-        let executable = require_plugin_worker(PluginWorkerKind::for_format(identity.format))?;
-        let worker = if identity.format == audiorouter_plugin_host::PluginFormat::Vst3 {
+        let executable = require_plugin_worker(PluginWorkerKind::for_identity(
+            identity.format,
+            identity.architecture,
+        ))?;
+        let as_instrument = params
+            .as_ref()
+            .and_then(|value| value.get("instrument"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let worker = if as_instrument {
+            audiorouter_plugin_host::SupervisedWorkerProcess::spawn_instrument_verified(
+                &executable,
+                &identity,
+                std::slice::from_ref(&root),
+                2,
+                48_000,
+                Instant::now(),
+            )
+        } else if identity.format == audiorouter_plugin_host::PluginFormat::Vst3 {
             #[cfg(windows)]
             {
                 audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
@@ -2422,7 +3166,11 @@ impl ControlPlane {
                 Instant::now(),
             )
         }
-        .map_err(|error| ControlError::InvalidRequest(format!("plugin worker launch failed: {error:?}")))?;
+        .map_err(|error| {
+            let message = format!("plugin worker launch failed: {error:?}");
+            audiorouter_plugin_host::note_instrument_refusal(&identity.sha256, &message);
+            ControlError::InvalidRequest(message)
+        })?;
         let mut worker = worker;
         let parameters = worker
             .describe_parameters(Instant::now())
@@ -2448,6 +3196,247 @@ impl ControlPlane {
                 "maximum": parameter.maximum,
             })).collect::<Vec<_>>()
         }))
+    }
+
+    /// `plugins.buses`: the exact input/output buses a scanned plugin reports,
+    /// including a declared auxiliary input. Discovery only; it never changes
+    /// a graph or starts audio.
+    pub(crate) fn dispatch_plugins_buses(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let path = params
+            .as_ref()
+            .and_then(|value| value.get("path"))
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("path is required".into()))?;
+        let (mut identity, root) = self.scanned_plugin_identity(path)?;
+        if let Some(class_id) = params
+            .as_ref()
+            .and_then(|value| value.get("classId"))
+            .and_then(Value::as_str)
+            .filter(|id| *id != "default")
+        {
+            // Optional module metadata can omit a class. Forward the explicit ID
+            // to the verified worker, which must accept it or refuse; never
+            // substitute another class.
+            if let Some(index) = identity
+                .metadata
+                .class_ids
+                .iter()
+                .position(|id| id.eq_ignore_ascii_case(class_id))
+            {
+                identity.metadata.class_ids.swap(0, index);
+            } else {
+                identity.metadata.class_ids = vec![class_id.to_owned()];
+            }
+        }
+        let executable = require_plugin_worker(PluginWorkerKind::for_identity(
+            identity.format,
+            identity.architecture,
+        ))?;
+        let mut worker = if identity.format == audiorouter_plugin_host::PluginFormat::Vst3 {
+            #[cfg(windows)]
+            {
+                audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
+                    &executable,
+                    &identity,
+                    std::slice::from_ref(&root),
+                    2,
+                    48_000,
+                    Instant::now(),
+                )
+            }
+            #[cfg(not(windows))]
+            {
+                return Err(ControlError::InvalidRequest(
+                    "VST3 bus discovery requires Windows".into(),
+                ));
+            }
+        } else {
+            audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_with_sample_rate(
+                &executable,
+                &identity,
+                std::slice::from_ref(&root),
+                2,
+                48_000,
+                Instant::now(),
+            )
+        }
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!("plugin worker launch failed: {error:?}"))
+        })?;
+        let buses = worker.describe_buses(Instant::now()).map_err(|error| {
+            ControlError::InvalidRequest(format!("plugin bus discovery failed: {error:?}"))
+        })?;
+        let _ = worker.shutdown_with_timeout(Duration::from_secs(2));
+        Ok(json!({
+            "path": path,
+            "sha256": identity.sha256,
+            "format": match identity.format {
+                audiorouter_plugin_host::PluginFormat::Vst2 => "vst2",
+                audiorouter_plugin_host::PluginFormat::Vst3 => "vst3",
+                audiorouter_plugin_host::PluginFormat::Unknown => "unknown",
+            },
+            "buses": buses,
+        }))
+    }
+
+    /// `plugins.removeSidechainPort`: take the named `sidechain` port off a
+    /// plugin node. Refused while a connection uses it, so no edge is ever
+    /// dropped silently; one reversible graph commit.
+    pub(crate) fn dispatch_plugins_remove_sidechain_port(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let (session_id, node_id) = Self::plugin_node_request(&params)?;
+        self.ensure_session_loaded(&session_id)?;
+        let session = self.get_session(&session_id)?.clone();
+        let mut candidate = session.clone();
+        let node = candidate
+            .nodes
+            .iter_mut()
+            .find(|node| node.id == node_id)
+            .ok_or_else(|| ControlError::InvalidRequest("plugin node was not found".into()))?;
+        if node.kind != NodeKind::Plugin || node.plugin_sidechain_port().is_none() {
+            return Err(ControlError::InvalidRequest(format!(
+                "\"{}\" has no sidechain port to remove",
+                node.name
+            )));
+        }
+        let name = node.name.clone();
+        node.ports.retain(|port| port.name != "sidechain");
+        if session
+            .edges
+            .iter()
+            .any(|edge| edge.destination_node == node_id && edge.destination_port == "sidechain")
+        {
+            return Err(ControlError::InvalidRequest(format!(
+                "\"{name}\" still has a connection into its sidechain port; disconnect it first"
+            )));
+        }
+        let plan = self.plan_graph(&session_id, session.revision, candidate)?;
+        let key = format!("plugins.removeSidechainPort:{}", plan.as_str());
+        let commit = self.commit_graph_scoped(&plan, session.revision, &key, &key, None)?;
+        Ok(json!({
+            "sessionId": session_id,
+            "nodeId": node_id,
+            "removed": true,
+            "revision": commit.get("revision").cloned().unwrap_or(Value::Null),
+            "activation": commit.get("activation").cloned().unwrap_or(Value::Null),
+        }))
+    }
+
+    /// `plugins.addSidechainPort`: give a plugin node its declared auxiliary
+    /// input as the named `sidechain` port. The binding comes from the live,
+    /// identity-checked worker, never from request JSON; the edit is one
+    /// reversible graph commit. No Mixer is created and no edge is added.
+    pub(crate) fn dispatch_plugins_add_sidechain_port(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let (session_id, node_id) = Self::plugin_node_request(&params)?;
+        self.ensure_session_loaded(&session_id)?;
+        let session = self.get_session(&session_id)?.clone();
+        let node = session
+            .nodes
+            .iter()
+            .find(|node| node.id == node_id)
+            .ok_or_else(|| ControlError::InvalidRequest("plugin node was not found".into()))?;
+        let name = node.name.clone();
+        let refuse = |message: &str| {
+            ControlError::InvalidRequest(format!(
+                "\"{name}\" cannot get a sidechain port: {message}"
+            ))
+        };
+        if node.kind != NodeKind::Plugin {
+            return Err(refuse("only a plugin node can have one"));
+        }
+        if node.parameters.get("format").and_then(Value::as_str) != Some("vst3") {
+            return Err(refuse(
+                "only a VST3 plugin with a declared auxiliary input is supported",
+            ));
+        }
+        let class_id = node
+            .parameters
+            .get("classId")
+            .and_then(Value::as_str)
+            .filter(|id| *id != "default")
+            .ok_or_else(|| refuse("select the exact VST3 class first"))?
+            .to_owned();
+        let path = node
+            .parameters
+            .get("path")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| refuse("the node has no plugin binary"))?
+            .to_owned();
+        let main_channels = node
+            .ports
+            .iter()
+            .find(|port| {
+                port.direction == audiorouter_domain::PortDirection::Input
+                    && port.name != "sidechain"
+            })
+            .map(|port| u16::from(port.channels))
+            .ok_or_else(|| refuse("it has no main input"))?;
+        #[cfg(not(windows))]
+        {
+            let _ = (&class_id, &path, main_channels);
+            Err(refuse("VST3 discovery requires Windows"))
+        }
+        #[cfg(windows)]
+        {
+            let (mut identity, root) = self.scanned_plugin_identity(&path)?;
+            identity.metadata.class_ids = vec![class_id.clone()];
+            let executable = require_plugin_worker(PluginWorkerKind::for_identity(
+                identity.format,
+                identity.architecture,
+            ))?;
+            let roots = std::slice::from_ref(&root);
+            let mut worker = audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
+                &executable, &identity, roots, main_channels, 48_000, Instant::now(),
+            )
+            .map_err(|error| refuse(&format!("the plugin worker did not start: {error:?}")))?;
+            let result = (|| {
+                let buses = worker
+                    .describe_buses(Instant::now())
+                    .map_err(|error| refuse(&format!("bus discovery failed: {error:?}")))?;
+                let aux = buses
+                    .inputs
+                    .get(1)
+                    .ok_or_else(|| refuse("the plugin declares no auxiliary input"))?;
+                worker
+                    .verify_sidechain_binding(
+                        roots,
+                        &identity.sha256,
+                        Some(&class_id),
+                        (main_channels, aux.channels),
+                        Instant::now(),
+                    )
+                    .map_err(|error| refuse(&format!("{error:?}")))
+            })();
+            let _ = worker.shutdown_with_timeout(Duration::from_secs(2));
+            let binding = result?;
+            let channels = binding.layout().input_buses()[1];
+            let plan = self.plan_bound_plugin_sidechain(
+                &session_id,
+                session.revision,
+                &node_id,
+                &binding,
+            )?;
+            let key = format!("plugins.addSidechainPort:{}", plan.as_str());
+            let commit = self.commit_graph_scoped(&plan, session.revision, &key, &key, None)?;
+            Ok(json!({
+                "sessionId": session_id,
+                "nodeId": node_id,
+                "port": "sidechain",
+                "channels": channels,
+                "revision": commit.get("revision").cloned().unwrap_or(Value::Null),
+                "activation": commit.get("activation").cloned().unwrap_or(Value::Null),
+            }))
+        }
     }
 }
 
@@ -2493,3 +3482,7 @@ mod tests;
 #[cfg(test)]
 #[path = "plugin_state_cleanup_tests.rs"]
 mod state_cleanup_tests;
+
+#[cfg(all(test, windows))]
+#[path = "plugin_census_tests.rs"]
+mod census_tests;

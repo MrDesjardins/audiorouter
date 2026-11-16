@@ -166,6 +166,13 @@ impl ControlPlane {
                 { "name": "stateId", "type": "string", "description": "Opaque settings asset from plugins.saveState or plugins.prepareUpdate. Omit it to start from the plugin's defaults; plugins.prepareUpdate with resetState removes it and forgets the latest capture once. Never change a fingerprint to bypass a plugin update; use plugins.prepareUpdate after scanning." },
                 { "name": "passThroughAllowed", "type": "boolean", "description": "Allow this plugin to pass a microphone through unchanged. When off, a plugin fed by a recording device that returns its audio untouched for about 2 seconds (as an unlicensed plugin does) is silenced until plugins.resume. Adjacent VST2 plugins that share one worker are checked and silenced together, so allow pass-through on every one of them. Turn on only for a plugin meant to be neutral. false when unset." }
             ]),
+            // An instrument is a source: it renders audio from MIDI notes.
+            // Plugin settings are per plugin (`plugins.parameters`).
+            audiorouter_domain::NodeKind::Instrument => json!([
+                { "name": "classId", "type": "string", "description": "The instrument class ID from plugins.scan (a VST3 module can hold several classes); default selects its first instrument." },
+                { "name": "stateId", "type": "string", "description": "Opaque settings asset from plugins.saveState or plugins.prepareUpdate. Omit it to start from the instrument's defaults." },
+                { "name": "midiInput", "type": "string", "description": "Where notes come from: \"keyboard\" (the on-screen keyboard and the API only), \"all\" (every connected MIDI device, plus the keyboard) or a MIDI device id from midi.devices. keyboard when unset." }
+            ]),
             audiorouter_domain::NodeKind::Volume => json!([{
                 "name": "percent",
                 "type": "number",

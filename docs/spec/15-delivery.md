@@ -63,7 +63,7 @@ The ranges below include every normative ID; each milestone must attach evidence
 | GRAPH-11 | M02/M03 | UC-01/04/05, global cycle checks |
 | GRAPH-15 | M02/M05 | Multi-path session: engine path tests, saved-session drift survey, audio continuity harness |
 | GRAPH-16 | M02 (network extension, 2026-09-26) | Network unit/loopback tests, live UDP continuity route |
-| CAP-01–08 | M00/M02 | UC-03, Windows device/app matrix |
+| CAP-01–08 | M00/M02 | UC-03, Windows device/app matrix; CAP-02 stopped-session exact-name input rebinding and manual ambiguity fallback |
 | CAP-09–10 | M03/M05 | UC-01, duplicate-playback validation |
 | CAP-11–12 | M02/M07 | UC-03/06, OS transitions |
 | CAP-13 | M02 | Concurrent exact-endpoint ownership in multi-path sessions |
@@ -73,11 +73,11 @@ The ranges below include every normative ID; each milestone must attach evidence
 | DSP-06, PLUG-01–06 | M06 | UC-02/06, pitch/worker/format evidence |
 | DSP-10–18 | M04/M05 | UC-02, DSP/engine response, latency and bounds tests; local voice-sample qualification in [active evidence](../plans/active/evidence/2026-09-27-voice-tools.md). Combination coverage and release gates remain tracked in the active plan. |
 | REC-01–08, REC-10–12 | M04/M05 | UC-08, frame/file/path tests |
-| PLUG-07 | M06 extension/M08 | Native x64 VST2 adapter, worker containment, rights, compatibility, and failure evidence |
+| PLUG-07 | M06 extension/M08 | VST2 adapter (x64/x86, effects/instruments), worker containment, rights, compatibility census, and failure evidence |
 | REC-09 | M04/M07 | UC-08, crash/disk-failure recovery |
 | UI-01–15 | M05/M07 | UC-01–10, keyboard/Narrator/usability |
 | UI-16 | M05 extension (2026-09-29) | Named visual groups, persistence, no audio changes, three-theme hit testing |
-| UI-27 | Setup check (2026-11-02) | Per-finding regressions, check flags exactly what Play refuses, dispatcher and default MCP tool, three-theme Status tab |
+| UI-27 | Setup check (2026-11-02; recovery UX extension 2026-11-15) | Per-finding regressions, check flags exactly what Play refuses, dispatcher/default MCP, three-theme Status tab and exact Properties field focus |
 | HTTP-01–06 | M07/M05 extension (2026-09-29) | Shared-backend mutation/frontend refresh, token/origin/bounds, local Swagger and schema parity |
 | API-01–07, API-09–12 | M01, each feature extension | UC-07/10, protocol/parity tests |
 | API-08 | M01 baseline; M07 hardening | Reconnect/backpressure/resync |
@@ -151,7 +151,7 @@ These decisions are the proposed baseline for implementation. Evidence may chang
 | DEC-05 | Per-user background engine, sign-in startup | Baseline; separate user capture from privileged driver lifecycle |
 | DEC-06 | 48 kHz float32, initial 128-frame quantum | Retained as the graph baseline; native endpoint formats and process-loopback evidence exist, but physical latency/quantum measurements are still required before making the quantum final |
 | DEC-07 | Managed persistent driver, not user-mode-only virtual microphones | Superseded for v1 by DEC-16; restored by DEC-18 (2026-10-05) for the AudioRouter cable |
-| DEC-08 | VST3 x64 plus built-ins; gated legacy VST2 x64 extension | Baseline release path remains VST3 plus built-ins; the explicitly approved PLUG-07 extension adds contained x64 VST2 effects only after ABI, rights, worker, editor, compatibility, and release evidence is complete |
+| DEC-08 | VST3 and VST2, x64 and x86, effects and instruments (revised 2026-11-13) | Owner decision 2026-11-13: support all VST2/VST3, including 32-bit and MIDI instruments, because users report plugins that fail. Each part ships only with ABI, rights, worker, editor, compatibility and release evidence; see the [full compatibility plan](../plans/active/vst-full-compatibility.md) |
 | DEC-09 | Explicit virtual desktop render route; capture-only app sources | Baseline; automatic capture-and-mute not assumed |
 | DEC-10 | Protected voice paths silence on effect failure | Baseline; deliberate user bypass is a separate action |
 | DEC-11 | SQLite + versioned portable bundle | Baseline; journal/import safety tested before recovery claims |
