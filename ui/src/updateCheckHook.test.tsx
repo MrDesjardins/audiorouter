@@ -70,6 +70,37 @@ afterEach(() => {
 });
 
 describe("useUpdateCheck", () => {
+  it("abandons a prerelease request when the channel changes before it fails", async () => {
+    writeCache({
+      checkedAt: start - CHECK_INTERVAL_MS - 1,
+      update: { tag: "v9.0.0", version: "9.0.0", url: "ignored" },
+    });
+    let rejectOld!: (reason: Error) => void;
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((_, reject) => {
+            rejectOld = reject;
+          }),
+      )
+      .mockResolvedValue(response([]));
+    const { result, rerender } = renderHook(
+      ({ channel }: { channel: "prerelease" | "stable" }) => useUpdateCheck(true, channel, fetcher),
+      { initialProps: { channel: "prerelease" } },
+    );
+    await settle();
+    rerender({ channel: "stable" });
+    await act(async () => {
+      rejectOld(new TypeError("old channel request failed"));
+    });
+    await settle();
+    expect(result.current.update).toBeNull();
+    expect(result.current.status).toBe("current");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(localStorage.getItem(cacheKey)!)).toMatchObject({ channel: "stable", update: null });
+  });
+
   it("uses a fresh cached answer without a request", async () => {
     writeCache({ checkedAt: start });
     const fetcher = vi.fn(async () => response([]));

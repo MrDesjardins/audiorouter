@@ -198,6 +198,9 @@ impl ControlPlane {
         // all of them so a queue never fills while audio plays.
         let _ = self.drain_attached_recorders();
         self.maintain_node_recordings(now);
+        // Plugin workers can fail between API calls. Withdraw recovery
+        // eligibility before a later backend failure can revive them.
+        self.publish_running_witness();
         self.audio_service.record(now, serviced != 0);
         serviced
     }

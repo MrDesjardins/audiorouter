@@ -1199,6 +1199,7 @@ mod opcode_tests {
 
     thread_local! {
         static DISPATCH_COUNT: Cell<usize> = const { Cell::new(0) };
+        static PROCESS_LEVELS: Cell<(isize, isize)> = const { Cell::new((0, 0)) };
     }
 
     unsafe extern "C" fn counting_dispatcher(
@@ -1226,6 +1227,59 @@ mod opcode_tests {
                 *(*outputs).add(frame) = f32::NAN;
             }
         }
+    }
+
+    unsafe extern "C" fn observe_process_levels(
+        effect: *mut Vst2Effect,
+        _: *const *const f32,
+        outputs: *mut *mut f32,
+        frames: i32,
+    ) {
+        // Opcode 23 accepts a null effect: it describes the calling thread.
+        // Check both the current processing thread and an editor-like thread
+        // while the process callback is active.
+        // SAFETY: no effect or data pointer is dereferenced by opcode 23.
+        let local = unsafe { host_callback(ptr::null_mut(), 23, 0, 0, ptr::null_mut(), 0.0) };
+        let address = effect as usize;
+        let other = std::thread::spawn(move || {
+            let effect = address as *mut Vst2Effect;
+            // SAFETY: the caller keeps the test effect and host context alive
+            // until this joined callback finishes; opcode 23 only reads TLS.
+            unsafe { host_callback(effect, 23, 0, 0, ptr::null_mut(), 0.0) }
+        })
+        .join()
+        .unwrap_or(-1);
+        PROCESS_LEVELS.with(|levels| levels.set((local, other)));
+        // SAFETY: the test supplies one output channel and a bounded frame
+        // count; writing silence keeps the normal output validation happy.
+        unsafe {
+            for frame in 0..frames as usize {
+                *(*outputs).add(frame) = 0.0;
+            }
+        }
+    }
+
+    #[test]
+    fn process_level_is_local_to_the_thread_in_the_audio_callback() {
+        let host_context = Box::new(Vst2HostContext::default());
+        let mut effect = blank_effect((&*host_context as *const Vst2HostContext).cast_mut().cast());
+        effect.process_replacing = Some(observe_process_levels);
+        let effect = Box::into_raw(Box::new(effect));
+        let mut library = Vst2Library {
+            module: ptr::null_mut(),
+            effect,
+            processing_format: None,
+            editor_open: false,
+            role: Vst2Role::Effect,
+            host_context,
+        };
+        let input = [0.0; 4];
+        let mut output = [0.0; 4];
+        let inputs = [&input[..]];
+        let mut outputs = [&mut output[..]];
+
+        library.process_replacing(&inputs, &mut outputs).unwrap();
+        assert_eq!(PROCESS_LEVELS.with(Cell::get), (2, 1));
     }
 
     #[test]
@@ -2370,14 +2424,14 @@ impl Vst2Library {
             let process = (*self.effect)
                 .process_replacing
                 .expect("validated replacing processor");
-            IN_PROCESS_CALL.store(true, std::sync::atomic::Ordering::Relaxed);
+            let was_processing = IN_PROCESS_CALL.with(|flag| flag.replace(true));
             process(
                 self.effect,
                 input_ptrs.as_ptr(),
                 output_ptrs.as_mut_ptr(),
                 frames as i32,
             );
-            IN_PROCESS_CALL.store(false, std::sync::atomic::Ordering::Relaxed);
+            IN_PROCESS_CALL.with(|flag| flag.set(was_processing));
         }
         self.host_context
             .sample_position
@@ -2493,7 +2547,10 @@ unsafe extern "C" fn host_callback(
         // the worker thread, and a plugin told "realtime" there may defer or
         // skip its interface work.
         23 => {
-            if IN_PROCESS_CALL.load(std::sync::atomic::Ordering::Relaxed) {
+            if IN_PROCESS_CALL
+                .try_with(std::cell::Cell::get)
+                .unwrap_or(false)
+            {
                 2
             } else {
                 1
@@ -2698,9 +2755,12 @@ pub fn enable_per_monitor_dpi_awareness() {
     }
 }
 
-/// Set while a plugin's process call runs (see opcode 23 above).
+// Processing is a property of the calling thread, not the worker process.
+// Const TLS avoids locks and allocations at the plugin processing boundary.
 #[cfg(windows)]
-static IN_PROCESS_CALL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+thread_local! {
+    static IN_PROCESS_CALL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
 
 #[cfg(windows)]
 #[repr(C)]

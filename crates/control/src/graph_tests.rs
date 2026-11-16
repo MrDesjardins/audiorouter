@@ -301,6 +301,27 @@ fn graph_commit_can_require_its_session_to_be_stopped_for_recovery_edits() {
         ))
         .result
         .unwrap();
+    for (key, value) in [
+        ("null-stopped-guard", Value::Null),
+        ("false-stopped-guard", json!(false)),
+        ("number-stopped-guard", json!(17)),
+        ("empty-stopped-guard", json!("")),
+    ] {
+        let invalid = plane.dispatch(request(
+            "graph.commit",
+            json!({
+                "planId":plan["planId"],
+                "baseRevision":0,
+                "idempotencyKey":key,
+                "requireStoppedSessionId":value
+            }),
+        ));
+        assert!(invalid
+            .error
+            .unwrap()
+            .message
+            .contains("must be a non-empty session ID"));
+    }
     let mismatched = plane.dispatch(request(
         "graph.commit",
         json!({

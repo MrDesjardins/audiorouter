@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **Recovery keeps failed plugin routes stopped.** A route with an unavailable
+  plugin is no longer restarted automatically after sleep or a device change.
+- **Late replies respect the current action.** An event poll cannot replace a
+  reconnect snapshot, and a stable update check cannot inherit a prerelease
+  result from an earlier request.
+- **Recovery notices follow the latest event.** A later successful restart is
+  no longer shown as a failure because an older failure appeared in the same
+  event batch.
+- **Stopped-session checks reject malformed guards.** Invalid graph-commit
+  preconditions can no longer be silently treated as absent.
+- **VST2 plugins get the calling thread's processing status.** Opening an
+  editor while audio is processing no longer makes its thread appear realtime.
+
 Plugin support work on the `feature/vst-plugin-experience` branch. Nothing here
 is released, signed or tested on a clean install yet.
 
@@ -76,7 +89,7 @@ older builds.
   sessions are quarantined without losing data, recordings finish after audio
   stops, the stereo Limiter's linked detection is corrected, and inserting or
   removing a tool keeps ports, Mixer volumes and disabled links.
-- **The new-version check now shows what it is doing.** Settings → New versions now shows what it is doing.** Settings → New versions
+- **The new-version check now shows what it is doing.** Settings → New versions
   shows the last successful check, the next attempt and a Check now button. A
   missing connection is no longer silent: the check retries with increasing
   waits for up to 12 hours, then waits for the next day and says so. You can

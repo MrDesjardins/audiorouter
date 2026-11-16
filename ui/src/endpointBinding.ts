@@ -111,6 +111,9 @@ export function findReplacementCaptureEndpoint(
   savedName?: string,
 ): Extract<DeviceListItem, { state: "active" }> | null {
   if (!missingEndpointId) return null;
+  // Setup findings can outlive an unplug/replug. An exact endpoint that
+  // returned takes precedence over every friendly-name recovery hint.
+  if (devices.some((device) => device.id === missingEndpointId && device.state === "active")) return null;
   const previous = readRememberedDevices()[missingEndpointId];
   const name = savedName || previous?.name;
   if (!name || (previous && previous.direction !== "capture")) return null;
