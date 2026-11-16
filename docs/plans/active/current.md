@@ -58,6 +58,36 @@ This smoke did not run the installer or open audio devices.
 The acceptance script cleans its temporary artifact output afterward; no
 installer is being handed off as a release candidate from this run.
 
+VM automation follow-up (2026-11-16): cloned `01-clean-windows` from
+`AR-DriverTest` into the separate full clone `AR-ReleaseQualification-20261116`
+under `C:/VMs`, leaving the source and its snapshots intact. Host audio is
+disabled for the clone. A retained app-only candidate from source `20503e066`
+was prepared and verified at `%TEMP%/audiorouter-vm-candidate-23873d955dd54ae7bf36582539be96f2`;
+its NSIS SHA-256 is `4ac481cac4fabb7f8e9e507f66dd65a4db74efa78369352a6d9ebcee575663c1`.
+The clean snapshot lacked Guest Additions; version 7.2.20 was installed in
+the clone. Its first restart lost the guest heartbeat and needed a reset;
+guest control then worked. Created `arrelease` in the clone and verified its
+medium-integrity token belongs to Users, not Administrators. Guest hash matched
+the candidate. Silent standard-user fresh install passed; the installed CLI
+imported `tests/fixtures/valid-session.json` into the real default
+`%LOCALAPPDATA%/AudioRouter/state.sqlite`. The published 0.0.29 installer,
+SHA-256 `f2c43d115f04fdef00f55ef96862eba41d581464db24785cde5f69755ba209d8`
+(matching its release manifest and guest copy), silently downgraded the app;
+the installed 0.0.29 CLI read the fixture. The candidate silently upgraded it
+to 0.0.30 and read the same fixture. Silent uninstall preserved the database,
+and candidate reinstall read the fixture again. These steps were driven with
+VirtualBox guest-control commands, not yet a reusable test harness. No audio
+device was used. The first registry lookup did not locate the uninstall key;
+registration/removal was not established. No recording or missing-WebView2
+case was tested. The clone was asked to shut down after the test.
+
+Next make the guest-control sequence repeatable with retained structured logs,
+snapshot the prepared baseline, and extend it to registration, real recording
+retention, repair and missing-WebView2 cases. A VM does
+not replace the required physical-device, endurance and second-Windows-build
+evidence. Roll back VM preparation by restoring its own baseline; do not alter
+the source VM.
+
 The packaged WebView2 smoke also passed against that release shell on Windows
 11 as a standard user, with isolated database and browser profile: native
 bridge, stopped first launch, canvas, session save and restart passed, with no
@@ -86,10 +116,9 @@ data retention on a clean standard-user Windows system, WebView2 absence, real
 MIDI unplug/replug and duplicate names, sidechain plugin failure on a protected
 voice path, sleep/device recovery, and current-head CI. UDP continuity under
 concurrent load remains unqualified after the earlier intermittent failures.
-`VBoxManage list vms` found only the powered-off `AR-DriverTest` with its
-driver-testing snapshots; the separate installer qualification VM described
-in the older plan is not registered here. No VM was started or changed.
-Next: run the applicable attended M08 gates on an isolated machine, then review
+The separate older installer qualification VM is not registered here; the
+new isolated clone provides the limited lifecycle evidence above.
+Next: complete the remaining M08 gates on isolated systems, then review
 the complete branch and current-head CI; do not call the candidate release-ready
 until those gates have evidence. The isolated worktree remains in place and
 must be removed only with the prescribed merged-worktree cleanup script.
