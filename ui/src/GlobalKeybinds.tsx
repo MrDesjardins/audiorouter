@@ -385,6 +385,22 @@ function nextKeybindName(rules: KeybindRule[]): string {
   return capKeybindName(`keybind${index}`);
 }
 
+function KeybindTrashIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" />
+    </svg>
+  );
+}
+
 export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | null }) {
   const invoke = shellInvoke();
   const [rules, setRules] = useState<KeybindRule[]>([]);
@@ -392,7 +408,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [recordingId, setRecordingId] = useState<string | null>(null);
-  const [newlyAddedId, setNewlyAddedId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<KeybindRule | null>(null);
   const [editingNames, setEditingNames] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const rulesRef = useRef<KeybindRule[]>(rules);
@@ -401,6 +417,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
   const usedModifierComboRef = useRef(false);
   const hitRefs = useRef(new Map<string, HTMLLabelElement>());
   const dragRef = useRef<{ select: boolean; x: number; y: number } | null>(null);
+  const addButtonRef = useRef<HTMLButtonElement>(null);
 
   const nodes = useMemo(() => snapshot?.session?.nodes ?? [], [snapshot?.session?.nodes]);
   const soundboards = useMemo(() => nodes.filter((node) => node.kind === "soundboard"), [nodes]);
@@ -468,7 +485,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
   }, [invoke]);
 
   const persist = async (nextRules: KeybindRule[]) => {
-    if (!invoke) return;
+    if (!invoke) return false;
     const previous = rulesRef.current;
     setRules(nextRules);
     setBusy(true);
@@ -477,9 +494,11 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
       const saved = (await invoke("keybinds_save", { rules: nextRules })) as KeybindRule[];
       setRules(saved);
       setMessage("Global keybindings saved.");
+      return true;
     } catch (error) {
       setRules(previous);
       setMessage(typeof error === "string" ? error : "Could not save global keybindings.");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -496,23 +515,28 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
       setMessage(limit);
       return;
     }
-    const action = defaultAction(soundboards);
+    const action: KeybindAction = { type: "sessionToggle" };
     const next: KeybindRule = {
       id: `kb-${Date.now().toString(36)}`,
       name: nextKeybindName(rules),
       enabled: true,
       trigger: {
-        keys: "F13",
-        mode: "hold",
+        keys: "",
+        mode: "press",
         passthrough: true,
       },
       action,
     };
-    setNewlyAddedId(next.id);
-    void persist([...rules, next]);
+    setEditingNames(false);
+    setMessage(null);
+    setDraft(next);
   };
 
   const updateRule = (id: string, updater: (rule: KeybindRule) => KeybindRule) => {
+    if (draft?.id === id) {
+      setDraft(updater(draft));
+      return;
+    }
     void persist(rules.map((rule) => (rule.id === id ? updater(rule) : rule)));
   };
 
@@ -525,17 +549,28 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
     const capped = capKeybindName(name);
     setRules((current) => current.map((rule) => (rule.id === id ? { ...rule, name: capped } : rule)));
   };
-  const removeSelected = async () => {
-    const removeIds = new Set(selectedIds);
-    const count = removeIds.size;
+  const removeRules = async (removeIds: Set<string>) => {
+    const previousSelection = new Set(selectedIds);
+    const targets = rulesRef.current.filter((rule) => removeIds.has(rule.id));
+    const count = targets.length;
     if (count === 0) return;
+    const name = targets[0].name?.trim() || targets[0].trigger.keys;
     const confirmed = await askConfirm({
-      title: count === 1 ? "Delete this keybind?" : `Delete ${count} keybinds?`,
-      message: "This removes the selected global keybinds. It cannot be undone.",
-      confirmLabel: "Delete",
+      title: count === 1 ? `Delete “${name}”?` : `Delete ${count} keybindings?`,
+      message:
+        count === 1
+          ? `This removes only “${name}” (${targets[0].trigger.keys}). Its shortcut will no longer run. This cannot be undone.`
+          : `This removes the ${count} selected global keybindings. Their shortcuts will no longer run. This cannot be undone.`,
+      confirmLabel: count === 1 ? "Delete keybinding" : `Delete ${count} keybindings`,
+      destructive: true,
     });
     if (!confirmed) return;
-    void persist(rulesRef.current.filter((rule) => !removeIds.has(rule.id)));
+    if (await persist(rulesRef.current.filter((rule) => !removeIds.has(rule.id)))) {
+      setMessage(count === 1 ? "Keybinding deleted." : `${count} keybindings deleted.`);
+      requestAnimationFrame(() => addButtonRef.current?.focus());
+    } else {
+      setSelectedIds(previousSelection);
+    }
   };
 
   const beginSelectionDrag = (id: string, event: ReactPointerEvent<HTMLElement>) => {
@@ -592,6 +627,14 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
         <h3>Global keybindings</h3>
         {invoke && (
           <div className="actions">
+            <button
+              ref={addButtonRef}
+              type="button"
+              onClick={addRule}
+              disabled={!loaded || busy || !!draft || rules.length >= KEYBIND_MAX}
+            >
+              Add keybinding
+            </button>
             {editingNames ? (
               <>
                 <button
@@ -617,44 +660,13 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                 </button>
                 <button
                   type="button"
-                  className="secondary"
-                  aria-label="Remove selected keybinds"
-                  title="Remove selected keybinds"
-                  onClick={removeSelected}
+                  className="danger keybind-delete-selected"
+                  title="Delete the selected keybindings"
+                  onClick={() => void removeRules(new Set(selectedIds))}
                   disabled={!loaded || busy || selectedCount === 0}
                 >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    aria-hidden="true"
-                  >
-                    <path d="M5 12h14" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  aria-label="Add global keybind"
-                  title={keybindLimitMessage(rules.length) ?? "Add global keybind"}
-                  onClick={addRule}
-                  disabled={!loaded || busy || rules.length >= KEYBIND_MAX}
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    aria-hidden="true"
-                  >
-                    <path d="M12 5v14" />
-                    <path d="M5 12h14" />
-                  </svg>
+                  <KeybindTrashIcon />
+                  Delete selected <span className="keybind-selection-count">({selectedCount})</span>
                 </button>
                 <button
                   type="button"
@@ -672,9 +684,10 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
             ) : (
               <button
                 type="button"
-                className="secondary"
-                aria-label="Edit keybind names"
-                title="Edit keybind names"
+                className="secondary keybind-manage"
+                aria-label="Manage keybindings"
+                title="Rename keybindings or select several to delete"
+                disabled={!!draft || busy || !loaded}
                 onClick={() => setEditingNames(true)}
               >
                 <svg
@@ -689,6 +702,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                   <path d="M12 20h9" />
                   <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
                 </svg>
+                Manage
               </button>
             )}
           </div>
@@ -698,17 +712,21 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
         Windows-wide hotkeys that work even when AudioRouter is minimized to the tray. Supports keyboard combos,
         function keys (F1–F24), and mouse side/middle buttons. These are the app's only audio shortcuts.
       </p>
+      {editingNames && (
+        <p className="muted">Select keybindings to delete, or edit their names. Choose Done when finished.</p>
+      )}
       {!invoke ? (
         <small className="muted">Global Windows keybindings are available in the desktop app.</small>
-      ) : rules.length === 0 ? (
+      ) : rules.length === 0 && !draft ? (
         <p className="muted">
           No global keybindings yet. Add one to start or stop the session, mute the microphone, or play a soundboard
           slot.
         </p>
       ) : (
         <div className="keybind-list">
-          {rules.map((rule) => {
+          {(draft ? [draft, ...rules.filter((rule) => rule.id !== draft.id)] : rules).map((rule) => {
             const isRecording = recordingId === rule.id;
+            const isDraft = draft?.id === rule.id;
             const soundboardAction = rule.action.type === "soundboardTrigger" ? rule.action : null;
             return (
               <div key={rule.id} className="keybind-row">
@@ -731,10 +749,35 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                     />
                   </div>
                 ) : (
-                  <details className="keybind-body" open={newlyAddedId === rule.id ? true : undefined}>
+                  <details className="keybind-body" inert={busy} open={draft?.id === rule.id ? true : undefined}>
                     <summary>
-                      <span className="keybind-title">{describeRuleSummary(rule, nodes)}</span>
+                      <span className="keybind-title">
+                        {isDraft ? "New keybinding" : describeRuleSummary(rule, nodes)}
+                        {!isDraft && rule.name?.trim() && (
+                          <small className="muted">
+                            {rule.trigger.keys} · {ACTION_LABELS[rule.action.type]}
+                          </small>
+                        )}
+                      </span>
                     </summary>
+                    {isDraft && (
+                      <>
+                        <p className="muted">
+                          Name it, choose what it does, and record a shortcut. It becomes active only when you save.
+                        </p>
+                        <label>
+                          Name
+                          <input
+                            autoFocus
+                            value={rule.name ?? ""}
+                            maxLength={KEYBIND_NAME_MAX}
+                            placeholder="e.g. Mute my microphone"
+                            onFocus={(event) => event.currentTarget.select()}
+                            onChange={(event) => setDraft({ ...rule, name: capKeybindName(event.target.value) })}
+                          />
+                        </label>
+                      </>
+                    )}
                     <label>
                       Action
                       <select
@@ -783,6 +826,10 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                                 </option>
                               ))}
                             </select>
+                          ) : isDraft ? (
+                            <small className="muted">
+                              Add a Soundboard tool to this session first, or choose another action.
+                            </small>
                           ) : (
                             <input
                               value={soundboardAction.nodeId}
@@ -842,12 +889,13 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                     )}
 
                     <label>
-                      Trigger
+                      Shortcut
                       <input
                         readOnly
+                        placeholder="Click here, then press your shortcut"
                         value={isRecording ? "Press key or mouse4/5…" : rule.trigger.keys}
                         aria-label={`Global trigger for ${rule.name?.trim() || ACTION_LABELS[rule.action.type]}`}
-                        onClick={() => {
+                        onFocus={() => {
                           heldModifiersRef.current.clear();
                           usedModifierComboRef.current = false;
                           setRecordingId(rule.id);
@@ -861,6 +909,12 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                         }}
                         onKeyDown={(event) => {
                           if (!isRecording || event.repeat) return;
+                          if (event.key === "Tab") {
+                            setRecordingId(null);
+                            heldModifiersRef.current.clear();
+                            setSuspended(false);
+                            return;
+                          }
                           event.preventDefault();
                           const keys = chordFromCaptureKeyDown(event, heldModifiersRef.current);
                           if (!keys) {
@@ -894,6 +948,11 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                         }}
                       />
                     </label>
+                    <small className="keybind-capture-help muted">
+                      {isRecording
+                        ? "Listening… Press Tab or click another field to cancel recording."
+                        : "Click or Tab into the shortcut field, then press a key combination or mouse side button."}
+                    </small>
 
                     <div className="keybind-toggles">
                       <label className="autoplay-toggle">
@@ -923,6 +982,74 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                         Pass key through
                       </label>
                     </div>
+                    {!isDraft && (
+                      <div className="actions keybind-delete-action">
+                        <button
+                          type="button"
+                          className="danger"
+                          disabled={busy}
+                          aria-label={`Delete keybinding ${rule.name?.trim() || rule.trigger.keys}`}
+                          onClick={() => void removeRules(new Set([rule.id]))}
+                        >
+                          <KeybindTrashIcon />
+                          Delete keybinding
+                        </button>
+                      </div>
+                    )}
+                    {isDraft && (
+                      <>
+                        <p className="keybind-draft-status muted" role="status">
+                          {!rule.name?.trim()
+                            ? "Enter a name for this keybinding."
+                            : !rule.trigger.keys
+                              ? "Record a shortcut before saving."
+                              : soundboardAction && !soundboardAction.nodeId.trim()
+                                ? "Choose a soundboard before saving."
+                                : rules.some(
+                                      (saved) =>
+                                        saved.id !== rule.id &&
+                                        saved.enabled &&
+                                        saved.trigger.keys.toLowerCase() === rule.trigger.keys.toLowerCase(),
+                                    )
+                                  ? "This shortcut is already assigned. Both actions will run."
+                                  : `Ready: ${rule.trigger.keys} → ${ACTION_LABELS[rule.action.type]}.`}
+                        </p>
+                        <div className="actions">
+                          <button
+                            type="button"
+                            disabled={
+                              busy ||
+                              !rule.name?.trim() ||
+                              !isValidTrigger(rule.trigger.keys) ||
+                              !!(soundboardAction && !soundboardAction.nodeId.trim())
+                            }
+                            onClick={async () => {
+                              if (await persist([...rulesRef.current, rule])) {
+                                setDraft(null);
+                                requestAnimationFrame(() => addButtonRef.current?.focus());
+                              }
+                            }}
+                          >
+                            Save keybinding
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary"
+                            disabled={busy}
+                            onClick={() => {
+                              setDraft(null);
+                              setRecordingId(null);
+                              heldModifiersRef.current.clear();
+                              setSuspended(false);
+                              setMessage(null);
+                              requestAnimationFrame(() => addButtonRef.current?.focus());
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </details>
                 )}
               </div>
@@ -936,11 +1063,9 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
           runs. Change one to keep them separate.
         </p>
       )}
-      {message && (
-        <p className="muted" role="status">
-          {message}
-        </p>
-      )}
+      <p className="keybind-draft-status muted" role="status">
+        {message ?? ""}
+      </p>
     </section>
   );
 }
