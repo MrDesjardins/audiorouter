@@ -10584,6 +10584,26 @@ button.danger {
 .keybind-body {
   min-width: 0;
 }
+.keybind-body > label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-block: 0.75rem;
+}
+.keybind-body > label > input,
+.keybind-body > label > select {
+  width: 100%;
+}
+.keybind-title > small {
+  display: block;
+}
+.keybind-draft-status {
+  min-height: 3em;
+}
+.keybind-capture-help {
+  display: block;
+  min-height: 3em;
+}
 .keybind-body > summary {
   display: flex;
   align-items: center;

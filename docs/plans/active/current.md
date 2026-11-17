@@ -151,6 +151,74 @@ Each carries an archive banner, and its residual gates are listed above.
 
 ## Next action
 
+### Global keybinding creation UX (owner request, 2026-11-16)
+
+Objective: configure name, shortcut and action together before activating a
+binding (UI-10, UI-11, UI-17, UI-29; M05). Existing shell commands and storage
+remain the authority; no API or audio behavior change is planned.
+
+Prerequisites: Windows UI dependencies are installed. Browser shell invocation
+can be simulated for form checks; this does not qualify the Windows hook.
+Preserve unrelated untracked target-preview directories and tsbuildinfo.
+
+Tasks: expose Add directly; open a local draft with all fields visible; require
+a captured shortcut and valid action target; save once or cancel without writes;
+keep failed drafts; show saved names, keys and actions together. Add regression
+coverage, typecheck immediately, format/lint/build, and visually inspect dark,
+light and high contrast. Grade clarity, efficiency, feedback, accessibility and
+visual consistency; iterate until at least 8/10 and record evidence here.
+
+Risks: shortcut capture must suspend existing hooks and restore them; cancel
+must never save a partial binding. Rollback: revert the UI/test changes; saved
+bindings retain the existing format.
+
+Implementation and review: Add opens an expanded unsaved draft with name,
+action and shortcut; Save validates the name/chord/target and writes once.
+Cancel writes nothing, rejected saves retain the draft, duplicate chords warn
+before saving, and saved names show key/action. Empty soundboard choices guide
+the user to add the tool. No contract or shell-command changes were required.
+
+UX iteration: first visual review scored 7.5/10 (keyboard exit and focus return
+were weak). Added Tab to cancel capture, focus return after Save/Cancel, reserved
+capture-help space and removed the redundant plus button. Final self-review:
+clarity 9, efficiency 9, feedback/recovery 9, keyboard accessibility 8, visual
+consistency 8; average 8.6/10, reported conservatively as 8.5. This is an agent
+review, not a first-time-user study or Narrator qualification.
+
+Windows verification (2026-11-16): `npm --prefix ui run typecheck:all`, lint,
+format:check and production build pass; the full unit suite passed 1,123 tests
+before the final keyboard/help refinement, and the final focused suites pass
+17 tests. `npx playwright test --config=playwright.config.ts
+global-keybinds.pw.ts --workers=1` from ui passes 3 Edge scenarios: real Settings
+entry, form, capture, Tab cancellation, stable Save position, Save/Cancel focus,
+one save and collapsed summary in all three themes. Screenshots reviewed:
+`target/keybinding-ux/draft-{dark,light,high-contrast}.png` and matching saved
+screenshots. Initial browser runs timed out on exact label matching for a
+select (the label includes option text); using its combobox role fixed the
+test locator. The component regression also caught optimistic-save duplicate
+React keys; the rendered draft now excludes its optimistic saved copy.
+
+Docs acceptance passes (278 Markdown files, 1,551 links). Production build
+reports a 645 kB main-chunk advisory; kept visible here because splitting the
+main application bundle is unrelated to this form change. Playwright reports
+the runner's NO_COLOR/FORCE_COLOR conflict, with no application console errors.
+Owner follow-up explicitly authorized a test build followed by a new PR.
+Branch: `feat/global-keybinding-creation`, based on main `a981d3489`.
+`tools/build-desktop.ps1` passed: release shell, matching CLI and x64/x86 VST2
+and VST3 workers. Shell: `src-tauri/target/release/audiorouter-shell.exe`,
+SHA-256 `BCC887131B254514F73B6E7BC4366515F3F99A360BCEF4131B7722B1035D5F6A`;
+its UTC timestamp (2026-11-17 01:41:55) is newer than ui/dist (01:41:27).
+`node tools/quality/packaged-shell-smoke.mjs --shell
+src-tauri/target/release/audiorouter-shell.exe --output
+target/keybinding-ux/packaged-smoke --timeout-ms 60000` passed on Windows 11
+build 26300 with WebView2 157.0.4341.46, Medium/non-admin. Evidence:
+`target/keybinding-ux/packaged-smoke/result.json`; fresh-profile launch,
+native bridge, save/restart and graceful quit passed with zero uncaught UI
+errors. Disposable database and WebView profile left owner settings unchanged.
+No live Windows hook/audio exercised. Next task: owner test of the rebuilt
+desktop shortcut creation/capture/activation and Narrator check; the broader
+M05 attended gates stay open.
+
 Start with priority 1 or 2 above. Nothing on this page authorizes a pull
 request, a release, a driver install or a change to the owner's live audio or
 saved data; see [AGENTS.md](../../../AGENTS.md) for the approval and evidence

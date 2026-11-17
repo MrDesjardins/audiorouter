@@ -1,0 +1,61 @@
+import { expect, test } from "./browser-test";
+import { openSettings } from "./workbench";
+
+for (const theme of ["dark", "light", "high-contrast"]) {
+  test(`create a global keybinding in one form: ${theme}`, async ({ page }) => {
+    await page.addInitScript((theme) => {
+      localStorage.setItem("audiorouter.ui.theme", theme);
+      const saves: unknown[] = [];
+      Object.assign(window, {
+        __keybindSaves: saves,
+        __TAURI_INTERNALS__: {
+          invoke: async (command: string, args?: { rules?: unknown[] }) => {
+            if (command === "keybinds_list") return [];
+            if (command === "keybinds_save") {
+              saves.push(args?.rules);
+              return args?.rules;
+            }
+            if (command === "keybinds_set_suspended") return;
+            throw new Error(`not available in this test: ${command}`);
+          },
+        },
+      });
+    }, theme);
+    await page.goto("/route-harness.html");
+    await openSettings(page, "Keyboard shortcuts");
+    const panel = page.locator(".shortcut-panel");
+    await panel.getByRole("button", { name: "Add keybinding", exact: true }).click();
+    const draft = panel.locator("details[open]");
+    await expect(draft.getByLabel("Name", { exact: true })).toBeFocused();
+    await draft.getByLabel("Name", { exact: true }).fill("Mute my microphone");
+    await draft.getByRole("combobox", { name: "Action", exact: true }).selectOption("privacyMuteToggle");
+    const shortcut = draft.getByRole("textbox", { name: /Global trigger/ });
+    const save = draft.getByRole("button", { name: "Save keybinding" });
+    const saveBeforeCapture = await save.boundingBox();
+    await shortcut.focus();
+    await expect(draft.getByText(/Listening/)).toBeVisible();
+    expect(await save.boundingBox()).toEqual(saveBeforeCapture);
+    await page.keyboard.press("Tab");
+    await expect(draft.getByLabel("Enabled", { exact: true })).toBeFocused();
+    await expect(shortcut).toHaveValue("");
+    await shortcut.focus();
+    await shortcut.press("Control+Shift+m");
+    await expect(shortcut).toHaveValue(/Control.*Shift.*M/);
+    await expect(draft.getByRole("button", { name: "Save keybinding" })).toBeEnabled();
+    expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await panel.screenshot({ path: `../target/keybinding-ux/draft-${theme}.png` });
+    await draft.getByRole("button", { name: "Save keybinding" }).click();
+    await expect(panel.getByText("New keybinding", { exact: true })).toHaveCount(0);
+    await expect(panel.getByRole("button", { name: "Add keybinding", exact: true })).toBeFocused();
+    await expect(panel.locator("summary")).toContainText("Mute my microphone");
+    await expect(panel.locator("summary")).toContainText("Turn privacy mute on or off");
+    await expect(panel.locator("summary")).toContainText(/Control.*Shift.*M/);
+    await panel.screenshot({ path: `../target/keybinding-ux/saved-${theme}.png` });
+    await panel.getByRole("button", { name: "Add keybinding", exact: true }).click();
+    await panel.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(panel.getByRole("button", { name: "Add keybinding", exact: true })).toBeFocused();
+    expect(await page.evaluate(() => (window as unknown as { __keybindSaves: unknown[] }).__keybindSaves.length)).toBe(
+      1,
+    );
+  });
+}
