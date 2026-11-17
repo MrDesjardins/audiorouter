@@ -2,7 +2,7 @@
 
 ## Where things stand
 
-`main` is at `6950c05e7` (PR #159, release readiness). The November 6–16 work
+`main` is at `8f42bf8de` (PR #151, global-only keyboard shortcuts). The November 6–16 work
 streams are merged: release-readiness repairs (#155–#159), the three-day code
 review (#158), device-binding recovery (#154), theme-editor preview (#153), the
 VST plugin experience (#152), live-parameter autosave (#150), the resilience
@@ -18,6 +18,24 @@ this short priorities page behind.
 No feature below is release-ready. The app-only candidate is 0.0.30, unsigned
 and experimental; the driver track is separate. Requirement IDs live in the
 linked plans, not here.
+
+## Latest main update: global-only keyboard shortcuts
+
+PR #151 implements the owner's UI-10 decision: Windows-wide global keybinds
+are the only audio shortcut mechanism. Local shortcut settings, defaults and
+the `audiorouter.ui.shortcuts` preference were removed. Global keybinds offer
+session start/stop, privacy mute, push-to-talk and soundboard slots; duplicate
+enabled chords are reported. This supersedes the 2026-11-07 default-binding
+decision. Requirements: UI-10, UI-11, UI-29.
+
+The merged work records UI typecheck/lint/format, 1,119 unit tests, production
+build, 127 shell tests, strict Clippy, Rust formatting, docs validation and 17
+focused Edge scenarios passing. No attended Windows hook or audio run was
+claimed. Rollback: revert that change; saved global keybinds and shell settings
+are unaffected, and the old local-shortcut preference is ignored.
+
+Issue #149 supplied-session verification and its remaining exact-plugin live
+gate are recorded in [the verification plan](issue-149-session-verification.md).
 
 ## Current priorities
 

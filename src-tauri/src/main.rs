@@ -24,6 +24,7 @@ mod http_accept;
 mod http_api;
 #[cfg(windows)]
 mod instance_windows;
+mod keybinds;
 mod lan_addresses;
 #[cfg(windows)]
 mod mcp_tunnel;
@@ -1042,6 +1043,33 @@ fn autoplay_set(enabled: bool, state: State<'_, ShellState>) -> Result<bool, Str
     settings.auto_play = enabled;
     shell_settings::save(&path, &settings)?;
     Ok(enabled)
+}
+
+#[tauri::command]
+fn keybinds_list(state: State<'_, ShellState>) -> Vec<keybinds::KeybindRule> {
+    shell_settings::load(&shell_settings::path_beside(&state.database_path)).keybinds
+}
+
+#[tauri::command]
+fn keybinds_save(
+    rules: Vec<keybinds::KeybindRule>,
+    state: State<'_, ShellState>,
+    service: State<'_, keybinds::KeybindService>,
+) -> Result<Vec<keybinds::KeybindRule>, String> {
+    let path = shell_settings::path_beside(&state.database_path);
+    let mut settings = shell_settings::load(&path);
+    settings.keybinds = rules;
+    // `load` discards a file over 64 KiB, which would also reset autoplay and
+    // API startup. Refuse that payload before the live hook or the file changes.
+    shell_settings::encoded_within_limit(&settings)?;
+    service.engine.update_rules(&settings.keybinds)?;
+    shell_settings::save(&path, &settings)?;
+    Ok(settings.keybinds)
+}
+
+#[tauri::command]
+fn keybinds_set_suspended(suspended: bool, service: State<'_, keybinds::KeybindService>) {
+    service.engine.set_suspended(suspended);
 }
 
 /// `--tray`: started at sign-in; stay in the tray without building a window.
@@ -2537,11 +2565,19 @@ fn main() {
     let session_script =
         session_initialization_script(&state.session_id, state.probe_file.is_some());
     let tray_pipe_name = state.pipe_name.clone();
+    let initial_keybinds =
+        shell_settings::load(&shell_settings::path_beside(&state.database_path)).keybinds;
+    let keybind_service = keybinds::KeybindService::new(&initial_keybinds);
     tauri::Builder::default()
+        // While this window is focused, tao's default raw-keyboard registration
+        // stops WH_KEYBOARD_LL from seeing keys. `Always` removes that
+        // registration. The shell does not consume raw device events.
+        .device_event_filter(tauri::DeviceEventFilter::Always)
         .manage(state)
         .manage(HttpApiState::default())
         .manage(UiUnsaved::default())
         .manage(mcp_tunnel::McpTunnelService::default())
+        .manage(keybind_service)
         .invoke_handler(tauri::generate_handler![
             backend_state,
             recovery_backups,
@@ -2553,6 +2589,9 @@ fn main() {
             set_ui_draft,
             autoplay_get,
             autoplay_set,
+            keybinds_list,
+            keybinds_save,
+            keybinds_set_suspended,
             api_autostart_get,
             api_autostart_set,
             http_api_control,
@@ -2788,6 +2827,8 @@ fn main() {
             if !starts_in_tray(std::env::args()) {
                 open_main_window(app.handle())?;
             }
+            app.state::<keybinds::KeybindService>()
+                .start_listener(tray_pipe_name.clone());
             // Autoplay (Advanced): play the selected session once the
             // backend answers, with or without the window.
             let database_path = app.state::<ShellState>().database_path.clone();
