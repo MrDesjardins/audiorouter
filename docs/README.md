@@ -1,11 +1,12 @@
 # Documentation map
 
-Status: VB-Cable-first implementation with guarded Windows user-mode evidence,
-updated 2026-09-28. The [active plan](plans/active/current.md#where-things-stand)
-has a per-milestone table of what is implemented, what is qualified on
-Windows, and what is still open. Requirements describe intended behavior
-unless the active plan or evidence explicitly records implementation and
-verification. Numeric budgets remain acceptance targets until measured.
+Status: guarded Windows user-mode evidence, consolidated 2026-11-16. The
+[active plan](plans/active/current.md#where-things-stand) lists current
+priorities, the open owner and hardware gates, and the execution plans that
+remain active; the earlier chronological history and the completed November
+execution plans are archived under [plans/archived](plans/archived/README.md).
+Requirements describe intended behavior unless the active plan, an archived
+record or evidence explicitly records implementation and verification. Numeric budgets remain acceptance targets until measured.
 Portable tests do not imply packaging, signing, attended UI,
 physical-latency or hardware gates. The AudioRouter-owned driver track was
 reopened by DEC-18 (2026-10-05); current app releases still use existing

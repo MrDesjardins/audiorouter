@@ -1,5 +1,7 @@
 # Resilience audit: UI and backend — 2026-11-13
 
+> **Archived 2026-11-16 — read-only audit whose RES-1 to RES-9 findings were repaired in PR #147. RES-10/11 remain deferred in the active plan.**
+
 Owner request (2026-11-13): investigate how to make AudioRouter more
 resilient, reliable and fault tolerant, mainly the UI (TypeScript) and the
 backend (Rust), and report the findings.
@@ -13,8 +15,8 @@ backend (Rust), and report the findings.
   finding also names the function.
 - This audit asks one question the earlier ones did not: **after something
   fails, does the app get back to working by itself, and does the user learn
-  why it failed?** The [bug audit of 2026-11-11](bug-audit-2026-11-11.md)
-  and the [plugin host audit](plugin-reliability.md) looked for wrong
+  why it failed?** The [bug audit of 2026-11-11](2026-11-11-bug-audit.md)
+  and the [plugin host audit](2026-11-11-plugin-reliability.md) looked for wrong
   behavior; their findings are not repeated here.
 
 ## Summary
@@ -294,7 +296,7 @@ Read and found sound; no finding:
   There is no process-level marker, no `RegisterApplicationRestart`, and no
   crash-dump configuration (searched `src-tauri` and `crates`).
 - **What is wrong**: a stack overflow (one already happened in the hosted
-  E2E run, see `plugin-reliability.md`), an access violation in the Windows
+  E2E run, see `2026-11-11-plugin-reliability.md`), an access violation in the Windows
   interop, or the process being killed ends the app at once. The next launch
   does not know the last run crashed: `recovery_crashes` is not incremented,
   so three such crashes in a row never reach safe mode, and a route that
@@ -333,7 +335,7 @@ Read and found sound; no finding:
 - **Where**: `SupervisedBusWorkerLoop::spawn` and `spawn_with_parameters`
   (`crates/plugin-host/src/lib.rs` lines 1789 and 1800) pass
   `max_restarts = 0`; no production caller uses
-  `spawn_with_restart_policy`. `plugin-reliability.md` notes "no restart on
+  `spawn_with_restart_policy`. `2026-11-11-plugin-reliability.md` notes "no restart on
   this bridge".
 - **What it means**: a plugin that crashes once stays silent until Stop and
   Play. That matches the microphone privacy rule for voice paths. For a

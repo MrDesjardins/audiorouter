@@ -1,5 +1,7 @@
 # Resilience implementation — 2026-11-13
 
+> **Archived 2026-11-16 — merged in PR #147. Hardware unplug/sleep and RES-6 timing gates remain open in the active plan.**
+
 ## Objective and authority
 
 Owner authorized implementation of every high and medium audit finding,

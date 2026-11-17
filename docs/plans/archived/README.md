@@ -14,6 +14,11 @@ Keep an index below with date, milestone/task, outcome, and path. Do not move st
 
 ## Index
 
+- **2026-11-16 — Active-plan consolidation:** completed November execution plans
+  and the former active plan's chronological history were archived; the active
+  plan is now a short priorities page. History:
+  [Active-plan history](2026-11-16-active-plan-history.md).
+
 - **2026-11-09 — Code review fixes:** all thirteen findings fixed and locally
   qualified, preserving network-path-only HTTP policy; PR approval pending.
   [Execution record](2026-11-09-code-review-fixes.md).
@@ -21,6 +26,28 @@ Keep an index below with date, milestone/task, outcome, and path. Do not move st
 - **2026-11-07 — UI Round 27:** native browser shortcuts repaired and exercised;
   dropdown/density/loading evidence recorded. Attended M05 gates and scores
   remain open. [Execution record](2026-11-07-ui-round-27.md).
+
+### 2026-11-16 consolidation
+
+Completed November execution plans moved out of `docs/plans/active/` on
+2026-11-16. Their residual owner and hardware gates are listed in the
+[active plan](../active/current.md#open-owner-gates).
+
+| Date | Milestone / task | Outcome | Path |
+| --- | --- | --- | --- |
+| 2026-11-15 | Three-day code review and repairs | Merged in PR #158; attended M07/M08, driver-helper and load-controlled UDP gates remain open | [Execution record](2026-11-15-code-review-repairs.md) |
+| 2026-11-15 | Device binding recovery | Merged in PR #154; physical reboot/re-enumeration and attended audio/Narrator gates remain open | [Execution record](2026-11-15-device-binding-recovery.md) |
+| 2026-11-14 | Live parameter autosave | Merged in PR #150; attended Mute/Fun Voice Changer recording remains open | [Execution record](2026-11-14-live-parameter-autosave.md) |
+| 2026-11-13 | Resilience audit and implementation | Read-only audit; RES-1 to RES-9 repaired in PR #147. RES-10/11 and RES-6 timings remain open | [Audit](2026-11-13-resilience-audit.md), [implementation](2026-11-13-resilience-implementation.md) |
+| 2026-11-12 | High and medium audit repairs | Merged in PR #142; STO-4 stayed unconfirmed | [Execution record](2026-11-12-audit-repairs.md) |
+| 2026-11-12 | CI selection and parallel execution (CI speed) | Merged in PR #143; post-merge cache and nightly-inventory observations remain open | [Execution record](2026-11-12-ci-speed.md) |
+| 2026-11-11 | Bug audit by feature | Reference audit; high/medium findings repaired in PR #142, low findings remain unfixed | [Audit record](2026-11-11-bug-audit.md) |
+| 2026-11-11 | Plugin worker packaging and copyable errors | Merged in PR #139 and folded into the VST work (PR #152) | [Execution record](2026-11-11-plugin-reliability.md) |
+| 2026-11-11 | Update-check hardening | Merged in PR #140; a real auto-updater stays deferred in `future/` | [Execution record](2026-11-11-update-check-hardening.md) |
+| 2026-11-11 | Audio latency and clock-drift repair | Merged in PR #137; owner listening, real-session health log and live continuity gates remain open | [Execution record](2026-11-11-audio-latency.md) |
+| 2026-11-09 | CI and quality nightly repair | Repairs landed via PR #134; hosted-nightly evidence remains open | [Execution record](2026-11-09-ci-quality-repair.md) |
+
+Earlier records:
 
 | Date | Milestone / task | Outcome | Path |
 | --- | --- | --- | --- |

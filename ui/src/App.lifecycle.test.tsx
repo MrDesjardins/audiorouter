@@ -493,66 +493,79 @@ describe("session refresh and playback regressions", () => {
     expect((screen.getByRole("button", { name: "Save changes" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it("coalesces edits made during an automatic save without a review warning", async () => {
-    const saved = demoSession;
-    const { backend } = await fixture(saved);
-    let running = false;
-    const snapshot = backend.snapshot;
-    backend.snapshot = vi.fn(async () => {
-      const value = await snapshot();
-      return { ...value, status: { ...value.status, activeSessionIds: running ? [saved.id] : [] } };
-    });
-    const startSession = backend.startSession;
-    backend.startSession = vi.fn(async () => {
-      running = true;
-      return startSession();
-    });
-    let releasePlan: () => void = () => {};
-    const planGate = new Promise<void>((resolve) => {
-      releasePlan = resolve;
-    });
-    const planGraph = backend.planGraph;
-    let planCalls = 0;
-    backend.planGraph = vi.fn(async (candidate: typeof demoSession) => {
-      planCalls += 1;
-      if (planCalls === 1) await planGate;
-      return planGraph(candidate);
-    });
-    await renderReady(
-      <App
-        backend={{
-          ...backend,
-          prepareNativePaths: async (sessionId: string) => ({
-            sessionId,
-            generation: 1,
-            state: "configured-stopped" as const,
-            pathCount: 2,
-            sourceNodeIds: ["mic"],
-            branchNodeIds: ["voice", "headphones"],
-            renderEndpointIds: ["headphones"],
-          }),
-          listProcessors: async () => [gainProcessor],
-        }}
-      />,
-    );
-    await screen.findByRole("heading", { name: saved.name });
-    start();
-    await messageBar().findByText(/Audio session is running/);
-    fireEvent.click(await screen.findByLabelText("Voice gain, gain"));
-    const slider = await screen.findByRole("slider", { name: "Gain slider" });
-    fireEvent.change(slider, { target: { value: "-3" } });
-    await waitFor(() => expect(backend.planGraph).toHaveBeenCalledTimes(1), { timeout: 3000 });
-    // The first automatic save is still in flight; this edit must not trigger
-    // a second concurrent save or a review warning.
-    fireEvent.change(slider, { target: { value: "-9" } });
-    releasePlan();
-    await waitFor(() => expect(backend.commitGraph).toHaveBeenCalledTimes(1), { timeout: 4000 });
-    expect(backend.planGraph.mock.calls.at(-1)?.[0].nodes.find((node) => node.id === "voice")?.parameters.gainDb).toBe(
-      -9,
-    );
-    expect(document.body.textContent).not.toMatch(/Your edits changed during review/);
-    expect(document.body.textContent).not.toMatch(/Checking route before saving/);
-  });
+  it.each(["planning", "committing"])(
+    "coalesces edits during automatic save %s without a review warning",
+    async (phase) => {
+      const saved = demoSession;
+      const { backend } = await fixture(saved);
+      let running = false;
+      const snapshot = backend.snapshot;
+      backend.snapshot = vi.fn(async () => {
+        const value = await snapshot();
+        return { ...value, status: { ...value.status, activeSessionIds: running ? [saved.id] : [] } };
+      });
+      const startSession = backend.startSession;
+      backend.startSession = vi.fn(async () => {
+        running = true;
+        return startSession();
+      });
+      let releasePlan: () => void = () => {};
+      const planGate = new Promise<void>((resolve) => {
+        releasePlan = resolve;
+      });
+      const planGraph = backend.planGraph;
+      let planCalls = 0;
+      backend.planGraph = vi.fn(async (candidate: typeof demoSession) => {
+        planCalls += 1;
+        if (phase === "planning" && planCalls === 1) await planGate;
+        return planGraph(candidate);
+      });
+      const commitGraph = backend.commitGraph;
+      let commitCalls = 0;
+      backend.commitGraph = vi.fn(async (...args: Parameters<typeof commitGraph>) => {
+        commitCalls += 1;
+        if (phase === "committing" && commitCalls === 1) await planGate;
+        return commitGraph(...args);
+      });
+      await renderReady(
+        <App
+          backend={{
+            ...backend,
+            prepareNativePaths: async (sessionId: string) => ({
+              sessionId,
+              generation: 1,
+              state: "configured-stopped" as const,
+              pathCount: 2,
+              sourceNodeIds: ["mic"],
+              branchNodeIds: ["voice", "headphones"],
+              renderEndpointIds: ["headphones"],
+            }),
+            listProcessors: async () => [gainProcessor],
+          }}
+        />,
+      );
+      await screen.findByRole("heading", { name: saved.name });
+      start();
+      await messageBar().findByText(/Audio session is running/);
+      fireEvent.click(await screen.findByLabelText("Voice gain, gain"));
+      const slider = await screen.findByRole("slider", { name: "Gain slider" });
+      fireEvent.change(slider, { target: { value: "-3" } });
+      await waitFor(() => expect(backend.planGraph).toHaveBeenCalledTimes(1), { timeout: 3000 });
+      if (phase === "committing") await waitFor(() => expect(backend.commitGraph).toHaveBeenCalledTimes(1));
+      // The first automatic save is still in flight; this edit must not trigger
+      // a second concurrent save or a review warning.
+      fireEvent.change(slider, { target: { value: "-9" } });
+      releasePlan();
+      await waitFor(() => expect(backend.commitGraph).toHaveBeenCalledTimes(phase === "committing" ? 2 : 1), {
+        timeout: 4000,
+      });
+      expect(
+        backend.planGraph.mock.calls.at(-1)?.[0].nodes.find((node) => node.id === "voice")?.parameters.gainDb,
+      ).toBe(-9);
+      expect(document.body.textContent).not.toMatch(/Your edits changed during review/);
+      expect(document.body.textContent).not.toMatch(/Checking route before saving/);
+    },
+  );
 
   it("hydrates a real saved session even when its revision is below the preview revision", async () => {
     const { backend } = await fixture({ ...demoSession, revision: 0, name: "Real saved session" });

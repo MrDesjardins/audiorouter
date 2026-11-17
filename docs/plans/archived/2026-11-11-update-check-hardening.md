@@ -1,5 +1,7 @@
 # Update-check hardening
 
+> **Archived 2026-11-16 — merged in PR #140. A real auto-updater remains deferred in docs/plans/future/auto-update-tauri.md.**
+
 Status: implementation and local validation complete on branch
 `improve/update-check` in the isolated worktree
 `C:\code\audiorouter-update-check`. Owner approved opening a pull request on
@@ -86,8 +88,8 @@ Evidence (2026-11-11, Windows / Node 22.22.3 / Edge):
   now, the channel change, turning off and reloading, and an offline failure.
 - Screenshots: `%TEMP%\audiorouter-playwright-results\update-notice.pw.ts-*\`
   and `target/ui-quality-review/round-25/updates-*.png`.
-- PR screenshots (dark theme, injected 0.0.28 release): [Settings page](evidence/2026-11-11-update-check-settings-dark.png)
-  and [New versions panel](evidence/2026-11-11-update-check-panel-dark.png).
+- PR screenshots (dark theme, injected 0.0.28 release): [Settings page](../active/evidence/2026-11-11-update-check-settings-dark.png)
+  and [New versions panel](../active/evidence/2026-11-11-update-check-panel-dark.png).
 - One earlier parallel run ended with a Playwright
   `browserContext.close: ENOENT ... recording.trace` artifact error; the same
   scenario passed when rerun alone and in the final single-worker run. It did

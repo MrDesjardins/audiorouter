@@ -1,5 +1,7 @@
 # CI and quality nightly repair
 
+> **Archived 2026-11-16 — completed; the nightly/export-expiry repairs landed in PR #134. Residual hosted-nightly evidence is tracked in the active plan.**
+
 Owner authorized this task after completion of the review-fix goal.
 Requirements: ENG-02/04, CAP-06/11, SEC desktop export consent lifetime; Windows.
 No audio hardware, driver, credentials or new shell is needed for local tests.
