@@ -10604,6 +10604,22 @@ button.danger {
   display: block;
   min-height: 3em;
 }
+.keybind-delete-action {
+  margin-top: 1rem;
+}
+.keybind-delete-action button,
+.keybind-delete-selected,
+.keybind-manage {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+.keybind-selection-count {
+  display: inline-block;
+  width: 5ch;
+  font-variant-numeric: tabular-nums;
+}
 .keybind-body > summary {
   display: flex;
   align-items: center;

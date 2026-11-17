@@ -385,6 +385,22 @@ function nextKeybindName(rules: KeybindRule[]): string {
   return capKeybindName(`keybind${index}`);
 }
 
+function KeybindTrashIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" />
+    </svg>
+  );
+}
+
 export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | null }) {
   const invoke = shellInvoke();
   const [rules, setRules] = useState<KeybindRule[]>([]);
@@ -533,17 +549,28 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
     const capped = capKeybindName(name);
     setRules((current) => current.map((rule) => (rule.id === id ? { ...rule, name: capped } : rule)));
   };
-  const removeSelected = async () => {
-    const removeIds = new Set(selectedIds);
-    const count = removeIds.size;
+  const removeRules = async (removeIds: Set<string>) => {
+    const previousSelection = new Set(selectedIds);
+    const targets = rulesRef.current.filter((rule) => removeIds.has(rule.id));
+    const count = targets.length;
     if (count === 0) return;
+    const name = targets[0].name?.trim() || targets[0].trigger.keys;
     const confirmed = await askConfirm({
-      title: count === 1 ? "Delete this keybind?" : `Delete ${count} keybinds?`,
-      message: "This removes the selected global keybinds. It cannot be undone.",
-      confirmLabel: "Delete",
+      title: count === 1 ? `Delete “${name}”?` : `Delete ${count} keybindings?`,
+      message:
+        count === 1
+          ? `This removes only “${name}” (${targets[0].trigger.keys}). Its shortcut will no longer run. This cannot be undone.`
+          : `This removes the ${count} selected global keybindings. Their shortcuts will no longer run. This cannot be undone.`,
+      confirmLabel: count === 1 ? "Delete keybinding" : `Delete ${count} keybindings`,
+      destructive: true,
     });
     if (!confirmed) return;
-    void persist(rulesRef.current.filter((rule) => !removeIds.has(rule.id)));
+    if (await persist(rulesRef.current.filter((rule) => !removeIds.has(rule.id)))) {
+      setMessage(count === 1 ? "Keybinding deleted." : `${count} keybindings deleted.`);
+      requestAnimationFrame(() => addButtonRef.current?.focus());
+    } else {
+      setSelectedIds(previousSelection);
+    }
   };
 
   const beginSelectionDrag = (id: string, event: ReactPointerEvent<HTMLElement>) => {
@@ -633,23 +660,13 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                 </button>
                 <button
                   type="button"
-                  className="secondary"
-                  aria-label="Remove selected keybinds"
-                  title="Remove selected keybinds"
-                  onClick={removeSelected}
+                  className="danger keybind-delete-selected"
+                  title="Delete the selected keybindings"
+                  onClick={() => void removeRules(new Set(selectedIds))}
                   disabled={!loaded || busy || selectedCount === 0}
                 >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    aria-hidden="true"
-                  >
-                    <path d="M5 12h14" />
-                  </svg>
+                  <KeybindTrashIcon />
+                  Delete selected <span className="keybind-selection-count">({selectedCount})</span>
                 </button>
                 <button
                   type="button"
@@ -667,9 +684,9 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
             ) : (
               <button
                 type="button"
-                className="secondary"
-                aria-label="Edit keybind names"
-                title="Edit keybind names"
+                className="secondary keybind-manage"
+                aria-label="Manage keybindings"
+                title="Rename keybindings or select several to delete"
                 disabled={!!draft || busy || !loaded}
                 onClick={() => setEditingNames(true)}
               >
@@ -685,6 +702,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                   <path d="M12 20h9" />
                   <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
                 </svg>
+                Manage
               </button>
             )}
           </div>
@@ -694,6 +712,9 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
         Windows-wide hotkeys that work even when AudioRouter is minimized to the tray. Supports keyboard combos,
         function keys (F1–F24), and mouse side/middle buttons. These are the app's only audio shortcuts.
       </p>
+      {editingNames && (
+        <p className="muted">Select keybindings to delete, or edit their names. Choose Done when finished.</p>
+      )}
       {!invoke ? (
         <small className="muted">Global Windows keybindings are available in the desktop app.</small>
       ) : rules.length === 0 && !draft ? (
@@ -961,6 +982,20 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                         Pass key through
                       </label>
                     </div>
+                    {!isDraft && (
+                      <div className="actions keybind-delete-action">
+                        <button
+                          type="button"
+                          className="danger"
+                          disabled={busy}
+                          aria-label={`Delete keybinding ${rule.name?.trim() || rule.trigger.keys}`}
+                          onClick={() => void removeRules(new Set([rule.id]))}
+                        >
+                          <KeybindTrashIcon />
+                          Delete keybinding
+                        </button>
+                      </div>
+                    )}
                     {isDraft && (
                       <>
                         <p className="keybind-draft-status muted" role="status">

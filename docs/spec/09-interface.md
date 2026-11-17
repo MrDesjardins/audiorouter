@@ -129,6 +129,11 @@ as a failed current-profile setup.
   registered until Save; Cancel discards the draft and a failed save preserves
   it for retry. Saved names retain a visible shortcut/action summary. Keyboard
   focus can enter shortcut recording and Tab leaves it without assigning Tab.
+  Expanding a saved binding offers a labelled trash-can Delete keybinding
+  button. Manage supports selecting several bindings and deleting them with
+  a trash-can action and a stable selection count. Destructive confirmation
+  identifies the binding or selected count; Cancel leaves bindings unchanged.
+  Failed deletion retains bindings and selection for retry.
 - **UI-11 — Accessibility.** All essential actions work without dragging or a mouse. Provide a structured list/tree view of routes, descriptive accessible names, logical focus order, focus restoration after dialogs, high-contrast/light/dark modes, 200% zoom, and non-color status cues. Target WCAG 2.2 AA applicable criteria plus Windows Narrator testing; record the exact audit checklist in M05.
 
   Properties chart labels retain an 11 CSS-pixel minimum after SVG viewBox

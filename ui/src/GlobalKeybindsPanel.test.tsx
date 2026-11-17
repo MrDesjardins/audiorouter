@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { GlobalKeybinds, type KeybindRule } from "./GlobalKeybinds";
+import { AppDialogHost } from "./AppDialog";
 
 const rules: KeybindRule[] = [
   {
@@ -179,4 +180,70 @@ test("a soundboard draft explains the missing tool and cannot save an empty targ
   fireEvent.keyDown(trigger, { key: "F9", code: "F9" });
   expect((within(draft).getByRole("button", { name: "Save keybinding" }) as HTMLButtonElement).disabled).toBe(true);
   expect(invoke.mock.calls.filter(([command]) => command === "keybinds_save")).toHaveLength(0);
+});
+
+test("single delete names the binding, cancels safely, and removes only that binding", async () => {
+  const invoke = fakeInvoke();
+  window.__TAURI_INTERNALS__ = { invoke } as unknown as typeof window.__TAURI_INTERNALS__;
+  render(
+    <>
+      <GlobalKeybinds snapshot={null} />
+      <AppDialogHost />
+    </>,
+  );
+  const title = await screen.findByText("Start or stop the session — F13");
+  title.closest("details")!.open = true;
+  fireEvent.click(screen.getByRole("button", { name: "Delete keybinding F13" }));
+  let dialog = screen.getByRole("dialog", { name: "Delete “F13”?" });
+  expect(within(dialog).getByText(/removes only “F13”/)).toBeTruthy();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(invoke.mock.calls.filter(([command]) => command === "keybinds_save")).toHaveLength(0);
+  fireEvent.click(screen.getByRole("button", { name: "Delete keybinding F13" }));
+  dialog = screen.getByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Delete keybinding" }));
+  await waitFor(() => expect(screen.queryByText("Start or stop the session — F13")).toBeNull());
+  expect(invoke).toHaveBeenCalledWith("keybinds_save", { rules: rules.slice(1) });
+  expect(screen.getByText("Push to talk (unmute while held) — F14")).toBeTruthy();
+});
+
+test("bulk delete uses selected IDs and a failed save retains every binding and selection", async () => {
+  const invoke = fakeInvoke();
+  let rejectSave = true;
+  let rejectPendingSave: ((reason: string) => void) | undefined;
+  invoke.mockImplementation(async (command, args) => {
+    if (command === "keybinds_list") return rules;
+    if (command === "keybinds_save" && rejectSave)
+      return await new Promise<unknown>((_resolve, reject) => {
+        rejectPendingSave = reject;
+      });
+    return args?.rules;
+  });
+  window.__TAURI_INTERNALS__ = { invoke } as unknown as typeof window.__TAURI_INTERNALS__;
+  render(
+    <>
+      <GlobalKeybinds snapshot={null} />
+      <AppDialogHost />
+    </>,
+  );
+  await screen.findByText("Start or stop the session — F13");
+  fireEvent.click(screen.getByRole("button", { name: "Manage keybindings" }));
+  fireEvent.keyDown(screen.getByRole("checkbox", { name: "Select F13" }), { key: " " });
+  fireEvent.keyDown(screen.getByRole("checkbox", { name: "Select F15" }), { key: " " });
+  fireEvent.click(screen.getByRole("button", { name: "Delete selected (2)" }));
+  fireEvent.click(
+    within(screen.getByRole("dialog", { name: "Delete 2 keybindings?" })).getByRole("button", {
+      name: "Delete 2 keybindings",
+    }),
+  );
+  await waitFor(() => expect(screen.getAllByRole("checkbox")).toHaveLength(1));
+  rejectPendingSave!("Could not save global keybindings.");
+  await screen.findByText("Could not save global keybindings.");
+  expect((screen.getByRole("checkbox", { name: "Select F13" }) as HTMLInputElement).checked).toBe(true);
+  expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+  rejectSave = false;
+  fireEvent.click(screen.getByRole("button", { name: "Delete selected (2)" }));
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete 2 keybindings" }));
+  await waitFor(() => expect(screen.getAllByRole("checkbox")).toHaveLength(1));
+  expect(invoke).toHaveBeenLastCalledWith("keybinds_save", { rules: [rules[1]] });
 });
