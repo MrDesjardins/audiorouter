@@ -195,13 +195,14 @@ Deletion itself was exercised through the browser Settings UI with simulated
 shell saves; live hook/audio and Narrator remain unrun. No owner data changed.
 Owner approved the test build and explicitly requested a new PR. Fetched
 origin: latest main is still `a981d3489`, already an ancestor of this work.
-Branch `fix/global-keybinding-delete` contains the deletion follow-up and
-depends on the still-open creation-form PR #161. Target that branch for a
-focused stacked PR; merge #161 first. Reviewed its existing check annotations:
+Owner subsequently requested consolidation: `fix/global-keybinding-delete`
+contains creation and deletion together; PR #162 targets main and supersedes
+PR #161. The PR description embeds creation, single-delete and bulk-delete
+screenshots in all three themes. Reviewed the earlier check annotations:
 all ten are GitHub notices about ubuntu-latest migrating to Ubuntu 26, with
 no source diagnostics; retain the notice rather than changing runner policy
 in this UI change. No source changes since the passing checks/build above.
-Next action: open the authorized deletion PR, then owner tests single/bulk
+Next action: review the consolidated PR #162 and test creation/single/bulk
 deletion in the rebuilt desktop app; retain the broader M05 attended gates.
 
 Objective: configure name, shortcut and action together before activating a
