@@ -82,5 +82,8 @@ play and record both outputs while rapidly toggling Mute and Fun Voice Changer,
 including edits during a save. Confirm no gap, no new worker for unchanged
 plugins, no revision-conflict lock, and editor open/close while stopped and
 playing. This gate remains unrun here because those binaries and endpoints
-are unavailable. No PR or release created; verification test and this record
-remain uncommitted on the investigation branch.
+are unavailable. The owner subsequently authorized adding this verification
+to existing PR #160 and merging latest main into that branch. The verification
+was committed as `c3302b0af` and cherry-picked as `f01ef57b6`; main `8f42bf8de`
+was merged, preserving the consolidated plan and its new shortcut decision.
+No release was created.
