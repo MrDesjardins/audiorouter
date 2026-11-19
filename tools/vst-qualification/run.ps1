@@ -213,10 +213,15 @@ $common = @{
     AUDIOROUTER_TEST_VST3_NATIVE_WORKER = $worker.Vst3X64
     AUDIOROUTER_SIGNAL_ARTIFACTS = (Join-Path $out 'signals')
 }
-function T([string]$Package, [string]$Target, [string]$Name, [hashtable]$Environment, [string]$Label = '', [string[]]$Features = @()) {
+function T([string]$Package, [string]$Target, [string]$Name, [hashtable]$Environment, [string]$Label = '', [string[]]$Features = @(), [string]$SkipReason = '') {
     if (-not $Label) { $Label = $Name }
-    return @{ Package = $Package; Target = $Target; Name = $Name; Environment = $Environment; Label = $Label; Features = $Features }
+    return @{ Package = $Package; Target = $Target; Name = $Name; Environment = $Environment; Label = $Label; Features = $Features; SkipReason = $SkipReason }
 }
+# GitHub's Windows runner has no GPU driver. DPF editors draw with OpenGL, and
+# the ProM editor ended its worker there with 0xC0150011 (an activation
+# context fault inside the plugin) while AGain's editor passed; run it locally.
+$noOpenGl = ''
+if ($env:GITHUB_ACTIONS -eq 'true') { $noOpenGl = 'the hosted runner has no OpenGL driver for DPF editors; run locally' }
 $ph = 'audiorouter-plugin-host'
 $ctl = 'audiorouter-control'
 $fx = @('test-fixtures')
@@ -274,7 +279,7 @@ if ($haveDpf) {
         (T $ph 'vst3_stateless_state' 'a_stateless_dpf_plugin_restores_its_own_saved_state' @{ AUDIOROUTER_TEST_VST3_STATELESS = (Join-Path $dpf64 'ProM.vst3') } 'vst3 stateless restore x64 (DPF ProM)'),
         (T $ph 'vst3_stateless_state' 'a_stateless_dpf_plugin_restores_its_own_saved_state' @{ AUDIOROUTER_TEST_VST3_STATELESS = (Join-Path $dpf32 'ProM.vst3'); AUDIOROUTER_TEST_VST3_NATIVE_WORKER = $worker.Vst3X86 } 'vst3 stateless restore x86 (DPF ProM)'),
         (T $ph 'vst3_instrument' 'a_vst3_instrument_sounds_when_it_gets_a_note_and_not_before' @{ AUDIOROUTER_TEST_VST3_INSTRUMENT = (Join-Path $dpf64 'Kars.vst3') } 'vst3 instrument x64 (DPF Kars)'),
-        (T $ph 'worker_process' 'native_vst3_editor_survives_repeated_open_resize_and_close' @{ AUDIOROUTER_VST3_FIXTURE = (Join-Path $dpf64 'ProM.vst3') } 'vst3 editor lifecycle (DPF ProM, resizable)' -Features $fx)
+        (T $ph 'worker_process' 'native_vst3_editor_survives_repeated_open_resize_and_close' @{ AUDIOROUTER_VST3_FIXTURE = (Join-Path $dpf64 'ProM.vst3') } 'vst3 editor lifecycle (DPF ProM, resizable)' -Features $fx -SkipReason $noOpenGl)
     )
 }
 if ($Only) { $tests = @($tests | Where-Object { $_.Label -match $Only -or $_.Name -match $Only }) }
@@ -314,7 +319,10 @@ foreach ($test in $tests) {
     $status = 'failed'
     $passed = 0
     $seconds = 0
-    if (-not $path) {
+    if ($test.SkipReason) {
+        $status = 'skipped'
+        "skipped: $($test.SkipReason)" | Out-File -FilePath $log -Encoding utf8
+    } elseif (-not $path) {
         "test '$($test.Name)' was not found as exactly one ignored test in $($test.Package) $($test.Target)" | Out-File -FilePath $log -Encoding utf8
     } else {
         $saved = @{}
@@ -339,9 +347,9 @@ foreach ($test in $tests) {
             if ($code -eq 0 -and $passed -eq 1 -and [int]$Matches[2] -eq 0) { $status = 'passed' }
         }
     }
-    if ($status -ne 'passed') { $failed++ }
+    if ($status -eq 'failed') { $failed++ }
     Write-Output ("{0,-7} {1,6}s  {2}" -f $status, $seconds, $test.Label)
-    $results += [ordered]@{ label = $test.Label; test = $path; package = $test.Package; target = $test.Target; status = $status; passed = $passed; seconds = $seconds; log = "logs/$logName.log" }
+    $results += [ordered]@{ label = $test.Label; test = $path; package = $test.Package; target = $test.Target; status = $status; reason = $test.SkipReason; passed = $passed; seconds = $seconds; log = "logs/$logName.log" }
 }
 
 # A bounded census over the same plugins: every format and bitness, effects
@@ -407,6 +415,10 @@ $report = [ordered]@{
 }
 $reportPath = Join-Path $out 'report.json'
 $report | ConvertTo-Json -Depth 6 | Out-File -FilePath $reportPath -Encoding utf8
-$total = $results.Count + $(if ($census) { 1 } else { 0 })
-Write-Output "VST qualification: $($total - $failed) of $total passed. Report: $reportPath"
+$skipped = @($results | Where-Object { $_.status -eq 'skipped' }).Count
+$total = $results.Count - $skipped + $(if ($census) { 1 } else { 0 })
+Write-Output "VST qualification: $($total - $failed) of $total passed, $skipped skipped. Report: $reportPath"
+foreach ($result in @($results | Where-Object { $_.status -eq 'skipped' })) {
+    if ($env:GITHUB_ACTIONS -eq 'true') { Write-Output "::notice title=VST test skipped::$($result.label): $($result.reason)" }
+}
 if ($failed -gt 0) { exit 1 }
