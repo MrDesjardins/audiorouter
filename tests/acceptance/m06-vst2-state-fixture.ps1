@@ -1,5 +1,7 @@
 param(
-    [string]$OutputDirectory = ''
+    [string]$OutputDirectory = '',
+    # Build the fixture DLLs and stop; tools/vst-qualification/run.ps1 runs the tests.
+    [switch]$BuildOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -60,6 +62,11 @@ if (-not (Test-Path -LiteralPath $hangOutput -PathType Leaf)) { throw "Hang fixt
 & $cl /nologo /LD /O2 /W4 /TC /DVST2_FIXTURE_BANK_CHUNK "/I$vcInclude" "/I$kitRoot\ucrt" "/I$kitRoot\shared" "/I$kitRoot\um" $source "/Fo:$bankObject" "/Fe:$bankOutput" /link "/LIBPATH:$vcLib" "/LIBPATH:$kitLib" "/LIBPATH:$ucrtLib"
 if ($LASTEXITCODE -ne 0) { throw "VST2 bank-chunk fixture build failed with exit code $LASTEXITCODE" }
 if (-not (Test-Path -LiteralPath $bankOutput -PathType Leaf)) { throw "Bank-chunk fixture build produced no DLL: $bankOutput" }
+
+if ($BuildOnly) {
+    Write-Output "VST2 fixture DLLs built in $outputRoot"
+    return
+}
 
 $previousFixture = $env:AUDIOROUTER_VST2_FIXTURE
 $previousSampleRate = $env:AUDIOROUTER_VST2_SAMPLE_RATE

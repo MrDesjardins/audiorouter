@@ -53,7 +53,10 @@ The [verification runbook](operations/verification.md) documents shared local/CI
 profiles, check selection, evidence, guarded audio and merge-gate rollout.
 
 The [plugin census](operations/plugin-census.md) lists the plugins the isolated
-workers actually ran, with the recorded quirk of each failure.
+workers actually ran, with the recorded quirk of each failure. The
+[VST qualification runner](operations/vst-qualification.md) rebuilds the
+workers and test plugins and runs every real-worker VST test that needs no
+installed plugin, locally or nightly in CI.
 
 The [development quickstart](operations/quickstart.md) gives the safe toolchain,
 acceptance, CLI, UI, MCP, and troubleshooting path for the current repository

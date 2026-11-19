@@ -113,6 +113,7 @@ export interface PluginScanEntry {
     vendor: string | null;
     version: string | null;
     classIds: string[];
+    shellEffects?: { id: string; name: string }[];
     compatibility:
       | "supportedVst3X64"
       | "supportedVst2X64Gated"
@@ -1937,7 +1938,7 @@ export type MethodParams = {
   "nativeRenderSources.pump": { sessionId: EntityId; generation: number; maxQuanta?: number };
   "nativeMultiInputs.pump": { sessionId: EntityId; generation: number; maxPackets?: number };
   "nativeMultiInputs.bindBranches": { sessionId: EntityId; generation: number; branchNodeIds: EntityId[] };
-  "plugins.scan": { directory: string };
+  "plugins.scan": { directory: string; shellPath?: string };
   "plugins.list": { directory: string };
   "plugins.inventory": Record<string, never>;
   "plugins.saveState": { sessionId: EntityId; nodeId: EntityId };

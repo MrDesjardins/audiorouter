@@ -991,11 +991,11 @@
             "minimum": null,
             "maximum": null,
             "default": null,
-            "meaning": "Add the named sidechain input only when the VST3 plugin declares an auxiliary bus. Connect the key source to that input on the canvas; the key is not summed into the plugin's main signal. Disconnect it before removing the port.",
+            "meaning": "Connect the key source to the named sidechain input on the canvas. AudioRouter sends it separately from the main input. The effect decides how to use it. Disconnect the key before removing the port.",
             "increase": "",
             "decrease": "",
             "example": "Connect a voice source to the plugin's main input and a music source to Sidechain input for a ducking effect.",
-            "caution": "This control is available only for a VST3 plugin with an auxiliary input. Replacing an occupied key asks first and never adds a Mixer."
+            "caution": "The effect must declare a VST3 auxiliary bus or explicitly label VST2 key pins. VST2 shell effects cannot use this path. Replacing an occupied key asks first and never adds a Mixer."
           },
           {
             "key": "pluginParameter:<parameterId>",
@@ -1040,7 +1040,7 @@
         {
           "title": "Set up a VST3 sidechain",
           "steps": [
-            "Add a VST3 plugin that declares an auxiliary input, then save the route.",
+            "Add a VST3 effect with a declared auxiliary input or a non-shell VST2 effect with explicitly labelled key pins, then save the route.",
             "In Properties, choose Add sidechain input and save the route again.",
             "Connect the program audio to the plugin's main input, then connect the key source to the canvas handle labeled Sidechain input.",
             "The key controls the plugin through its auxiliary bus; it is not summed into the main signal. If a key is already connected, confirm Replace sidechain source to switch it."

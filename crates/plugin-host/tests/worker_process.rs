@@ -3496,8 +3496,8 @@ unsafe extern "system" {
 
 /// Opt-in check of a VST3 effect's own editor: it opens inside a visible,
 /// pumping parent window owned by this process, sizes that window to fit,
-/// keeps processing audio while open, and closes cleanly. Set
-/// `AUDIOROUTER_VST3_EDITOR_HOLD_MS` to keep it on screen for a look.
+/// keeps processing generated audio while open, and closes cleanly. The
+/// parent stays hidden unless the attended run explicitly enables visibility.
 #[cfg(all(windows, feature = "test-fixtures"))]
 #[test]
 #[ignore = "requires AUDIOROUTER_VST3_FIXTURE, AUDIOROUTER_VST3_NATIVE_WORKER and a Windows desktop"]
@@ -3505,6 +3505,7 @@ fn native_vst3_editor_opens_in_a_pumping_parent() {
     use std::sync::atomic::{AtomicBool, Ordering};
     let plugin_path = PathBuf::from(std::env::var("AUDIOROUTER_VST3_FIXTURE").unwrap());
     let worker_path = PathBuf::from(std::env::var("AUDIOROUTER_VST3_NATIVE_WORKER").unwrap());
+    let visible = std::env::var("AUDIOROUTER_VST3_EDITOR_VISIBLE").as_deref() == Ok("1");
     let hold = Duration::from_millis(
         std::env::var("AUDIOROUTER_VST3_EDITOR_HOLD_MS")
             .ok()
@@ -3534,8 +3535,8 @@ fn native_vst3_editor_opens_in_a_pumping_parent() {
         let title: Vec<u16> = "AudioRouter VST3 editor host test\0"
             .encode_utf16()
             .collect();
-        // WS_OVERLAPPEDWINDOW | WS_VISIBLE, at a size the editor must change.
-        let style = 0x00CF_0000 | 0x1000_0000;
+        // WS_OVERLAPPEDWINDOW, optionally WS_VISIBLE for attended runs.
+        let style = 0x00CF_0000 | if visible { 0x1000_0000 } else { 0 };
         // SAFETY: NUL-terminated buffers outlive the synchronous call.
         let parent = unsafe {
             CreateWindowExW(
@@ -3616,6 +3617,214 @@ fn native_vst3_editor_opens_in_a_pumping_parent() {
     worker
         .save_state(Instant::now())
         .expect("state after close");
+    stop.store(true, Ordering::Release);
+    pump.join().unwrap();
+    assert!(worker.shutdown().unwrap().success());
+}
+
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[link(name = "user32")]
+unsafe extern "system" {
+    fn SetWindowPos(
+        window: *mut std::ffi::c_void,
+        after: *mut std::ffi::c_void,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+        flags: u32,
+    ) -> i32;
+    fn IsWindow(window: *mut std::ffi::c_void) -> i32;
+}
+
+/// Opt-in, hidden-window check of a VST3 editor's lifecycle (VSTC-10): in one
+/// worker, the editor is opened, its parent is resized larger, smaller and
+/// back, and it is closed, three times, while audio keeps flowing. A
+/// resizable editor must follow the parent; a fixed-size editor must keep
+/// its own size (never stretched). The worker must keep processing finite
+/// audio, reopen in the same parent and save its state afterwards.
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
+#[ignore = "requires AUDIOROUTER_VST3_FIXTURE and AUDIOROUTER_VST3_NATIVE_WORKER"]
+fn native_vst3_editor_survives_repeated_open_resize_and_close() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    const SWP_NOMOVE_NOZORDER_NOACTIVATE_ASYNC: u32 = 0x0002 | 0x0004 | 0x0010 | 0x4000;
+    let plugin_path = PathBuf::from(std::env::var("AUDIOROUTER_VST3_FIXTURE").unwrap());
+    let worker_path = PathBuf::from(std::env::var("AUDIOROUTER_VST3_NATIVE_WORKER").unwrap());
+    let visible = std::env::var("AUDIOROUTER_VST3_EDITOR_VISIBLE").as_deref() == Ok("1");
+    let root = plugin_path.parent().unwrap().to_path_buf();
+    let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root)).unwrap();
+    let mut worker = SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
+        worker_path,
+        &identity,
+        std::slice::from_ref(&root),
+        2,
+        48_000,
+        Instant::now(),
+    )
+    .expect("launch native VST3 worker");
+    let editor = worker.describe_editor(Instant::now()).unwrap();
+    assert!(
+        editor.has_editor && editor.width > 0 && editor.height > 0,
+        "{editor:?}"
+    );
+
+    let stop = Arc::new(AtomicBool::new(false));
+    let (window_sender, window_receiver) = std::sync::mpsc::channel();
+    let pump_stop = Arc::clone(&stop);
+    let pump = std::thread::spawn(move || {
+        let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+        let title: Vec<u16> = "AudioRouter VST3 editor lifecycle test\0"
+            .encode_utf16()
+            .collect();
+        // WS_OVERLAPPEDWINDOW (resizable frame), optionally WS_VISIBLE.
+        let style = 0x00CF_0000 | if visible { 0x1000_0000 } else { 0 };
+        // SAFETY: NUL-terminated buffers outlive the synchronous call.
+        let parent = unsafe {
+            CreateWindowExW(
+                0,
+                class.as_ptr(),
+                title.as_ptr(),
+                style,
+                100,
+                100,
+                320,
+                200,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            )
+        };
+        window_sender.send(parent as usize).unwrap();
+        let mut message = [0usize; 6];
+        while !pump_stop.load(Ordering::Acquire) {
+            // SAFETY: standard non-blocking message pump for this thread's windows.
+            unsafe {
+                while PeekMessageW(&mut message, std::ptr::null_mut(), 0, 0, 1) != 0 {
+                    TranslateMessage(&message);
+                    DispatchMessageW(&message);
+                }
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        // SAFETY: the window was created on this thread.
+        unsafe { DestroyWindow(parent) };
+    });
+    let parent = window_receiver.recv().unwrap() as *mut std::ffi::c_void;
+    assert!(!parent.is_null(), "editor parent creation failed");
+    let authorization = EditorParentAuthorizationIssuer::from_key([7; 32])
+        .issue(parent as u64, std::process::id())
+        .unwrap();
+
+    let mut sequence = 0u64;
+    // Process audio for `duration` and return the editor's child window and
+    // its client size at the end (null when the plugin made no window).
+    let mut run = |worker: &mut SupervisedWorkerProcess, duration: Duration| {
+        let started = Instant::now();
+        let mut child = std::ptr::null_mut();
+        let mut size = [0i32; 4];
+        while started.elapsed() < duration {
+            sequence += 1;
+            let samples = (0..256)
+                .map(|index| 0.1 * ((index / 2) as f32 * 0.03).sin())
+                .collect::<Vec<_>>();
+            let frame = WorkerFrame::new(
+                sequence,
+                worker_clock_tick().saturating_add(10_000),
+                2,
+                samples,
+            )
+            .unwrap();
+            let processed = worker.process(frame, Vec::new(), Instant::now()).unwrap();
+            assert!(processed.samples.iter().all(|sample| sample.is_finite()));
+            // SAFETY: GetWindow/GetClientRect only read windows; a stale child
+            // handle is checked with IsWindow before it is read.
+            unsafe {
+                child = GetWindow(parent, 5); // GW_CHILD
+                if !child.is_null() && IsWindow(child) != 0 {
+                    GetClientRect(child, &mut size);
+                }
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        (child, size[2], size[3])
+    };
+    let resize = |width: i32, height: i32| {
+        // SAFETY: asynchronous SetWindowPos on a live window owned by the
+        // pump thread; no pointer outlives the call.
+        unsafe {
+            SetWindowPos(
+                parent,
+                std::ptr::null_mut(),
+                0,
+                0,
+                width,
+                height,
+                SWP_NOMOVE_NOZORDER_NOACTIVATE_ASYNC,
+            )
+        };
+    };
+
+    let (width, height) = (i32::from(editor.width), i32::from(editor.height));
+    for cycle in 0..3 {
+        worker
+            .open_editor(&authorization, Instant::now())
+            .unwrap_or_else(|error| panic!("cycle {cycle}: the editor opens: {error:?}"));
+        let (child, child_width, child_height) = run(&mut worker, Duration::from_millis(600));
+        assert!(
+            !child.is_null(),
+            "cycle {cycle}: the plugin created no window"
+        );
+        let opened = (child_width, child_height);
+        // Larger: a resizable editor grows with the parent, a fixed one keeps
+        // its size. The window frame adds a border, so compare with the
+        // opened size rather than the requested outer size.
+        resize(width + 200, height + 150);
+        let (child, grown_width, grown_height) = run(&mut worker, Duration::from_millis(600));
+        assert!(
+            !child.is_null(),
+            "cycle {cycle}: the editor vanished on resize"
+        );
+        let resizable = (grown_width, grown_height) != opened;
+        if resizable {
+            assert!(
+                grown_width >= opened.0 && grown_height >= opened.1,
+                "cycle {cycle}: a resizable editor shrank when its parent grew: {opened:?} -> {grown_width}x{grown_height}"
+            );
+        }
+        // Smaller, then back to the editor's own size.
+        resize((width / 2).max(120), (height / 2).max(90));
+        let (child, small_width, small_height) = run(&mut worker, Duration::from_millis(600));
+        assert!(
+            !child.is_null(),
+            "cycle {cycle}: the editor vanished on shrink"
+        );
+        if !resizable {
+            assert_eq!(
+                (small_width, small_height),
+                opened,
+                "cycle {cycle}: a fixed-size editor was stretched or squeezed"
+            );
+        }
+        resize(width + 16, height + 39);
+        let (child, _, _) = run(&mut worker, Duration::from_millis(300));
+        assert!(!child.is_null(), "cycle {cycle}: the editor vanished");
+        eprintln!(
+            "cycle {cycle}: opened {opened:?}, grown {grown_width}x{grown_height}, small {small_width}x{small_height}, resizable {resizable}"
+        );
+        worker
+            .close_editor(Instant::now())
+            .unwrap_or_else(|error| panic!("cycle {cycle}: the editor closes: {error:?}"));
+        let (child, _, _) = run(&mut worker, Duration::from_millis(300));
+        assert!(
+            child.is_null(),
+            "cycle {cycle}: the editor window stayed after close"
+        );
+    }
+    worker
+        .save_state(Instant::now())
+        .expect("state after the cycles");
     stop.store(true, Ordering::Release);
     pump.join().unwrap();
     assert!(worker.shutdown().unwrap().success());

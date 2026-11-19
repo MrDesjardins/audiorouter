@@ -343,7 +343,7 @@ pub(crate) fn validate_method_params(
         "nativeRenderSources.pump" => &["sessionId", "generation", "maxQuanta"],
         "nativeMultiInputs.pump" => &["sessionId", "generation", "maxPackets"],
         "nativeMultiInputs.bindBranches" => &["sessionId", "generation", "branchNodeIds"],
-        "plugins.scan" => &["directory"],
+        "plugins.scan" => &["directory", "shellPath"],
         "plugins.list" => &["directory"],
         "plugins.inventory" => &[],
         "plugins.retry" => &["directory", "idempotencyKey"],

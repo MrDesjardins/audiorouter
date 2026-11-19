@@ -256,7 +256,7 @@ export interface UiBackend {
   ): Promise<MethodResult["midi.sendEvents"]>;
   /** Retry a plugin silenced for passing a recording device's audio through unchanged. */
   resumePlugin?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.resume"]>;
-  /** Give a VST3 plugin node its declared auxiliary input as a named sidechain port. */
+  /** Give a plugin node its declared auxiliary (VST3) or key-labelled (VST2) input as a named sidechain port. */
   addPluginSidechainPort?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.addSidechainPort"]>;
   /** Remove a plugin node's sidechain port; refused while a connection uses it. */
   removePluginSidechainPort?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.removeSidechainPort"]>;
@@ -358,7 +358,7 @@ export interface UiBackend {
   listProcessors(): Promise<DiscoveryDocument["processors"]>;
   processorResponse(params: ProcessorResponseParams): Promise<ProcessorResponse>;
   listPresets(): Promise<DiscoveryDocument["presets"]>;
-  scanPlugins(directory: string): Promise<PluginScanResult>;
+  scanPlugins(directory: string, shellPath?: string): Promise<PluginScanResult>;
   listPlugins(directory: string): Promise<PluginScanResult>;
   /** Every remembered scan (persisted by the backend); optional for older backends. */
   pluginInventory?(): Promise<MethodResult["plugins.inventory"]>;
@@ -1120,8 +1120,8 @@ export function createLiveBackend(
     async listPresets() {
       return client.request("presets.list", undefined);
     },
-    async scanPlugins(directory) {
-      return client.request("plugins.scan", { directory });
+    async scanPlugins(directory, shellPath) {
+      return client.request("plugins.scan", { directory, ...(shellPath ? { shellPath } : {}) });
     },
     async savePluginState(currentSessionId, nodeId) {
       return client.request("plugins.saveState", { sessionId: currentSessionId, nodeId });

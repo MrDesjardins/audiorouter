@@ -37,6 +37,35 @@ let replacementSession = appendLibraryNode({ ...session, edges: [] }, "testSigna
 replacementSession = appendDraftConnection(replacementSession, "mic", "out", "plugin-1", "sidechain");
 const replacementSource = replacementSession.nodes.find((node) => node.kind === "testSignal")!;
 
+const vst2Session = {
+  ...pluginSession,
+  nodes: pluginSession.nodes.map((node) =>
+    node.id === "plugin-1" ? { ...node, parameters: { ...node.parameters, format: "vst2", classId: "default" } } : node,
+  ),
+};
+
+for (const theme of ["dark", "light", "high-contrast"]) {
+  test(`labelled VST2 key controls are visible in ${theme}`, async ({ page }, testInfo) => {
+    await page.addInitScript(
+      ({ session, theme }) => {
+        localStorage.setItem("audiorouter.ui.theme", theme);
+        Object.assign(window, { __routeFixtureSession: session });
+      },
+      { session: vst2Session, theme },
+    );
+    await page.setViewportSize({ width: 1500, height: 950 });
+    await page.goto("/route-harness.html");
+    await fitCanvas(page);
+    await page.getByTestId("rf__node-plugin-1").locator(".flow-node-title").click();
+    await page.getByRole("tab", { name: "Properties", exact: true }).click();
+    const section = page.getByRole("region", { name: "Sidechain input" });
+    await expect(section).toContainText("explicitly labels its key input");
+    await section.screenshot({ path: testInfo.outputPath(`vst2-sidechain-${theme}.png`) });
+    await section.getByRole("button", { name: "Add sidechain input" }).click();
+    await expect(section.getByRole("button", { name: "Remove sidechain input" })).toBeVisible();
+  });
+}
+
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`named sidechain input is visible and unambiguous in ${theme}`, async ({ page }, testInfo) => {
     await page.addInitScript(

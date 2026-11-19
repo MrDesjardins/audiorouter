@@ -6,6 +6,7 @@
 //! - `AUDIOROUTER_TEST_VST3_WORKER`: the worker built by
 //!   `tools/m06-vst3-worker/build.ps1`.
 //! - `AUDIOROUTER_TEST_VST3_INSTRUMENT`: a `.vst3` bundle (for example Surge XT).
+//! - `AUDIOROUTER_TEST_VST3_INSTRUMENT_CLASS` (optional): the 32-hex class ID to play.
 //!
 //! Run: `cargo test -p audiorouter-plugin-host --test vst3_instrument -- --ignored --nocapture`
 #![cfg(windows)]
@@ -44,16 +45,19 @@ fn a_vst3_instrument_sounds_when_it_gets_a_note_and_not_before() {
     let plugin = env_path("AUDIOROUTER_TEST_VST3_INSTRUMENT");
     let root = plugin.parent().expect("plugin folder").to_path_buf();
     let identity = inspect_binary(&plugin, std::slice::from_ref(&root)).expect("inspect");
-    // The scan itself says what it is, before any worker has refused it.
+    // Optional: pick one class of a multi-class module (for example mda JX10).
+    let class_id = std::env::var("AUDIOROUTER_TEST_VST3_INSTRUMENT_CLASS").ok();
+    // The scan itself says what it is, before any worker has refused it. A
+    // module that mixes effects and instruments classifies by its first class.
     assert!(
-        identity.metadata.instrument,
+        class_id.is_some() || identity.metadata.instrument,
         "inspection must classify the instrument without loading it"
     );
     let mut process = WorkerProcess::spawn_vst3_instrument(
         &worker,
         &plugin,
         &identity.sha256,
-        None,
+        class_id.as_deref(),
         2,
         SAMPLE_RATE,
     )

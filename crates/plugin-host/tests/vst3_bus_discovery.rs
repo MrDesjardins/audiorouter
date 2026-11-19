@@ -219,7 +219,10 @@ fn each_again_class_keeps_its_own_bus_identity() {
             assert_eq!(key.channel(0).unwrap(), &[0.2; 4]);
             assert_eq!(
                 audiorouter_engine::RealtimePluginProcessor::health(bridge.as_ref()).state,
-                audiorouter_engine::PluginWorkerState::Running
+                audiorouter_engine::PluginWorkerState::Running,
+                "bridge failure: {:?}; continuity (input drops, output misses): {:?}",
+                bridge.failure_reason(),
+                bridge.continuity_counts()
             );
             assert!(
                 audiorouter_engine::RealtimePluginProcessor::latency_samples(bridge.as_ref()) >= 4

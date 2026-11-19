@@ -592,21 +592,37 @@ fn start_sidechain_bridge(
         node_id: node.id.as_str().into(),
         message: format!("\"{}\" cannot prepare its sidechain: {message}", node.name),
     };
-    if node.kind != NodeKind::Plugin
-        || identity.format != audiorouter_plugin_host::PluginFormat::Vst3
-    {
-        return Err(not_ready(
-            "multi-bus processing currently requires a declared VST3 auxiliary bus".into(),
-        ));
+    use audiorouter_plugin_host::{PluginFormat, SupervisedWorkerProcess};
+    use std::path::PathBuf;
+    type WorkerResult =
+        Result<SupervisedWorkerProcess, audiorouter_plugin_host::WorkerProcessError>;
+    if node.kind != NodeKind::Plugin {
+        return Err(not_ready("multi-bus processing requires an effect".into()));
     }
-    let class_id = node
+    let selected_class = node
         .parameters
         .get("classId")
         .and_then(Value::as_str)
-        .filter(|id| *id != "default")
-        .ok_or_else(|| {
-            not_ready("select the exact VST3 class before connecting its auxiliary input".into())
-        })?;
+        .filter(|id| *id != "default");
+    let (discover, spawn) = match (identity.format, selected_class) {
+        (PluginFormat::Vst3, Some(_)) => (
+            SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate
+                as fn(PathBuf, &_, &_, _, _, _) -> WorkerResult,
+            SupervisedWorkerProcess::spawn_verified_bound_vst3
+                as fn(PathBuf, &_, &_, &_, _, _) -> WorkerResult,
+        ),
+        (PluginFormat::Vst2, None) => (
+            SupervisedWorkerProcess::spawn_verified_with_sample_rate
+                as fn(PathBuf, &_, &_, _, _, _) -> WorkerResult,
+            SupervisedWorkerProcess::spawn_verified_bound_vst2
+                as fn(PathBuf, &_, &_, &_, _, _) -> WorkerResult,
+        ),
+        _ => {
+            return Err(not_ready(
+                "select an exact VST3 class or a non-shell VST2 effect".into(),
+            ))
+        }
+    };
     let key = node
         .plugin_sidechain_port()
         .ok_or_else(|| not_ready("the sidechain input port is missing".into()))?;
@@ -615,9 +631,15 @@ fn start_sidechain_bridge(
         identity.architecture,
     ))?;
     let roots = std::slice::from_ref(&request.configured_root);
-    let mut discovery = audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
-        executable.as_path(), identity, roots, request.channels as u16, sample_rate_hz, Instant::now(),
-    ).map_err(|error| not_ready(error.to_string()))?;
+    let mut discovery = discover(
+        executable.clone(),
+        identity,
+        roots,
+        request.channels as u16,
+        sample_rate_hz,
+        Instant::now(),
+    )
+    .map_err(|error| not_ready(error.to_string()))?;
     if let Some(state) = &request.state {
         discovery
             .restore_state(state.clone(), Instant::now())
@@ -627,7 +649,7 @@ fn start_sidechain_bridge(
         .verify_sidechain_binding(
             roots,
             &request.fingerprint,
-            Some(class_id),
+            selected_class,
             (request.channels as u16, u16::from(key.channels)),
             Instant::now(),
         )
@@ -635,8 +657,8 @@ fn start_sidechain_bridge(
     discovery
         .shutdown()
         .map_err(|error| not_ready(error.to_string()))?;
-    let mut worker = audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_bound_vst3(
-        executable.as_path(),
+    let mut worker = spawn(
+        executable,
         identity,
         roots,
         &binding,
@@ -713,7 +735,11 @@ pub(crate) fn start_plugin_bridges(
                 "plugin fingerprint changed since scan".into(),
             ));
         }
-        if verified.format == audiorouter_plugin_host::PluginFormat::Vst3 {
+        if matches!(
+            verified.format,
+            audiorouter_plugin_host::PluginFormat::Vst3
+                | audiorouter_plugin_host::PluginFormat::Vst2
+        ) {
             if let Some(class_id) = session
                 .nodes
                 .iter()
@@ -771,6 +797,7 @@ pub(crate) fn start_plugin_bridges(
         .iter()
         .filter(|(id, (identity, _, _, _, _))| {
             identity.format == audiorouter_plugin_host::PluginFormat::Vst2
+                && identity.metadata.class_ids.is_empty()
                 // A chain is one process, so it cannot mix bitness; each 32-bit
                 // plugin runs in its own 32-bit worker.
                 && identity.architecture == audiorouter_plugin_host::PeArchitecture::X64
@@ -2105,7 +2132,7 @@ impl ControlPlane {
                         .ok()
                         .flatten();
                     let latest = latest_id.as_deref().and_then(|id| {
-                        Self::load_plugin_state_asset(storage, id, fingerprint).ok()
+                        Self::load_plugin_state_for_node(storage, id, fingerprint, node).ok()
                     });
                     // Slider values the latest capture already contains; see
                     // capture_plugin_state.
@@ -2125,7 +2152,9 @@ impl ControlPlane {
                             .parameters
                             .get("stateId")
                             .and_then(Value::as_str)
-                            .map(|id| Self::load_plugin_state_asset(storage, id, fingerprint))
+                            .map(|id| {
+                                Self::load_plugin_state_for_node(storage, id, fingerprint, node)
+                            })
                             .transpose()?,
                     };
                     Ok((state, captured_sliders))
@@ -2222,7 +2251,7 @@ impl ControlPlane {
                 .as_deref()
                 .or_else(|| node.parameters.get("stateId").and_then(Value::as_str));
             if let Some(state_id) = state_id {
-                let asset = Self::load_plugin_state_asset(storage, state_id, previous)?;
+                let asset = Self::load_plugin_state_for_node(storage, state_id, previous, &node)?;
                 let root = storage.plugin_state_directory().ok_or_else(|| {
                     ControlError::InvalidRequest("plugin state storage is unavailable".into())
                 })?;
@@ -2253,7 +2282,7 @@ impl ControlPlane {
                 storage
                     .save_plugin_state(&audiorouter_storage::PluginStateRecord {
                         id: id.clone(),
-                        plugin_id: identity.sha256.clone(),
+                        plugin_id: plugin_state_identity(&node, &identity.sha256),
                         plugin_sha256: identity.sha256.clone(),
                         version: asset.version,
                         path: state_path.to_string_lossy().into_owned(),
@@ -2495,22 +2524,42 @@ impl ControlPlane {
 
     /// Read and verify a stored plugin state for the plugin binary it was
     /// captured from.
+    #[cfg(test)]
     pub(crate) fn load_plugin_state_asset(
         storage: &Storage,
         state_id: &str,
         plugin_sha256: &str,
     ) -> Result<audiorouter_plugin_host::PluginStateAsset, ControlError> {
+        Self::load_plugin_state_with_identity(storage, state_id, plugin_sha256, None)
+    }
+
+    fn load_plugin_state_for_node(
+        storage: &Storage,
+        state_id: &str,
+        fingerprint: &str,
+        node: &audiorouter_domain::Node,
+    ) -> Result<audiorouter_plugin_host::PluginStateAsset, ControlError> {
+        let identity = plugin_state_identity(node, fingerprint);
+        Self::load_plugin_state_with_identity(storage, state_id, fingerprint, Some(&identity))
+    }
+
+    fn load_plugin_state_with_identity(
+        storage: &Storage,
+        state_id: &str,
+        plugin_sha256: &str,
+        identity: Option<&str>,
+    ) -> Result<audiorouter_plugin_host::PluginStateAsset, ControlError> {
         let root = storage.plugin_state_directory().ok_or_else(|| {
             ControlError::InvalidRequest("plugin state storage is unavailable".into())
         })?;
         let record = storage
-            .list_plugin_states(Some(plugin_sha256))
+            .list_plugin_states(Some(identity.unwrap_or(plugin_sha256)))
             .map_err(storage_error)?
             .into_iter()
-            .find(|record| record.id == state_id)
+            .find(|record| record.id == state_id && record.plugin_sha256 == plugin_sha256)
             .ok_or_else(|| {
                 ControlError::InvalidRequest(
-                    "the saved plugin state is missing or belongs to a different plugin binary"
+                    "the saved plugin state is missing or belongs to a different plugin identity"
                         .into(),
                 )
             })?;
@@ -2554,9 +2603,37 @@ impl ControlPlane {
         let entries = self
             .while_servicing_audio(|| audiorouter_plugin_host::scan_directory(root))
             .map_err(ControlError::PluginScan)?;
+        let shell_path = params
+            .as_ref()
+            .and_then(|value| value["shellPath"].as_str());
+        let shell_classes = if let Some(path) = shell_path {
+            let identity = entries
+                .iter()
+                .find(|entry| entry.path == std::path::Path::new(path))
+                .and_then(|entry| entry.identity.as_ref())
+                .filter(|identity| identity.format == audiorouter_plugin_host::PluginFormat::Vst2)
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest(
+                        "shellPath must name a VST2 binary in this scan".into(),
+                    )
+                })?;
+            let executable = require_plugin_worker(PluginWorkerKind::for_identity(
+                identity.format,
+                identity.architecture,
+            ))?;
+            self.while_servicing_audio(|| {
+                let mut worker = audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_with_sample_rate(
+                    executable, identity, &[root.to_path_buf()], 2, 48_000, Instant::now(),
+                )?;
+                worker.describe_shell(Instant::now())
+            }).map_err(|error| ControlError::InvalidRequest(format!("VST2 shell discovery failed: {error}")))?
+        } else {
+            Vec::new()
+        };
         let result = json!({
             "directory": directory,
             "entries": entries.into_iter().map(|entry| {
+                let shell = shell_path.is_some_and(|path| entry.path == std::path::Path::new(path));
                 let identity = entry.identity.map(|identity| json!({
                     "path": identity.path,
                     "binaryPath": identity.binary_path,
@@ -2575,7 +2652,18 @@ impl ControlPlane {
                     "sha256": identity.sha256,
                     "vendor": identity.metadata.vendor,
                     "version": identity.metadata.version,
-                    "classIds": identity.metadata.class_ids,
+                    "classIds": if shell {
+                        shell_classes.iter().map(|plugin| format!("{:08X}", plugin.id)).collect()
+                    } else {
+                        identity.metadata.class_ids.clone()
+                    },
+                    "shellEffects": if shell {
+                        shell_classes.iter().map(|plugin| json!({
+                            "id": format!("{:08X}", plugin.id), "name": plugin.name,
+                        })).collect::<Vec<_>>()
+                    } else {
+                        Vec::new()
+                    },
                     "compatibility": match identity.compatibility() {
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst3X64 => "supportedVst3X64",
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst2X64Gated => "supportedVst2X64Gated",
@@ -2722,7 +2810,7 @@ impl ControlPlane {
         &self,
         path: &str,
     ) -> Result<(audiorouter_plugin_host::PluginIdentity, std::path::PathBuf), ControlError> {
-        let (root, fingerprint, scanned_path) = self
+        let (root, fingerprint, scanned_path, classes) = self
             .plugin_inventories
             .iter()
             .filter_map(|(root, inventory)| {
@@ -2736,7 +2824,12 @@ impl ControlPlane {
                     .and_then(|identity| identity.get("sha256"))
                     .and_then(Value::as_str)?;
                 let scanned_path = entry.get("path").and_then(Value::as_str)?;
-                Some((root, fingerprint, scanned_path))
+                Some((
+                    root,
+                    fingerprint,
+                    scanned_path,
+                    entry["identity"]["classIds"].as_array(),
+                ))
             })
             .next()
             .ok_or_else(|| {
@@ -2746,7 +2839,7 @@ impl ControlPlane {
             })?;
         let root = std::path::PathBuf::from(root);
         // Re-inspect using the path exactly as scanned under its root.
-        let identity = audiorouter_plugin_host::inspect_binary(
+        let mut identity = audiorouter_plugin_host::inspect_binary(
             std::path::Path::new(scanned_path),
             std::slice::from_ref(&root),
         )
@@ -2757,6 +2850,14 @@ impl ControlPlane {
             return Err(ControlError::InvalidRequest(
                 "plugin fingerprint changed since scan".into(),
             ));
+        }
+        if identity.format == audiorouter_plugin_host::PluginFormat::Vst2 {
+            identity.metadata.class_ids = classes
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect();
         }
         // Effects and instruments are both hostable; each tool checks the
         // kind where it adds the plugin (`validate_plugin_placeholders`)
@@ -2819,6 +2920,23 @@ impl ControlPlane {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
+        #[cfg(windows)]
+        let nodes = {
+            let mut nodes = nodes;
+            if let Ok(bridges) = self.sidechain_bridges.lock() {
+                nodes.extend(
+                    bridges
+                        .iter()
+                        .filter(|((session, _), bridge)| {
+                            session == session_id && bridge.strong_count() > 0
+                        })
+                        .map(|((_, node), _)| node.clone()),
+                );
+            }
+            nodes.sort_unstable_by(|left, right| left.as_str().cmp(right.as_str()));
+            nodes.dedup();
+            nodes
+        };
         for node_id in nodes {
             if let Err(error) = self.capture_plugin_state(session_id, &node_id, true) {
                 eprintln!(
@@ -2841,7 +2959,7 @@ impl ControlPlane {
         automatic: bool,
     ) -> Result<(String, usize), ControlError> {
         let (session_id, node_id) = (session_id.clone(), node_id.clone());
-        let (fingerprint, sliders) = self
+        let (fingerprint, state_identity, sliders) = self
             .get_session(&session_id)?
             .nodes
             .iter()
@@ -2852,7 +2970,11 @@ impl ControlPlane {
                     .get("fingerprint")
                     .and_then(Value::as_str)?
                     .to_owned();
-                Some((fingerprint, plugin_slider_values(&node.parameters)))
+                Some((
+                    fingerprint.clone(),
+                    plugin_state_identity(node, &fingerprint),
+                    plugin_slider_values(&node.parameters),
+                ))
             })
             .ok_or_else(|| {
                 ControlError::InvalidRequest("nodeId is not a plugin node in this session".into())
@@ -2893,7 +3015,7 @@ impl ControlPlane {
         storage
             .save_plugin_state(&audiorouter_storage::PluginStateRecord {
                 id: state_id.clone(),
-                plugin_id: fingerprint.clone(),
+                plugin_id: state_identity,
                 plugin_sha256: fingerprint,
                 version: asset.version,
                 path: path.to_string_lossy().into_owned(),
@@ -3119,6 +3241,12 @@ impl ControlPlane {
                     )
                 })?;
             identity.metadata.class_ids.swap(0, index);
+        } else if identity.format == audiorouter_plugin_host::PluginFormat::Vst2
+            && !identity.metadata.class_ids.is_empty()
+        {
+            return Err(ControlError::InvalidRequest(
+                "select an exact VST2 shell effect".into(),
+            ));
         }
         let executable = require_plugin_worker(PluginWorkerKind::for_identity(
             identity.format,
@@ -3353,18 +3481,25 @@ impl ControlPlane {
         if node.kind != NodeKind::Plugin {
             return Err(refuse("only a plugin node can have one"));
         }
-        if node.parameters.get("format").and_then(Value::as_str) != Some("vst3") {
-            return Err(refuse(
-                "only a VST3 plugin with a declared auxiliary input is supported",
-            ));
-        }
-        let class_id = node
+        let selected_class = node
             .parameters
             .get("classId")
             .and_then(Value::as_str)
-            .filter(|id| *id != "default")
-            .ok_or_else(|| refuse("select the exact VST3 class first"))?
-            .to_owned();
+            .filter(|id| *id != "default");
+        use audiorouter_plugin_host::PluginFormat;
+        let (format, class_id) = match node.parameters.get("format").and_then(Value::as_str) {
+            Some("vst3") => (
+                PluginFormat::Vst3,
+                Some(selected_class.ok_or_else(|| refuse("select the exact VST3 class first"))?),
+            ),
+            Some("vst2") if selected_class.is_none() => (PluginFormat::Vst2, None),
+            Some("vst2") => {
+                return Err(refuse(
+                    "VST2 shell effects are unavailable for sidechain routing",
+                ))
+            }
+            _ => return Err(refuse("select a VST2 or VST3 effect first")),
+        };
         let path = node
             .parameters
             .get("path")
@@ -3383,20 +3518,35 @@ impl ControlPlane {
             .ok_or_else(|| refuse("it has no main input"))?;
         #[cfg(not(windows))]
         {
-            let _ = (&class_id, &path, main_channels);
-            Err(refuse("VST3 discovery requires Windows"))
+            let _ = (format, class_id, &path, main_channels);
+            Err(refuse("plugin bus discovery requires Windows"))
         }
         #[cfg(windows)]
         {
             let (mut identity, root) = self.scanned_plugin_identity(&path)?;
-            identity.metadata.class_ids = vec![class_id.clone()];
+            if identity.format != format {
+                return Err(refuse("the scanned binary format differs from the node"));
+            }
+            if let Some(class_id) = class_id {
+                identity.metadata.class_ids = vec![class_id.to_owned()];
+            }
             let executable = require_plugin_worker(PluginWorkerKind::for_identity(
                 identity.format,
                 identity.architecture,
             ))?;
             let roots = std::slice::from_ref(&root);
-            let mut worker = audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
-                &executable, &identity, roots, main_channels, 48_000, Instant::now(),
+            let discover = if format == PluginFormat::Vst3 {
+                audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate as fn(_, &_, &_, _, _, _) -> Result<_, audiorouter_plugin_host::WorkerProcessError>
+            } else {
+                audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_with_sample_rate
+            };
+            let mut worker = discover(
+                &executable,
+                &identity,
+                roots,
+                main_channels,
+                48_000,
+                Instant::now(),
             )
             .map_err(|error| refuse(&format!("the plugin worker did not start: {error:?}")))?;
             let result = (|| {
@@ -3411,7 +3561,7 @@ impl ControlPlane {
                     .verify_sidechain_binding(
                         roots,
                         &identity.sha256,
-                        Some(&class_id),
+                        class_id,
                         (main_channels, aux.channels),
                         Instant::now(),
                     )
@@ -3449,6 +3599,20 @@ fn plugin_slider_values(
         .filter(|(name, value)| name.starts_with("pluginParameter:") && value.is_number())
         .map(|(name, value)| (name.clone(), value.clone()))
         .collect()
+}
+
+fn plugin_state_identity(node: &audiorouter_domain::Node, fingerprint: &str) -> String {
+    let class = node
+        .parameters
+        .get("classId")
+        .and_then(Value::as_str)
+        .filter(|class| class.len() == 8 && class.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    if node.parameters.get("format").and_then(Value::as_str) == Some("vst2") {
+        if let Some(class) = class {
+            return format!("{fingerprint}:{}", class.to_ascii_uppercase());
+        }
+    }
+    fingerprint.to_owned()
 }
 
 fn plugin_slider_snapshot_path(root: &std::path::Path, state_id: &str) -> std::path::PathBuf {

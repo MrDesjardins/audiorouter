@@ -305,14 +305,14 @@ describe("PluginEditorControls before Play", () => {
     expect(selectPluginProgram).not.toHaveBeenCalled();
   });
 
-  it("adds a VST3 sidechain input once, and explains a refusal without changing the panel", async () => {
+  it.each(["vst3", "vst2"])("adds a %s sidechain input and explains a refusal", async (format) => {
     const addPluginSidechainPort = vi
       .fn()
       .mockRejectedValueOnce(new Error("the plugin declares no auxiliary input"))
       .mockResolvedValue({ sessionId: "s", nodeId: "plugin-1", port: "sidechain", channels: 2 });
     const { rerender } = render(
       <PluginNodeInspector
-        node={plugin({ path: "C:\\VST3\\Comp.vst3", format: "vst3" })}
+        node={plugin({ path: "C:\\Plugins\\Comp", format })}
         disabled={false}
         onUnload={() => {}}
         snapshot={null}
@@ -327,10 +327,10 @@ describe("PluginEditorControls before Play", () => {
     expect(addPluginSidechainPort).toHaveBeenCalledWith("s", "plugin-1");
     expect(await screen.findByText(/has a sidechain input named/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Add sidechain input" })).toBeNull();
-    // An effect that already has the port, or a VST2 plugin, offers no button.
+    // The non-shell sidechain path cannot configure a shell sub-plugin.
     rerender(
       <PluginNodeInspector
-        node={plugin({ path: "C:\\VST2\\x.dll", format: "vst2" })}
+        node={plugin({ path: "C:\\VST2\\x.dll", format: "vst2", classId: "123" })}
         disabled={false}
         onUnload={() => {}}
         snapshot={null}

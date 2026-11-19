@@ -535,6 +535,7 @@ public:
         index = static_cast<int32>(queues_.size() - 1);
         return &queues_.back();
     }
+    void clear() { queues_.clear(); }
 
 private:
     std::vector<ParameterQueue> queues_;
@@ -1195,11 +1196,22 @@ public:
             // The SDK's host order: the component takes its state first, then
             // the controller mirrors it with setComponentState.
             StateStream component_stream(component_state.data(), component_state.size());
-            require_result("VST3 component setState", component_->setState(&component_stream));
+            const auto component_result = component_->setState(&component_stream);
+            // DPF plugins with no parameters and no states save a single NUL
+            // byte, then refuse that same byte in setState (they wait for a
+            // 0xFE terminator that getState never wrote). The saved state is
+            // "nothing", so there is nothing to restore: accept exactly that
+            // value and nothing else, for the component and its controller.
+            const bool stateless_sentinel = component_state.size() == 1 && component_state[0] == 0;
+            if (!(stateless_sentinel && component_result != kResultOk)) {
+                require_result("VST3 component setState", component_result);
+            }
             if (controller_) {
                 StateStream controller_component_stream(component_state.data(), component_state.size());
-                require_result("VST3 controller component state", controller_->setComponentState(
-                    &controller_component_stream));
+                const auto controller_result = controller_->setComponentState(&controller_component_stream);
+                if (!(stateless_sentinel && controller_result != kResultOk)) {
+                    require_result("VST3 controller component state", controller_result);
+                }
             }
             if (!controller_state.empty()) {
                 if (!controller_) throw protocol_error("VST3 controller state is unavailable");
@@ -1592,8 +1604,10 @@ public:
             data.outputs = &output_bus;
             data.inputParameterChanges = changes_.getParameterCount() > 0 ? &changes_ : nullptr;
             data.inputEvents = events_.getEventCount() > 0 ? &events_ : nullptr;
+            data.outputParameterChanges = &output_changes_;
             data.processContext = &context_;
             const auto result = processor_->process(data);
+            output_changes_.clear();
             events_.clear();
             if (result != kResultFalse) require_result("VST3 instrument process", result);
             advance_context(end - start);
@@ -1653,8 +1667,10 @@ private:
         data.inputs = &input_bus;
         data.outputs = &output_bus;
         data.inputParameterChanges = changes_.getParameterCount() > 0 ? &changes_ : nullptr;
+        data.outputParameterChanges = &output_changes_;
         data.processContext = &context_;
         const auto result = processor_->process(data);
+        output_changes_.clear();
         if (result != kResultFalse) require_result("VST3 process", result);
         advance_context(end - start);
         changes_ = ParameterChanges{};
@@ -1706,8 +1722,10 @@ private:
         data.inputs = input_buses.data();
         data.outputs = output_buses.data();
         data.inputParameterChanges = changes_.getParameterCount() > 0 ? &changes_ : nullptr;
+        data.outputParameterChanges = &output_changes_;
         data.processContext = &context_;
         const auto result = processor_->process(data);
+        output_changes_.clear();
         if (result != kResultFalse) require_result("VST3 multi-bus process", result);
         advance_context(end - start);
         changes_ = ParameterChanges{};
@@ -1738,6 +1756,10 @@ private:
     uint16_t plugin_input_channels_ = 0;
     uint16_t plugin_output_channels_ = 0;
     ParameterChanges changes_;
+    // VST3 hosts pass an output list every block for parameter changes the
+    // plugin makes while processing. The worker does not forward them yet, but
+    // DPF plugins assert on every block when the list is missing.
+    ParameterChanges output_changes_;
     std::vector<std::pair<Vst::ParamID, double>> pending_snapshot_;
     bool instrument_ = false;
     Vst::IMidiMapping* midi_mapping_ = nullptr;

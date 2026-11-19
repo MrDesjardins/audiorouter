@@ -141,7 +141,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `nativeRenderSources.pump` | `sessionControl` | external operation; drains bounded work for the exact running standalone virtual render-source generation |
 | `nativeMultiInputs.pump` | `sessionControl` | external operation; drains bounded work from several exact capture workers into their prepared generation-bound feeder |
 | `nativeMultiInputs.bindBranches` | `sessionControl` | external operation; binds ordered validated output nodes to branch-local virtual, recording, and tool observers |
-| `plugins.scan` | `pluginScan` | read-only |
+| `plugins.scan` | `pluginScan` | reads directory metadata by default; optional `shellPath` inspects one exact VST2 binary in an isolated worker and reports its named effects |
 | `plugins.list` | `pluginScan` | read-only |
 | `plugins.inventory` | `pluginScan` | read-only; every remembered scan (one per folder), persisted across restarts; never scans or loads plugin code |
 | `plugins.saveState` | `pluginScan` | mutating; captures a playing plugin node's opaque state, stores it under the database's `plugin-states` folder, and returns a `stateId` to set on the node |
@@ -154,7 +154,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `plugins.parameters` | `pluginScan` | external operation; bounded descriptors from the exact revalidated plugin worker |
 | `plugins.buses` | `pluginScan` | read-only; exact VST2/VST3 audio bus discovery through a verified isolated worker; optional exact VST3 `classId`; no graph mutation |
 | `plugins.removeSidechainPort` | `sessionControl` | mutating; removes the `sidechain` port of a plugin node as one reversible graph commit; refused while any connection uses it |
-| `plugins.addSidechainPort` | `sessionControl` | mutating; adds the declared VST3 auxiliary input as the named `sidechain` port from a live, identity-checked worker, as one reversible graph commit; creates no Mixer and no connection |
+| `plugins.addSidechainPort` | `sessionControl` | mutating; creates the named `sidechain` port from a declared VST3 auxiliary bus or explicitly labelled non-shell VST2 key pins, verified by a live worker; one reversible edit that creates no Mixer or connection |
 | `plugins.programs` | `pluginScan` | read-only; bounded program list for a plugin in a playing route (VST2 and VST3; VST3 is read-only); optional `sessionId`, `nodeId` is an ID or exact name |
 | `plugins.selectProgram` | `pluginScan` | mutating; selects a bounded VST2 program index on a playing plugin; optional `sessionId`, `nodeId` is an ID or exact name |
 | `plugins.applyPreset` | `pluginScan` | external operation; applies a bounded VST2 `.fxp`/`.fxb` file from the plugin's own directory to a playing plugin; optional `sessionId`, `nodeId` is an ID or exact name |

@@ -35,7 +35,9 @@ function widthProblems(width) {
   const problems = [];
   if (typeof width.audioError === "string") problems.push(`audio error: ${short(width.audioError)}`);
   if (width.nonFinite === true) problems.push("non-finite output");
-  if (width.silent === true) problems.push("silent");
+  // A plugin with a sidechain key input is silent on purpose without a key; the
+  // census feeds only the main input, so that is not a failure.
+  if (width.silent === true && !(width.keyInputs > 0)) problems.push("silent");
   if (width.stateSaved === false) problems.push("state not saved");
   if (width.restoreSame != null || width.restoreFresh != null) problems.push("state not restored");
   if (width.cleanExit === false) problems.push("did not close cleanly");
@@ -50,6 +52,18 @@ for (const report of reports) {
     const key = `${name}\0${plugin.format}\0${plugin.architecture}`;
     if (plugin.skipped) {
       rows.set(key, { name, plugin, kind: "skipped", result: "not run (left out of this run)", ok: null });
+      continue;
+    }
+    // A shell DLL that offers no sub-plugin (here: the DirectX wrappers on a PC
+    // without DirectX plugins) can only say "select a sub-plugin".
+    if (!plugin.shell && JSON.stringify(plugin).includes("select a VST2 shell sub-plugin")) {
+      rows.set(key, {
+        name,
+        plugin,
+        kind: "skipped",
+        result: "not testable: a shell DLL with no sub-plugin installed on this PC",
+        ok: null,
+      });
       continue;
     }
     if (plugin.instrument) {
@@ -75,16 +89,23 @@ for (const report of reports) {
     const ok = mono.length === 0 && stereo.length === 0;
     const describe = (label, problems) => (problems.length ? `${label}: ${problems.join(", ")}` : null);
     const passThrough = (plugin.widths ?? []).some((width) => width.changesSignal === false);
+    const keyed = (plugin.widths ?? []).some((width) => width.silent === true && width.keyInputs > 0);
     rows.set(key, {
       name,
       plugin,
       kind: "effect",
       ok,
       result: ok
-        ? `ok${passThrough ? " (default settings leave the test tone unchanged)" : ""}`
+        ? `ok${keyed ? " (silent without its sidechain key, which the census does not feed)" : passThrough ? " (default settings leave the test tone unchanged)" : ""}`
         : [describe("mono", mono), describe("stereo", stereo)].filter(Boolean).join("; "),
     });
   }
+}
+
+// A shell DLL hosts several effects; the census runs only the first.
+for (const row of rows.values()) {
+  const shell = row.plugin.shell;
+  if (shell) row.result += ` (shell: tested "${shell.testedName}", 1 of ${shell.count} sub-plugins)`;
 }
 
 const sorted = [...rows.values()].sort(
@@ -127,6 +148,8 @@ VST3), fed a 220 Hz tone for 100 blocks at mono and at stereo, asked to save its
 state, then asked to restore it in the same worker and in a fresh one. "ok"
 means every step worked and the output was finite and not silent. Each
 instrument is started in stereo, checked for silence, then given one held note.
+A VST2 shell DLL is tested through its first sub-plugin. An effect that declares
+a sidechain input is not failed for silence, because only its main input is fed.
 
 It opens no audio device and no plugin window, so it says nothing about
 editors, about how a plugin sounds, or about a plugin on a live route. A plugin

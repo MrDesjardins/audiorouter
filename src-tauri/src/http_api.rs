@@ -181,7 +181,8 @@ fn http_access(method: &str) -> HttpAccess {
         "obs.preview" => HttpAccess::DesktopOnly("Preview OBS changes in the AudioRouter window"),
         "obs.apply" => HttpAccess::DesktopOnly("Apply OBS changes in the AudioRouter window"),
         "obs.restore" => HttpAccess::DesktopOnly("Restore OBS settings in the AudioRouter window"),
-        "plugins.scan" | "plugins.list" | "plugins.retry" => HttpAccess::LocalPaths(&["directory"]),
+        "plugins.scan" => HttpAccess::LocalPaths(&["directory", "shellPath"]),
+        "plugins.list" | "plugins.retry" => HttpAccess::LocalPaths(&["directory"]),
         "plugins.inspect" | "plugins.parameters" | "plugins.buses" | "sessions.importFile" => {
             HttpAccess::LocalPaths(&["path"])
         }
@@ -712,6 +713,7 @@ mod tests {
         .unwrap();
         for (method, parameter) in [
             ("plugins.scan", "directory"),
+            ("plugins.scan", "shellPath"),
             ("plugins.list", "directory"),
             ("plugins.retry", "directory"),
             ("plugins.inspect", "path"),

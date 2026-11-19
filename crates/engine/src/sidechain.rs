@@ -197,6 +197,43 @@ mod tests {
         assert_eq!(main.channel(0).unwrap(), &[0.0; 4]);
     }
 
+    /// A worker that starts late fills the input queue; the stage then drops
+    /// its pending quantum, and the worker's catch-up results fill the output
+    /// queue before the graph can drain them. The next result must replace
+    /// the oldest stale one, not be refused (a refusal ended the plugin).
+    #[test]
+    fn a_late_worker_start_cannot_block_the_next_result() {
+        let (stage, scheduler) = stage();
+        let generation = RuntimeGeneration::new(1);
+        let mut main = AudioBlock::new(2, 4).unwrap();
+        for sequence in 1..=4 {
+            stage.process(id(sequence), &mut main, None);
+        }
+        // The worker has not taken anything yet: the fifth input is refused.
+        stage.process(id(5), &mut main, None);
+        let mut stale = AudioBlock::new(2, 4).unwrap();
+        stale.channel_mut(0).unwrap().fill(0.25);
+        for _ in 1..=4 {
+            let input = scheduler.try_take_input().unwrap();
+            let identity = input.identity();
+            scheduler.recycle_input(input);
+            scheduler
+                .try_submit_outputs(generation, identity, &[&stale])
+                .unwrap();
+        }
+        stage.process(id(6), &mut main, None);
+        let input = scheduler.try_take_input().unwrap();
+        assert_eq!(input.identity(), id(6));
+        scheduler.recycle_input(input);
+        let mut fresh = AudioBlock::new(2, 4).unwrap();
+        fresh.channel_mut(0).unwrap().fill(0.5);
+        scheduler
+            .try_submit_outputs(generation, id(6), &[&fresh])
+            .expect("a full queue of older results must not refuse a newer one");
+        stage.process(id(7), &mut main, None);
+        assert_eq!(main.channel(0).unwrap(), &[0.5; 4]);
+    }
+
     #[test]
     fn reset_cannot_publish_a_result_from_before_activation() {
         let (stage, scheduler) = stage();

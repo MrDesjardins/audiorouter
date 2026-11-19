@@ -29,6 +29,7 @@ type WorkerArguments = (
     Option<WorkerAudioBusLayout>,
     // True when the plugin is an instrument played with MIDI (--instrument).
     bool,
+    Option<u32>,
 );
 
 /// The worker's stderr line is what the supervisor shows after a failed
@@ -184,8 +185,9 @@ fn run() -> Result<(), String> {
         plugin_path,
         multi_bus_layout,
         instrument,
+        shell_id,
     ) = parse_arguments()?;
-    if let Some(layout) = multi_bus_layout {
+    if let Some(layout) = multi_bus_layout.clone().filter(|_| plugin_path.is_none()) {
         return run_multi_bus(plugin_sha256, layout, fixture_mode.as_deref());
     }
     #[cfg(windows)]
@@ -204,14 +206,14 @@ fn run() -> Result<(), String> {
         Vst2Role::Effect
     };
     #[cfg(not(windows))]
-    let _ = instrument;
+    let _ = (instrument, shell_id);
     // MIDI received for the next block (instrument workers only).
     #[cfg_attr(not(windows), allow(unused_mut))]
     let mut pending_midi: Vec<audiorouter_plugin_host::MidiEvent> = Vec::new();
     #[cfg(windows)]
     let loaded = plugin_path
         .clone()
-        .map(|path| Vst2EditorThread::spawn_loading_as(&path, vst2_role))
+        .map(|path| Vst2EditorThread::spawn_loading_selected(&path, vst2_role, shell_id))
         .transpose()
         .map_err(|error| load_failure_text("VST2 load failed", &error))?;
     #[cfg(windows)]
@@ -220,6 +222,10 @@ fn run() -> Result<(), String> {
     });
     #[cfg(windows)]
     let mut vst2_plugins: Vec<Vst2Library> = first_plugin.into_iter().collect();
+    #[cfg(windows)]
+    if multi_bus_layout.is_some() && vst2_plugins.first_mut().is_some_and(Vst2Library::is_shell) {
+        return Err("VST2 shell sidechain processing requires a bound sub-plugin".into());
+    }
     #[cfg(windows)]
     // Each editor thread shows its processing instance. Declared after the
     // plugins so it is dropped (editor closed, thread joined) first.
@@ -259,15 +265,28 @@ fn run() -> Result<(), String> {
         }
     });
 
-    write_worker_message(
-        &mut writer,
-        &WorkerMessage::Hello {
+    let hello = match &multi_bus_layout {
+        Some(layout) => WorkerMessage::HelloBuses {
             protocol_version: WORKER_PROTOCOL_VERSION,
-            plugin_sha256,
+            plugin_sha256: plugin_sha256.clone(),
+            layout: layout.clone(),
+        },
+        None => WorkerMessage::Hello {
+            protocol_version: WORKER_PROTOCOL_VERSION,
+            plugin_sha256: plugin_sha256.clone(),
             channels,
         },
-    )
-    .map_err(|error| format!("hello write failed: {error:?}"))?;
+    };
+    let mut bus_session = multi_bus_layout
+        .map(|layout| audiorouter_plugin_host::WorkerBusSession::new(plugin_sha256, layout))
+        .transpose()
+        .map_err(|error| format!("invalid bus session: {error:?}"))?;
+    if let Some(bus) = &mut bus_session {
+        bus.accept(&hello, 0)
+            .map_err(|error| format!("{error:?}"))?;
+    }
+    write_worker_message(&mut writer, &hello)
+        .map_err(|error| format!("hello write failed: {error:?}"))?;
     session
         .hello_sent()
         .map_err(|error| format!("hello state transition failed: {error:?}"))?;
@@ -279,6 +298,10 @@ fn run() -> Result<(), String> {
     session
         .accept(&ready, 0)
         .map_err(|error| format!("ready rejected: {error:?}"))?;
+    if let Some(bus) = &mut bus_session {
+        bus.accept(&ready, 0)
+            .map_err(|error| format!("{error:?}"))?;
+    }
 
     // The message loop below is the plugin audio path of this process.
     let _scheduling = audiorouter_plugin_host::ProAudioThread::enter();
@@ -298,6 +321,25 @@ fn run() -> Result<(), String> {
     loop {
         let message = receive_while_pumping(&messages)
             .map_err(|error| format!("message read failed: {error:?}"))?;
+        if bus_session.is_some() && matches!(message, WorkerMessage::Process { .. }) {
+            return Err("a bound bus worker requires ProcessBuses".into());
+        }
+        #[cfg(windows)]
+        if let WorkerMessage::ProcessBuses { parameters, .. } = &message {
+            let bus = bus_session.as_mut().ok_or("worker has no bound buses")?;
+            let input = bus
+                .accept(&message, worker_clock_tick())
+                .map_err(|error| format!("bus request rejected: {error:?}"))?
+                .ok_or("missing bus input")?;
+            let plugin = vst2_plugins.first_mut().ok_or("no VST2 processor")?;
+            let layout = bus.layout().clone();
+            let reply =
+                process_vst2_buses(plugin, &layout, input.frames(), parameters, sample_rate_hz)?;
+            bus.accept_result(&reply)
+                .map_err(|error| format!("bus output rejected: {error:?}"))?;
+            write_worker_message(&mut writer, &reply).map_err(|error| format!("{error:?}"))?;
+            continue;
+        }
         if let Err(error) = session.accept(&message, worker_clock_tick()) {
             write_worker_message(
                 &mut writer,
@@ -533,11 +575,17 @@ fn run() -> Result<(), String> {
             WorkerMessage::DescribeBuses => {
                 #[cfg(windows)]
                 let response = if let Some(plugin) = vst2_plugins.get_mut(selected_instance) {
-                    match plugin.describe_buses() {
-                        Ok(buses) => WorkerMessage::Buses(buses),
-                        Err(_) => WorkerMessage::Failure {
-                            code: "unsupportedVst2BusLayout".into(),
-                        },
+                    if plugin.is_shell() {
+                        WorkerMessage::Failure {
+                            code: "shellSidechainUnavailable".into(),
+                        }
+                    } else {
+                        match plugin.describe_buses() {
+                            Ok(buses) => WorkerMessage::Buses(buses),
+                            Err(_) => WorkerMessage::Failure {
+                                code: "unsupportedVst2BusLayout".into(),
+                            },
+                        }
                     }
                 } else {
                     WorkerMessage::Failure {
@@ -550,6 +598,26 @@ fn run() -> Result<(), String> {
                 };
                 write_worker_message(&mut writer, &response)
                     .map_err(|error| format!("bus description write failed: {error:?}"))?;
+            }
+            WorkerMessage::DescribeShell => {
+                let response = WorkerMessage::ShellPlugins(Vec::new());
+                #[cfg(windows)]
+                let response = if let Some(plugin) = vst2_plugins.get_mut(selected_instance) {
+                    if plugin.is_shell() {
+                        match plugin.shell_sub_plugins() {
+                            Ok(plugins) => WorkerMessage::ShellPlugins(plugins),
+                            Err(_) => WorkerMessage::Failure {
+                                code: "vst2ShellEnumerationFailed".into(),
+                            },
+                        }
+                    } else {
+                        response
+                    }
+                } else {
+                    response
+                };
+                write_worker_message(&mut writer, &response)
+                    .map_err(|error| format!("shell inventory write failed: {error:?}"))?;
             }
             WorkerMessage::DescribeParameters => {
                 let fixture_descriptors = {
@@ -617,15 +685,40 @@ fn run() -> Result<(), String> {
                     .map_err(|error| format!("program selection write failed: {error:?}"))?;
             }
             WorkerMessage::ApplyPreset { bytes } => {
+                // A preset the plugin refuses (bad file, another plugin's
+                // preset, a value it declines) is answered and the worker
+                // keeps processing: apply_preset already put the previous
+                // program and state back. Only a failed rollback, which leaves
+                // the plugin's settings unknown, stops the worker.
                 #[cfg(windows)]
-                if let Some(plugin) = vst2_plugins.get_mut(selected_instance) {
-                    let preset = audiorouter_plugin_host::vst2_preset::parse(&bytes)
-                        .map_err(|error| format!("VST2 preset rejected: {error}"))?;
-                    plugin
-                        .apply_preset(&preset)
-                        .map_err(|error| format!("VST2 preset apply failed: {error:?}"))?;
-                }
-                write_worker_message(&mut writer, &WorkerMessage::PresetApplied)
+                let response = if let Some(plugin) = vst2_plugins.get_mut(selected_instance) {
+                    use audiorouter_plugin_host::vst2::Vst2LibraryError;
+                    match audiorouter_plugin_host::vst2_preset::parse(&bytes) {
+                        Err(error) => WorkerMessage::Failure {
+                            code: format!("presetRejected: {error}"),
+                        },
+                        Ok(preset) => match plugin.apply_preset(&preset) {
+                            Ok(()) => WorkerMessage::PresetApplied,
+                            Err(Vst2LibraryError::PresetRollbackFailed) => {
+                                return Err("VST2 preset failed and its rollback failed".into())
+                            }
+                            Err(Vst2LibraryError::PresetForAnotherPlugin) => {
+                                WorkerMessage::Failure {
+                                    code: "presetRejected: the preset belongs to another plugin"
+                                        .into(),
+                                }
+                            }
+                            Err(error) => WorkerMessage::Failure {
+                                code: format!("presetRejected: {error:?}"),
+                            },
+                        },
+                    }
+                } else {
+                    WorkerMessage::PresetApplied
+                };
+                #[cfg(not(windows))]
+                let response = WorkerMessage::PresetApplied;
+                write_worker_message(&mut writer, &response)
                     .map_err(|error| format!("preset applied write failed: {error:?}"))?;
             }
             WorkerMessage::DescribeEditor => {
@@ -891,6 +984,7 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
     let mut input_path = None;
     let mut output_path = None;
     let mut plugin_path = None;
+    let mut shell_id = None;
     let mut input_buses = None;
     let mut output_buses = None;
     let mut instrument = false;
@@ -930,6 +1024,15 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
             "--input-buses" => input_buses = arguments.next(),
             "--output-buses" => output_buses = arguments.next(),
             "--instrument" => instrument = true,
+            "--vst2-shell-id" => {
+                let value = arguments.next().ok_or("--vst2-shell-id requires a value")?;
+                shell_id = Some(
+                    u32::from_str_radix(&value, 16)
+                        .ok()
+                        .filter(|id| *id != 0 && value.len() == 8)
+                        .ok_or("--vst2-shell-id requires eight hex digits and a nonzero ID")?,
+                );
+            }
             "--fixture-mode" => {
                 #[cfg(feature = "test-fixtures")]
                 {
@@ -971,8 +1074,8 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
     }
     let multi_bus_layout = match (input_buses, output_buses) {
         (Some(input), Some(output)) => {
-            if plugin_path.is_some() || input_path.is_some() || output_path.is_some() {
-                return Err("multi-bus mode cannot use plugin or shared paths".into());
+            if instrument || input_path.is_some() || output_path.is_some() {
+                return Err("multi-bus mode requires an effect and cannot use shared paths".into());
             }
             let parse_buses = |value: String| -> Result<Vec<u16>, String> {
                 let buses = value
@@ -995,6 +1098,9 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
         (None, None) => None,
         _ => return Err("--input-buses and --output-buses must be supplied together".into()),
     };
+    if shell_id.is_some() && (plugin_path.is_none() || multi_bus_layout.is_some() || instrument) {
+        return Err("VST2 shell selection requires a single-stream effect path".into());
+    }
     match (input_path, output_path) {
         (Some(input), Some(output)) => Ok((
             hash,
@@ -1005,6 +1111,7 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
             plugin_path,
             multi_bus_layout,
             instrument,
+            shell_id,
         )),
         (None, None) => Ok((
             hash,
@@ -1015,6 +1122,7 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
             plugin_path,
             multi_bus_layout,
             instrument,
+            shell_id,
         )),
         _ => Err("--input-path and --output-path must be supplied together".into()),
     }
@@ -1028,6 +1136,9 @@ fn process_vst2_frame(
     midi: &[audiorouter_plugin_host::MidiEvent],
     sample_rate_hz: u32,
 ) -> Result<(), String> {
+    if plugin.is_shell() {
+        return Err("select a VST2 shell sub-plugin before processing".into());
+    }
     let channels = usize::from(frame.channels);
     let frames = frame.samples.len() / channels;
     if !channel_layouts_are_mappable(channels, plugin.output_channels()) {
@@ -1039,6 +1150,81 @@ fn process_vst2_frame(
     let mut input_channels = vec![vec![0.0_f32; frames]; plugin.input_channels()];
     let mut output_channels = vec![vec![0.0_f32; frames]; plugin.output_channels()];
     spread_graph_to_plugin_inputs(&frame.samples, channels, &mut input_channels);
+    process_vst2_planar(
+        plugin,
+        &input_channels,
+        &mut output_channels,
+        parameters,
+        midi,
+        sample_rate_hz,
+    )?;
+    fold_plugin_outputs_to_graph(&output_channels, channels, &mut frame.samples);
+    Ok(())
+}
+
+#[cfg(windows)]
+fn process_vst2_buses(
+    plugin: &mut Vst2Library,
+    layout: &WorkerAudioBusLayout,
+    frames: &[audiorouter_plugin_host::WorkerFrame],
+    parameters: &[audiorouter_plugin_host::ParameterEvent],
+    sample_rate_hz: u32,
+) -> Result<WorkerMessage, String> {
+    plugin.apply_io_change();
+    let buses = plugin
+        .describe_buses()
+        .map_err(|error| format!("{error:?}"))?;
+    if buses.processing_layout().ok().as_ref() != Some(layout)
+        || layout.input_buses().len() != 2
+        || layout.output_buses().len() != 1
+        || usize::from(buses.inputs[1].native_index) != usize::from(layout.input_buses()[0])
+    {
+        return Err("VST2 labelled sidechain layout does not match the bound buses".into());
+    }
+    let frame_count = frames[0].samples.len() / usize::from(frames[0].channels);
+    let mut inputs = Vec::new();
+    for frame in frames {
+        let width = usize::from(frame.channels);
+        inputs.extend((0..width).map(|channel| {
+            frame
+                .samples
+                .iter()
+                .skip(channel)
+                .step_by(width)
+                .copied()
+                .collect()
+        }));
+    }
+    let width = usize::from(layout.output_buses()[0]);
+    let mut outputs = vec![vec![0.0; frame_count]; width];
+    process_vst2_planar(
+        plugin,
+        &inputs,
+        &mut outputs,
+        parameters,
+        &[],
+        sample_rate_hz,
+    )?;
+    let mut output = frames[0].clone();
+    output.channels = layout.output_buses()[0];
+    output.samples.resize(frame_count * width, 0.0);
+    fold_plugin_outputs_to_graph(&outputs, width, &mut output.samples);
+    Ok(WorkerMessage::ProcessedBuses {
+        layout: layout.clone(),
+        frames: vec![output],
+    })
+}
+
+#[cfg(windows)]
+fn process_vst2_planar(
+    plugin: &mut Vst2Library,
+    input_channels: &[Vec<f32>],
+    output_channels: &mut [Vec<f32>],
+    parameters: &[audiorouter_plugin_host::ParameterEvent],
+    midi: &[audiorouter_plugin_host::MidiEvent],
+    sample_rate_hz: u32,
+) -> Result<(), String> {
+    let frames = output_channels[0].len();
     // A plugin that reported an I/O change is suspended and resumed first.
     plugin.apply_io_change();
     plugin
@@ -1120,7 +1306,6 @@ fn process_vst2_frame(
     {
         return Err("plugin produced a non-finite sample".into());
     }
-    fold_plugin_outputs_to_graph(&output_channels, channels, &mut frame.samples);
     Ok(())
 }
 

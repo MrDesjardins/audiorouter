@@ -49,7 +49,12 @@ impl SidechainRuntimeBridge {
         depth: usize,
         parameters: Vec<ParameterEvent>,
     ) -> Result<Arc<Self>, WorkerLoopError> {
-        if worker.instrument || worker.identity.format != crate::PluginFormat::Vst3 {
+        if worker.instrument
+            || !matches!(
+                worker.identity.format,
+                crate::PluginFormat::Vst2 | crate::PluginFormat::Vst3
+            )
+        {
             return Err(WorkerLoopError::InvalidLayout);
         }
         let layout = worker

@@ -6,7 +6,138 @@ P2/P3 conformance and P6 editor completion, then the P9 release gate. The
 review fixes already on `feature/vst-plugin-experience` are the starting point;
 they are not repeated here.
 
+## Reconciled gap list (VS-01, 2026-11-18)
+
+This table supersedes the older "still open" lists further down. "Exercised"
+names a real-worker or dispatcher test; tests marked (N) run in the
+reproducible runner `tools/vst-qualification/run.ps1` and its nightly
+workflow (see [VST qualification runner](../../operations/vst-qualification.md)).
+The runner passed locally from an empty folder on 2026-11-18 (48 of 48: 47 tests and the census); it has not run
+on a hosted runner yet (the branch is not pushed).
+
+| Item | Implemented | Exercised | Missing locally | Blocked on |
+| --- | --- | --- | --- | --- |
+| VSTC-01 sidechain domain | port add/remove as graph transactions, saved sessions | `add_sidechain_port_adds_the_real_again_auxiliary_input_once_and_undoes` (N), `discovered_sidechain_port_plans_commit_replay_and_undo_atomically` (N), `a_sidechain_input_is_only_connected_by_name_and_never_summed` | none | — |
+| VSTC-02 bus discovery and multi-bus bridge | VST3 aux buses; VST2 explicitly labelled key pins | `vst3_bus_discovery` (3, N), `vst2_bus_discovery` (3, N), multi-bus and async bus worker tests (N) | none | — |
+| VSTC-03 engine sidechain | separate key branch, fail-closed, no allocation | `sidechain.rs` and `connected_mixers.rs` unit tests (sources, processed source, Mixer, connected Mixers, enabled/bypass flags), `sidechain_handoff_never_allocates_...`; real routes `backend_plugin_stage_path_prepares_and_compiles_a_verified_sidechain_route` (VST3, N) and `backend_compiles_the_verified_vst2_labelled_key_route` (VST2, N) | none | real-audio ducking by ear (owner) |
+| VSTC-04 control/API/MCP/UI | dispatcher, default MCP, Properties, replace/keep dialog, guides | 2026-11-15 records: MCP reachability, headed three-theme browser tests, guide coverage | none | — |
+| VSTC-05/07 programs and presets | VST2 programs, `.fxp`/`.fxb` import | worker and dispatcher tests (N); **fixed 2026-11-18:** a refused preset no longer stops the worker | a vendor-made `.fxp` file (only fixture chunks and synthetic presets) | — |
+| VSTC-06 shell plugins | exact sub-ID binding, names, saved routes | `real_worker_keeps_exact_shell_sub_id_and_refuses_unknown_selection` (N), `shell_scan_and_saved_route_bind_the_exact_sub_id` (N) | a real third-party shell that enumerates (the DirectX wrappers on this PC enumerate none) | — |
+| VSTC-08 VST3 units/programs | read-only units and programs, safe context-menu stub | `vst3_programs` UTF16Name and mda (N), `plugins_programs_dispatches_real_vst3_unit_hierarchy` (N) | none | — |
+| VSTC-09 multi-class, sample size | class selection, 64-bit-only refusal | `vst3_multi_class` (N), `vst3_sample_format` (N), `a_missing_requested_class_never_substitutes_another_effect` (N); validator on AGain and mda (N, supplemental) | none | — |
+| VSTC-10 editors | VST3 follow-parent resize with constraints, focus/DPI forwarding in the shell window, VST2 editor on its loader thread | `native_vst3_editor_survives_repeated_open_resize_and_close` (new, N: AGain fixed, DPF ProM resizable; also passed on Surge XT Effects), visible VST2/VST3 editor runs 2026-11-18 | none | focus, 100/150/200 % DPI and monitor moves by eye (owner) |
+| VSTC-11 release gate | census, compatibility page, runner, release manifest tooling | census 2026-11-18 (180/184 effects, 9/12 instruments); runner report | none (app-only candidate and binary hashes: [evidence](evidence/2026-11-18-vst-release-candidate.md)) | hosted CI run and annotations, signed installer, live-ear checks (owner) |
+
+An earlier 2026-11-18 handoff listed "VST2 sidechain lifecycle" as remaining;
+that was wrong. `start_sidechain_bridge` already starts bound VST2 workers for
+explicitly labelled key pins, and the VST2 route test above passes.
+
 ## Objective
+
+VSTC-06 next slice: pass the selected shell ID to the worker and verify the
+returned AEffect identity before handshake. Cover valid and unknown fixture
+IDs before extending inventory and persistence. Rollback reverts the shell
+argument and its fixture coverage together.
+
+Windows shell results: explicitly probing one VST2 binary with
+`plugins.scan` + `shellPath` returns the bounded names and IDs, for example
+Shell Drive / `53484432`. The UI uses the name for the choice and the ID
+for the saved node. The real worker distinguishes all three fixture IDs
+by their output and refuses an unknown ID or processing the container.
+`shell_scan_and_saved_route_bind_the_exact_sub_id` passed after reopening
+SQLite, capturing through `plugins.saveState`, restoring the original
+sub-ID and refusing its state on another sub-ID. The scoped state record
+uses a separate plugin ID field and retains the actual binary SHA-256.
+Migration uses the same identity lookup; cleanup and bundle staging
+operate on state IDs and preserve the scoped plugin ID.
+
+VSTC-10 next slice: reuse the existing VST3 message-pumping harness
+with a hidden parent. Keep the visible scenario opt-in and use only
+generated blocks. The harness change can be reverted independently.
+
+VSTC-04 next slice: extend the existing reversible add/remove dispatch
+methods for verified non-shell VST2 pins, then qualify the fixture through
+dispatcher and MCP. Keep the same authorization and graph transaction.
+
+Windows VSTC-04 results: exact-name dispatcher add and compiled route pass
+using the bus fixture. The default MCP fixture test passes Observer denial
+and Editor add/remove. Properties tests pass 15 cases, and headless Edge
+passes three VST2 cases with screenshots in
+`target/vst-qualification/browser`. The browser harness simulates the
+backend; the dispatcher/MCP tests load the real worker. Both engine
+combination suites passed (6 tests each). The browser runner emitted its
+existing NO_COLOR/FORCE_COLOR warning. A refreshed recording remains open.
+
+VSTC-06 correction: the repository implements shell enumeration and
+selection in `Vst2Library` only. Search for `load_shell_sub_plugin_as`
+finds direct loader tests and its definition but no production worker
+caller. Next wire selected sub-ID to the loader thread and reject a shell
+container as a processor before extending selection surfaces. Revert that
+worker change independently of the VST2 sidechain work if necessary.
+
+VSTC-02 next slice: make the existing four-pin fixture apply key-dependent
+gain to main only, preserving its labelled versus unlabelled discovery switch.
+Qualify the fixture first, then connect production VST2 worker processing and
+exact pin binding. Revert the fixture independently if needed. Leave VST2
+playback gated until the worker and backend tests pass.
+
+VSTC-02/03 Windows result: the repository bus fixture and debug VST2 worker
+passed the opt-in `labeled_pins_are_discovered_but_unlabeled_surround_is_refused`
+and `backend_compiles_the_verified_vst2_labelled_key_route` tests. The worker
+and production compiled route both produced 0.5 with no key, 0.125 with
+0.75 key, and silence with key only. Worker discovery refused the same
+four pins after their labels changed to surround. The control test uses
+`AUDIOROUTER_PLUGIN_WORKER_PATH`, while plugin-host tests use
+`AUDIOROUTER_TEST_VST2_WORKER`; both use
+`AUDIOROUTER_TEST_VST2_BUS_FIXTURE`. Port creation through dispatcher,
+MCP and Properties remains a separate integration step. No endpoints or
+editor windows opened.
+
+Next VSTC-02/03 validation slice: dispatch Stop against the registered worker,
+apply a non-default gain only to that worker, and compare AGain's main-only,
+key-only and combined transfer before and after restoration. AGain adds the
+key to the main by design. Use zero key as the no-leakage baseline.
+
+2026-11-18 (VSTC-02/03, PLUG-04): automatic Stop-path capture enumerated
+only single-stream bridges. It now includes live sidechain bridges. The
+opt-in AGain test uses disposable SQLite storage, the production stage
+preparer and native route compiler, automatic capture, and a new worker
+prepared from the stored mapping. Finite nonzero output passed before and
+after restore. Key isolation and restored gain equivalence remain open.
+Rollback: revert the capture enumeration and test together.
+
+Follow-up Windows run: `ControlPlane::dispatch` invokes `sessions.stop`.
+The test sets worker-only gain 0.25, verifies the stored state mapping,
+then measures restored transfer at 0.025 (main only), 0.05 (key only), and
+0.075 (both). AGain mixes its auxiliary bus by design. Temporarily
+enumerating only standard bridges failed with zero stored mappings.
+Restoring the fix passed the real-worker test. See the delegation brief
+for command and hashes.
+
+Current VSTC reconciliation: 01 has persisted topology and transaction
+coverage. 02/03 have VST3 graph and worker evidence above, with VST2
+labelled pins still discoverable only. 04 already has add/remove API,
+default MCP and three-theme Properties evidence from November 15.
+05–09 are implemented at the branch base, as corroborated by the
+November 16 audit commits `742a5f10f` and `0c17783b3`. The latter
+qualifies fixture shell enumeration, leaving exact sub-ID execution,
+saved identity, real preset persistence and remaining opt-in conformance
+runs to qualify. 10 has editor host support and needs pumped-parent
+processing/resize/recovery qualification and attended DPI. 11 needs
+current corpus and artifact evidence, with hosted CI, hardware, signing
+and owner checks still separate. Next slice: rerun shell fixture and
+inspect VST2 multi-bus protocol/processing before changing support.
+
+Windows follow-up: control library 442 passed / 22 ignored, both source and
+tool combination suites passed, and strict control Clippy passed. The VST2
+fixture originally enumerated three IDs but always returned the same effect.
+It now implements `audioMasterCurrentId`. The opt-in
+`a_shell_fixture_lists_three_named_sub_plugins` test passed opening all three
+exact IDs and rejecting an unknown one, with
+`AUDIOROUTER_TEST_VST2_SHELL_FIXTURE` set to
+`target/vst-shell/debug/ar_test_instrument.dll` built from
+`tools/vst2-test-instrument` with `--features shell-fixture`. This is
+direct loader evidence. Worker/API saved identity remains open.
 
 Backend assembly checkpoint (2026-11-14, VSTC-02/03, PLUG-01/03/05):
 `start_plugin_bridges` now returns typed standard/sidechain bridge handles.
@@ -1032,3 +1163,45 @@ an empty root program list. Passed with `AUDIOROUTER_VST3_WORKER_PATH` pointing
 to the freshly built C++ worker and `AUDIOROUTER_TEST_VST3_EFFECT` pointing to
 the SDK fixture. This exercises API resolution/serialization without opening
 an audio endpoint; it is not live-ear or hardware qualification.
+
+VST2 shell supervisor review follow-up (Windows, 2026-11-18): the scan output carries bounded `shellEffects` ({id, name}) and the Properties list shows "Add <name>" (hex ID only when no name exists); the hex sub-ID stays the node's `classId` identity. `shell_scan_and_saved_route_bind_the_exact_sub_id` now saves through SQLite, reopens the database, reloads the session, prepares and publishes the stage, applies FXP/FXB presets, captures state and proves it is refused on another sub-ID and an unknown sub-ID (passed 2026-11-18 with the shell fixture and rebuilt worker). `plugin_state_identity` (`<file hash>:<SUB-ID>`, used at capture, load and migration call sites in `plugins.rs`; the file hash is the SHA-256 of the binary, the combined key is not a hash) is consistent across all three call sites. Checks: cargo fmt, Clippy `-D warnings` (control, plugin-host), UI lint, PluginNodeInspector tests (15) pass; `cargo fmt` and UI format had drifted and were reapplied. Not run: full workspace/UI suites after this slice, state isolation across two *different saved* sub-IDs in one session (only cross-refusal is proven).
+
+VSTC-10 editor runs on the owner-cleared screen (Windows, 2026-11-18, source `0ed1fd3e9`): with `AUDIOROUTER_VST3_EDITOR_VISIBLE=1`, `native_vst3_editor_opens_in_a_pumping_parent` passed against SDK AGain (`target/vst-qualification/audiorouter-vst3-worker.exe`). Against the free x64 VST2 TDR Nova (`C:/Program Files/Steinberg/VSTPlugins/TDR Nova.dll`) these passed: `vst2_editor_shows_the_processing_instance_without_blocking_its_caller`, `supervised_vst2_worker_keeps_processing_while_an_editor_hangs`, `runtime_bridge_saves_state_and_opens_the_editor_in_a_pumping_parent`, `supervised_vst2_worker_survives_its_editor_window_being_built`. Each run lasted 0.3-3.3 s, so this is open/close and hang-recovery evidence, not repeated resize cycles. Not covered: keyboard focus reaching the editor, 100/150/200 percent DPI and monitor moves (attended, by eye), and the shell's own editor window. VSTC-10 stays open for those.
+
+VSTC-11 census re-run (Windows, 2026-11-18, source `47ec4cfef`, debug workers rebuilt from this tree: x64/x86 VST2 via cargo, x64/x86 VST3 via `build.ps1`): corpus `%TEMP%\vstcorpus`, `C:\Program Files\VSTPlugins`, `Common Files\VST3`, `Steinberg\VSTPlugins`; Blue Cat skipped (`AUDIOROUTER_CENSUS_SKIP="BC ,Blue Cat,BlueCat"`), 2 left out. Result (`docs/operations/plugin-census.md`, regenerated): **173 of 185 effects** passed every step (was 172 of 190 on 2026-11-14), **9 of 17 instruments** played a note (the old run counted only 4 instruments; Kars and Nekobi are now classified as instruments instead of "refused" effects). The denominators differ, so the two runs are not a like-for-like trend. Known issues in this run: (1) the VST2 shell DLLs (dxshell, dxishell, mfxshell, 32/64-bit) fail with the intended "select a VST2 shell sub-plugin" refusal because the census harness does not choose a sub-ID, so they say nothing about shell plugin quality; (2) Kars and Nekobi VST3 32-bit load but are silent with a note held while the 64-bit builds and the VST2 builds play, not investigated; (3) TDR Nova.vst3 is tried as an instrument and refused as an effect (census classification, not a worker fault); (4) PolyMAX and other licensed plugins unchanged. The raw JSON holds user paths and is kept out of the repository (`target/census-2026-11-18.json`). Debug workers, not release artifacts; no audio device or editor opened.
+
+VSTC-11 census failures investigated (Windows, 2026-11-18, source `79344a93f` plus the edits below). Result after the fixes: **180 of 184 effects** pass every step and **9 of 12 instruments** play a note (the denominators shrank because six VST2 shell DLLs are now reported as "not testable" instead of failed). Two defects were found and fixed, each with a regression that fails without the fix:
+1. **DPF VST3 plugins with no parameters or states (ProM, ZamAutoSat; 32- and 64-bit) could not restore their own state.** DPF's `getState` writes a single NUL byte when it has nothing to save, and its `setState` and `setComponentState` then refuse that byte (they wait for a 0xFE terminator that was never written), so the worker answered `StateUnsupported`. `tools/m06-vst3-worker/main.cpp` now accepts exactly that one-byte value for the component and the controller. Regression: `vst3_stateless_state.rs` (`AUDIOROUTER_TEST_VST3_NATIVE_WORKER`, `AUDIOROUTER_TEST_VST3_STATELESS`) fails with `StateUnsupported` on the worker built from the previous source and passes with the fix. Workers rebuilt for x64 and x86; both `--self-test-host` runs pass.
+2. **A JUCE VST3 effect (TDR Nova.vst3) was scanned as an instrument**, because JUCE embeds the whole category table (`Fx|Reverb` ... `Instrument|Piano`) in the module and the scan took the `Instrument|` strings as a declaration. Regression: `an_embedded_category_table_does_not_make_an_effect_an_instrument` (fails before, passes after). A real instrument that carries such a table is still learned from its first refusal as an effect; none in this corpus does (Surge XT, RipplerX, Dexed, PolyMAX, Kars, Nekobi were checked).
+Census harness changes (`plugin_census_tests.rs`, `plugin-census-report.mjs`): a VST2 shell DLL is tested through its first sub-plugin; a shell with no sub-plugin on this PC (the DirectX wrappers dxshell/dxishell/mfxshell, 32- and 64-bit) is reported as not testable; a VST3 effect with a declared sidechain input is not failed for silence. Bus discovery is asked only of VST3 workers, because a failed bus query ends a VST2 worker (an early run that asked VST2 too killed 14 workers; found and removed before the final run).
+Not fixable in AudioRouter, with evidence:
+- **reacontrolmidi-standalone (VST2, 32/64): crashes (0xC0000005) inside the plugin when it is given its own saved chunk,** even in a fresh instance and in-process outside the worker. The stack ends in a null function call inside the plugin; before it, the plugin calls the host with opcode 0xDEADBEEF (index 0xDEADF00D), which is REAPER's private host-API probe. The plugin appears to need REAPER's API; the worker contains the crash. Left as a known issue.
+- **AmplitudeImposer VST2 (32/64) is silent** with only the main input fed. Its VST3 build declares a sidechain input and is reported as keyed; the VST2 build declares no labelled pin, so the census cannot tell. Not a failure of the host; a key-fed check would need the sidechain bridge.
+- **Kars and Nekobi VST3 32-bit are silent with a held note; 64-bit and both VST2 builds play.** Events do reach the plugin (the worker logged one event in the process call). A temporary experiment that shifted the event union to the 4-byte layout a gcc-i686 build would use did not help. As a control, an MSVC-built 32-bit VST3 instrument (SDK mda JX10, built with `-A Win32`, validator 1598 passed) plays through the same 32-bit worker with an unmodified event path (peak 0.72, silent before the note), so the 32-bit event path is correct and the silence is on the DPF 32-bit VST3 build. The exact cause inside the plugin is not found. `vst3_instrument.rs` now takes `AUDIOROUTER_TEST_VST3_INSTRUMENT_CLASS` to play one class of a multi-class module.
+- **PolyMAX** needs the vendor's licence sign-in (owner gate).
+Debug and experiment edits were removed before the commit; the final workers contain only the sentinel fix.
+
+VST3 output parameter list (Windows, 2026-11-18, source `2726c89fd` plus this change): a cdb run on Kars VST3 32-bit showed DPF asserting `outparamsptr != nullptr` (DistrhoPluginVST3.cpp) on every block, because the worker passed no `outputParameterChanges`. VST3 hosts are expected to pass that list, so `tools/m06-vst3-worker/main.cpp` now gives every process call (instrument, single-bus and multi-bus effect) an output list. The list is cleared after each call. The worker does not yet forward the changes it collects. This is a conformance fix only: it did not change the Kars/Nekobi 32-bit silence, which stays a known issue in the DPF 32-bit VST3 build (see above; the MSVC 32-bit mda JX10 control still plays, peak 0.72). Checks with release workers rebuilt into `target/vst-qualification` (x64 and x86 `build.ps1 -Release`):
+- `--self-test-host` passes on both;
+- `vst3_instrument` passes on Kars 64-bit (peak 0.90) and on mda JX10 x86;
+- `vst3_stateless_state` passes on ProM;
+- the full census re-run (Blue Cat skipped) gives the same 180 of 184 effects and 9 of 12 instruments, and the regenerated `plugin-census.md` is unchanged.
+No audio device or editor was opened.
+
+VS-03/05/06 slice (Windows, 2026-11-18): reproducible runner, editor lifecycle and a preset defect.
+- **Runner.** `tools/vst-qualification/run.ps1` builds the four workers, the pinned SDK samples (AGain, mda x64/x86, UTF16Name), the repository fixtures and a SHA-256-pinned DPF-Plugins v1.7 download, then runs each opt-in real-worker test by exact name (a test must report exactly one pass) plus a census, writing `report.json` with input hashes. `.github/workflows/vst-nightly.yml` runs it nightly and on demand, never on pull requests; `tools/quality/policy.mjs` classifies both. `tests/acceptance/m06-vst2-state-fixture.ps1` gained `-BuildOnly`. The first clean run found three runner mistakes (two `deterministic_audio` tests need `test-fixtures`; one stale test) and the defect below.
+- **Defect fixed: a refused VST2 preset stopped the worker.** Any `plugins.applyPreset` error (another plugin's preset, a damaged file) ended the worker process, so a wrong `.fxp` silenced the route until Stop/Play. The library already rolled the plugin back. The worker now answers `presetRejected: ...` and keeps running; the supervised client reports it as `UnsupportedFeature` without counting a failure. Only a failed rollback (`PresetRollbackFailed`) still stops the worker. Regression: `the_worker_protocol_lists_and_selects_real_programs` (now refused-then-still-processing for another plugin's preset and a damaged file, then a plugin-neutral preset applies) fails on the worker built before the fix and passes after.
+- **Editor lifecycle (VSTC-10).** New `native_vst3_editor_survives_repeated_open_resize_and_close`: hidden parent, three open/grow/shrink/close cycles with audio flowing, reopen in the same worker, state saved after. AGain stays 350x120 (fixed, never stretched); Surge XT Effects follows 600x490 -> 736x601 -> 450x368; DPF ProM follows and keeps its square aspect.
+- **Release manifest.** `tools/release/prepare-artifacts.ps1 -AppOnly` already writes `release-manifest.json` with the source revision and the SHA-256 of the shell, CLI and four workers; no new manifest tool is needed.
+Checks: workspace Clippy `-D warnings`, both format checks, plugin-host suites with `test-fixtures` (128 lib, 42 worker_process, all others), `node --test tools/quality/policy.test.mjs` (67), docs validation. Not run: the workflow on a hosted runner.
+
+VS-06 release candidate (Windows, 2026-11-18, source `8232e5ed3`): `prepare-artifacts.ps1 -AppOnly` built the unsigned 0.0.30 installer from a clean tree; installer, shell, CLI and four worker hashes are in [the evidence file](evidence/2026-11-18-vst-release-candidate.md). `fresh_install_shell` passed on the built shell (65 ms to `status.get`, raw caller denied device administration). Remaining gates are owner or hosted only: editor focus/DPI by eye, live-ear and sidechain ducking, the first hosted run of `vst-nightly.yml` with its annotations read, a signed installer, hardware MIDI and the PolyMAX sign-in. No push or PR without approval.
+
+Follow-up (Windows, 2026-11-18, source `d6c400c7b`): the runtime bridge reported a refused preset in the Debug form (`UnsupportedFeature("presetRejected: ...")`). It now says "the preset belongs to another plugin; the plugin keeps its previous settings". Regression: `shell_scan_and_saved_route_bind_the_exact_sub_id` applies another plugin's `.fxp` through `ControlPlane::dispatch`, checks the message and the unchanged state, then a good preset; it fails with the old worker and passes now. The MCP `apply_plugin_preset` and `add_plugin_sidechain_port` descriptions and `plugin-compatibility.md` (2026-11-18 census) were brought up to date. The release candidate was rebuilt from `d6c400c7b` (new hashes and a passing `fresh_install_shell`, 62 ms, in the evidence file; the `8232e5ed3` candidate is superseded). Checks: both format checks, workspace and shell Clippy, `cargo test -p audiorouter-cli` (in the first run `real_mcp_pipe_preserves_roles_and_live_revocation` failed: its `backend serve` process exited with code 2 before answering; the test discards stderr, so the cause is unknown. It then passed three times in a row. Watch for a recurrence and capture the backend's stderr if it does), contract drift, UI format. The owner and hosted gates are written as steps in [vst-owner-checks.md](vst-owner-checks.md). **Next action:** the owner runs those checks. GitHub runs and dispatches a workflow only from the default branch, so the first hosted `vst-nightly.yml` run needs the file on `main` (see check 6); after approval, push, get it there, run it, read its annotations, and ask for PR approval.
+
+First hosted run of `vst-nightly.yml` (GitHub, 2026-11-19, run 44457349039, source `9db4cf361`, through a temporary push trigger on this branch because `main` only accepts pull requests): 45 of 47 tests passed on a clean runner, plus the SDK build, self-tests and validator. Two failures:
+- **Defect fixed: one late block ended a sidechain plugin.** `each_again_class_keeps_its_own_bus_identity` saw the bridge `Failed` with "the plugin worker output could not be published without waiting"; it also failed 3 of 8 times locally. A worker that starts late fills the input queue, the stage drops its pending quantum and stops draining, the worker's catch-up results fill the 4-slot output queue, and the next result was refused, which the bus loop treats as a worker failure. `RuntimeBusScheduler::try_submit_outputs` now reuses the oldest waiting result (always older than the one being published, since the single owner publishes in order) instead of refusing. Regression: `sidechain::tests::a_late_worker_start_cannot_block_the_next_result` fails with `OutputQueueFull` before and passes after; the real-worker test then passed 12 of 12, and 8 of 8 with six CPU-burning jobs. The test now prints the bridge's failure reason.
+- **DPF ProM editor on the hosted runner:** the worker exited with `0xC0150011` (activation context already deactivated) while processing just after the editor opened. Not reproduced on the desktop; AGain's editor passed on the runner. ProM's editor uses OpenGL and the runner has no GPU driver, so `run.ps1` reports that entry as `skipped` with a notice when `GITHUB_ACTIONS` is set. The editor stays covered locally and in the owner checks.
+The release candidate in the evidence file predates the scheduler fix and must be rebuilt before release. The temporary push trigger in `vst-nightly.yml` must be removed before the pull request.
+
+Second hosted run (GitHub, 2026-11-19, run 44477835024, source `2af88e925`): passed. 46 tests and the census passed, and the DPF ProM editor entry was skipped with its reason; the job's only annotation is that skip notice. The temporary push trigger is removed again, so the workflow runs nightly and on demand once it is on `main`.

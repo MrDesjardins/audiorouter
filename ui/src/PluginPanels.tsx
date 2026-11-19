@@ -31,7 +31,7 @@ export function PluginScanPanel({
     directoryRef.current = directory;
     inspectionPathRef.current = inspectionPath;
   }, [directory, inspectionPath]);
-  const scan = async () => {
+  const scan = async (shellPath?: string) => {
     if (!directory.trim()) {
       setMessage("Enter an absolute plugin directory.");
       return;
@@ -42,12 +42,18 @@ export function PluginScanPanel({
     setBusy(true);
     setMessage("Scanning selected directory...");
     try {
-      const next = await backend.scanPlugins(requestedDirectory);
+      const next = shellPath
+        ? await backend.scanPlugins(requestedDirectory, shellPath)
+        : await backend.scanPlugins(requestedDirectory);
       if (request === requestGeneration.current && directoryRef.current.trim() === requestedDirectory) {
         setResult(next);
         setInspection(null);
         setInspectionPath("");
-        setMessage("Plugin scan completed without loading plugin code.");
+        setMessage(
+          shellPath
+            ? "Checked the selected VST2 file for shell effects."
+            : "Plugin scan completed without loading plugin code.",
+        );
       }
     } catch (error) {
       if (request === requestGeneration.current) {
@@ -163,7 +169,7 @@ export function PluginScanPanel({
         <span className="badge">{result?.entries.length ?? 0}</span>
       </div>
       <p className="muted">
-        Choose a directory explicitly. Discovery inspects bounded metadata only; it does not load or execute plugins.
+        A directory scan reads file metadata. Checking a VST2 shell opens only the selected file in an isolated worker.
       </p>
       <label>
         Absolute plugin directory
@@ -209,17 +215,42 @@ export function PluginScanPanel({
                   >
                     Select for inspection
                   </button>
-                  {supported && (
+                  {entry.identity?.format === "vst2" && (
                     <button
                       type="button"
                       className="secondary"
-                      aria-label={`Add to route: ${entry.path}`}
-                      onClick={() => addToDraft(entry)}
-                      disabled={!backend.connected || !onAddPlaceholder}
+                      disabled={!backend.connected || busy}
+                      onClick={() => void scan(entry.path)}
                     >
-                      Add to route
+                      Find shell effects
                     </button>
                   )}
+                  {supported && entry.identity?.format === "vst2" && entry.identity.classIds.length > 0
+                    ? entry.identity.classIds.map((id) => (
+                        <button
+                          key={id}
+                          type="button"
+                          className="secondary"
+                          disabled={!backend.connected || !onAddPlaceholder}
+                          onClick={() => {
+                            if (entry.identity)
+                              addToDraft({ ...entry, identity: { ...entry.identity, classIds: [id] } });
+                          }}
+                        >
+                          Add {entry.identity?.shellEffects?.find((effect) => effect.id === id)?.name ?? id}
+                        </button>
+                      ))
+                    : supported && (
+                        <button
+                          type="button"
+                          className="secondary"
+                          aria-label={`Add to route: ${entry.path}`}
+                          onClick={() => addToDraft(entry)}
+                          disabled={!backend.connected || !onAddPlaceholder}
+                        >
+                          Add to route
+                        </button>
+                      )}
                 </li>
               );
             })
@@ -931,7 +962,7 @@ export function PluginNodeInspector({
           {programError ? <small role="alert">{programError}</small> : null}
         </section>
       ) : null}
-      {format === "vst3" ? (
+      {format === "vst3" || (isVst2 && (!node.parameters.classId || node.parameters.classId === "default")) ? (
         <section className="plugin-programs" aria-label="Sidechain input">
           <span className="eyebrow">Sidechain input</span>
           {hasSidechainPort || sidechain.added ? (
@@ -971,7 +1002,9 @@ export function PluginNodeInspector({
               </button>
               <div className="plugin-guard-stack">
                 <small {...shownWhen(sidechainBlockedReason === undefined)}>
-                  Works only for a VST3 plugin that declares an auxiliary input.
+                  {isVst2
+                    ? "Works when the effect explicitly labels its key input."
+                    : "Works when the effect declares an auxiliary input."}
                 </small>
                 <small {...shownWhen(sidechainBlockedReason !== undefined)}>
                   {sidechainBlockedReason ?? "Save or discard changes to this tool before adding a sidechain input."}
