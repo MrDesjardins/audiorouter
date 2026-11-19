@@ -256,7 +256,7 @@ export interface UiBackend {
   ): Promise<MethodResult["midi.sendEvents"]>;
   /** Retry a plugin silenced for passing a recording device's audio through unchanged. */
   resumePlugin?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.resume"]>;
-  /** Give a VST3 plugin node its declared auxiliary input as a named sidechain port. */
+  /** Give a plugin node its declared auxiliary (VST3) or key-labelled (VST2) input as a named sidechain port. */
   addPluginSidechainPort?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.addSidechainPort"]>;
   /** Remove a plugin node's sidechain port; refused while a connection uses it. */
   removePluginSidechainPort?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.removeSidechainPort"]>;

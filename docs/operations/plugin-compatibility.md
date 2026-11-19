@@ -4,27 +4,36 @@ For how to install, scan and add your own plugins (including UAD), see
 [Bring your own plugins](bring-your-own-plugins.md). This page records what
 was tested.
 
-## Current status (2026-11-14, version 0.0.29)
+## Current status (2026-11-18, version 0.0.30)
 
 The per-plugin results are in the generated [plugin census](plugin-census.md).
 It started each plugin in its real isolated worker (VST2 and VST3, 64-bit and
-32-bit), without a window or audio device: 172 of 190 effects passed every
-step, and 3 of 4 instruments played a held note. These are the plugins that
+32-bit), without a window or audio device: 180 of 184 effects passed every
+step, and 9 of 12 instruments played a held note. These are the plugins that
 did not pass, and why:
 
 | Plugin | What happens | Cause |
 | --- | --- | --- |
-| AmplitudeImposer (VST2, VST3, 32/64) | Silent output | The test tone has no second input to impose; not investigated further |
-| ProM (VST3) | State is saved but not restored | The plugin rejects the saved state; AudioRouter restores parameters instead where it can |
-| ZamAutoSat (VST3) | State is saved but not restored | Same |
-| ReaControlMIDI standalone (VST2) | The worker crashes when state is restored | A defect in the plugin: `effSetChunk` crashes in every host variant we tried. Do not save or restore it |
+| AmplitudeImposer (VST2, 32/64) | Silent output | It imposes the level of a second input on the first. Its VST3 build declares that input as a sidechain and is listed as ok; the VST2 build does not label its extra pins as a key, so AudioRouter treats them as ordinary inputs and the census feeds only the first |
+| ReaControlMIDI standalone (VST2, 32/64) | The worker crashes when state is restored | A defect in the plugin: `effSetChunk` crashes in every host variant we tried (it expects REAPER). Do not save or restore it |
+| DPF Kars and Nekobi (VST3, 32-bit) | Load, silent with a note held | The 32-bit VST3 builds in DPF-Plugins v1.7 produce no sound; their 64-bit VST3 and both VST2 builds play. Use one of those |
 | UADx PolyMAX (VST3) | Loads, silent with a note held | Needs UA Connect sign-in; owner-gated |
+
+ProM and ZamAutoSat (VST3), listed here before 2026-11-18 because their state
+was not restored, now pass: DPF plugins with nothing to save return an empty
+state, which AudioRouter now restores as such.
+
+A VST2 `.fxp` or `.fxb` preset made for another plugin, or a damaged one, is
+refused with a plain message, and the plugin keeps playing with its previous
+settings; the worker is not restarted.
 
 Plugins that declare themselves instruments are listed in the Instrument tool,
 not as effects. Instruments are found from `moduleinfo.json`, a UA manifest, or
-the plugin's category string; a VST2 instrument is only known once it has been
-loaded once. DPF instruments that declare the bare `Instrument` category are
-recognised since 2026-11-14 but the census has not been re-run since.
+the plugin's category string (including DPF's bare `Instrument`); a VST2
+instrument is only known once it has been loaded once.
+
+To reproduce these results and the VST test suite on another PC, see
+[VST qualification](vst-qualification.md).
 
 Not covered by the census: editors, sound quality, live routes, hardware MIDI
 input, the Steinberg validator, and plugins that need a licence. Blue Cat

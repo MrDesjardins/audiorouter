@@ -6171,7 +6171,15 @@ impl PluginRuntimeBridge {
                             }
                             BridgeRequest::ApplyPreset(bytes, reply) => {
                                 let result = if vst2 {
-                                    worker.apply_preset(&bytes, now).map_err(|error| format!("{error:?}"))
+                                    worker.apply_preset(&bytes, now).map_err(|error| match error {
+                                        // Shown to the user: the worker refused the
+                                        // preset and kept the previous settings.
+                                        WorkerProcessError::UnsupportedFeature(code) => format!(
+                                            "{}; the plugin keeps its previous settings",
+                                            code.strip_prefix("presetRejected: ").unwrap_or(&code)
+                                        ),
+                                        other => format!("{other:?}"),
+                                    })
                                 } else {
                                     Err("preset import is only available for VST2 plugins".into())
                                 };

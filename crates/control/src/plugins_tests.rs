@@ -544,6 +544,43 @@ fn shell_scan_and_saved_route_bind_the_exact_sub_id() {
         assert_ne!(actual, previous);
         previous = actual;
     }
+    // Regression (2026-11-18): a preset made for another plugin used to stop
+    // the worker and silence the route. It is refused in plain words, the
+    // plugin keeps its settings, and the same route takes the next preset.
+    let mut other = program(0.25);
+    other[16..20].copy_from_slice(b"XXXX"); // fxID of another plugin
+    let other_path = profile.join("other.fxp");
+    std::fs::write(&other_path, other).unwrap();
+    let refused = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(4)),
+        method: "plugins.applyPreset".into(),
+        params: Some(json!({"sessionId": reloaded.id, "nodeId": reloaded.nodes[0].name, "presetPath": other_path})),
+    });
+    let message = refused
+        .error
+        .expect("another plugin's preset is refused")
+        .message;
+    assert!(
+        message.contains("belongs to another plugin")
+            && message.contains("keeps its previous settings")
+            && !message.contains("UnsupportedFeature"),
+        "{message}"
+    );
+    let bridge = plane
+        .plugin_live_bridge(&reloaded.id, &reloaded.nodes[0].id)
+        .unwrap();
+    assert_eq!(bridge.save_state().unwrap().sha256, previous);
+    let gain = profile.join("gain.fxp");
+    let reply = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(5)),
+        method: "plugins.applyPreset".into(),
+        params: Some(
+            json!({"sessionId": reloaded.id, "nodeId": reloaded.nodes[0].name, "presetPath": gain}),
+        ),
+    });
+    assert!(reply.error.is_none(), "{:?}", reply.error);
     let capture = plane.dispatch(JsonRpcRequest {
         jsonrpc: "2.0".into(),
         id: Some(json!(2)),
