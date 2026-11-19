@@ -535,6 +535,7 @@ public:
         index = static_cast<int32>(queues_.size() - 1);
         return &queues_.back();
     }
+    void clear() { queues_.clear(); }
 
 private:
     std::vector<ParameterQueue> queues_;
@@ -1603,8 +1604,10 @@ public:
             data.outputs = &output_bus;
             data.inputParameterChanges = changes_.getParameterCount() > 0 ? &changes_ : nullptr;
             data.inputEvents = events_.getEventCount() > 0 ? &events_ : nullptr;
+            data.outputParameterChanges = &output_changes_;
             data.processContext = &context_;
             const auto result = processor_->process(data);
+            output_changes_.clear();
             events_.clear();
             if (result != kResultFalse) require_result("VST3 instrument process", result);
             advance_context(end - start);
@@ -1664,8 +1667,10 @@ private:
         data.inputs = &input_bus;
         data.outputs = &output_bus;
         data.inputParameterChanges = changes_.getParameterCount() > 0 ? &changes_ : nullptr;
+        data.outputParameterChanges = &output_changes_;
         data.processContext = &context_;
         const auto result = processor_->process(data);
+        output_changes_.clear();
         if (result != kResultFalse) require_result("VST3 process", result);
         advance_context(end - start);
         changes_ = ParameterChanges{};
@@ -1717,8 +1722,10 @@ private:
         data.inputs = input_buses.data();
         data.outputs = output_buses.data();
         data.inputParameterChanges = changes_.getParameterCount() > 0 ? &changes_ : nullptr;
+        data.outputParameterChanges = &output_changes_;
         data.processContext = &context_;
         const auto result = processor_->process(data);
+        output_changes_.clear();
         if (result != kResultFalse) require_result("VST3 multi-bus process", result);
         advance_context(end - start);
         changes_ = ParameterChanges{};
@@ -1749,6 +1756,10 @@ private:
     uint16_t plugin_input_channels_ = 0;
     uint16_t plugin_output_channels_ = 0;
     ParameterChanges changes_;
+    // VST3 hosts pass an output list every block for parameter changes the
+    // plugin makes while processing. The worker does not forward them yet, but
+    // DPF plugins assert on every block when the list is missing.
+    ParameterChanges output_changes_;
     std::vector<std::pair<Vst::ParamID, double>> pending_snapshot_;
     bool instrument_ = false;
     Vst::IMidiMapping* midi_mapping_ = nullptr;

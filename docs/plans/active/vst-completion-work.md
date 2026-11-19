@@ -1154,3 +1154,10 @@ Not fixable in AudioRouter, with evidence:
 - **Kars and Nekobi VST3 32-bit are silent with a held note; 64-bit and both VST2 builds play.** Events do reach the plugin (the worker logged one event in the process call). A temporary experiment that shifted the event union to the 4-byte layout a gcc-i686 build would use did not help. As a control, an MSVC-built 32-bit VST3 instrument (SDK mda JX10, built with `-A Win32`, validator 1598 passed) plays through the same 32-bit worker with an unmodified event path (peak 0.72, silent before the note), so the 32-bit event path is correct and the silence is on the DPF 32-bit VST3 build. The exact cause inside the plugin is not found. `vst3_instrument.rs` now takes `AUDIOROUTER_TEST_VST3_INSTRUMENT_CLASS` to play one class of a multi-class module.
 - **PolyMAX** needs the vendor's licence sign-in (owner gate).
 Debug and experiment edits were removed before the commit; the final workers contain only the sentinel fix.
+
+VST3 output parameter list (Windows, 2026-11-18, source `2726c89fd` plus this change): a cdb run on Kars VST3 32-bit showed DPF asserting `outparamsptr != nullptr` (DistrhoPluginVST3.cpp) on every block, because the worker passed no `outputParameterChanges`. VST3 hosts are expected to pass that list, so `tools/m06-vst3-worker/main.cpp` now gives every process call (instrument, single-bus and multi-bus effect) an output list. The list is cleared after each call. The worker does not yet forward the changes it collects. This is a conformance fix only: it did not change the Kars/Nekobi 32-bit silence, which stays a known issue in the DPF 32-bit VST3 build (see above; the MSVC 32-bit mda JX10 control still plays, peak 0.72). Checks with release workers rebuilt into `target/vst-qualification` (x64 and x86 `build.ps1 -Release`):
+- `--self-test-host` passes on both;
+- `vst3_instrument` passes on Kars 64-bit (peak 0.90) and on mda JX10 x86;
+- `vst3_stateless_state` passes on ProM;
+- the full census re-run (Blue Cat skipped) gives the same 180 of 184 effects and 9 of 12 instruments, and the regenerated `plugin-census.md` is unchanged.
+No audio device or editor was opened.
