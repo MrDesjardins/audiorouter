@@ -1,0 +1,35 @@
+{
+  "id": "qualification-recorder",
+  "name": "Installer recorder qualification",
+  "schemaVersion": 1,
+  "revision": 0,
+  "nodes": [
+    {
+      "id": "tone",
+      "kind": "testSignal",
+      "name": "Generated qualification tone",
+      "enabled": true,
+      "bypass": false,
+      "parameters": { "frequencyHz": 440, "levelDb": -18, "durationMs": 30000 },
+      "ports": [{ "name": "main", "direction": "output", "channels": 2 }]
+    },
+    {
+      "id": "recorder",
+      "kind": "recorder",
+      "name": "Qualification recorder",
+      "enabled": true,
+      "bypass": false,
+      "parameters": { "format": "wavPcm16" },
+      "ports": [{ "name": "main", "direction": "input", "channels": 2 }]
+    }
+  ],
+  "edges": [{
+    "id": "tone-to-recorder",
+    "sourceNode": "tone",
+    "sourcePort": "main",
+    "destinationNode": "recorder",
+    "destinationPort": "main",
+    "matrix": [1.0, 0.0, 0.0, 1.0],
+    "enabled": true
+  }]
+}
