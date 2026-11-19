@@ -100,18 +100,55 @@ installer or validate audio hardware. Restore the dedicated VM snapshot before
 repeating with the same account. Sign-in and snapshot preparation are currently
 separate steps.
 
+Use `-ProductionRecording` to run the installed desktop bridge against the
+disposable guest's generated tone and Recorder route. It verifies the
+finalized PCM WAV, frame count, signal content, and retained bytes after
+each lifecycle change. Use `-WebViewBaseline Present` or
+`-WebViewBaseline Absent` to require the expected runtime state before
+install and a registered runtime after setup. Run each on its own verified
+baseline. A successful silent exit cannot establish interactive behavior.
+
+For the offline bootstrap retry, use the unattended wrapper with
+`-WebViewBaseline Absent -ProductionRecording -OfflineBootstrapRetry`.
+The disposable guest must have exactly one enabled NAT adapter with its
+virtual cable connected. The runner verifies that VirtualBox disconnects
+that guest adapter, attempts setup, verifies that no runtime was registered,
+then reconnects the adapter and retries the same installer in the same guest.
+The retry requires a marker tied to the staged installer hash and a clean
+app directory and registry state. A partial install is preserved, and a
+leftover shell is probed in an isolated profile. A nonzero setup exit
+without a verified bootstrap diagnostic is recorded as unattributed. A
+successful retry after that exit provides recovery evidence while bootstrap
+attribution stays open (the wrapper then reports the run as failed on purpose;
+2026-11-19 result: setup exit 2, nothing left behind, retry passed). The retry
+waits until the guest resolves names, because the installer downloads the
+WebView2 bootstrapper. Do not block the Edge updater with a policy on the
+absent-runtime baseline: it also blocks that bootstrapper. Disable the
+`edgeupdate` services and update tasks instead. The runner records setup and
+reconnect failures separately in its JSON result.
+
 For repeat runs, `tools/vm/installer-lifecycle-unattended.ps1` accepts the same
 installer, version, hash, credential and output arguments, plus `-VmId`,
 `-SnapshotId` (both exact UUIDs), and `-RestoreDisposableSnapshot`. Prepare a
-private saved-state snapshot with the fresh standard user already signed in;
-the snapshot contains a live Windows session and must be protected accordingly.
+private offline snapshot (taken after a clean shutdown) containing the fresh
+standard, non-administrator user. Do not use a saved-memory snapshot: its guest
+control failed after restore, and a live snapshot of the 8 GB guest stalled the VM.
 The wrapper requires the VM to be powered off, verifies snapshot ownership and
-installer hashes, restores the snapshot, waits for that user, runs the lifecycle
-and requests graceful shutdown. It bounds the host-side runner as well as the
-guest commands and leaves a failed shutdown running for inspection. Restoring a
-snapshot discards the clone's current disk state; use only a dedicated test VM.
-One end-to-end run passed on the reference host, but a subsequent restore hung
-in VirtualBox guest control; see the active plan before relying on it as a gate.
+installer hashes, restores the snapshot, waits for guest control, signs that user
+in at the console with the password from the credential file, runs the lifecycle
+and requests graceful shutdown (allow up to five minutes). Each VBoxManage invocation has a host deadline.
+The wrapper and its guest-control runner each write a `steps.jsonl` with
+individual attempt IDs, start and end times, exit status, and timeout cleanup
+results. The wrapper records shutdown errors separately from the original
+failure and leaves a guest that fails graceful shutdown available for inspection.
+Run the Windows process regression without a VM using
+`powershell -NoProfile -ExecutionPolicy Bypass -File tests/acceptance/m08-lifecycle-process.ps1`.
+Restoring a snapshot discards the clone's current disk state. Use only a
+dedicated test VM. On the final harness revision an injected guest-control
+timeout reached its marker and recovered, then three consecutive production-recording
+runs passed; the combined 0.0.30 candidate passed twice. A Test Signal is silent
+until played, so the recorder case plays it before recording.
+See the [VM attempt record](../plans/active/evidence/2026-11-18-installer-process.md).
 
 ## Current qualification snapshot
 
