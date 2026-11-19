@@ -127,3 +127,24 @@ failed honestly with VERR_TIMEOUT and motivated the 400 s deadline. Combined
 candidate: `ar-rq06-combined-8aec0750` and `-7db05993` passed. Wrong snapshot
 refusal: `ar-rq03-wrongsnap-1049c80e`. An all-zero recording from the first
 installed-recorder run showed that a Test Signal must be played before recording.
+
+## RQ-05 baseline attempt (2026-11-19)
+
+- Probe in the guest: WebView2 157.0.4341.46 is machine-wide
+  (`HKLM\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients`, plus 154.0.4258.62 on
+  disk). Removing it needs an administrator. The only administrator, `artest`
+  (documented in the VM guide), is refused by guest control as "restricted"
+  (expired password), and `arqual4` is a standard user by design.
+- Resetting it at the console was tried: a lock via `LockWorkStation` worked, but
+  keyboard-only account selection opened the power menu instead. VirtualBox
+  headless has no mouse control, so the attempt was stopped. No password or
+  account was changed.
+- After that the guest ignored two ACPI power-button requests for about 25
+  minutes while locked. With the user's approval I terminated only that guest's
+  VBoxHeadless (PID 53220, matched through its `VBox.log`), restored
+  `lifecycle-offline-20261118` and confirmed `poweroff`. `discardstate` reported
+  no saved state. No other VM or snapshot was touched.
+- RQ-05 stays open. Ways forward: set a known `artest` password by an interactive
+  console session (GUI VirtualBox, with a mouse) and take a WebView2-absent
+  snapshot (`setup.exe --uninstall --msedgewebview --system-level --force-uninstall`),
+  or build a fresh guest from a Windows ISO.
