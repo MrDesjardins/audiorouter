@@ -80,9 +80,13 @@ sign-in it must play.
 
 ## 6. Nightly workflow on GitHub
 
-Only after the branch is pushed with the owner's approval: start
-`VST nightly qualification` from the Actions tab (Run workflow), wait for it,
-download the `vst-qualification` artifact, and read every annotation on the
+GitHub dispatches and schedules a workflow only when its file is on the
+default branch, so pushing `work/vst-compatibility` alone does not make it
+runnable. With the owner's approval, either merge the workflow and runner to
+`main` (on their own or with the branch), or land just the workflow file on
+`main` first and then run `gh workflow run vst-nightly.yml --ref
+work/vst-compatibility`. Then start `VST nightly qualification` (Actions tab,
+Run workflow), wait for it, download the `vst-qualification` artifact, and read every annotation on the
 run (`gh api repos/<owner>/<repo>/check-runs/<id>/annotations`). The first
 hosted run is the evidence that the runner works on a clean machine; it has
 only run on the owner's PC so far (48 of 48 on 2026-11-18).

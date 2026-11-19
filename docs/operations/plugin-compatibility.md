@@ -14,7 +14,7 @@ did not pass, and why:
 
 | Plugin | What happens | Cause |
 | --- | --- | --- |
-| AmplitudeImposer (VST2, 32/64) | Silent output | It imposes the level of a second input on the first. Its VST3 build declares that input as a sidechain and is listed as ok; the VST2 build does not label its extra pins as a key, so AudioRouter treats them as ordinary inputs and the census feeds only the first |
+| AmplitudeImposer (VST2, 32/64) | Silent output | It imposes the level of a second input on the first. Its VST3 build declares that input as a sidechain and is listed as ok; the census found no input pins labelled as a key in the VST2 build, so it cannot offer a sidechain port and the second signal is never fed |
 | ReaControlMIDI standalone (VST2, 32/64) | The worker crashes when state is restored | A defect in the plugin: `effSetChunk` crashes in every host variant we tried (it expects REAPER). Do not save or restore it |
 | DPF Kars and Nekobi (VST3, 32-bit) | Load, silent with a note held | The 32-bit VST3 builds in DPF-Plugins v1.7 produce no sound; their 64-bit VST3 and both VST2 builds play. Use one of those |
 | UADx PolyMAX (VST3) | Loads, silent with a note held | Needs UA Connect sign-in; owner-gated |

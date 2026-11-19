@@ -5,7 +5,10 @@ and VST3 tests on any Windows machine with Visual Studio's C++ tools, CMake,
 Git and the pinned Rust toolchain (with the `i686-pc-windows-msvc` target).
 It needs nothing installed in the system plugin folders. The nightly workflow
 `.github/workflows/vst-nightly.yml` runs the same script on GitHub's Windows
-runner every night and on demand; it never runs on pull requests.
+runner every night and on demand; it never runs on pull requests. GitHub runs
+scheduled workflows, and shows the Run workflow button, only for workflow
+files on the default branch, so the nightly run starts once the file is on
+`main`. Until then, run the script locally.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/vst-qualification/run.ps1 -Clean
