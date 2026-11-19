@@ -119,8 +119,13 @@ app directory and registry state. A partial install is preserved, and a
 leftover shell is probed in an isolated profile. A nonzero setup exit
 without a verified bootstrap diagnostic is recorded as unattributed. A
 successful retry after that exit provides recovery evidence while bootstrap
-attribution stays open. The runner records setup and reconnect failures
-separately in its JSON result.
+attribution stays open (the wrapper then reports the run as failed on purpose;
+2026-11-19 result: setup exit 2, nothing left behind, retry passed). The retry
+waits until the guest resolves names, because the installer downloads the
+WebView2 bootstrapper. Do not block the Edge updater with a policy on the
+absent-runtime baseline: it also blocks that bootstrapper. Disable the
+`edgeupdate` services and update tasks instead. The runner records setup and
+reconnect failures separately in its JSON result.
 
 For repeat runs, `tools/vm/installer-lifecycle-unattended.ps1` accepts the same
 installer, version, hash, credential and output arguments, plus `-VmId`,

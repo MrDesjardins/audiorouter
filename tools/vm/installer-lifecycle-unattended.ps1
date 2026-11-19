@@ -71,9 +71,9 @@ try {
                 # Let the sign-in screen finish drawing after guest services start.
                 Start-Sleep -Seconds 20
                 $lastSignIn = [DateTime]::UtcNow
-                # Dismiss a leftover expired-password prompt, wake the lock screen, then sign in.
-                $null = Invoke-VBox 'sign-in-dismiss' @('controlvm',$VmId,'keyboardputscancode','0f','8f','1c','9c')
-                Start-Sleep -Seconds 3
+                # Wake the lock screen, then sign in. Do not press Tab, Enter or Escape first:
+                # on the account picker they move focus to the account list, so the password
+                # went to whichever account headed it instead of the default user.
                 $null = Invoke-VBox 'sign-in-wake' @('controlvm',$VmId,'keyboardputscancode','39','b9')
                 Start-Sleep -Seconds 3
                 $secret = ([IO.File]::ReadAllText((Resolve-Path -LiteralPath $PasswordFile).Path)).Trim()

@@ -112,4 +112,12 @@ try {
     $env:WEBVIEW2_USER_DATA_FOLDER = $originalProfile
     $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = $originalArguments
 }
+# Keys pressed before the password (Tab, Enter, Escape) move focus to the account list on
+# the picker and sent the qualification password to the wrong user. Only a wake is allowed.
+$wrapperText = [IO.File]::ReadAllText((Join-Path $PSScriptRoot '../../tools/vm/installer-lifecycle-unattended.ps1'))
+if ($wrapperText -match 'sign-in-dismiss') { throw 'Sign-in must not send focus-moving keys before the password' }
+# The online retry downloads the WebView2 bootstrapper, so it must wait for guest network
+# after the adapter reconnects instead of starting at once.
+$lifecycleText = [IO.File]::ReadAllText((Join-Path $PSScriptRoot '../../tools/vm/installer-lifecycle.ps1'))
+if ($lifecycleText -notmatch 'bootstrap-network-probe') { throw 'Online retry must wait for guest network after reconnect' }
 Write-Output 'Synthetic lifecycle guards and recorder transport passed.'

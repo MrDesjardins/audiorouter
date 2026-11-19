@@ -291,14 +291,24 @@ Results on the final revision (evidence in the
   a new qualification.
 - Host: process, guards, recording and docs acceptance pass; `git diff --check` clean.
 
-Still open (external): a runtime-absent WebView2 baseline, bootstrap
-failure/retry, interactive unsigned trust prompts, endpoint guidance and
-default-device checks (RQ-05); the guest has runtime 157.0.4341.46 and
-arqual4 is not an administrator, so absence cannot be created here. A
-first-run "What do you want to do?" chooser appeared in the installed shell
-(seen on screen only). M08 hardware, endurance, accessibility and signing gates
-are untouched. Nothing is committed, pushed or published.
+- **RQ-05 (partly met, 2026-11-19):** a runtime-absent baseline now exists
+  (`lifecycle-webview-absent-v10-20261119`, built from the guest's offline
+  baseline by removing WebView2 as an administrator and disabling the Edge update
+  services and tasks). `-WebViewBaseline Absent -ProductionRecording
+  -OfflineBootstrapRetry` (`ar-rq05-372e4035-547a-456d-a532-6e8501b1f6aa`) shows:
+  with the guest NAT link disconnected, setup exits 2 and leaves no registration,
+  files, database, shell or runtime; after the link returns, the same installer
+  bootstraps WebView2 (157.0.4341.60) and passes install, repair, rollback,
+  upgrade, uninstall and reinstall with the 440 Hz recording intact. The harness
+  reports the overall run as failed on purpose: the offline exit is recorded as
+  `unattributed-installer-failure` because the silent NSIS setup writes no
+  bootstrap diagnostic, so attribution to the bootstrapper is not proven.
 
-Next action: obtain a Windows image without WebView2 for a dedicated baseline,
-run `-WebViewBaseline Absent -ProductionRecording -OfflineBootstrapRetry`, and
-observe an interactive install. Then review the diff and ask for PR approval.
+Still open: interactive unsigned-trust and setup prompts, endpoint guidance,
+and default-device and volume checks (RQ-05), because VirtualBox headless has no
+mouse and nobody watched the screen. A first-run "What do you want to do?"
+chooser appeared in the installed shell (seen on screen only). M08 hardware,
+endurance, accessibility and signing gates are untouched.
+
+Next action: have a person observe one interactive install in the
+absent-runtime baseline (GUI VirtualBox), then review the diff.

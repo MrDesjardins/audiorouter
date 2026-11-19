@@ -148,3 +148,35 @@ installed-recorder run showed that a Test Signal must be played before recording
   console session (GUI VirtualBox, with a mouse) and take a WebView2-absent
   snapshot (`setup.exe --uninstall --msedgewebview --system-level --force-uninstall`),
   or build a fresh guest from a Windows ISO.
+
+## RQ-05 absent-runtime run (2026-11-19)
+
+- `p@ssword1` did not work for `artest`. The documented `123123123` did, but the
+  password had expired, so it was changed at the console and the guest was
+  elevated through its UAC prompt. The supported uninstall (`setup.exe
+  --uninstall --msedgewebview --system-level --force-uninstall`) exited 93, so
+  the runtime was removed by hand: its `EdgeUpdate\Clients` and uninstall keys,
+  and `Program Files (x86)\Microsoft\EdgeWebView`.
+- The Edge updater put the runtime back at boot. Its services (`edgeupdate`,
+  `edgeupdatem`) and two scheduled tasks are now disabled. An updater policy
+  (`InstallDefault=0`) kept it out too, but also blocked the bootstrapper the
+  installer runs: the online retry then hung for 400 s (`VERR_TIMEOUT`), so the
+  policy was dropped.
+- Harness defects found and fixed (each with a host regression): the wrapper's
+  Tab+Enter before the password sent it to whichever account headed the picker
+  (it now sends no key); the online retry started before the guest had DNS (it
+  now waits with `bootstrap-network-probe`).
+- Baseline setup also removed VirtualBox's leftover automatic sign-in for
+  `artest` and made `arqual4` the default account. Each rebuild from the offline
+  baseline needed the administrator password reset again, so ten absent
+  snapshots (`lifecycle-webview-absent-v1..v10-20261119`) exist in the guest;
+  v10 is the qualified one. The temporary password files were deleted from the
+  host.
+- Result `ar-rq05-372e4035-547a-456d-a532-6e8501b1f6aa`: offline attempt exit 2,
+  nothing left behind, runtime not installed; online retry passed the full
+  lifecycle with the recording (sha256
+  `8AD092B5F4E2DD03EABCC0D2C570EE7330FA768C043C4D3A8C5C1797F0403E1A`, stereo,
+  48 kHz, 440.002 Hz, RMS 0.0890). Overall status `failed` by design: the offline
+  failure is `unattributed-installer-failure`.
+- Not observed: unsigned-trust and setup prompts, endpoint guidance, default
+  device and volume checks. Headless VirtualBox offers no mouse.

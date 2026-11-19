@@ -81,6 +81,16 @@ try {
             $null = Invoke-LifecycleProcess $vbox 'bootstrap-reconnect-guest' @('controlvm',$Vm,'setlinkstate1','on') $output 30
             $link = @(Invoke-LifecycleProcess $vbox 'bootstrap-verify-reconnected' @('showvminfo',$Vm,'--machinereadable') $output 30 -OutputFilter '^cableconnected1=')
             if ($link -notcontains 'cableconnected1="on"') { throw 'Guest NAT link did not reconnect' }
+            # The link comes back before the guest can resolve names. The installer downloads
+            # the WebView2 bootstrapper, so retrying at once would fail for lack of network.
+            $probe = @('guestcontrol', $Vm, 'run') + $auth + @('--profile', '--timeout', '20000', '--exe', 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe', '--wait-stdout', '--', '-NoProfile', '-Command', '[void][Net.Dns]::GetHostAddresses(''go.microsoft.com'')')
+            $reachable = $false
+            for ($try = 0; $try -lt 12 -and -not $reachable; $try++) {
+                $probeExit = $null
+                $null = Invoke-LifecycleProcess $vbox 'bootstrap-network-probe' $probe $output 40 -AllowNonzero -ExitStatus ([ref]$probeExit)
+                if ($probeExit -eq 0) { $reachable = $true } else { Start-Sleep -Seconds 5 }
+            }
+            if (-not $reachable) { throw 'Guest network did not return after the adapter reconnected' }
         } $result.offlineTransport
         $offlineOutput = $result.offlineTransport.output
         $result.offlineTransport.Remove('output')
