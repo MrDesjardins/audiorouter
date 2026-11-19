@@ -40,6 +40,7 @@ mod startup;
 mod support_bundle;
 mod tray_playback;
 mod ui_draft;
+mod ui_language;
 mod virtual_cable_shell;
 #[cfg(windows)]
 mod webview_keys;
@@ -459,6 +460,54 @@ struct ShellState {
 
 #[derive(Default)]
 struct HttpApiState(std::sync::Mutex<Option<http_api::HttpApi>>);
+
+/// The resolved interface language for shell-owned text (tray, autoplay and
+/// recovery messages). Set before the tray is built and updated by the
+/// window's presentation-only `set_ui_language` command.
+static TRAY_LANGUAGE: std::sync::RwLock<String> = std::sync::RwLock::new(String::new());
+
+fn set_tray_language(language: &str) {
+    match TRAY_LANGUAGE.write() {
+        Ok(mut current) => *current = language.to_owned(),
+        Err(poisoned) => *poisoned.into_inner() = language.to_owned(),
+    }
+}
+
+fn tray_language() -> String {
+    match TRAY_LANGUAGE.read() {
+        Ok(current) if !current.is_empty() => current.clone(),
+        Ok(_) => "en".to_owned(),
+        Err(poisoned) if !poisoned.get_ref().is_empty() => poisoned.into_inner().clone(),
+        Err(_) => "en".to_owned(),
+    }
+}
+
+/// The ordered Windows UI languages, best first. Uses the one locale Windows
+/// returns for this user; a malformed result is ignored.
+#[cfg(windows)]
+fn system_languages() -> Vec<String> {
+    use windows::Win32::Globalization::GetUserDefaultLocaleName;
+    let mut buffer = [0_u16; 85];
+    // SAFETY: `buffer` is a writable slice for the call, which writes at most
+    // its length in UTF-16 code units including the terminating NUL.
+    let length = unsafe { GetUserDefaultLocaleName(&mut buffer) };
+    if length > 1 {
+        vec![String::from_utf16_lossy(&buffer[..length as usize - 1])]
+    } else {
+        Vec::new()
+    }
+}
+
+#[cfg(not(windows))]
+fn system_languages() -> Vec<String> {
+    Vec::new()
+}
+
+/// A saved explicit language, else the Windows language, else English.
+fn resolved_saved_language(database_path: &std::path::Path) -> String {
+    let saved = shell_settings::load(&shell_settings::path_beside(database_path)).language;
+    ui_language::resolve(saved.as_deref(), &system_languages()).to_owned()
+}
 
 /// The project release page for one tag (UI-18), opened in the default
 /// browser. Only `vMAJOR.MINOR.PATCH` tags of this repository are accepted.
@@ -1043,6 +1092,36 @@ fn autoplay_set(enabled: bool, state: State<'_, ShellState>) -> Result<bool, Str
     settings.auto_play = enabled;
     shell_settings::save(&path, &settings)?;
     Ok(enabled)
+}
+
+/// The window's presentation-only language choice: save it and update the
+/// tray without touching audio, the graph or any backend state.
+#[tauri::command]
+fn set_ui_language(
+    language: Option<String>,
+    state: State<'_, ShellState>,
+    items: State<'_, TrayItems<tauri::Wry>>,
+) -> Result<(), String> {
+    let path = shell_settings::path_beside(&state.database_path);
+    let mut settings = shell_settings::load(&path);
+    settings.language = match language {
+        None => None,
+        Some(tag) => Some(
+            ui_language::canonical(&tag)
+                .ok_or_else(|| "unsupported interface language".to_owned())?
+                .to_owned(),
+        ),
+    };
+    shell_settings::save(&path, &settings)?;
+    set_tray_language(ui_language::resolve(
+        settings.language.as_deref(),
+        &system_languages(),
+    ));
+    items.apply_language();
+    let pipe = state.pipe_name.clone();
+    let items = items.inner().clone();
+    std::thread::spawn(move || refresh_tray_status(&items, &pipe));
+    Ok(())
 }
 
 #[tauri::command]
@@ -2186,11 +2265,13 @@ fn spawn_route_restore(pipe_name: String, session_ids: Vec<String>) {
     let spawned = std::thread::Builder::new()
         .name("audiorouter-route-restore".into())
         .spawn(move || {
+            let language = tray_language();
             let outcome = tray_playback::restore_after_restart(
                 &mut backend_call(&pipe_name),
                 &session_ids,
                 40,
                 std::time::Duration::from_millis(250),
+                &language,
             );
             let request = JsonRpcRequest {
                 jsonrpc: "2.0".into(),
@@ -2216,9 +2297,9 @@ fn spawn_route_restore(pipe_name: String, session_ids: Vec<String>) {
     }
 }
 
-fn tray_status_text(response: &JsonRpcResponse) -> String {
+fn tray_status_text(response: &JsonRpcResponse, language: &str) -> String {
     let Some(result) = response.result.as_ref() else {
-        return "Status unavailable".to_owned();
+        return ui_language::text(language, "native.statusUnavailable").to_owned();
     };
     let active = result
         .get("activeSessionCount")
@@ -2229,20 +2310,35 @@ fn tray_status_text(response: &JsonRpcResponse) -> String {
         .and_then(|value| value.get("muted"))
         .and_then(serde_json::Value::as_bool)
         .unwrap_or(true);
-    let mic = if muted { "Mic muted" } else { "Mic on" };
+    let mic = ui_language::text(
+        language,
+        if muted {
+            "native.micMuted"
+        } else {
+            "native.micOn"
+        },
+    );
     match active {
-        0 => format!("Stopped · {mic}"),
-        1 => format!("Playing · {mic}"),
-        count => format!("Playing {count} sessions · {mic}"),
+        0 => ui_language::format(language, "native.stoppedStatus", &[("mic", mic)]),
+        1 => ui_language::format(language, "native.playingStatus", &[("mic", mic)]),
+        count => {
+            let count = count.to_string();
+            ui_language::format(
+                language,
+                "native.playingSessionsStatus",
+                &[("count", &count), ("mic", mic)],
+            )
+        }
     }
 }
 
 /// The tray Play/Stop item names the action it will take.
-fn tray_playback_label(active: Option<u64>) -> &'static str {
+fn tray_playback_label(active: Option<u64>, language: &str) -> String {
     match active {
-        Some(count) if count > 0 => "Stop audio",
-        _ => "Play",
+        Some(count) if count > 0 => ui_language::text(language, "native.stopAudio"),
+        _ => ui_language::text(language, "native.play"),
     }
+    .to_owned()
 }
 
 /// Number of playing sessions from `status.get`; `None` when unknown.
@@ -2254,15 +2350,16 @@ fn tray_active_sessions(response: &JsonRpcResponse) -> Option<u64> {
         .as_u64()
 }
 
-fn tray_recording_text(response: &JsonRpcResponse) -> String {
+fn tray_recording_text(response: &JsonRpcResponse, language: &str) -> String {
+    let unavailable = || ui_language::text(language, "native.liveRecordersUnavailable").to_owned();
     let Some(result) = response.result.as_ref() else {
-        return "Live recorders: unavailable".to_owned();
+        return unavailable();
     };
     let Some(items) = result
         .as_array()
         .or_else(|| result.get("items").and_then(serde_json::Value::as_array))
     else {
-        return "Live recorders: unavailable".to_owned();
+        return unavailable();
     };
     let count = |state: &str| {
         items
@@ -2272,21 +2369,25 @@ fn tray_recording_text(response: &JsonRpcResponse) -> String {
     };
     // Name only the states that are present, so the usual case reads plainly.
     let parts = [
-        ("recording", "active"),
-        ("paused", "paused"),
-        ("armed", "armed"),
-        ("failed", "failed"),
+        ("recording", "native.recorderActive"),
+        ("paused", "native.recorderPaused"),
+        ("armed", "native.recorderArmed"),
+        ("failed", "native.recorderFailed"),
     ]
     .iter()
     .filter_map(|(state, label)| match count(state) {
         0 => None,
-        n => Some(format!("{n} {label}")),
+        n => Some(format!("{n} {}", ui_language::text(language, label))),
     })
     .collect::<Vec<_>>();
     if parts.is_empty() {
-        "Not recording".to_owned()
+        ui_language::text(language, "native.notRecording").to_owned()
     } else {
-        format!("Recorders: {}", parts.join(" · "))
+        ui_language::format(
+            language,
+            "native.recorders",
+            &[("parts", &parts.join(" · "))],
+        )
     }
 }
 
@@ -2379,6 +2480,8 @@ struct TrayItems<R: Runtime> {
     status: MenuItem<R>,
     recordings: MenuItem<R>,
     playback: MenuItem<R>,
+    open: MenuItem<R>,
+    quit: MenuItem<R>,
 }
 
 // Manual: derive would require `R: Clone`, which runtimes are not.
@@ -2388,7 +2491,25 @@ impl<R: Runtime> Clone for TrayItems<R> {
             status: self.status.clone(),
             recordings: self.recordings.clone(),
             playback: self.playback.clone(),
+            open: self.open.clone(),
+            quit: self.quit.clone(),
         }
+    }
+}
+
+impl<R: Runtime> TrayItems<R> {
+    /// Refresh the labels that do not come from the backend. Dynamic status
+    /// and recording lines refresh separately from `status.get`.
+    fn apply_language(&self) {
+        let language = tray_language();
+        let text = |key: &str| ui_language::text(&language, key);
+        let _ = self.open.set_text(text("native.open"));
+        let _ = self.playback.set_text(text("native.play"));
+        let _ = self.quit.set_text(text("native.quit"));
+        let _ = self.status.set_text(text("native.statusUnavailable"));
+        let _ = self
+            .recordings
+            .set_text(text("native.recordingStatusUnavailable"));
     }
 }
 
@@ -2397,7 +2518,9 @@ fn refresh_tray_status<R: Runtime>(items: &TrayItems<R>, pipe_name: &str) {
         status,
         recordings,
         playback,
+        ..
     } = items;
+    let language = tray_language();
     let status_request = JsonRpcRequest {
         jsonrpc: "2.0".into(),
         id: Some(serde_json::json!("tray-status")),
@@ -2407,12 +2530,12 @@ fn refresh_tray_status<R: Runtime>(items: &TrayItems<R>, pipe_name: &str) {
     let response = forward_rpc_request(&status_request, pipe_name).ok();
     let text = response
         .as_ref()
-        .map(tray_status_text)
-        .unwrap_or_else(|| "Status unavailable".to_owned());
+        .map(|response| tray_status_text(response, &language))
+        .unwrap_or_else(|| ui_language::text(&language, "native.statusUnavailable").to_owned());
     let _ = status.set_text(text);
     // One item that names what it will do: a greyed twin was too subtle to read.
     let active = response.as_ref().and_then(tray_active_sessions);
-    let _ = playback.set_text(tray_playback_label(active));
+    let _ = playback.set_text(tray_playback_label(active, &language));
 
     let recordings_request = JsonRpcRequest {
         jsonrpc: "2.0".into(),
@@ -2421,8 +2544,10 @@ fn refresh_tray_status<R: Runtime>(items: &TrayItems<R>, pipe_name: &str) {
         params: None,
     };
     let text = forward_rpc_request(&recordings_request, pipe_name)
-        .map(|response| tray_recording_text(&response))
-        .unwrap_or_else(|_| "Live recorders: unavailable".to_owned());
+        .map(|response| tray_recording_text(&response, &language))
+        .unwrap_or_else(|_| {
+            ui_language::text(&language, "native.liveRecordersUnavailable").to_owned()
+        });
     let _ = recordings.set_text(text);
 }
 
@@ -2620,7 +2745,8 @@ fn main() {
             startup_register,
             startup_status,
             virtual_cable_shell::manage_virtual_cable,
-            virtual_cable_shell::virtual_cable_management_available
+            virtual_cable_shell::virtual_cable_management_available,
+            set_ui_language
         ])
         .setup(move |app| {
             let session_script = session_script.clone();
@@ -2668,15 +2794,24 @@ fn main() {
                     }
                 }
             }
-            let open = MenuItem::with_id(app, "open", "Open AudioRouter", true, None::<&str>)?;
-            let playback = MenuItem::with_id(app, "playback", "Play", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "Quit and stop audio", true, None::<&str>)?;
-            let status =
-                MenuItem::with_id(app, "status", "Status unavailable", false, None::<&str>)?;
+            let initial_language =
+                resolved_saved_language(&app.state::<ShellState>().database_path);
+            set_tray_language(&initial_language);
+            let tick = |key: &str| ui_language::text(&initial_language, key);
+            let open = MenuItem::with_id(app, "open", tick("native.open"), true, None::<&str>)?;
+            let playback = MenuItem::with_id(app, "playback", tick("native.play"), true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", tick("native.quit"), true, None::<&str>)?;
+            let status = MenuItem::with_id(
+                app,
+                "status",
+                tick("native.statusUnavailable"),
+                false,
+                None::<&str>,
+            )?;
             let recordings = MenuItem::with_id(
                 app,
                 "recordings",
-                "Recording status unavailable",
+                tick("native.recordingStatusUnavailable"),
                 false,
                 None::<&str>,
             )?;
@@ -2688,7 +2823,10 @@ fn main() {
                 status: status.clone(),
                 recordings: recordings.clone(),
                 playback: playback.clone(),
+                open: open.clone(),
+                quit: quit.clone(),
             };
+            app.manage(tray_items.clone());
             let items_for_handler = tray_items.clone();
             let items_for_icon = tray_items.clone();
             let pipe_for_icon = tray_pipe_name.clone();
@@ -2744,10 +2882,11 @@ fn main() {
                                 .and_then(|response| tray_active_sessions(&response))
                                 .is_some_and(|count| count > 0);
                             let mut call = backend_call(&pipe_name);
+                            let language = tray_language();
                             let outcome = if !playing {
-                                tray_playback::play_saved_session(&mut call)
+                                tray_playback::play_saved_session(&mut call, &language)
                             } else {
-                                tray_playback::stop_playing(&mut call)
+                                tray_playback::stop_playing(&mut call, &language)
                             };
                             match outcome {
                                 Ok(_) => refresh_tray_status(&items_for_handler, &pipe_name),
@@ -2771,9 +2910,10 @@ fn main() {
                                         .and_then(serde_json::Value::as_str)
                                         == Some("stopped") => app.exit(0),
                                 _ => {
+                                    let language = tray_language();
                                     let _ = items_for_handler
                                         .status
-                                        .set_text("Quit refused: backend finalization failed");
+                                        .set_text(ui_language::text(&language, "native.quitRefused"));
                                 }
                             }
                         }
@@ -2846,7 +2986,13 @@ fn main() {
                 && shell_settings::load(&shell_settings::path_beside(&database_path)).auto_play {
                 let (items, pipe) = (tray_items.clone(), tray_pipe_name.clone());
                 std::thread::spawn(move || {
-                    let outcome = tray_playback::autoplay(&mut backend_call(&pipe), 40, std::time::Duration::from_millis(500));
+                    let language = tray_language();
+                    let outcome = tray_playback::autoplay(
+                        &mut backend_call(&pipe),
+                        40,
+                        std::time::Duration::from_millis(500),
+                        &language,
+                    );
                     match outcome {
                         Ok(_) => refresh_tray_status(&items, &pipe),
                         Err(reason) => {
@@ -3109,6 +3255,28 @@ mod tests {
     }
 
     #[test]
+    fn native_language_matches_exact_tags_parents_and_english_fallback() {
+        assert_eq!(ui_language::canonical("EN"), Some("en"));
+        assert_eq!(ui_language::canonical("en-US"), None);
+        assert_eq!(
+            ui_language::resolve(Some("en-US"), &[]),
+            "en",
+            "a regional parent resolves to the supported language"
+        );
+        assert_eq!(
+            ui_language::resolve(Some("zz"), &["de-DE".into()]),
+            "en",
+            "unsupported choices fall through to the system order and English"
+        );
+        assert_eq!(ui_language::text("en", "native.play"), "Play");
+        assert_eq!(ui_language::text("en", "native.missing"), "");
+        assert_eq!(
+            ui_language::format("en", "native.playFailed", &[("reason", "busy")]),
+            "Play failed: busy"
+        );
+    }
+
+    #[test]
     fn tray_status_uses_authoritative_session_and_privacy_fields() {
         let response = JsonRpcResponse {
             jsonrpc: "2.0".into(),
@@ -3117,27 +3285,27 @@ mod tests {
             error: None,
         };
         assert_eq!(
-            tray_status_text(&response),
+            tray_status_text(&response, "en"),
             "Playing 2 sessions · Mic muted"
         );
         let stopped = JsonRpcResponse {
             result: Some(json!({ "activeSessionCount": 0, "privacyMute": { "muted": false } })),
             ..response.clone()
         };
-        assert_eq!(tray_status_text(&stopped), "Stopped · Mic on");
+        assert_eq!(tray_status_text(&stopped, "en"), "Stopped · Mic on");
         assert_eq!(tray_active_sessions(&stopped), Some(0));
         let unavailable = JsonRpcResponse {
             result: None,
             ..response
         };
-        assert_eq!(tray_status_text(&unavailable), "Status unavailable");
+        assert_eq!(tray_status_text(&unavailable, "en"), "Status unavailable");
     }
 
     #[test]
     fn tray_playback_item_names_the_action_it_will_take() {
-        assert_eq!(tray_playback_label(Some(0)), "Play");
-        assert_eq!(tray_playback_label(Some(2)), "Stop audio");
-        assert_eq!(tray_playback_label(None), "Play");
+        assert_eq!(tray_playback_label(Some(0), "en"), "Play");
+        assert_eq!(tray_playback_label(Some(2), "en"), "Stop audio");
+        assert_eq!(tray_playback_label(None, "en"), "Play");
     }
 
     #[test]
@@ -3152,14 +3320,14 @@ mod tests {
             error: None,
         };
         assert_eq!(
-            tray_recording_text(&response),
+            tray_recording_text(&response, "en"),
             "Recorders: 2 active · 1 paused · 1 armed · 1 failed"
         );
         let idle = JsonRpcResponse {
             result: Some(json!([{ "state": "stopped" }])),
             ..response
         };
-        assert_eq!(tray_recording_text(&idle), "Not recording");
+        assert_eq!(tray_recording_text(&idle, "en"), "Not recording");
     }
 
     #[test]

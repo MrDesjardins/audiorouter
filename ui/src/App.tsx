@@ -34,6 +34,7 @@ import {
   SETTINGS_PAGE_ICONS,
   SETTINGS_PAGE_KEYWORDS,
   SETTINGS_PAGES,
+  settingsPageTitle,
   tabPlace,
   Workbench,
   type WorkbenchTab,
@@ -133,10 +134,12 @@ import {
 import {
   readFlowAnimation,
   readLastSession,
+  readLanguagePreference,
   readLiveAutosave,
   readSidebarWidth,
   readTheme,
   writeFlowAnimation,
+  writeLanguagePreference,
   writeLastSession,
   writeLiveAutosave,
   writeSidebarWidth,
@@ -144,6 +147,8 @@ import {
   type FlowAnimationMode,
   type ThemeMode,
 } from "./preferences";
+import { applyLanguage } from "./i18n";
+import { useMessages } from "./i18n/useMessages";
 import { SidebarResizer } from "./SidebarResizer";
 import {
   announceDeviceAccessChanged,
@@ -332,6 +337,7 @@ export function App({ backend }: { backend?: UiBackend } = {}) {
 }
 
 function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) {
+  const m = useMessages();
   const [snapshotCache] = useState(() => new SnapshotCache());
   const [snapshotState, setSnapshotState] = useState(snapshotCache.current());
   const staleSnapshot = snapshotState.stale && snapshotState.snapshot !== null;
@@ -425,6 +431,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [presets, setPresets] = useState<import("@audiorouter/contracts").DiscoveryDocument["presets"] | null>(null);
   const [presetError, setPresetError] = useState<string | null>(null);
   const [theme, setTheme] = useState<ThemeMode>(() => readTheme(optionalLocalStorage()));
+  const [language, setLanguage] = useState<string | null>(() => readLanguagePreference(optionalLocalStorage()));
+  const changeLanguage = (preference: string | null) => {
+    setLanguage(preference);
+    writeLanguagePreference(optionalLocalStorage(), preference);
+    void applyLanguage(preference);
+  };
   const [customThemes, setCustomThemes] = useState(() => readCustomThemeLibrary(optionalLocalStorage()));
   const changeCustomThemes = (value: CustomThemeLibrary) => {
     setCustomThemes(value);
@@ -875,6 +887,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   useEffect(() => {
     writeTheme(optionalLocalStorage(), theme);
   }, [theme]);
+  // Presentation only: the native shell's tray text follows the same choice.
+  // A shell without the command (browser harness) simply has no effect.
+  useEffect(() => {
+    void backend.setUiLanguage?.(language).catch(() => undefined);
+  }, [backend, language]);
   // AudioRouter cable status (spec 17 §7.1), published to the library,
   // canvas palette, cable properties and Setup. The backend caches it until
   // Windows reports an endpoint change (at most 30 s), so this poll is cheap.
@@ -3647,6 +3664,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     <UiOptionsWorkbench
       theme={theme}
       onTheme={setTheme}
+      language={language}
+      onLanguage={changeLanguage}
       customThemes={customThemes}
       onCustomThemes={changeCustomThemes}
       flowAnimation={flowAnimation}
@@ -3787,12 +3806,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         run: () => addLibraryNode(kind),
       });
     }
-    for (const [page, title] of SETTINGS_PAGES) {
+    for (const [page] of SETTINGS_PAGES) {
       items.push({
         id: `settings-${page}`,
         group: "Settings",
         icon: SETTINGS_PAGE_ICONS[page],
-        title,
+        title: settingsPageTitle(page),
         detail: "Open in Settings",
         keywords: SETTINGS_PAGE_KEYWORDS[page],
         run: () => setWorkbenchTab(page),
@@ -3935,7 +3954,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             if (!keepNativeContextMenu(event.target, window.getSelection())) event.preventDefault();
           }}
         >
-          <nav className="skip-navigation" aria-label="Skip navigation">
+          <nav className="skip-navigation" aria-label={m("topbar.skipNavigation")}>
             {tabPlace(workbenchTab) !== "settings" && (
               <a
                 href="#routing-canvas"
@@ -3944,7 +3963,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   document.getElementById("routing-canvas")?.focus();
                 }}
               >
-                Skip to canvas
+                {m("topbar.skipToCanvas")}
               </a>
             )}
             <a
@@ -3954,7 +3973,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                 document.getElementById("routing-workbench")?.focus();
               }}
             >
-              Skip to tools and settings
+              {m("topbar.skipToTools")}
             </a>
           </nav>
           <header className="topbar">
@@ -3964,10 +3983,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                 <button
                   type="button"
                   className="header-session-name"
-                  title="Open the Session tab to switch or manage sessions"
+                  title={m("topbar.openSessionTab")}
                   onClick={() => setWorkbenchTab("session")}
                 >
-                  {draft.name || "Routing workspace"}
+                  {draft.name || m("topbar.routingWorkspace")}
                 </button>
               </h1>
             </div>
@@ -3976,7 +3995,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   so its arrival moves nothing else (UI-17). */}
               {(!backend.connected || staleSnapshot || reconnecting) && (
                 <button type="button" onClick={() => void reconnect()} disabled={reconnecting} aria-busy={reconnecting}>
-                  Reconnect
+                  {m("topbar.reconnect")}
                 </button>
               )}
               <span
@@ -3996,7 +4015,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               >
                 <span className="audio-state-dot" aria-hidden="true" />
                 {staleSnapshot
-                  ? "Status unavailable"
+                  ? m("topbar.statusUnavailable")
                   : routePlaybackLabel({
                       busy: sessionActionBusy,
                       running: sessionRunning,
@@ -4017,28 +4036,28 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                 <button
                   type="button"
                   className="secondary"
-                  aria-label="Undo"
-                  title="Undo (Ctrl+Z)"
+                  aria-label={m("topbar.undo")}
+                  title={m("topbar.undoTitle")}
                   onClick={() => restoreNewestEdit("undo")}
                   disabled={!canRestoreEdit.undo}
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M9 4 4 9l5 5M4 9h10a6 6 0 0 1 0 12" />
                   </svg>
-                  Undo
+                  {m("topbar.undo")}
                 </button>
                 <button
                   type="button"
                   className="secondary"
-                  aria-label="Redo"
-                  title="Redo (Ctrl+Y)"
+                  aria-label={m("topbar.redo")}
+                  title={m("topbar.redoTitle")}
                   onClick={() => restoreNewestEdit("redo")}
                   disabled={!canRestoreEdit.redo}
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="m15 4 5 5-5 5m5-5H10a6 6 0 0 0 0 12" />
                   </svg>
-                  Redo
+                  {m("topbar.redo")}
                 </button>
               </span>
               <button
@@ -4046,27 +4065,27 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                 className={routeChanged ? "secondary save-pending" : "secondary"}
                 title={
                   autoSavePending
-                    ? "Parameter changes save automatically after a short pause"
+                    ? m("topbar.saveTitleAuto")
                     : routeChanged
-                      ? "You have unsaved edits; save them to this session"
-                      : "Saved route: changes survive restart and are included in exports"
+                      ? m("topbar.saveTitlePending")
+                      : m("topbar.saveTitleSaved")
                 }
                 data-save-required={routeChanged && !autoSavePending && !graphBusy}
                 aria-busy={graphBusy}
                 onClick={saveChanges}
                 disabled={saveDisabled}
               >
-                {graphBusy ? "Saving…" : pendingGraphPlan ? "Confirm Save" : "Save"}
+                {graphBusy ? m("topbar.saving") : pendingGraphPlan ? m("topbar.confirmSave") : m("topbar.save")}
               </button>
               <button
                 type="button"
                 className={sessionRunning ? "play-stop stop-audio" : "play-stop primary"}
-                title="Header Play starts the route; Stop stops the route. Source Play controls only that source and starts the route first if needed. Playing unsaved edits is a temporary preview and does not save them."
+                title={m("topbar.playTitle")}
                 onClick={() => void (sessionRunning ? stopSession() : startSession())}
                 disabled={!backend.connected || sessionActionBusy || (!sessionRunning && staleSnapshot)}
                 aria-busy={sessionActionBusy}
               >
-                <span data-tour="play">{sessionRunning ? "Stop" : "Play"}</span>
+                <span data-tour="play">{sessionRunning ? m("topbar.stop") : m("topbar.play")}</span>
               </button>
               <QuitButton onMessage={setActionMessage} beforeQuit={draftRecovery.flush} />
             </div>
@@ -4074,7 +4093,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           <aside
             ref={notificationsRef}
             className="workspace-notifications"
-            aria-label="Notifications"
+            aria-label={m("topbar.notifications")}
             style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
           >
             {unfedNodes.length > 0 &&

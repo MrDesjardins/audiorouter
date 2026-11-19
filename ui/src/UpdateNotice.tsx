@@ -6,9 +6,9 @@ import {
   type UpdateCheckState,
   type UpdateFailure,
 } from "./updateCheck";
-
-const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
-const dateFormat = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+import { tx } from "./i18n";
+import { formatDateTime } from "./i18n/format";
+import { useMessages } from "./i18n/useMessages";
 
 /** Open a release page in the default browser (desktop) or a new tab. */
 export function openReleasePage(update: AvailableUpdate) {
@@ -24,10 +24,11 @@ export function openReleasePage(update: AvailableUpdate) {
  * never moves other content (UI-17).
  */
 export function VersionLine({ update }: { update: AvailableUpdate | null }) {
+  const tr = useMessages();
   return (
     <p className="eyebrow app-version-line">
       AudioRouter{" "}
-      <span className="app-version" aria-label={`Version ${APP_VERSION}`}>
+      <span className="app-version" aria-label={tr("version.versionLabel", { version: APP_VERSION })}>
         {APP_VERSION}
       </span>
       {update && (
@@ -37,10 +38,10 @@ export function VersionLine({ update }: { update: AvailableUpdate | null }) {
           <button
             type="button"
             className="update-link"
-            title={`Open the AudioRouter ${update.version} release page`}
+            title={tr("version.openRelease", { version: update.version })}
             onClick={() => openReleasePage(update)}
           >
-            {update.version} available
+            {tr("version.available", { version: update.version })}
           </button>
         </>
       )}
@@ -49,25 +50,29 @@ export function VersionLine({ update }: { update: AvailableUpdate | null }) {
 }
 
 export function checkedAtLabel(lastCheckedAt: number | null, now = Date.now()): string {
-  if (lastCheckedAt === null) return "Not checked yet.";
+  if (lastCheckedAt === null) return tx("updates.notChecked");
   const minutes = Math.max(0, Math.floor((now - lastCheckedAt) / 60_000));
-  if (minutes < 1) return "Checked just now.";
-  if (minutes < 60) return `Checked ${minutes} minute${minutes === 1 ? "" : "s"} ago.`;
+  if (minutes < 1) return tx("updates.checkedJustNow");
+  if (minutes < 60) return tx("updates.checkedMinutes", { count: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `Checked ${hours} hour${hours === 1 ? "" : "s"} ago.`;
+  if (hours < 24) return tx("updates.checkedHours", { count: hours });
   const days = Math.floor(hours / 24);
-  return `Checked ${days} day${days === 1 ? "" : "s"} ago.`;
+  return tx("updates.checkedDays", { count: days });
 }
 
 export function nextCheckLabel(nextCheckAt: number, now = Date.now()): string {
-  if (nextCheckAt <= now) return "now";
+  if (nextCheckAt <= now) return tx("updates.nextNow");
   const target = new Date(nextCheckAt);
   const current = new Date(now);
-  if (target.toDateString() === current.toDateString()) return `at ${timeFormat.format(target)}`;
+  const time = formatDateTime(target, { hour: "numeric", minute: "2-digit" });
+  if (target.toDateString() === current.toDateString()) return tx("updates.nextAt", { time });
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  if (target.toDateString() === tomorrow.toDateString()) return `tomorrow at ${timeFormat.format(target)}`;
-  return `on ${dateFormat.format(target)} at ${timeFormat.format(target)}`;
+  if (target.toDateString() === tomorrow.toDateString()) return tx("updates.nextTomorrow", { time });
+  return tx("updates.nextOn", {
+    date: formatDateTime(target, { month: "short", day: "numeric" }),
+    time,
+  });
 }
 
 function failureDetail(
@@ -78,12 +83,13 @@ function failureDetail(
 ): string {
   const reason =
     failure === "offline"
-      ? "No internet connection."
+      ? tx("updates.failureOffline")
       : failure === "rate-limited"
-        ? "GitHub is limiting checks."
-        : "The check didn't finish.";
+        ? tx("updates.failureRateLimited")
+        : tx("updates.failureUnfinished");
   if (nextCheckAt === null) return reason;
-  return `${reason} ${retrying ? "Trying again" : "The next check is"} ${nextCheckLabel(nextCheckAt, now)}.`;
+  const when = nextCheckLabel(nextCheckAt, now);
+  return retrying ? tx("updates.retryingSuffix", { reason, when }) : tx("updates.nextCheckSuffix", { reason, when });
 }
 
 function statusHeadline(
@@ -93,39 +99,39 @@ function statusHeadline(
 ): string {
   switch (status) {
     case "off":
-      return "Checking is off.";
+      return tx("updates.offHeadline");
     case "idle":
-      return "Not checked yet.";
+      return tx("updates.idleHeadline");
     case "checking":
-      return "Checking GitHub…";
+      return tx("updates.checkingHeadline");
     case "available":
-      return update ? `Version ${update.version} is available.` : "A new version is available.";
+      return update ? tx("updates.availableHeadline", { version: update.version }) : tx("updates.availableGeneric");
     case "current":
-      return channel === "stable" ? "No newer stable version was found." : "You have the newest version.";
+      return channel === "stable" ? tx("updates.currentStable") : tx("updates.currentNewest");
     case "failed":
-      return "Can't check for new versions right now.";
+      return tx("updates.failedHeadline");
   }
 }
 
 function nextCheckSuffix(nextCheckAt: number | null, now: number): string {
-  return nextCheckAt === null ? "" : ` Next check ${nextCheckLabel(nextCheckAt, now)}.`;
+  return nextCheckAt === null ? "" : ` ${tx("updates.nextCheckOnly", { when: nextCheckLabel(nextCheckAt, now) })}`;
 }
 
 function statusDetail(state: UpdateCheckState, channel: ReleaseChannel, now: number): string {
   switch (state.status) {
     case "off":
-      return "Turn it on to look for new versions.";
+      return tx("updates.offDetail");
     case "idle":
-      return "Check now to look for a newer version.";
+      return tx("updates.idleDetail");
     case "checking":
-      return "Looking for a newer version.";
+      return tx("updates.checkingDetail");
     case "available":
-      return `You have ${APP_VERSION}.${nextCheckSuffix(state.nextCheckAt, now)}`;
+      return `${tx("updates.haveVersion", { version: APP_VERSION })}${nextCheckSuffix(state.nextCheckAt, now)}`;
     case "current":
       return (
         (channel === "stable"
-          ? `AudioRouter ${APP_VERSION} is installed. Only stable releases are checked.`
-          : `AudioRouter ${APP_VERSION} is up to date.`) + nextCheckSuffix(state.nextCheckAt, now)
+          ? tx("updates.installedStableOnly", { version: APP_VERSION })
+          : tx("updates.upToDate", { version: APP_VERSION })) + nextCheckSuffix(state.nextCheckAt, now)
       );
     case "failed":
       return failureDetail(state.failure, state.retrying, state.nextCheckAt, now);
@@ -133,7 +139,7 @@ function statusDetail(state: UpdateCheckState, channel: ReleaseChannel, now: num
 }
 
 /**
- * Settings › New versions. The status slot, action row and controls all keep
+ * Settings → New versions. The status slot, action row and controls all keep
  * their space so an asynchronous result never moves the page (UI-17).
  */
 export function UpdatesPanel({
@@ -149,6 +155,7 @@ export function UpdatesPanel({
   onChannelChange: (channel: ReleaseChannel) => void;
   updateState: UpdateCheckState;
 }) {
+  const tr = useMessages();
   // Refresh the relative "Checked ... ago" line while the page stays open.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -159,14 +166,14 @@ export function UpdatesPanel({
   const update = updateState.update;
   return (
     <section className="panel updates-panel" aria-labelledby="updates-heading">
-      <h3 id="updates-heading">New versions</h3>
+      <h3 id="updates-heading">{tr("updates.heading")}</h3>
       <div className="updates-status" data-status={updateState.status}>
         <div className="updates-announcement" role="status" aria-live="polite" aria-atomic="true">
           <p className="updates-headline">{statusHeadline(updateState.status, update, channel)}</p>
           <p className="updates-detail">{statusDetail(updateState, channel, now)}</p>
         </div>
         <p className="updates-last-checked">
-          {enabled ? checkedAtLabel(updateState.lastCheckedAt, now) : "No result is stored while checking is off."}
+          {enabled ? checkedAtLabel(updateState.lastCheckedAt, now) : tr("updates.offStored")}
         </p>
       </div>
       <div className="updates-actions">
@@ -177,18 +184,18 @@ export function UpdatesPanel({
           disabled={!enabled || checking}
           aria-busy={checking}
         >
-          {checking ? "Checking…" : "Check now"}
+          {checking ? tr("updates.checking") : tr("updates.checkNow")}
         </button>
         <button
           type="button"
           className="secondary"
           disabled={!update}
-          title={update ? `Open the AudioRouter ${update.version} release page` : "No release to open"}
+          title={update ? tr("version.openRelease", { version: update.version }) : tr("updates.noRelease")}
           onClick={() => {
             if (update) openReleasePage(update);
           }}
         >
-          Open release page
+          {tr("updates.openReleasePage")}
         </button>
       </div>
       <div className="setting-toggle-row">
@@ -199,28 +206,24 @@ export function UpdatesPanel({
             aria-describedby="update-check-state"
             onChange={(event) => onChange(event.target.checked)}
           />
-          Check GitHub once a day for a newer version
+          {tr("updates.dailyCheck")}
         </label>
         <span className="setting-toggle-state" id="update-check-state">
-          {enabled ? "On" : "Off"}
+          {enabled ? tr("common.on") : tr("common.off")}
         </span>
       </div>
       <label className="updates-channel">
-        <span>Versions to check</span>
+        <span>{tr("updates.channelLabel")}</span>
         <select
-          aria-label="Versions to check"
+          aria-label={tr("updates.channelLabel")}
           value={channel}
           onChange={(event) => onChannelChange(event.target.value === "stable" ? "stable" : "prerelease")}
         >
-          <option value="prerelease">Stable and prerelease versions</option>
-          <option value="stable">Stable versions only</option>
+          <option value="prerelease">{tr("updates.stableAndPrerelease")}</option>
+          <option value="stable">{tr("updates.stableOnly")}</option>
         </select>
       </label>
-      <small className="muted">
-        Reads the public AudioRouter release list on github.com; nothing about you or your audio is sent. If GitHub
-        cannot be reached, AudioRouter retries for up to 12 hours and then waits for the next day. It never downloads or
-        installs an update; the release page opens in your browser. AudioRouter currently publishes prerelease builds.
-      </small>
+      <small className="muted">{tr("updates.privacyNote")}</small>
     </section>
   );
 }

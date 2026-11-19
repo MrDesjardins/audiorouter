@@ -30,6 +30,11 @@ export default tseslint.config(
     },
   },
   {
+    // Catalog tooling runs in Node before TypeScript.
+    files: ["scripts/**/*.mjs"],
+    languageOptions: { globals: { ...globals.node } },
+  },
+  {
     // React code only: Playwright fixtures in e2e/ call a `use` callback that
     // is not React's `use` hook.
     files: ["src/**/*.{ts,tsx}"],

@@ -1,5 +1,6 @@
 import type { DeviceListItem } from "@audiorouter/contracts";
 import { GoalSetupGuide } from "./GoalSetupGuide";
+import { useMessages } from "./i18n/useMessages";
 
 export function FirstRunGuide({
   devices,
@@ -15,6 +16,7 @@ export function FirstRunGuide({
   /** Opens the guided Discord route ("Set up for Discord"). */
   onSetUpDiscord?: () => void;
 }) {
+  const tr = useMessages();
   const active = devices.filter((device) => device.state === "active");
   const captures = active.filter((device) => device.direction === "capture").length;
   const renders = active.filter((device) => device.direction === "render").length;
@@ -22,46 +24,45 @@ export function FirstRunGuide({
 
   return (
     <section className="panel setup-panel first-run-guide" aria-labelledby="first-run-guide-heading">
-      <p className="eyebrow">Getting started</p>
-      <h3 id="first-run-guide-heading">Set up a route on this PC</h3>
+      <p className="eyebrow">{tr("firstRun.eyebrow")}</p>
+      <h3 id="first-run-guide-heading">{tr("firstRun.heading")}</h3>
       <GoalSetupGuide connected={connected} onOpenTools={onOpenTools} onSetUpDiscord={onSetUpDiscord} />
       {!connected ? (
         <p className="muted" role="status">
-          Connect to AudioRouter to check available devices.
+          {tr("firstRun.connect")}
         </p>
       ) : hasRouteEndpoints ? (
         <p className="muted" role="status">
-          Found {captures} input{captures === 1 ? "" : "s"} and {renders} output{renders === 1 ? "" : "s"}. Choose the
-          exact devices in each tool's Properties.
+          {tr("firstRun.found", {
+            count: captures,
+            renders,
+            outputs: tr(renders === 1 ? "firstRun.outputOne" : "firstRun.outputOther"),
+          })}
         </p>
       ) : (
         <p className="muted" role="status">
-          No complete input-and-output pair is available yet. Connect or enable your audio devices, then refresh this
-          list. AudioRouter never installs audio drivers on its own.
+          {tr("firstRun.noPair")}
         </p>
       )}
       <ol>
-        <li>Open Tools and add an Input Device and Output Device, or start with Test Signal.</li>
-        <li>Choose an available device in each tool's Properties, then connect the route.</li>
-        <li>Review the route and press Play when you are ready. AudioRouter never changes Windows default devices.</li>
+        <li>{tr("firstRun.step1")}</li>
+        <li>{tr("firstRun.step2")}</li>
+        <li>{tr("firstRun.step3")}</li>
       </ol>
       <div className="setup-guide-actions actions">
         <button type="button" onClick={onOpenTools} disabled={!connected}>
-          Open Tools
+          {tr("firstRun.openTools")}
         </button>
         {onSetUpDiscord && (
           <button type="button" className="secondary" onClick={onSetUpDiscord} disabled={!connected}>
-            Set up for Discord
+            {tr("firstRun.setUpDiscord")}
           </button>
         )}
         <button type="button" className="secondary" onClick={onRefresh} disabled={!connected}>
-          Refresh devices
+          {tr("firstRun.refresh")}
         </button>
       </div>
-      <small>
-        To send your microphone to another app, use an existing supported virtual audio device such as VB-Cable or
-        Voicemeeter. Install it separately from its vendor.
-      </small>
+      <small>{tr("firstRun.virtualCable")}</small>
     </section>
   );
 }

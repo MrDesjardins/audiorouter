@@ -1,7 +1,41 @@
+import { normalizeLanguageTag } from "./i18n/resolve";
+
 export type ThemeMode = "dark" | "light" | "high-contrast" | "custom";
 
 const THEME_KEY = "audiorouter.ui.theme";
 const LAST_SESSION_KEY = "audiorouter.ui.last-session";
+/** BCP 47 UI language; absent means System default. */
+const LANGUAGE_KEY = "audiorouter.ui.language";
+
+export function readLanguagePreference(storage: Pick<Storage, "getItem"> | null): string | null {
+  try {
+    const value = storage?.getItem(LANGUAGE_KEY);
+    if (!value || value.length > 64) return null;
+    const normalized = normalizeLanguageTag(value);
+    // A denied or corrupt preference falls back to System default.
+    return normalized || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Save an explicit language, or remove the preference for System default. */
+export function writeLanguagePreference(
+  storage: Pick<Storage, "setItem" | "removeItem"> | null,
+  tag: string | null,
+): void {
+  try {
+    if (!storage) return;
+    if (!tag) {
+      storage.removeItem(LANGUAGE_KEY);
+      return;
+    }
+    const normalized = normalizeLanguageTag(tag);
+    if (normalized) storage.setItem(LANGUAGE_KEY, normalized);
+  } catch {
+    /* Optional presentation preference. */
+  }
+}
 
 export function readLastSession(storage: Pick<Storage, "getItem"> | null): string | null {
   try {

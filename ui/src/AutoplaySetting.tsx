@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useMessages } from "./i18n/useMessages";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 
 type Invoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 type Props = { invoke?: Invoke };
@@ -8,14 +10,14 @@ const shellInvoke = () =>
 
 type StartupToggle = {
   id: string;
-  heading: string;
-  label: string;
+  heading: MessageKey;
+  label: MessageKey;
   command: string;
-  description: string;
-  on: string;
-  off: string;
-  unavailable: string;
-  failed: string;
+  description: MessageKey;
+  on: MessageKey;
+  off: MessageKey;
+  unavailable: MessageKey;
+  failed: MessageKey;
 };
 
 /**
@@ -23,9 +25,10 @@ type StartupToggle = {
  * through `<command>_get` / `<command>_set` in the shell's settings file.
  */
 function StartupSetting({ toggle, invoke }: { toggle: StartupToggle; invoke?: Invoke }) {
+  const tr = useMessages();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<MessageKey | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   useEffect(() => {
     setEnabled(null);
@@ -51,7 +54,7 @@ function StartupSetting({ toggle, invoke }: { toggle: StartupToggle; invoke?: In
   const change = async (next: boolean) => {
     if (!invoke || busy) return;
     setBusy(true);
-    setMessage("Saving setting…");
+    setMessage("common.saving");
     try {
       const confirmed = (await invoke(`${toggle.command}_set`, { enabled: next })) === true;
       setEnabled(confirmed);
@@ -62,9 +65,11 @@ function StartupSetting({ toggle, invoke }: { toggle: StartupToggle; invoke?: In
       setBusy(false);
     }
   };
+  // The message state stores keys; render them in the active language.
+  const messageText = message ? tr(message) : null;
   return (
     <section className="panel startup-autoplay" aria-labelledby={`${toggle.id}-heading`}>
-      <h3 id={`${toggle.id}-heading`}>{toggle.heading}</h3>
+      <h3 id={`${toggle.id}-heading`}>{tr(toggle.heading)}</h3>
       <div className="setting-toggle-row">
         <label className="autoplay-toggle">
           <input
@@ -75,15 +80,21 @@ function StartupSetting({ toggle, invoke }: { toggle: StartupToggle; invoke?: In
             aria-busy={busy}
             onChange={(event) => void change(event.target.checked)}
           />
-          {toggle.label}
+          {tr(toggle.label)}
         </label>
         <span className="setting-toggle-state" id={`${toggle.id}-state`} data-testid={`${toggle.id}-state`}>
-          {!invoke || loadFailed ? "Unavailable" : enabled === null ? "Loading…" : enabled ? "On" : "Off"}
+          {!invoke || loadFailed
+            ? tr("common.unavailable")
+            : enabled === null
+              ? tr("common.loading")
+              : enabled
+                ? tr("common.on")
+                : tr("common.off")}
         </span>
       </div>
-      <p className="muted">{invoke ? toggle.description : "Available in the AudioRouter desktop app."}</p>
+      <p className="muted">{invoke ? tr(toggle.description) : tr("common.availableInDesktop")}</p>
       <p className="muted autoplay-message" role="status">
-        {message ?? " "}
+        {messageText ?? " "}
       </p>
     </section>
   );
@@ -91,28 +102,26 @@ function StartupSetting({ toggle, invoke }: { toggle: StartupToggle; invoke?: In
 
 const AUTOPLAY: StartupToggle = {
   id: "autoplay",
-  heading: "Play when AudioRouter starts",
-  label: "Play the selected session automatically",
+  heading: "settings.startup.autoplayHeading",
+  label: "settings.startup.autoplayLabel",
   command: "autoplay",
-  description:
-    "Plays the session selected here when AudioRouter starts, for example at sign-in. The tray menu's Play and Stop audio work the same way without opening this window.",
-  on: "AudioRouter will play the selected session when it starts.",
-  off: "AudioRouter will start stopped.",
-  unavailable: "Autoplay setting unavailable.",
-  failed: "Autoplay could not be saved. Try again.",
+  description: "settings.startup.autoplayDescription",
+  on: "settings.startup.autoplayOn",
+  off: "settings.startup.autoplayOff",
+  unavailable: "settings.startup.autoplayUnavailable",
+  failed: "settings.startup.autoplayFailed",
 };
 
 const API_AUTOSTART: StartupToggle = {
   id: "api-autostart",
-  heading: "Start the API when AudioRouter starts",
-  label: "Start the local API automatically",
+  heading: "settings.startup.apiHeading",
+  label: "settings.startup.apiLabel",
   command: "api_autostart",
-  description:
-    "Keeps controllers such as a Stream Deck connected after a restart. The API uses the port and network it last started with (Settings, API), or this PC only on port 17891.",
-  on: "The API will start with AudioRouter.",
-  off: "Start the API from Settings, API, when you need it.",
-  unavailable: "API auto-start setting unavailable.",
-  failed: "API auto-start could not be saved. Try again.",
+  description: "settings.startup.apiDescription",
+  on: "settings.startup.apiOn",
+  off: "settings.startup.apiOff",
+  unavailable: "settings.startup.apiUnavailable",
+  failed: "settings.startup.apiFailed",
 };
 
 /**

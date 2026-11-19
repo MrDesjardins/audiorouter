@@ -288,6 +288,12 @@ function shellStartupRegistration(core: TauriCore) {
   ] as const;
 }
 
+/** Presentation-only: the shell stores the choice and refreshes its tray. */
+function shellLanguage(core: TauriCore) {
+  return (language: string | null) =>
+    Promise.resolve(core.invoke("set_ui_language", { language })).then(() => undefined);
+}
+
 /** Cable mutations are deliberately available only through the native shell,
  * and only when this installation ships the driver helper and package. */
 function shellCableManagement(core: TauriCore) {
@@ -326,6 +332,7 @@ export function createInitialBackend(
           host.sessionId,
           ...shellStartupRegistration(webview),
           ...shellCableManagement(webview),
+          shellLanguage(webview),
         )
       : createLiveBackendFromTransport(host.transport, host.sessionId);
   }
@@ -335,6 +342,7 @@ export function createInitialBackend(
       sessionId,
       ...shellStartupRegistration(webview),
       ...shellCableManagement(webview),
+      shellLanguage(webview),
     );
   }
   if (isWebView2Webview(webview) && typeof sessionId === "string" && sessionId.length > 0 && sessionId.length <= 128) {

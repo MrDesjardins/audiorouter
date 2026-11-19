@@ -4,6 +4,7 @@
 //! of the session, then start it); the backend then services the audio, so no
 //! page is needed. Results are short texts for the tray status line.
 
+use crate::ui_language;
 use serde_json::{json, Value};
 
 /// One backend call: the method's `result`, or the error message.
@@ -45,24 +46,28 @@ fn active_session_ids(call: &mut Call<'_>) -> Result<Vec<String>, String> {
 
 /// Play the selected (last used) session, as the window's Play does for a
 /// saved route. Returns the tray status text either way.
-pub fn play_saved_session(call: &mut Call<'_>) -> Result<String, String> {
+pub fn play_saved_session(call: &mut Call<'_>, language: &str) -> Result<String, String> {
     let selected = call("sessions.active.get", json!({}))?;
     let Some(session_id) = selected
         .get("sessionId")
         .and_then(Value::as_str)
         .map(str::to_owned)
     else {
-        return Err("No session to play. Open AudioRouter and create one.".into());
+        return Err(ui_language::text(language, "native.noSession").to_owned());
     };
-    play_session(call, &session_id)
+    play_session(call, &session_id, language)
 }
 
 /// Play one saved session, as the window's Play does: prepare every path,
 /// then start it, and never leave a silent simulated run playing.
-pub fn play_session(call: &mut Call<'_>, session_id: &str) -> Result<String, String> {
+pub fn play_session(
+    call: &mut Call<'_>,
+    session_id: &str,
+    language: &str,
+) -> Result<String, String> {
     let session_id = session_id.to_owned();
     if active_session_ids(call)?.contains(&session_id) {
-        return Ok("Already playing".into());
+        return Ok(ui_language::text(language, "native.alreadyPlaying").to_owned());
     }
     // A stopped worker left from an earlier run of this session is detached
     // first, as the window does before preparing again.
@@ -72,44 +77,57 @@ pub fn play_session(call: &mut Call<'_>, session_id: &str) -> Result<String, Str
     }
     call("nativePaths.prepare", json!({ "sessionId": session_id })).map_err(|error| {
         if error.contains("permission denied") {
-            "Play failed: allow device access in the window first (press Play there once)."
-                .to_owned()
+            ui_language::text(language, "native.playFailedConsent").to_owned()
         } else {
-            short(&format!("Play failed: {error}"))
+            short(&ui_language::format(
+                language,
+                "native.playFailed",
+                &[("reason", &error)],
+            ))
         }
     })?;
     let started = call(
         "session.start",
         json!({ "sessionId": session_id, "idempotencyKey": idempotency_key("tray-play") }),
     )
-    .map_err(|error| short(&format!("Play failed: {error}")))?;
+    .map_err(|error| {
+        short(&ui_language::format(
+            language,
+            "native.playFailed",
+            &[("reason", &error)],
+        ))
+    })?;
     if started.get("runtime").and_then(Value::as_str) != Some("native") {
         // Never leave a silent simulated run "playing" (the window does the same).
         let _ = call(
             "session.stop",
             json!({ "sessionId": session_id, "idempotencyKey": idempotency_key("tray-play-undo") }),
         );
-        return Err(
-            "Play failed: no device route. Open AudioRouter and choose the devices.".into(),
-        );
+        return Err(ui_language::text(language, "native.playFailedNoRoute").to_owned());
     }
-    Ok("Playing".into())
+    Ok(ui_language::text(language, "native.playing").to_owned())
 }
 
 /// Stop every playing session. Returns the tray status text.
-pub fn stop_playing(call: &mut Call<'_>) -> Result<String, String> {
+pub fn stop_playing(call: &mut Call<'_>, language: &str) -> Result<String, String> {
     let playing = active_session_ids(call)?;
     if playing.is_empty() {
-        return Ok("Stopped".into());
+        return Ok(ui_language::text(language, "native.stopped").to_owned());
     }
     for session_id in playing {
         call(
             "session.stop",
             json!({ "sessionId": session_id, "idempotencyKey": idempotency_key("tray-stop") }),
         )
-        .map_err(|error| short(&format!("Stop failed: {error}")))?;
+        .map_err(|error| {
+            short(&ui_language::format(
+                language,
+                "native.stopFailed",
+                &[("reason", &error)],
+            ))
+        })?;
     }
-    Ok("Stopped".into())
+    Ok(ui_language::text(language, "native.stopped").to_owned())
 }
 
 /// Wait for the backend to answer after launch, then play (autoplay).
@@ -117,6 +135,7 @@ pub fn autoplay(
     call: &mut Call<'_>,
     attempts: u32,
     delay: std::time::Duration,
+    language: &str,
 ) -> Result<String, String> {
     for attempt in 0..attempts {
         if let Ok(status) = call("status.get", json!({})) {
@@ -125,18 +144,15 @@ pub fn autoplay(
                 .and_then(Value::as_array)
                 .is_some_and(|sessions| !sessions.is_empty())
             {
-                return Err(
-                    "Autoplay paused: unavailable saved sessions need recovery in AudioRouter."
-                        .into(),
-                );
+                return Err(ui_language::text(language, "native.autoplayPaused").to_owned());
             }
-            return play_saved_session(call);
+            return play_saved_session(call, language);
         }
         if attempt + 1 < attempts {
             std::thread::sleep(delay);
         }
     }
-    Err("Autoplay failed: the audio engine did not start".into())
+    Err(ui_language::text(language, "native.autoplayFailed").to_owned())
 }
 
 /// After the backend restarted once, play again the sessions that were
@@ -148,6 +164,7 @@ pub fn restore_after_restart(
     session_ids: &[String],
     attempts: u32,
     delay: std::time::Duration,
+    language: &str,
 ) -> Result<String, String> {
     for attempt in 0..attempts {
         if let Ok(status) = call("status.get", json!({})) {
@@ -156,18 +173,21 @@ pub fn restore_after_restart(
                 .and_then(Value::as_array)
                 .is_some_and(|sessions| !sessions.is_empty())
             {
-                return Err("Restore paused: unavailable saved sessions need recovery.".into());
+                return Err(ui_language::text(language, "native.restorePaused").to_owned());
             }
             let restored = session_ids
                 .iter()
-                .filter(|id| play_session(call, id).is_ok())
+                .filter(|id| play_session(call, id, language).is_ok())
                 .count();
             return if restored == session_ids.len() {
-                Ok("Playing again after a restart".into())
+                Ok(ui_language::text(language, "native.restoredAll").to_owned())
             } else {
-                Err(short(&format!(
-                    "Restored {restored} of {} routes after a restart",
-                    session_ids.len()
+                let restored = restored.to_string();
+                let total = session_ids.len().to_string();
+                Err(short(&ui_language::format(
+                    language,
+                    "native.restoredPartial",
+                    &[("restored", &restored), ("total", &total)],
                 )))
             };
         }
@@ -175,7 +195,7 @@ pub fn restore_after_restart(
             std::thread::sleep(delay);
         }
     }
-    Err("Restore failed: the audio engine did not start".into())
+    Err(ui_language::text(language, "native.restoreFailed").to_owned())
 }
 
 #[cfg(test)]
@@ -218,7 +238,10 @@ mod tests {
     }
 
     fn play(backend: &mut Backend) -> Result<String, String> {
-        play_saved_session(&mut |method: &str, params: Value| backend.call(method, params))
+        play_saved_session(
+            &mut |method: &str, params: Value| backend.call(method, params),
+            "en",
+        )
     }
 
     #[test]
@@ -286,7 +309,10 @@ mod tests {
         let mut backend = Backend::new();
         backend.playing = vec!["mine", "other"];
         assert_eq!(
-            stop_playing(&mut |method: &str, params: Value| backend.call(method, params)),
+            stop_playing(
+                &mut |method: &str, params: Value| backend.call(method, params),
+                "en"
+            ),
             Ok("Stopped".into())
         );
         assert_eq!(
@@ -315,6 +341,7 @@ mod tests {
             },
             1,
             std::time::Duration::ZERO,
+            "en",
         );
         assert!(result.unwrap_err().contains("unavailable saved sessions"));
         assert_eq!(methods, ["status.get"]);
@@ -334,12 +361,14 @@ mod tests {
             },
             5,
             std::time::Duration::ZERO,
+            "en",
         );
         assert_eq!(result, Ok("Playing".into()));
         let never = autoplay(
             &mut |_: &str, _: Value| Err("pipe not ready".into()),
             3,
             std::time::Duration::ZERO,
+            "en",
         );
         assert!(never.unwrap_err().starts_with("Autoplay failed"));
     }
@@ -352,6 +381,7 @@ mod tests {
             &["mine".into()],
             3,
             std::time::Duration::ZERO,
+            "en",
         );
         assert_eq!(restored.unwrap(), "Playing again after a restart");
         assert!(backend.calls.contains(&"nativePaths.prepare".to_owned()));
@@ -364,6 +394,7 @@ mod tests {
             &["mine".into()],
             3,
             std::time::Duration::ZERO,
+            "en",
         );
         assert_eq!(
             partial.unwrap_err(),

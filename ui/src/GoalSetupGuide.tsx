@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMessages } from "./i18n/useMessages";
 
 /** Guidance only: all graph edits and playback remain explicit existing actions. */
 export function GoalSetupGuide({
@@ -10,58 +11,39 @@ export function GoalSetupGuide({
   onOpenTools: () => void;
   onSetUpDiscord?: () => void;
 }) {
+  const tr = useMessages();
   const [goal, setGoal] = useState("voice");
   const recording = goal === "recording";
   return (
     <details>
-      <summary>Choose a setup goal</summary>
+      <summary>{tr("goalGuide.summary")}</summary>
       <label className="discord-setup-field">
-        <span>What do you want to do?</span>
+        <span>{tr("goalGuide.question")}</span>
         <select value={goal} onChange={(event) => setGoal(event.target.value)}>
-          <option value="voice">Processed microphone</option>
-          <option value="gaming">Gaming + Discord</option>
-          <option value="recording">Record one application</option>
+          <option value="voice">{tr("goalGuide.voice")}</option>
+          <option value="gaming">{tr("goalGuide.gaming")}</option>
+          <option value="recording">{tr("goalGuide.recording")}</option>
         </select>
       </label>
       <ol>
+        <li>{recording ? tr("goalGuide.step1Recording") : tr("goalGuide.step1Voice")}</li>
+        <li>{recording ? tr("goalGuide.step2Recording") : tr("goalGuide.step2Voice")}</li>
         <li>
-          {recording
-            ? "In Tools, add Application Capture and choose the exact running process in Properties. Capture includes its process tree, not a browser tab."
-            : "Use Set up for Discord to choose your exact microphone and paired voice cable and add optional voice cleanup."}
+          <strong>{tr("goalGuide.deviceLabel")}</strong> {tr("goalGuide.deviceHelp")}
         </li>
         <li>
-          {recording
-            ? "Add a Recorder and connect only that application to it. Leave it unarmed until you deliberately choose to record."
-            : "Send only your processed microphone to the voice cable. Keep microphone monitoring muted; do not connect a headphone monitoring branch until you deliberately want it."}
+          <strong>{tr("goalGuide.signalLabel")}</strong> {tr("goalGuide.signalHelp")}
         </li>
         <li>
-          <strong>Device availability:</strong> check selected devices in Properties. An available device or running
-          process does not prove audio is arriving.
-        </li>
-        <li>
-          <strong>Local signal, not yet verified:</strong> review the route, then deliberately press Play. Make sound in
-          the selected source and check fresh route meters. Silence needs investigation before continuing.
-        </li>
-        <li>
-          <strong>{recording ? "Recording verification" : "Receiving-app verification"}, not yet verified:</strong>{" "}
-          {recording
-            ? "deliberately arm and start the Recorder, stop it, then review the file for the selected app and absence of unrelated apps."
-            : "open Discord or your receiving app, select the cable's recording end shown by setup, and use its input test. A closed app or correct device selection alone is not a successful audio test."}
+          <strong>{recording ? tr("goalGuide.recordingVerifyLabel") : tr("goalGuide.receivingVerifyLabel")}</strong>{" "}
+          {recording ? tr("goalGuide.recordingVerifyHelp") : tr("goalGuide.receivingVerifyHelp")}
         </li>
       </ol>
-      {goal === "gaming" && (
-        <p>
-          Keep game and browser audio out of the voice cable. Select headphones for Discord playback and check for
-          duplicate playback separately.
-        </p>
-      )}
+      {goal === "gaming" && <p>{tr("goalGuide.gamingNote")}</p>}
       <button type="button" disabled={!connected} onClick={recording || !onSetUpDiscord ? onOpenTools : onSetUpDiscord}>
-        {recording || !onSetUpDiscord ? "Open Tools for this goal" : "Choose microphone and voice cable"}
+        {recording || !onSetUpDiscord ? tr("goalGuide.openTools") : tr("goalGuide.chooseMicrophone")}
       </button>
-      <p className="muted">
-        This guide does not start audio, enable monitoring, arm recording, or change another app. The canvas remains
-        available for advanced routes.
-      </p>
+      <p className="muted">{tr("goalGuide.footnote")}</p>
     </details>
   );
 }

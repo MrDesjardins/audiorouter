@@ -12,6 +12,9 @@ import { usePanelMemory } from "./usePanelMemory";
 import type { Session } from "@audiorouter/contracts";
 import type { ClientRow } from "./backend";
 import { lazy, startTransition, Suspense, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { i18n } from "./i18n";
+import type { MessageKey } from "./i18n/generated/messageKeys";
+import { useMessages } from "./i18n/useMessages";
 
 const ApiPanel = lazy(() => import("./ApiPanel").then((module) => ({ default: module.ApiPanel })));
 const LogFilesPanel = lazy(() => import("./LogFilesPanel").then((module) => ({ default: module.LogFilesPanel })));
@@ -39,54 +42,64 @@ export type StatusView = "status" | "apps" | "timing";
 
 export type WorkbenchTab = "tools" | "properties" | "session" | "recording" | StatusView | SettingsPage;
 
-const DAILY_TABS: [WorkbenchTab, string][] = [
-  ["tools", "Tools"],
-  ["properties", "Properties"],
-  ["status", "Status"],
-  ["session", "Session"],
-  ["recording", "Recording"],
+const DAILY_TABS: [WorkbenchTab, MessageKey][] = [
+  ["tools", "workbench.tools"],
+  ["properties", "workbench.properties"],
+  ["status", "workbench.status"],
+  ["session", "workbench.session"],
+  ["recording", "workbench.recording"],
 ];
 
-const STATUS_VIEWS: [StatusView, string][] = [
-  ["status", "Readiness"],
-  ["apps", "Apps"],
-  ["timing", "Timing"],
+const STATUS_VIEWS: [StatusView, MessageKey][] = [
+  ["status", "workbench.readiness"],
+  ["apps", "workbench.apps"],
+  ["timing", "workbench.timing"],
 ];
 
-const SETTINGS_GROUPS: { title: string; pages: [SettingsPage, string][] }[] = [
+const SETTINGS_GROUPS: { title: MessageKey; pages: [SettingsPage, MessageKey][] }[] = [
   {
-    title: "Audio setup",
+    title: "settingsGroups.audioSetup",
     pages: [
-      ["virtualCables", "Virtual Cables"],
-      ["plugins", "Plug-ins"],
-      ["deviceAccess", "Device access"],
+      ["virtualCables", "settingsPages.virtualCables"],
+      ["plugins", "settingsPages.plugins"],
+      ["deviceAccess", "settingsPages.deviceAccess"],
     ],
   },
   {
-    title: "This app",
+    title: "settingsGroups.thisApp",
     pages: [
-      ["uiOptions", "Appearance"],
-      ["startup", "When AudioRouter starts"],
-      ["shortcuts", "Keyboard shortcuts"],
-      ["versions", "New versions"],
-      ["help", "Help"],
+      ["uiOptions", "settingsPages.uiOptions"],
+      ["startup", "settingsPages.startup"],
+      ["shortcuts", "settingsPages.shortcuts"],
+      ["versions", "settingsPages.versions"],
+      ["help", "settingsPages.help"],
     ],
   },
   {
-    title: "For developers",
+    title: "settingsGroups.forDevelopers",
     pages: [
-      ["mcp", "AI assistants (MCP)"],
-      ["api", "API"],
-      ["diagnostics", "Logs and support"],
-      ["clients", "Connected clients"],
-      ["sessionJson", "Session as JSON"],
-      ["catalog", "Tool catalog"],
-      ["identity", "App identity"],
+      ["mcp", "settingsPages.mcp"],
+      ["api", "settingsPages.api"],
+      ["diagnostics", "settingsPages.diagnostics"],
+      ["clients", "settingsPages.clients"],
+      ["sessionJson", "settingsPages.sessionJson"],
+      ["catalog", "settingsPages.catalog"],
+      ["identity", "settingsPages.identity"],
     ],
   },
 ];
+
+const SETTINGS_PAGE_TITLE_KEYS = Object.fromEntries(SETTINGS_GROUPS.flatMap((group) => group.pages)) as Record<
+  SettingsPage,
+  MessageKey
+>;
 
 export const SETTINGS_PAGES = SETTINGS_GROUPS.flatMap((group) => group.pages);
+
+/** The Settings page name in the active language, for navigation and search. */
+export function settingsPageTitle(page: SettingsPage): string {
+  return i18n.t(SETTINGS_PAGE_TITLE_KEYS[page]) as string;
+}
 
 /** One icon per page; a Record, so a new page cannot ship without one. */
 export const SETTINGS_PAGE_ICONS: Record<SettingsPage, IconName> = {
@@ -130,7 +143,8 @@ export const SETTINGS_PAGE_KEYWORDS: Record<SettingsPage, string> = {
 export function matchingSettingsPages(query: string): Set<SettingsPage> {
   return new Set(
     SETTINGS_PAGES.filter(
-      ([id, title]) => paletteScore({ title, detail: "", keywords: SETTINGS_PAGE_KEYWORDS[id] }, query) > 0,
+      ([id]) =>
+        paletteScore({ title: settingsPageTitle(id), detail: "", keywords: SETTINGS_PAGE_KEYWORDS[id] }, query) > 0,
     ).map(([id]) => id),
   );
 }
@@ -433,6 +447,7 @@ export function Workbench({
   apiBuilder?: (baseUrl: string) => ReactNode;
   verboseLogging?: VerboseLoggingControl;
 }) {
+  const tr = useMessages();
   const tabsRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const previousTab = useRef(tab);
@@ -553,11 +568,11 @@ export function Workbench({
     "aria-labelledby": place === "status" ? `workbench-tab-status-view-${tab}` : `workbench-tab-${tab}`,
     tabIndex: 0,
   };
-  const page = (id: SettingsPage, heading: string, content: ReactNode, eyebrow?: string) =>
+  const page = (id: SettingsPage, content: ReactNode, eyebrow?: MessageKey) =>
     tab === id && (
       <section className="workbench-page" role="tabpanel" {...panelProps}>
-        {eyebrow && <p className="eyebrow">{eyebrow}</p>}
-        <h2>{heading}</h2>
+        {eyebrow && <p className="eyebrow">{tr(eyebrow)}</p>}
+        <h2>{settingsPageTitle(id)}</h2>
         {content}
       </section>
     );
@@ -567,26 +582,26 @@ export function Workbench({
       className={`right-workbench${inSettings ? " settings-view" : ""}`}
       id="routing-workbench"
       tabIndex={-1}
-      aria-label="Tools and settings"
+      aria-label={tr("workbench.toolsAndSettings")}
       onFocusCapture={(event) => {
         lastFocusedControl.current = event.target;
       }}
     >
       {inSettings && (
-        <nav className="settings-nav" aria-label="Settings">
+        <nav className="settings-nav" aria-label={tr("workbench.settings")}>
           <button
             type="button"
             className="secondary settings-back"
             onClick={() => startTransition(() => onTab(lastRouteTab.current))}
           >
-            <span aria-hidden="true">←</span> Back to the route
+            <span aria-hidden="true">←</span> {tr("workbench.backToRoute")}
           </button>
           <label className="settings-search">
-            <span>Find a setting</span>
+            <span>{tr("workbench.findSetting")}</span>
             <input
               type="search"
               value={settingsQuery}
-              placeholder="Shortcut, theme, logs…"
+              placeholder={tr("workbench.searchPlaceholder")}
               aria-describedby="settings-search-hint"
               onChange={(event) => setSettingsQuery(event.target.value)}
               onKeyDown={(event) => {
@@ -601,15 +616,13 @@ export function Workbench({
               }}
             />
             <small id="settings-search-hint">
-              {shownList.length === 0
-                ? "No settings match. Ctrl+K searches everything."
-                : "Ctrl+K searches everything."}
+              {shownList.length === 0 ? tr("workbench.noSettingsMatch") : tr("workbench.searchHint")}
             </small>
           </label>
           <div
             role="tablist"
             aria-orientation="vertical"
-            aria-label="Settings pages"
+            aria-label={tr("workbench.settingsPages")}
             ref={tabsRef}
             onKeyDown={(event) => {
               if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
@@ -626,7 +639,7 @@ export function Workbench({
             {SETTINGS_GROUPS.filter((group) => group.pages.some(([id]) => shownPages.has(id))).map((group) => (
               <div key={group.title} className="settings-nav-group" role="presentation">
                 <p className="eyebrow" role="presentation">
-                  {group.title}
+                  {tr(group.title)}
                 </p>
                 {group.pages
                   .filter(([id]) => shownPages.has(id))
@@ -643,7 +656,7 @@ export function Workbench({
                       onClick={() => startTransition(() => onTab(id))}
                     >
                       <Icon name={SETTINGS_PAGE_ICONS[id]} size={16} />
-                      {label}
+                      {tr(label)}
                     </button>
                   ))}
               </div>
@@ -652,10 +665,10 @@ export function Workbench({
         </nav>
       )}
       <div ref={inSettings ? undefined : tabsRef} className="workbench-tabs" hidden={inSettings}>
-        <div className="workbench-tablist" role="tablist" aria-label="Right sidebar">
+        <div className="workbench-tablist" role="tablist" aria-label={tr("workbench.sidebar")}>
           {tabs.map(([id, label]) => (
             <button
-              key={label}
+              key={id}
               type="button"
               role="tab"
               id={`workbench-tab-${id}`}
@@ -667,7 +680,7 @@ export function Workbench({
               tabIndex={selectedDailyTab === id ? 0 : -1}
               aria-selected={selectedDailyTab === id}
               aria-describedby={id === "status" && statusHasProblem ? "status-problem-description" : undefined}
-              title={id === "status" && statusHasProblem ? "Setup problems found. Open Status for details." : undefined}
+              title={id === "status" && statusHasProblem ? tr("workbench.statusProblem") : undefined}
               className={selectedDailyTab === id ? "active" : ""}
               onKeyDown={(event) => {
                 // The Properties overlay precedes the tablist in DOM order.
@@ -683,7 +696,7 @@ export function Workbench({
                   }
                   return;
                 }
-                const index = tabs.findIndex(([, name]) => name === label);
+                const index = tabs.findIndex(([key]) => key === id);
                 const next =
                   event.key === "Home"
                     ? 0
@@ -702,7 +715,7 @@ export function Workbench({
               }}
               onClick={() => startTransition(() => onTab(id))}
             >
-              {label}
+              {tr(label)}
               {id === "status" && (
                 <span
                   aria-hidden="true"
@@ -716,7 +729,7 @@ export function Workbench({
         <button
           type="button"
           className="settings-gear"
-          aria-label="Settings"
+          aria-label={tr("workbench.settings")}
           title="Settings"
           onClick={() => startTransition(() => onTab(lastSettingsPage.current))}
         >
@@ -750,7 +763,7 @@ export function Workbench({
               }}
               onClick={() => startTransition(() => onTab(id))}
             >
-              {label}
+              {tr(label)}
             </button>
           ))}
         </div>
@@ -809,43 +822,43 @@ export function Workbench({
         {tab === "timing" && (
           <section className="workbench-page" role="tabpanel" {...panelProps}>
             <p className="eyebrow">Where the sound spends time</p>
-            <h2>Signal timing</h2>
+            <h2>{tr("workbench.signalTiming")}</h2>
             {timingContent}
           </section>
         )}
         {tab === "properties" && (
           <section className="workbench-page">
-            <h2>Tool properties</h2>
+            <h2>{tr("workbench.toolProperties")}</h2>
             <p className="muted">Select a tool on the canvas to edit it here.</p>
           </section>
         )}
         {tab === "status" && (
           <section className="workbench-page" role="tabpanel" {...panelProps}>
-            <h2>Status</h2>
+            <h2>{tr("workbench.status")}</h2>
             {statusContent}
           </section>
         )}
         {tab === "apps" && (
           <section className="workbench-page" role="tabpanel" {...panelProps}>
-            <h2>Apps</h2>
+            <h2>{tr("workbench.apps")}</h2>
             {appsContent}
           </section>
         )}
-        {page("virtualCables", "Virtual Cables", virtualCablesContent)}
-        {page("uiOptions", "Appearance", uiOptionsContent)}
-        {page("plugins", "Plug-ins", settingsContent.plugins)}
-        {page("deviceAccess", "Device access", settingsContent.deviceAccess)}
-        {page("startup", "When AudioRouter starts", settingsContent.startup)}
-        {page("shortcuts", "Keyboard shortcuts", settingsContent.shortcuts)}
-        {page("versions", "New versions", settingsContent.versions)}
-        {page("help", "Help", settingsContent.help)}
-        {page("clients", "Connected clients", settingsContent.clients)}
-        {page("sessionJson", "Session as JSON", settingsContent.sessionJson, "For scripts")}
-        {page("catalog", "Tool catalog", settingsContent.catalog)}
-        {page("identity", "App identity", settingsContent.identity)}
+        {page("virtualCables", virtualCablesContent)}
+        {page("uiOptions", uiOptionsContent)}
+        {page("plugins", settingsContent.plugins)}
+        {page("deviceAccess", settingsContent.deviceAccess)}
+        {page("startup", settingsContent.startup)}
+        {page("shortcuts", settingsContent.shortcuts)}
+        {page("versions", settingsContent.versions)}
+        {page("help", settingsContent.help)}
+        {page("clients", settingsContent.clients)}
+        {page("sessionJson", settingsContent.sessionJson, "workbench.forScripts")}
+        {page("catalog", settingsContent.catalog)}
+        {page("identity", settingsContent.identity)}
         {tab === "recording" && (
           <section className="workbench-page" role="tabpanel" {...panelProps}>
-            <h2>Recording</h2>
+            <h2>{tr("workbench.recording")}</h2>
             <p className="muted">
               Recording starts only after you explicitly arm and start a recorder. Confirm the destination and format
               before recording.
@@ -855,7 +868,7 @@ export function Workbench({
         )}
         {tab === "session" && (
           <section className="workbench-page session-page" role="tabpanel" {...panelProps}>
-            <h2>Sessions</h2>
+            <h2>{tr("workbench.sessions")}</h2>
             <p className="muted">
               Switch between saved audio setups, or create a copy to try another arrangement. Use Save at the top when
               you want to keep your edits.
@@ -920,7 +933,7 @@ export function Workbench({
           <section className="workbench-page mcp-page" role="tabpanel" {...panelProps}>
             <header className="mcp-heading">
               <p className="eyebrow">Model Context Protocol</p>
-              <h2>MCP connections</h2>
+              <h2>{tr("workbench.mcpConnections")}</h2>
               <p className="muted">
                 AudioRouter speaks standard MCP. Choose a local app below, or connect ChatGPT through its optional
                 OpenAI tunnel.
@@ -1448,7 +1461,7 @@ export function Workbench({
         )}
         {tab === "diagnostics" && (
           <section className="workbench-page" role="tabpanel" {...panelProps}>
-            <h2>Client diagnostics</h2>
+            <h2>{tr("workbench.clientDiagnostics")}</h2>
             <LogFilesPanel verbose={verboseLogging} clientDiagnostics={diagnostics} />
             <p className="muted">
               Recent interface error categories and route checkpoints. Up to 80 short entries are saved in this local

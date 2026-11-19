@@ -7,6 +7,7 @@ import { SetupCheck, SetupCheckPanel } from "./SetupCheck";
 import type { SetupCheckState } from "./useSetupCheck";
 import { ThisPcDevices } from "./ThisPcDevices";
 import { VirtualCablePanel } from "./VirtualCablePanel";
+import { useMessages } from "./i18n/useMessages";
 
 import { setupCheckRefreshKey } from "./setupCheckRefreshKey";
 
@@ -37,6 +38,7 @@ export function SetupWorkbench({
   setupCheck?: SetupCheckState;
   onOpenFinding?: (finding: SetupFinding) => void;
 }) {
+  const tr = useMessages();
   // Stable across renders so the panel probes the shell once, not per refresh.
   const cableManagementAvailable = useMemo(() => backend.virtualCableManagementAvailable?.bind(backend), [backend]);
   const checkSetup = useMemo(() => backend.checkSetup?.bind(backend), [backend]);
@@ -51,7 +53,7 @@ export function SetupWorkbench({
       {section === "status" ? (
         <>
           <section className="panel setup-panel" aria-labelledby="setup-status-heading">
-            <h3 id="setup-status-heading">Readiness</h3>
+            <h3 id="setup-status-heading">{tr("setupWorkbench.readiness")}</h3>
             <ul className="setup-status-list">
               {setupSteps.map((step) => (
                 <li key={step.id} className={`is-${step.state}`}>
@@ -91,12 +93,8 @@ export function SetupWorkbench({
           />
 
           <section className="panel setup-panel" aria-labelledby="setup-other-apps-heading">
-            <h3 id="setup-other-apps-heading">Use with other apps</h3>
-            <p className="muted">
-              AudioRouter does not change settings in Windows or in other apps. To send your processed microphone to
-              Discord, OBS or a game, end the route in an Output Device set to a virtual cable (for example CABLE
-              Input), then choose the matching input (CABLE Output) as the microphone in that app.
-            </p>
+            <h3 id="setup-other-apps-heading">{tr("setupWorkbench.otherAppsHeading")}</h3>
+            <p className="muted">{tr("setupWorkbench.otherAppsHelp")}</p>
           </section>
         </>
       )}

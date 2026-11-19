@@ -20,6 +20,8 @@ import { TextField } from "./TextField";
 import { ThemeColorPicker } from "./ThemeColorPicker";
 import { ThemePreview } from "./ThemePreview";
 import { themeContrastWarnings } from "./themeContrast";
+import { supportedLocales } from "./i18n";
+import { useMessages } from "./i18n/useMessages";
 
 function ThemeContrastReport({
   theme,
@@ -71,6 +73,8 @@ const CUSTOM_PREFIX = "custom:";
 export function UiOptionsWorkbench({
   theme,
   onTheme,
+  language,
+  onLanguage,
   customThemes,
   onCustomThemes,
   flowAnimation,
@@ -80,6 +84,9 @@ export function UiOptionsWorkbench({
 }: {
   theme: ThemeMode;
   onTheme: (theme: ThemeMode) => void;
+  /** Saved BCP 47 tag, or null for System default. */
+  language: string | null;
+  onLanguage: (language: string | null) => void;
   customThemes: CustomThemeLibrary;
   onCustomThemes: (library: CustomThemeLibrary) => void;
   flowAnimation: FlowAnimationMode;
@@ -87,6 +94,7 @@ export function UiOptionsWorkbench({
   liveAutosave: boolean;
   onLiveAutosave: (enabled: boolean) => void;
 }) {
+  const tr = useMessages();
   const [message, setMessage] = useState("");
   const [error, setError] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -163,11 +171,27 @@ export function UiOptionsWorkbench({
   return (
     <div className="ui-options">
       <section className="panel theme-options" aria-labelledby="theme-options-title">
-        <h3 id="theme-options-title">Appearance</h3>
+        <h3 id="theme-options-title">{tr("appearance.title")}</h3>
         <label>
-          Color theme
+          {tr("appearance.language")}
           <select
-            aria-label="Color theme"
+            aria-label={tr("appearance.language")}
+            value={language ?? "system"}
+            onChange={(event) => onLanguage(event.target.value === "system" ? null : event.target.value)}
+          >
+            <option value="system">{tr("appearance.languageSystem")}</option>
+            {supportedLocales().map((locale) => (
+              <option key={locale.tag} value={locale.tag}>
+                {locale.nativeName}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="muted">{tr("appearance.languageHint")}</p>
+        <label>
+          {tr("appearance.colorTheme")}
+          <select
+            aria-label={tr("appearance.colorTheme")}
             value={selectValue}
             onChange={(event) => {
               const value = event.target.value;
@@ -178,9 +202,9 @@ export function UiOptionsWorkbench({
               } else onTheme(value as ThemeMode);
             }}
           >
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-            <option value="high-contrast">High contrast</option>
+            <option value="dark">{tr("appearance.themeDark")}</option>
+            <option value="light">{tr("appearance.themeLight")}</option>
+            <option value="high-contrast">{tr("appearance.themeHighContrast")}</option>
             {customThemes.themes.map((entry) => (
               <option key={entry.id} value={CUSTOM_PREFIX + entry.id}>
                 {entry.theme.name} (custom)

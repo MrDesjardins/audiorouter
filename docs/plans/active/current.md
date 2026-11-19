@@ -41,6 +41,12 @@ gate are recorded in [the verification plan](issue-149-session-verification.md).
 
 Ordered. Each item is authorized work unless it names an owner decision.
 
+Delegation briefs prepared 2026-11-18: [app-only release qualification](delegate-release-qualification.md)
+and [VST2/VST3 compatibility](delegate-vst-compatibility.md). These define
+separate agent scopes, ordered tasks, evidence and coordination; no execution
+or additional publication authority is implied. The VST brief requires
+reconciling the later handoff against older open-work summaries first.
+
 1. **Release qualification (DIST-02/08, NFR-16, M08).** Finish the automated VM
    installer-lifecycle harness: make guest control repeatable with retained
    structured logs, snapshot the prepared baseline, then cover registration,
@@ -101,6 +107,17 @@ them.
 - Endurance and load-controlled UDP continuity; i686 hosted CI.
 
 ## Active plan index
+
+Owner-requested UI language support (2026-11-19):
+[plan](ui-localization.md). Implemented: central per-language JSON catalogs
+with validation/generation for TypeScript keys and native Rust text, live
+Language selection in Settings → Appearance, localized top bar, workbench
+navigation, Settings/onboarding/dialog surfaces, and the native tray
+(static labels plus status/recording/playback text) following the choice.
+English is the only shipped language. Remaining work is the canvas/Properties
+and tool catalogs, structured backend error mapping, a real reviewed second
+language, and three-theme/Narrator/packaged evidence; see the plan’s execution
+record. No release or PR is authorized by the plan.
 
 Execution plans that still hold open work:
 

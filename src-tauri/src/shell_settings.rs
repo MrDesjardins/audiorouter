@@ -19,6 +19,9 @@ pub struct ShellSettings {
     pub api: Option<ApiListener>,
     /// Global Windows keybindings owned by the desktop shell.
     pub keybinds: Vec<crate::keybinds::KeybindRule>,
+    /// The interface language chosen in the window (BCP 47); `None` follows
+    /// the Windows language. Read before any window exists for tray text.
+    pub language: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -112,6 +115,28 @@ mod tests {
             load(&path).auto_play,
             "unknown keys from a newer version are ignored"
         );
+        let _ = std::fs::remove_dir_all(&folder);
+    }
+
+    #[test]
+    fn the_interface_language_round_trips_and_is_optional() {
+        let folder =
+            std::env::temp_dir().join(format!("audiorouter-shell-language-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&folder);
+        std::fs::create_dir_all(&folder).unwrap();
+        let path = path_beside(&folder.join("state.sqlite"));
+        assert_eq!(load(&path).language, None, "missing file: system default");
+        save(
+            &path,
+            &ShellSettings {
+                language: Some("fr".into()),
+                ..ShellSettings::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(load(&path).language.as_deref(), Some("fr"));
+        save(&path, &ShellSettings::default()).unwrap();
+        assert_eq!(load(&path).language, None);
         let _ = std::fs::remove_dir_all(&folder);
     }
 

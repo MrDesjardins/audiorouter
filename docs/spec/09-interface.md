@@ -363,6 +363,30 @@ from Test Signal or Audio File sources; capture-only paths remain marked muted.
 - **UI-33 — Find anything.** Ctrl+K searches actions, tools, settings, cards on this route and sessions by keyboard. Nothing in it deletes anything.
 - **UI-34 — Change history.** Session lists changes since the last save, in plain words, with undo back to any of them, and saved versions from `graph.versions` with time and who saved. "Who" is an enrolled client's own ID or "this PC", and "not recorded" otherwise; a person is never guessed. "Go back here" (`graph.restorePlan` then commit) makes a new saved version, so later versions remain, and it refuses while there are unsaved changes.
 - **UI-35 — First-minute tour.** After the first goal, three skippable steps point at where tools are added, how to connect them and Play. It never starts audio and can be replayed from Settings → Help.
+- **UI-37 — Interface languages (L10N-01–08, owner request 2026-11-19).**
+  AudioRouter-owned interface text comes from one catalog per language,
+  `ui/src/i18n/locales/<BCP 47 tag>.json`; adding a language means copying
+  English, translating it and running the catalog check, with no component or
+  language-list edits. English is the reference and fallback. The app bundles
+  the catalogs and picks an explicit saved choice, then the ordered Windows
+  languages, then English, matching exact tags before script or language
+  parents. Settings → Appearance offers Language, with System default first
+  and each language named in its own language. Switching is immediate: it
+  keeps audio, drafts, selection and canvas positions, refreshes open text,
+  search and the native tray, and updates document language and direction.
+  User-entered names, IDs, API and wire names, file paths, endpoint
+  identities, plugin/vendor names and canonical values are never translated.
+  Severity, expiry, permissions and recovery decisions use structured state,
+  never English wording. Known backend errors map through the UI; unknown
+  errors keep their technical detail. Numbers, dates, durations, chart ticks
+  and list joins follow the selected locale while request values stay
+  canonical. Longer text must wrap at 200% zoom in every theme without live
+  slots moving (UI-17); right-to-left support is declared only after a
+  reviewed right-to-left catalog and narrated acceptance. Shipped catalogs
+  are complete and validated: metadata, duplicate keys, placeholders, plural
+  categories and supported markup. A fluent reviewer approves terminology and
+  safety text before a language is offered.
+
 - **UI-36 — Canvas readability and aids.** Body text is 14 px. On loading a route, fit the complete route into the available canvas, including routes that require shrinking below 100% zoom (owner decision, 2026-11-07). Cap the initial zoom at 100%; users can zoom in to read and edit individual cards. The fit button and Arrange also show everything. Cards snap to a 24 px grid, with alignment guides, a minimap and arrow-key movement. Properties groups settings in sections that show their values while closed and are remembered per kind of tool on this PC.
 
 Native preparation guidance distinguishes control connection readiness from

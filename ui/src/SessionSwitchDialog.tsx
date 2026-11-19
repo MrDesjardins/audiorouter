@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useMessages } from "./i18n/useMessages";
 
 export function SessionSwitchDialog({
   names,
@@ -7,6 +8,7 @@ export function SessionSwitchDialog({
   names: string[];
   onDecision: (confirmed: boolean) => void;
 }) {
+  const tr = useMessages();
   const cancel = useRef<HTMLButtonElement>(null);
   const confirm = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -36,12 +38,8 @@ export function SessionSwitchDialog({
           }
         }}
       >
-        <h2 id="session-switch-heading">Stop audio and switch session?</h2>
-        <p id="session-switch-description">
-          Switching stops all sessions listed below, including audio used by other apps. Their active recordings will
-          stop and finalize; a finalization failure may leave recoverable partial files. The selected session stays
-          stopped until you press Play.
-        </p>
+        <h2 id="session-switch-heading">{tr("sessionSwitch.heading")}</h2>
+        <p id="session-switch-description">{tr("sessionSwitch.description")}</p>
         <ul>
           {names.map((name, index) => (
             <li key={index}>{name}</li>
@@ -49,10 +47,10 @@ export function SessionSwitchDialog({
         </ul>
         <div className="actions">
           <button ref={cancel} type="button" className="secondary" onClick={() => onDecision(false)}>
-            Cancel
+            {tr("sessionSwitch.cancel")}
           </button>
           <button ref={confirm} type="button" className="primary" onClick={() => onDecision(true)}>
-            Stop and switch
+            {tr("sessionSwitch.confirm")}
           </button>
         </div>
       </section>

@@ -9,6 +9,7 @@ import {
   VirtualDeviceLifecyclePanel,
   VirtualRoutePanel,
 } from "./NativeDevicePanels";
+import { useMessages } from "./i18n/useMessages";
 
 export function DeviceTroubleshooting({
   backend,
@@ -37,12 +38,10 @@ export function DeviceTroubleshooting({
   setRenderEndpointId: Dispatch<SetStateAction<string>>;
   addVirtualBusNode: (busId: string, direction: "renderSource" | "captureSink") => string | undefined;
 }) {
+  const tr = useMessages();
   return (
     <>
-      <p className="muted">
-        Devices chosen here are used only when a single route's Input Device or Output Device tool has no device of its
-        own.
-      </p>
+      <p className="muted">{tr("deviceTroubleshooting.bindingHelp")}</p>
       <NativeEndpointPanel
         backend={backend}
         sessionId={session.id}
@@ -59,7 +58,7 @@ export function DeviceTroubleshooting({
         setRenderEndpointId={setRenderEndpointId}
       />
       <details>
-        <summary>Multiple capture devices</summary>
+        <summary>{tr("deviceTroubleshooting.multipleCapture")}</summary>
         <NativeMultiInputPanel
           backend={backend}
           sessionId={session.id}
@@ -69,7 +68,7 @@ export function DeviceTroubleshooting({
         />
       </details>
       <details>
-        <summary>Multiple output devices</summary>
+        <summary>{tr("deviceTroubleshooting.multipleOutput")}</summary>
         <NativeOutputFanoutPanel
           backend={backend}
           sessionId={session.id}
@@ -78,7 +77,7 @@ export function DeviceTroubleshooting({
         />
       </details>
       <details>
-        <summary>Managed virtual devices and routes</summary>
+        <summary>{tr("deviceTroubleshooting.managedDevices")}</summary>
         <VirtualDeviceLifecyclePanel backend={backend} onAddVirtualBusNode={addVirtualBusNode} />
         <VirtualRoutePanel backend={backend} />
       </details>

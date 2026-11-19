@@ -4,6 +4,13 @@ import "./styles.css";
 import { App } from "./App";
 import { createInitialBackend } from "./host";
 import { invoke as tauriInvoke, isTauri } from "@tauri-apps/api/core";
+import { applyDocumentLanguage, i18n } from "./i18n";
+
+// The catalogs are bundled and initialized synchronously, so the first frame
+// already uses the saved or system language. Keep the document language and
+// writing direction in step with every later change.
+applyDocumentLanguage();
+i18n.on("languageChanged", applyDocumentLanguage);
 
 const globalTauriCore = (window.__TAURI__ as { core?: unknown } | undefined)?.core;
 const tauriCore: unknown = isTauri()
