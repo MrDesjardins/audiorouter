@@ -147,7 +147,7 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "nativeMultiInputs.bindBranches" => {
             "Bind ordered validated fan-out destination nodes to branch-local virtual, recording, and tool observers."
         }
-        "plugins.scan" => "Inspect an explicitly selected plugin directory without loading plugin code.",
+        "plugins.scan" => "Inspect a plugin directory. An optional exact VST2 shell path runs isolated sub-plugin discovery for that binary.",
         "plugins.list" => "List the last bounded plugin scan inventory without scanning or loading plugin code.",
         "plugins.inventory" => "List every remembered plugin scan (one per scanned folder, persisted across restarts) without scanning or loading plugin code.",
         "plugins.retry" => "Explicitly refresh a plugin inventory after a prior scan failure or quarantine decision.",
@@ -159,7 +159,7 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "plugins.parameters" => "Load one currently scanned plugin in its isolated worker and return bounded parameter descriptors.",
         "plugins.buses" => "Load one currently scanned plugin in its isolated worker and return its exact audio input/output buses, including any declared auxiliary input that can become a sidechain port.",
         "plugins.removeSidechainPort" => "Remove the sidechain port of a plugin node; refused while a connection still uses it.",
-        "plugins.addSidechainPort" => "Give a VST3 plugin node its declared auxiliary input as a named sidechain port; no Mixer or connection is created.",
+        "plugins.addSidechainPort" => "Add a named sidechain port from a declared VST3 auxiliary bus or explicitly labelled VST2 key pins. Creates no Mixer or connection.",
         "plugins.programs" => "List bounded program names and any VST3 unit hierarchy for a plugin node in a playing route; VST3 programs are read-only.",
         "plugins.selectProgram" => "Select one bounded VST2 program by index on a plugin node in a playing route.",
         "plugins.applyPreset" => "Apply a bounded VST2 .fxp or .fxb preset file from the plugin's own directory to a plugin node in a playing route.",
@@ -686,7 +686,8 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
         ),
         "plugins.scan" => object_schema(
             json!({
-                "directory": { "type": "string", "minLength": 1 }
+                "directory": { "type": "string", "minLength": 1 },
+                "shellPath": { "type": "string", "minLength": 1 }
             }),
             &["directory"],
         ),

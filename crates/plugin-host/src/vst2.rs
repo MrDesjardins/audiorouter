@@ -1601,10 +1601,17 @@ impl Vst2Library {
         role: Vst2Role,
         sub_plugin_id: u32,
     ) -> Result<Self, Vst2LibraryError> {
+        if sub_plugin_id == 0 {
+            return Err(Vst2LibraryError::InvalidPath);
+        }
         SHELL_CURRENT_ID.with(|cell| cell.set(sub_plugin_id));
         let result = Self::load_as(path, role);
         SHELL_CURRENT_ID.with(|cell| cell.set(0));
-        result
+        let mut library = result?;
+        if library.unique_id() != sub_plugin_id || library.is_shell() {
+            return Err(Vst2LibraryError::InvalidPath);
+        }
+        Ok(library)
     }
 
     /// The AEffect unique ID (the four-character plugin code).
@@ -3057,6 +3064,14 @@ impl Vst2EditorThread {
         path: &Path,
         role: Vst2Role,
     ) -> Result<(Vst2Library, Self), Vst2LibraryError> {
+        Self::spawn_loading_selected(path, role, None)
+    }
+
+    pub fn spawn_loading_selected(
+        path: &Path,
+        role: Vst2Role,
+        sub_id: Option<u32>,
+    ) -> Result<(Vst2Library, Self), Vst2LibraryError> {
         let path = path.to_path_buf();
         let (commands, receiver) = mpsc::channel();
         let (exit_signal, exited) = mpsc::channel();
@@ -3064,7 +3079,11 @@ impl Vst2EditorThread {
         let thread = thread::Builder::new()
             .name("audiorouter-vst2-editor".into())
             .spawn(move || {
-                let library = match Vst2Library::load_as(&path, role) {
+                let loaded = match sub_id {
+                    Some(id) => Vst2Library::load_shell_sub_plugin_as(&path, role, id),
+                    None => Vst2Library::load_as(&path, role),
+                };
+                let library = match loaded {
                     Ok(library) => library,
                     Err(error) => {
                         let _ = loaded_sender.send(Err(error));

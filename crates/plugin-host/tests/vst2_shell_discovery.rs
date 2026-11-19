@@ -9,7 +9,98 @@
 //! ```
 #![cfg(windows)]
 
-use audiorouter_plugin_host::vst2::{Vst2Library, Vst2Role};
+use audiorouter_plugin_host::vst2::{Vst2EditorThread, Vst2Library, Vst2Role};
+
+#[test]
+#[ignore = "requires rebuilt worker and repository shell fixture"]
+fn real_worker_keeps_exact_shell_sub_id_and_refuses_unknown_selection() {
+    use audiorouter_plugin_host::{
+        inspect_binary, worker_clock_tick, SupervisedWorkerProcess, WorkerFrame,
+    };
+    use std::{path::PathBuf, time::Instant};
+    let path = PathBuf::from(std::env::var("AUDIOROUTER_TEST_VST2_SHELL_FIXTURE").unwrap());
+    let worker = PathBuf::from(std::env::var("AUDIOROUTER_TEST_VST2_WORKER").unwrap());
+    let roots = [path.parent().unwrap().to_path_buf()];
+    let mut identity = inspect_binary(&path, &roots).unwrap();
+    let frame = || {
+        WorkerFrame::new(
+            1,
+            worker_clock_tick().saturating_add(10_000_000),
+            2,
+            vec![0.5; 512],
+        )
+        .unwrap()
+    };
+    let spawn = |identity: &audiorouter_plugin_host::PluginIdentity| {
+        SupervisedWorkerProcess::spawn_verified_with_sample_rate(
+            &worker,
+            identity,
+            &roots,
+            2,
+            48_000,
+            Instant::now(),
+        )
+    };
+    assert!(spawn(&identity)
+        .unwrap()
+        .process(frame(), vec![], Instant::now())
+        .is_err());
+    for (code, expected) in [(b"SHC1", 0.125), (b"SHD2", 0.25), (b"SHE3", 0.375)] {
+        identity.metadata.class_ids = vec![format!("{:08X}", u32::from_be_bytes(*code))];
+        let mut selected = spawn(&identity).unwrap();
+        assert_eq!(
+            selected
+                .process(frame(), vec![], Instant::now())
+                .unwrap()
+                .samples,
+            vec![expected; 512]
+        );
+    }
+    identity.metadata.class_ids = vec!["4E4F4E45".into()];
+    assert!(spawn(&identity).is_err());
+
+    fn preset(kind: &[u8; 4], version: u32, body: &[u8]) -> Vec<u8> {
+        let mut bytes = b"CcnK".to_vec();
+        bytes.extend(((16 + body.len()) as u32).to_be_bytes());
+        bytes.extend(kind);
+        bytes.extend(version.to_be_bytes());
+        bytes.extend(b"SHD2");
+        bytes.extend(1_u32.to_be_bytes());
+        bytes.extend(body);
+        bytes
+    }
+    let program = |gain: f32| {
+        let mut body = 1_u32.to_be_bytes().to_vec();
+        let mut name = [0; 28];
+        name[..4].copy_from_slice(b"Gain");
+        body.extend(name);
+        body.extend(gain.to_be_bytes());
+        preset(b"FxCk", 1, &body)
+    };
+    let mut bank_body = 1_u32.to_be_bytes().to_vec();
+    bank_body.extend([0; 128]);
+    bank_body.extend(program(0.75));
+    identity.metadata.class_ids = vec!["53484432".into()];
+    let mut selected = spawn(&identity).unwrap();
+    for (index, (bytes, expected)) in [
+        (program(0.5), 0.125),
+        (preset(b"FxBk", 2, &bank_body), 0.1875),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        selected.apply_preset(&bytes, Instant::now()).unwrap();
+        let mut input = frame();
+        input.sequence = index as u64 + 1;
+        assert_eq!(
+            selected
+                .process(input, vec![], Instant::now())
+                .unwrap()
+                .samples,
+            vec![expected; 512]
+        );
+    }
+}
 
 #[test]
 #[ignore = "requires AUDIOROUTER_TEST_VST2_SHELL_FIXTURE (built with --features shell-fixture)"]
@@ -33,6 +124,22 @@ fn a_shell_fixture_lists_three_named_sub_plugins() {
     assert_eq!(plugins[0].id, u32::from_be_bytes(*b"SHC1"));
     assert_eq!(plugins[1].id, u32::from_be_bytes(*b"SHD2"));
     assert_eq!(plugins[2].id, u32::from_be_bytes(*b"SHE3"));
+    drop(library);
+    for plugin in plugins {
+        let (mut selected, _editor) = Vst2EditorThread::spawn_loading_selected(
+            std::path::Path::new(&path),
+            Vst2Role::Effect,
+            Some(plugin.id),
+        )
+        .expect("load the exact fixture sub-plugin");
+        assert_eq!(selected.effect_name(), plugin.name);
+    }
+    assert!(Vst2Library::load_shell_sub_plugin_as(
+        std::path::Path::new(&path),
+        Vst2Role::Effect,
+        u32::from_be_bytes(*b"NONE"),
+    )
+    .is_err());
 }
 
 #[test]

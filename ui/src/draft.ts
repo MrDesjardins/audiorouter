@@ -1746,7 +1746,7 @@ export function pluginCatalog(
       if (seen.has(key)) continue;
       seen.add(key);
       const file = identity.path.split(/[\\/]/).pop() ?? identity.path;
-      const classes = identity.format === "vst3" && identity.classIds?.length ? identity.classIds : [null];
+      const classes = identity.classIds?.length ? identity.classIds : [null];
       for (const classId of classes) {
         catalog.push({
           entry: classId

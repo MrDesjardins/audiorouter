@@ -24,6 +24,12 @@ const EFF_GET_PLUG_CATEGORY: i32 = 35;
 const EFF_SHELL_GET_NEXT_PLUGIN: i32 = 70;
 const PLUG_CATEGORY_SHELL: isize = 10;
 const EFF_GET_EFFECT_NAME: i32 = 45;
+const AUDIO_MASTER_CURRENT_ID: i32 = 2;
+const SHELL: [(&str, i32); 3] = [
+    ("Shell Clean", i32::from_be_bytes(*b"SHC1")),
+    ("Shell Drive", i32::from_be_bytes(*b"SHD2")),
+    ("Shell Echo", i32::from_be_bytes(*b"SHE3")),
+];
 const EFF_GET_VENDOR_STRING: i32 = 47;
 const EFF_GET_PRODUCT_STRING: i32 = 48;
 const EFF_CAN_DO: i32 = 51;
@@ -197,20 +203,16 @@ unsafe extern "C" fn dispatch(
             1
         }
         EFF_GET_PLUG_CATEGORY => {
-            if cfg!(feature = "shell-fixture") {
+            // SAFETY: dispatch receives the live effect provided by the host.
+            if cfg!(feature = "shell-fixture") && unsafe { (*effect).unique_id } == 0 {
                 PLUG_CATEGORY_SHELL
-            } else if cfg!(feature = "bus-fixture") {
+            } else if cfg!(feature = "bus-fixture") || cfg!(feature = "shell-fixture") {
                 1
             } else {
                 PLUG_CATEGORY_SYNTH
             }
         }
         EFF_SHELL_GET_NEXT_PLUGIN if cfg!(feature = "shell-fixture") => {
-            const SHELL: [(&str, i32); 3] = [
-                ("Shell Clean", i32::from_be_bytes(*b"SHC1")),
-                ("Shell Drive", i32::from_be_bytes(*b"SHD2")),
-                ("Shell Echo", i32::from_be_bytes(*b"SHE3")),
-            ];
             let Some((name, id)) = SHELL.get(_index as usize) else {
                 return 0;
             };
@@ -221,7 +223,13 @@ unsafe extern "C" fn dispatch(
         }
         EFF_GET_EFFECT_NAME | EFF_GET_PRODUCT_STRING => {
             // SAFETY: the host passes a 64-byte string buffer for these.
-            unsafe { write_string(ptr, "AR Test Instrument") };
+            unsafe {
+                let name = SHELL
+                    .iter()
+                    .find(|(_, id)| *id == (*effect).unique_id)
+                    .map_or("AR Test Instrument", |(name, _)| *name);
+                write_string(ptr, name);
+            };
             1
         }
         EFF_GET_VENDOR_STRING => {
@@ -264,41 +272,69 @@ unsafe extern "C" fn process_replacing(
     // SAFETY: the host passes two writable channel buffers of `frames`
     // samples (this plugin declares two outputs) and an open effect.
     unsafe {
-        let state = state_of(effect);
         let left = std::slice::from_raw_parts_mut(*outputs, frames.max(0) as usize);
         let right = std::slice::from_raw_parts_mut(*outputs.add(1), frames.max(0) as usize);
-        let mut pending = std::mem::take(&mut state.pending);
-        pending.sort_by_key(|message| message.delta);
-        let mut next = 0;
-        for (index, (l, r)) in left.iter_mut().zip(right.iter_mut()).enumerate() {
-            while next < pending.len() && pending[next].delta <= index as i32 {
-                let message = pending[next];
-                next += 1;
-                let kind = message.status & 0xF0;
-                if kind == 0x90 && message.velocity > 0 {
-                    state.note = Some(message.note);
-                    state.velocity = message.velocity;
-                    state.phase = 0.0;
-                } else if (kind == 0x80 || kind == 0x90) && state.note == Some(message.note) {
-                    state.note = None;
+        if cfg!(feature = "shell-fixture") {
+            let gain = SHELL
+                .iter()
+                .position(|(_, id)| *id == (*effect).unique_id)
+                .map_or(0.0, |index| (index + 1) as f32 * 0.25);
+            for (channel, output) in [left, right].into_iter().enumerate() {
+                let main = std::slice::from_raw_parts(*_inputs.add(channel), output.len());
+                for (out, main) in output.iter_mut().zip(main) {
+                    *out = main * gain * state_of(effect).volume;
                 }
             }
-            let sample = match state.note {
-                Some(note) => {
-                    let frequency = 440.0 * 2f64.powf((f64::from(note) - 69.0) / 12.0);
-                    state.phase += frequency / f64::from(state.sample_rate);
-                    state.phase -= state.phase.floor();
-                    let level = f64::from(state.velocity) / 127.0 * f64::from(state.volume) * 0.5;
-                    ((state.phase * std::f64::consts::TAU).sin() * level) as f32
-                }
-                None => 0.0,
-            };
-            *l = sample;
-            *r = sample;
+            return;
         }
-        // Events that arrived with offsets past this block are not kept.
-        pending.clear();
-        state.pending = pending;
+        if cfg!(feature = "bus-fixture") {
+            // This fixture declares four readable input channels at entry.
+            // Key controls the corresponding main channel without being mixed in.
+            for (channel, output) in [left, right].into_iter().enumerate() {
+                let main = std::slice::from_raw_parts(*_inputs.add(channel), output.len());
+                let key = std::slice::from_raw_parts(*_inputs.add(channel + 2), output.len());
+                for ((out, main), key) in output.iter_mut().zip(main).zip(key) {
+                    *out = main * (1.0 - key.abs().min(1.0));
+                }
+            }
+            return;
+        }
+        {
+            let state = state_of(effect);
+            let mut pending = std::mem::take(&mut state.pending);
+            pending.sort_by_key(|message| message.delta);
+            let mut next = 0;
+            for (index, (l, r)) in left.iter_mut().zip(right.iter_mut()).enumerate() {
+                while next < pending.len() && pending[next].delta <= index as i32 {
+                    let message = pending[next];
+                    next += 1;
+                    let kind = message.status & 0xF0;
+                    if kind == 0x90 && message.velocity > 0 {
+                        state.note = Some(message.note);
+                        state.velocity = message.velocity;
+                        state.phase = 0.0;
+                    } else if (kind == 0x80 || kind == 0x90) && state.note == Some(message.note) {
+                        state.note = None;
+                    }
+                }
+                let sample = match state.note {
+                    Some(note) => {
+                        let frequency = 440.0 * 2f64.powf((f64::from(note) - 69.0) / 12.0);
+                        state.phase += frequency / f64::from(state.sample_rate);
+                        state.phase -= state.phase.floor();
+                        let level =
+                            f64::from(state.velocity) / 127.0 * f64::from(state.volume) * 0.5;
+                        ((state.phase * std::f64::consts::TAU).sin() * level) as f32
+                    }
+                    None => 0.0,
+                };
+                *l = sample;
+                *r = sample;
+            }
+            // Events that arrived with offsets past this block are not kept.
+            pending.clear();
+            state.pending = pending;
+        }
     }
 }
 
@@ -324,6 +360,25 @@ unsafe extern "C" fn get_parameter(effect: *mut AEffect, index: i32) -> f32 {
 /// Called by a VST2 host once per instance, with a valid host callback.
 #[no_mangle]
 pub unsafe extern "C" fn VSTPluginMain(_host: HostCallback) -> *mut AEffect {
+    let unique_id = if cfg!(feature = "shell-fixture") {
+        // SAFETY: the host callback is valid at entry. CurrentId needs no effect pointer.
+        let id = unsafe {
+            _host(
+                std::ptr::null_mut(),
+                AUDIO_MASTER_CURRENT_ID,
+                0,
+                0,
+                std::ptr::null_mut(),
+                0.0,
+            )
+        } as i32;
+        if id != 0 && !SHELL.iter().any(|(_, known)| *known == id) {
+            return std::ptr::null_mut();
+        }
+        id
+    } else {
+        i32::from_be_bytes(*b"ARTI")
+    };
     let state = Box::new(State {
         sample_rate: 48_000.0,
         volume: 1.0,
@@ -362,7 +417,7 @@ pub unsafe extern "C" fn VSTPluginMain(_host: HostCallback) -> *mut AEffect {
         io_ratio: 1.0,
         object: Box::into_raw(state).cast(),
         user: std::ptr::null_mut(),
-        unique_id: i32::from_be_bytes(*b"ARTI"),
+        unique_id,
         version: 1,
         process_replacing: Some(process_replacing),
         future: [0; 56],

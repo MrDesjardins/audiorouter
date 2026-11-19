@@ -2873,6 +2873,8 @@ pub enum WorkerMessage {
     Ready,
     DescribeBuses,
     Buses(bus_discovery::DiscoveredAudioBuses),
+    DescribeShell,
+    ShellPlugins(Vec<ShellPluginDescriptor>),
     DescribeParameters,
     DescribePrograms,
     Programs {
@@ -3133,6 +3135,7 @@ impl WorkerSession {
             (
                 WorkerSessionState::Active,
                 WorkerMessage::DescribeBuses
+                | WorkerMessage::DescribeShell
                 | WorkerMessage::DescribeParameters
                 | WorkerMessage::DescribePrograms
                 | WorkerMessage::SelectProgram { .. }
@@ -4061,6 +4064,11 @@ impl SupervisedWorkerProcess {
         sample_rate_hz: u32,
         now: Instant,
     ) -> Result<Self, WorkerProcessError> {
+        if identity.format != PluginFormat::Vst3 {
+            return Err(WorkerProcessError::Protocol(
+                "expected VST3 identity".into(),
+            ));
+        }
         identity
             .verify_current(configured_roots)
             .map_err(WorkerProcessError::PluginIdentity)?;
@@ -4074,6 +4082,48 @@ impl SupervisedWorkerProcess {
             Some(&identity.binary_path),
         )
         .map_err(|(error, _)| error)
+    }
+
+    #[cfg(windows)]
+    pub fn spawn_verified_bound_vst2(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        roots: &[PathBuf],
+        binding: &bus_discovery::VerifiedSidechainBinding,
+        sample_rate_hz: u32,
+        now: Instant,
+    ) -> Result<Self, WorkerProcessError> {
+        if identity.format != PluginFormat::Vst2
+            || identity.sha256 != binding.fingerprint()
+            || binding.class_id().is_some()
+            || binding.native_index() != binding.layout().input_buses()[0]
+        {
+            return Err(WorkerProcessError::Protocol(
+                "VST2 pin binding mismatch".into(),
+            ));
+        }
+        identity
+            .verify_current(roots)
+            .map_err(WorkerProcessError::PluginIdentity)?;
+        let mut worker = Self::spawn_multi_bus_with_supervisor(
+            executable,
+            identity,
+            binding.layout(),
+            WorkerSupervisor::new(),
+            now,
+            sample_rate_hz,
+            Some(&identity.binary_path),
+        )
+        .map_err(|(error, _)| error)?;
+        let buses = worker.describe_buses(now)?;
+        if buses.processing_layout().ok().as_ref() != Some(binding.layout())
+            || buses.inputs.get(1).map(|bus| bus.native_index) != Some(binding.native_index())
+        {
+            return Err(WorkerProcessError::Protocol(
+                "VST2 labelled pins changed since discovery".into(),
+            ));
+        }
+        Ok(worker)
     }
 
     /// Prepare the exact multi-bus class verified by discovery. No graph is
@@ -4174,7 +4224,7 @@ impl SupervisedWorkerProcess {
         sample_rate_hz: u32,
         plugin_path: Option<&Path>,
     ) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
-        if identity.format == PluginFormat::Vst2 {
+        if identity.format == PluginFormat::Vst2 && plugin_path.is_none() {
             return Err((
                 WorkerProcessError::Protocol(
                     "VST2 workers support only the single-stream protocol".into(),
@@ -4279,7 +4329,32 @@ impl SupervisedWorkerProcess {
                 supervisor,
             ));
         }
-        let process_result = if identity.format == PluginFormat::Vst3 && plugin_path.is_some() {
+        let shell_class = (identity.format == PluginFormat::Vst2)
+            .then(|| identity.metadata.class_ids.first().map(String::as_str))
+            .flatten();
+        let process_result = if let Some(shell_class) = shell_class {
+            if shell_class.len() != 8
+                || !shell_class.bytes().all(|byte| byte.is_ascii_hexdigit())
+                || shell_class == "00000000"
+            {
+                return Err((
+                    WorkerProcessError::Protocol("invalid VST2 shell sub-ID".into()),
+                    supervisor,
+                ));
+            }
+            WorkerProcess::spawn_inner_with_class(
+                &executable,
+                &identity.sha256,
+                channels,
+                sample_rate_hz,
+                None,
+                None,
+                Some(plugin_path.unwrap_or(&identity.binary_path)),
+                None,
+                Some(shell_class),
+                false,
+            )
+        } else if identity.format == PluginFormat::Vst3 && plugin_path.is_some() {
             WorkerProcess::spawn_inner_with_class(
                 &executable,
                 &identity.sha256,
@@ -4812,6 +4887,25 @@ impl SupervisedWorkerProcess {
             Ok(descriptors) => {
                 self.supervisor.heartbeat(now);
                 Ok(descriptors)
+            }
+            Err(error) => {
+                terminate_child(&mut self.process.child);
+                self.supervisor.record_failure(now);
+                Err(error)
+            }
+        }
+    }
+
+    pub fn describe_shell(
+        &mut self,
+        now: Instant,
+    ) -> Result<Vec<ShellPluginDescriptor>, WorkerProcessError> {
+        self.ensure_running()?;
+        let result = self.process.describe_shell();
+        match result {
+            Ok(plugins) => {
+                self.supervisor.heartbeat(now);
+                Ok(plugins)
             }
             Err(error) => {
                 terminate_child(&mut self.process.child);
@@ -7119,12 +7213,19 @@ impl WorkerProcess {
             command.arg("--instrument");
         }
         if let Some(class_id) = class_id {
-            if class_id.len() != 32 || !class_id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            if !matches!(class_id.len(), 8 | 32)
+                || !class_id.bytes().all(|byte| byte.is_ascii_hexdigit())
+            {
                 return Err(WorkerProcessError::Protocol(
-                    "VST3 class ID must be 32 hexadecimal characters".into(),
+                    "plugin class ID must have 8 (VST2) or 32 (VST3) hexadecimal characters".into(),
                 ));
             }
-            command.args(["--class-id", class_id]);
+            let flag = if class_id.len() == 8 {
+                "--vst2-shell-id"
+            } else {
+                "--class-id"
+            };
+            command.args([flag, class_id]);
         }
         let input_buses = bus_layout.map(|layout| {
             layout
@@ -7342,6 +7443,18 @@ impl WorkerProcess {
             WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
             _ => Err(WorkerProcessError::Protocol(
                 "unexpected bus description response".into(),
+            )),
+        }
+    }
+
+    fn describe_shell(&mut self) -> Result<Vec<ShellPluginDescriptor>, WorkerProcessError> {
+        self.write(&WorkerMessage::DescribeShell)
+            .map_err(WorkerProcessError::Message)?;
+        match self.read_control().map_err(WorkerProcessError::Message)? {
+            WorkerMessage::ShellPlugins(plugins) => Ok(plugins),
+            WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
+            _ => Err(WorkerProcessError::Protocol(
+                "unexpected shell inventory response".into(),
             )),
         }
     }
@@ -8028,6 +8141,18 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
             buses
                 .processing_layout()
                 .map_err(WorkerMessageError::InvalidBusDiscovery)?;
+        }
+        WorkerMessage::ShellPlugins(plugins) => {
+            let mut ids = std::collections::HashSet::new();
+            if plugins.len() > 64
+                || plugins.iter().any(|plugin| {
+                    plugin.id == 0
+                        || !ids.insert(plugin.id)
+                        || ShellPluginDescriptor::new(plugin.id, &plugin.name).is_err()
+                })
+            {
+                return Err(WorkerMessageError::InvalidProgram);
+            }
         }
         WorkerMessage::Parameters { descriptors } => {
             validate_parameter_descriptors(descriptors)?;

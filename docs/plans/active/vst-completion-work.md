@@ -8,6 +8,111 @@ they are not repeated here.
 
 ## Objective
 
+VSTC-06 next slice: pass the selected shell ID to the worker and verify the
+returned AEffect identity before handshake. Cover valid and unknown fixture
+IDs before extending inventory and persistence. Rollback reverts the shell
+argument and its fixture coverage together.
+
+Windows shell results: explicitly probing one VST2 binary with
+`plugins.scan` + `shellPath` returns the bounded names and IDs, for example
+Shell Drive / `53484432`. The UI uses the name for the choice and the ID
+for the saved node. The real worker distinguishes all three fixture IDs
+by their output and refuses an unknown ID or processing the container.
+`shell_scan_and_saved_route_bind_the_exact_sub_id` passed after reopening
+SQLite, capturing through `plugins.saveState`, restoring the original
+sub-ID and refusing its state on another sub-ID. The scoped state record
+uses a separate plugin ID field and retains the actual binary SHA-256.
+Migration uses the same identity lookup; cleanup and bundle staging
+operate on state IDs and preserve the scoped plugin ID.
+
+VSTC-10 next slice: reuse the existing VST3 message-pumping harness
+with a hidden parent. Keep the visible scenario opt-in and use only
+generated blocks. The harness change can be reverted independently.
+
+VSTC-04 next slice: extend the existing reversible add/remove dispatch
+methods for verified non-shell VST2 pins, then qualify the fixture through
+dispatcher and MCP. Keep the same authorization and graph transaction.
+
+Windows VSTC-04 results: exact-name dispatcher add and compiled route pass
+using the bus fixture. The default MCP fixture test passes Observer denial
+and Editor add/remove. Properties tests pass 15 cases, and headless Edge
+passes three VST2 cases with screenshots in
+`target/vst-qualification/browser`. The browser harness simulates the
+backend; the dispatcher/MCP tests load the real worker. Both engine
+combination suites passed (6 tests each). The browser runner emitted its
+existing NO_COLOR/FORCE_COLOR warning. A refreshed recording remains open.
+
+VSTC-06 correction: the repository implements shell enumeration and
+selection in `Vst2Library` only. Search for `load_shell_sub_plugin_as`
+finds direct loader tests and its definition but no production worker
+caller. Next wire selected sub-ID to the loader thread and reject a shell
+container as a processor before extending selection surfaces. Revert that
+worker change independently of the VST2 sidechain work if necessary.
+
+VSTC-02 next slice: make the existing four-pin fixture apply key-dependent
+gain to main only, preserving its labelled versus unlabelled discovery switch.
+Qualify the fixture first, then connect production VST2 worker processing and
+exact pin binding. Revert the fixture independently if needed. Leave VST2
+playback gated until the worker and backend tests pass.
+
+VSTC-02/03 Windows result: the repository bus fixture and debug VST2 worker
+passed the opt-in `labeled_pins_are_discovered_but_unlabeled_surround_is_refused`
+and `backend_compiles_the_verified_vst2_labelled_key_route` tests. The worker
+and production compiled route both produced 0.5 with no key, 0.125 with
+0.75 key, and silence with key only. Worker discovery refused the same
+four pins after their labels changed to surround. The control test uses
+`AUDIOROUTER_PLUGIN_WORKER_PATH`, while plugin-host tests use
+`AUDIOROUTER_TEST_VST2_WORKER`; both use
+`AUDIOROUTER_TEST_VST2_BUS_FIXTURE`. Port creation through dispatcher,
+MCP and Properties remains a separate integration step. No endpoints or
+editor windows opened.
+
+Next VSTC-02/03 validation slice: dispatch Stop against the registered worker,
+apply a non-default gain only to that worker, and compare AGain's main-only,
+key-only and combined transfer before and after restoration. AGain adds the
+key to the main by design. Use zero key as the no-leakage baseline.
+
+2026-11-18 (VSTC-02/03, PLUG-04): automatic Stop-path capture enumerated
+only single-stream bridges. It now includes live sidechain bridges. The
+opt-in AGain test uses disposable SQLite storage, the production stage
+preparer and native route compiler, automatic capture, and a new worker
+prepared from the stored mapping. Finite nonzero output passed before and
+after restore. Key isolation and restored gain equivalence remain open.
+Rollback: revert the capture enumeration and test together.
+
+Follow-up Windows run: `ControlPlane::dispatch` invokes `sessions.stop`.
+The test sets worker-only gain 0.25, verifies the stored state mapping,
+then measures restored transfer at 0.025 (main only), 0.05 (key only), and
+0.075 (both). AGain mixes its auxiliary bus by design. Temporarily
+enumerating only standard bridges failed with zero stored mappings.
+Restoring the fix passed the real-worker test. See the delegation brief
+for command and hashes.
+
+Current VSTC reconciliation: 01 has persisted topology and transaction
+coverage. 02/03 have VST3 graph and worker evidence above, with VST2
+labelled pins still discoverable only. 04 already has add/remove API,
+default MCP and three-theme Properties evidence from November 15.
+05–09 are implemented at the branch base, as corroborated by the
+November 16 audit commits `742a5f10f` and `0c17783b3`. The latter
+qualifies fixture shell enumeration, leaving exact sub-ID execution,
+saved identity, real preset persistence and remaining opt-in conformance
+runs to qualify. 10 has editor host support and needs pumped-parent
+processing/resize/recovery qualification and attended DPI. 11 needs
+current corpus and artifact evidence, with hosted CI, hardware, signing
+and owner checks still separate. Next slice: rerun shell fixture and
+inspect VST2 multi-bus protocol/processing before changing support.
+
+Windows follow-up: control library 442 passed / 22 ignored, both source and
+tool combination suites passed, and strict control Clippy passed. The VST2
+fixture originally enumerated three IDs but always returned the same effect.
+It now implements `audioMasterCurrentId`. The opt-in
+`a_shell_fixture_lists_three_named_sub_plugins` test passed opening all three
+exact IDs and rejecting an unknown one, with
+`AUDIOROUTER_TEST_VST2_SHELL_FIXTURE` set to
+`target/vst-shell/debug/ar_test_instrument.dll` built from
+`tools/vst2-test-instrument` with `--features shell-fixture`. This is
+direct loader evidence. Worker/API saved identity remains open.
+
 Backend assembly checkpoint (2026-11-14, VSTC-02/03, PLUG-01/03/05):
 `start_plugin_bridges` now returns typed standard/sidechain bridge handles.
 Ordinary parameter/editor/MIDI registries retain their existing standard
@@ -1032,3 +1137,5 @@ an empty root program list. Passed with `AUDIOROUTER_VST3_WORKER_PATH` pointing
 to the freshly built C++ worker and `AUDIOROUTER_TEST_VST3_EFFECT` pointing to
 the SDK fixture. This exercises API resolution/serialization without opening
 an audio endpoint; it is not live-ear or hardware qualification.
+
+VST2 shell supervisor review follow-up (Windows, 2026-11-18): the scan output carries bounded `shellEffects` ({id, name}) and the Properties list shows "Add <name>" (hex ID only when no name exists); the hex sub-ID stays the node's `classId` identity. `shell_scan_and_saved_route_bind_the_exact_sub_id` now saves through SQLite, reopens the database, reloads the session, prepares and publishes the stage, applies FXP/FXB presets, captures state and proves it is refused on another sub-ID and an unknown sub-ID (passed 2026-11-18 with the shell fixture and rebuilt worker). `plugin_state_identity` (`<file hash>:<SUB-ID>`, used at capture, load and migration call sites in `plugins.rs`; the file hash is the SHA-256 of the binary, the combined key is not a hash) is consistent across all three call sites. Checks: cargo fmt, Clippy `-D warnings` (control, plugin-host), UI lint, PluginNodeInspector tests (15) pass; `cargo fmt` and UI format had drifted and were reapplied. Not run: full workspace/UI suites after this slice, state isolation across two *different saved* sub-IDs in one session (only cross-refusal is proven).

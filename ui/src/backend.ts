@@ -358,7 +358,7 @@ export interface UiBackend {
   listProcessors(): Promise<DiscoveryDocument["processors"]>;
   processorResponse(params: ProcessorResponseParams): Promise<ProcessorResponse>;
   listPresets(): Promise<DiscoveryDocument["presets"]>;
-  scanPlugins(directory: string): Promise<PluginScanResult>;
+  scanPlugins(directory: string, shellPath?: string): Promise<PluginScanResult>;
   listPlugins(directory: string): Promise<PluginScanResult>;
   /** Every remembered scan (persisted by the backend); optional for older backends. */
   pluginInventory?(): Promise<MethodResult["plugins.inventory"]>;
@@ -1120,8 +1120,8 @@ export function createLiveBackend(
     async listPresets() {
       return client.request("presets.list", undefined);
     },
-    async scanPlugins(directory) {
-      return client.request("plugins.scan", { directory });
+    async scanPlugins(directory, shellPath) {
+      return client.request("plugins.scan", { directory, ...(shellPath ? { shellPath } : {}) });
     },
     async savePluginState(currentSessionId, nodeId) {
       return client.request("plugins.saveState", { sessionId: currentSessionId, nodeId });

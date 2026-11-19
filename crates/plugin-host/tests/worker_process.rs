@@ -3496,8 +3496,8 @@ unsafe extern "system" {
 
 /// Opt-in check of a VST3 effect's own editor: it opens inside a visible,
 /// pumping parent window owned by this process, sizes that window to fit,
-/// keeps processing audio while open, and closes cleanly. Set
-/// `AUDIOROUTER_VST3_EDITOR_HOLD_MS` to keep it on screen for a look.
+/// keeps processing generated audio while open, and closes cleanly. The
+/// parent stays hidden unless the attended run explicitly enables visibility.
 #[cfg(all(windows, feature = "test-fixtures"))]
 #[test]
 #[ignore = "requires AUDIOROUTER_VST3_FIXTURE, AUDIOROUTER_VST3_NATIVE_WORKER and a Windows desktop"]
@@ -3505,6 +3505,7 @@ fn native_vst3_editor_opens_in_a_pumping_parent() {
     use std::sync::atomic::{AtomicBool, Ordering};
     let plugin_path = PathBuf::from(std::env::var("AUDIOROUTER_VST3_FIXTURE").unwrap());
     let worker_path = PathBuf::from(std::env::var("AUDIOROUTER_VST3_NATIVE_WORKER").unwrap());
+    let visible = std::env::var("AUDIOROUTER_VST3_EDITOR_VISIBLE").as_deref() == Ok("1");
     let hold = Duration::from_millis(
         std::env::var("AUDIOROUTER_VST3_EDITOR_HOLD_MS")
             .ok()
@@ -3534,8 +3535,8 @@ fn native_vst3_editor_opens_in_a_pumping_parent() {
         let title: Vec<u16> = "AudioRouter VST3 editor host test\0"
             .encode_utf16()
             .collect();
-        // WS_OVERLAPPEDWINDOW | WS_VISIBLE, at a size the editor must change.
-        let style = 0x00CF_0000 | 0x1000_0000;
+        // WS_OVERLAPPEDWINDOW, optionally WS_VISIBLE for attended runs.
+        let style = 0x00CF_0000 | if visible { 0x1000_0000 } else { 0 };
         // SAFETY: NUL-terminated buffers outlive the synchronous call.
         let parent = unsafe {
             CreateWindowExW(

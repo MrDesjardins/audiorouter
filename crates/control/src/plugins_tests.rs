@@ -39,17 +39,19 @@ fn add_sidechain_port_refuses_unsupported_nodes_without_changing_the_session() {
     let reply = sidechain_request(&mut plane, original.id.as_str(), node_id.as_str());
     let message = reply.error.expect("a non-plugin node is refused").message;
     assert!(message.contains("only a plugin node"), "{message}");
-    // 2. A VST2 plugin has no declared auxiliary bus in this path.
+    // 2. VST2 shell sub-plugins cannot use the non-shell sidechain path.
     let mut vst2 = original.clone();
     vst2.id = EntityId::new("vst2-session");
     vst2.nodes[0].kind = NodeKind::Plugin;
     vst2.nodes[0].ports = plugin_ports();
-    vst2.nodes[0].parameters =
-        serde_json::from_value(json!({ "path": "C:\\VST2\\x.dll", "format": "vst2" })).unwrap();
+    vst2.nodes[0].parameters = serde_json::from_value(
+        json!({ "path": "C:\\VST2\\x.dll", "format": "vst2", "classId": "123" }),
+    )
+    .unwrap();
     plane.insert_session(vst2.clone()).unwrap();
     let reply = sidechain_request(&mut plane, vst2.id.as_str(), node_id.as_str());
     let message = reply.error.expect("VST2 is refused").message;
-    assert!(message.contains("VST3"), "{message}");
+    assert!(message.contains("shell"), "{message}");
     // 3. A VST3 plugin whose class was never chosen.
     let mut unclassed = vst2.clone();
     unclassed.id = EntityId::new("vst3-unclassed");
@@ -431,10 +433,162 @@ fn plugins_programs_dispatches_real_vst3_unit_hierarchy() {
 
 #[cfg(windows)]
 #[test]
+#[ignore = "requires the repository VST2 shell fixture and worker"]
+fn shell_scan_and_saved_route_bind_the_exact_sub_id() {
+    let path =
+        std::path::PathBuf::from(std::env::var("AUDIOROUTER_TEST_VST2_SHELL_FIXTURE").unwrap());
+    let profile = std::env::temp_dir().join(format!(
+        "audiorouter-shell-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir(&profile).unwrap();
+    let fixture = profile.join("shell-fixture.dll");
+    std::fs::copy(path, &fixture).unwrap();
+    let path = fixture;
+    let root = profile.as_path();
+    let database = profile.join("session.sqlite");
+    let mut plane = ControlPlane::with_storage("shell-fixture", Storage::open(&database).unwrap());
+    let response = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "plugins.scan".into(),
+        params: Some(json!({"directory": root, "shellPath": path})),
+    });
+    assert!(response.error.is_none(), "{:?}", response.error);
+    let inventory = response.result.unwrap();
+    let identity = &inventory["entries"][0]["identity"];
+    assert_eq!(
+        identity["shellEffects"][1],
+        json!({"id":"53484432","name":"Shell Drive"})
+    );
+    assert_eq!(
+        identity["classIds"],
+        json!(["53484331", "53484432", "53484533"])
+    );
+    let mut saved = session();
+    saved.edges.clear();
+    saved.nodes.truncate(1);
+    let node = &mut saved.nodes[0];
+    node.kind = NodeKind::Plugin;
+    node.ports = serde_json::from_value(json!([
+        {"name":"in","direction":"input","channels":2},
+        {"name":"out","direction":"output","channels":2}
+    ]))
+    .unwrap();
+    node.parameters = serde_json::from_value(json!({
+        "path": path, "format": "vst2", "fingerprint": identity["sha256"],
+        "classId": "53484432"
+    }))
+    .unwrap();
+    plane.insert_session(saved.clone()).unwrap();
+    drop(plane);
+    let storage = Storage::open(&database).unwrap();
+    let reloaded = storage.load_session(&saved.id).unwrap().unwrap();
+    assert_eq!(reloaded, saved);
+    let mut plane = ControlPlane::with_storage("shell-fixture-reopened", storage);
+    plane.insert_plugin_inventory(root.to_string_lossy().into_owned(), inventory);
+    plane.ensure_session_loaded(&reloaded.id).unwrap();
+    let stages = plane
+        .prepare_plugin_stages(&reloaded, 48_000, None)
+        .unwrap();
+    assert!(stages.stages.contains_key(&reloaded.nodes[0].id));
+    stages.publish(&plane, &reloaded.id).unwrap();
+    let make_preset = |kind: &[u8; 4], version: u32, body: &[u8]| {
+        let mut bytes = b"CcnK".to_vec();
+        bytes.extend(((16 + body.len()) as u32).to_be_bytes());
+        bytes.extend(kind);
+        bytes.extend(version.to_be_bytes());
+        bytes.extend(b"SHD2");
+        bytes.extend(1_u32.to_be_bytes());
+        bytes.extend(body);
+        bytes
+    };
+    let program = |gain: f32| {
+        let mut body = 1_u32.to_be_bytes().to_vec();
+        body.extend([0; 28]);
+        body.extend(gain.to_be_bytes());
+        make_preset(b"FxCk", 1, &body)
+    };
+    let mut bank = 1_u32.to_be_bytes().to_vec();
+    bank.extend([0; 128]);
+    bank.extend(program(0.75));
+    let mut previous = plane
+        .plugin_live_bridge(&reloaded.id, &reloaded.nodes[0].id)
+        .unwrap()
+        .save_state()
+        .unwrap()
+        .sha256;
+    for (file, bytes) in [
+        ("gain.fxp", program(0.5)),
+        ("gain.fxb", make_preset(b"FxBk", 2, &bank)),
+    ] {
+        let preset = profile.join(file);
+        std::fs::write(&preset, bytes).unwrap();
+        let reply = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(3)),
+            method: "plugins.applyPreset".into(),
+            params: Some(json!({"sessionId": reloaded.id, "nodeId": reloaded.nodes[0].name, "presetPath": preset})),
+        });
+        assert!(reply.error.is_none(), "{:?}", reply.error);
+        let actual = plane
+            .plugin_live_bridge(&reloaded.id, &reloaded.nodes[0].id)
+            .unwrap()
+            .save_state()
+            .unwrap()
+            .sha256;
+        assert_ne!(actual, previous);
+        previous = actual;
+    }
+    let capture = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(2)),
+        method: "plugins.saveState".into(),
+        params: Some(json!({"sessionId": reloaded.id, "nodeId": reloaded.nodes[0].id})),
+    });
+    assert!(capture.error.is_none(), "{:?}", capture.error);
+    let mut with_state = reloaded.clone();
+    with_state.nodes[0]
+        .parameters
+        .insert("stateId".into(), capture.result.unwrap()["stateId"].clone());
+    plane
+        .prepare_plugin_stages(&with_state, 48_000, None)
+        .unwrap();
+    with_state.nodes[0]
+        .parameters
+        .insert("classId".into(), json!("53484331"));
+    assert!(plane
+        .prepare_plugin_stages(&with_state, 48_000, None)
+        .is_err());
+    let mut changed = reloaded;
+    changed.nodes[0]
+        .parameters
+        .insert("classId".into(), json!("4E4F4E45"));
+    assert!(plane.prepare_plugin_stages(&changed, 48_000, None).is_err());
+}
+
+#[cfg(windows)]
+#[test]
 #[ignore = "requires SDK AGain and rebuilt native worker overrides"]
 fn backend_plugin_stage_path_prepares_and_compiles_a_verified_sidechain_route() {
+    exercise_real_sidechain_route("AUDIOROUTER_VST3_FIXTURE", false);
+}
+
+#[cfg(windows)]
+#[test]
+#[ignore = "requires a rebuilt VST2 worker and the repository bus fixture"]
+fn backend_compiles_the_verified_vst2_labelled_key_route() {
+    exercise_real_sidechain_route("AUDIOROUTER_TEST_VST2_BUS_FIXTURE", true);
+}
+
+#[cfg(windows)]
+fn exercise_real_sidechain_route(fixture: &str, vst2: bool) {
     use audiorouter_domain::{Edge, Node, Port};
-    let path = std::path::PathBuf::from(std::env::var("AUDIOROUTER_VST3_FIXTURE").unwrap());
+    let path = std::path::PathBuf::from(std::env::var(fixture).unwrap());
     let root = path.parent().unwrap().to_path_buf();
     let identity =
         audiorouter_plugin_host::inspect_binary(&path, std::slice::from_ref(&root)).unwrap();
@@ -459,12 +613,16 @@ fn backend_plugin_stage_path_prepares_and_compiles_a_verified_sidechain_route() 
         "effect",
         NodeKind::Plugin,
         &[
-            ("sidechain", PortDirection::Input, 1),
+            ("sidechain", PortDirection::Input, if vst2 { 2 } else { 1 }),
             ("in", PortDirection::Input, 2),
             ("out", PortDirection::Output, 2),
         ],
     );
     plugin.parameters = serde_json::from_value(json!({ "path": path, "format": "vst3", "classId": "41347FD6FED64094AFBB12B7DBA1D441", "fingerprint": identity.sha256 })).unwrap();
+    if vst2 {
+        plugin.parameters.insert("format".into(), json!("vst2"));
+        plugin.parameters.remove("classId");
+    }
     let edge = |id: &str, from: &str, to: &str, port: &str, matrix: Vec<f32>| Edge {
         id: EntityId::new(id),
         source_node: EntityId::new(from),
@@ -488,7 +646,7 @@ fn backend_plugin_stage_path_prepares_and_compiles_a_verified_sidechain_route() 
             make(
                 "key",
                 NodeKind::PhysicalInput,
-                &[("out", PortDirection::Output, 1)],
+                &[("out", PortDirection::Output, if vst2 { 2 } else { 1 })],
             ),
             plugin,
             make(
@@ -499,7 +657,17 @@ fn backend_plugin_stage_path_prepares_and_compiles_a_verified_sidechain_route() 
         ],
         edges: vec![
             edge("main-in", "main", "effect", "in", vec![1.0, 0.0, 0.0, 1.0]),
-            edge("key-in", "key", "effect", "sidechain", vec![1.0]),
+            edge(
+                "key-in",
+                "key",
+                "effect",
+                "sidechain",
+                if vst2 {
+                    vec![1.0, 0.0, 0.0, 1.0]
+                } else {
+                    vec![1.0]
+                },
+            ),
             edge("output", "effect", "sink", "in", vec![1.0, 0.0, 0.0, 1.0]),
         ],
     };
@@ -520,7 +688,21 @@ fn backend_plugin_stage_path_prepares_and_compiles_a_verified_sidechain_route() 
     session.nodes[2]
         .parameters
         .insert("classId".into(), json!("41347FD6FED64094AFBB12B7DBA1D441"));
-    let mut plane = ControlPlane::default();
+    if vst2 {
+        session.nodes[2].parameters.remove("classId");
+    }
+    let profile = std::env::temp_dir().join(format!(
+        "audiorouter-again-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir(&profile).unwrap();
+    let storage = Storage::open(profile.join("state.sqlite")).unwrap();
+    let mut plane = ControlPlane::with_storage("again-test", storage);
+    plane.insert_session(session.clone()).unwrap();
     plane.insert_plugin_inventory(
         root.to_string_lossy().into_owned(),
         json!({
@@ -528,8 +710,45 @@ fn backend_plugin_stage_path_prepares_and_compiles_a_verified_sidechain_route() 
             "entries": [{ "path": path, "identity": { "sha256": identity.sha256 } }]
         }),
     );
+    if vst2 {
+        let mut stopped = session.clone();
+        stopped.nodes[2].name = "Labelled effect".into();
+        let scan = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "plugins.scan".into(),
+            params: Some(json!({"directory": root})),
+        });
+        assert!(scan.error.is_none(), "{:?}", scan.error);
+        stopped.nodes[2]
+            .ports
+            .retain(|port| port.name != "sidechain");
+        stopped
+            .edges
+            .retain(|edge| edge.destination_port != "sidechain");
+        plane.insert_session(stopped.clone()).unwrap();
+        let result = sidechain_request(&mut plane, stopped.id.as_str(), "Labelled effect");
+        assert!(result.error.is_none(), "{:?}", result.error);
+        let changed = plane.get_session(&stopped.id).unwrap();
+        assert_eq!(
+            changed.nodes[2].plugin_sidechain_port().unwrap().channels,
+            2
+        );
+        assert_eq!(changed.nodes.len(), stopped.nodes.len());
+        assert_eq!(changed.edges, stopped.edges);
+    }
     let prepared = plane.prepare_plugin_stages(&session, 48_000, None).unwrap();
     prepared.publish(&plane, &session.id).unwrap();
+    if !vst2 {
+        plane
+            .sidechain_bridge(&session.id, &EntityId::new("effect"))
+            .unwrap()
+            .set_parameters(vec![audiorouter_plugin_host::ParameterEvent::new(
+                0, 0.25, 0,
+            )
+            .unwrap()])
+            .unwrap();
+    }
     let processors = prepared.stages;
     let set = audiorouter_engine::compile_native_paths_with_plugins_and_audio(
         &session,
@@ -539,12 +758,12 @@ fn backend_plugin_stage_path_prepares_and_compiles_a_verified_sidechain_route() 
     )
     .unwrap();
     let graph = &set.paths()[0];
-    let inputs = graph
+    let mut inputs = graph
         .input_node_ids()
         .iter()
         .map(|id| {
             let mut block = AudioBlock::new(
-                if id.as_str() == "main" { 2 } else { 1 },
+                if vst2 || id.as_str() == "main" { 2 } else { 1 },
                 audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
             )
             .unwrap();
@@ -559,6 +778,42 @@ fn backend_plugin_stage_path_prepares_and_compiles_a_verified_sidechain_route() 
         .collect::<Vec<_>>();
     let mut scratch = AudioBlock::new(2, audiorouter_engine::PROCESSING_QUANTUM_FRAMES).unwrap();
     let mut output = AudioBlock::new(2, audiorouter_engine::PROCESSING_QUANTUM_FRAMES).unwrap();
+    if vst2 {
+        for (main, key, expected) in [(0.5, 0.0, 0.5), (0.5, 0.75, 0.125), (0.0, 0.75, 0.0)] {
+            for (id, block) in graph.input_node_ids().iter().zip(&mut inputs) {
+                for channel in 0..block.channels() {
+                    block
+                        .channel_mut(channel)
+                        .unwrap()
+                        .fill(if id.as_str() == "main" { main } else { key });
+                }
+            }
+            let mut matched = false;
+            for index in 0..40 {
+                graph
+                    .process(&inputs, &mut scratch, &mut [&mut output])
+                    .unwrap();
+                if index >= 10 {
+                    let samples = output.channel(0).unwrap();
+                    assert!(samples.iter().all(|sample| sample.is_finite()));
+                    matched |= samples
+                        .iter()
+                        .all(|sample| (*sample - expected).abs() < 0.0001);
+                    if main == 0.0 {
+                        assert!(samples.iter().all(|sample| *sample == 0.0));
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(3));
+            }
+            assert!(matched, "expected {expected} from main={main}, key={key}");
+        }
+        assert!(plane
+            .sidechain_bridge(&session.id, &EntityId::new("effect"))
+            .unwrap()
+            .failure_reason()
+            .is_none());
+        return;
+    }
     let mut heard = false;
     for _ in 0..40 {
         graph
@@ -568,7 +823,7 @@ fn backend_plugin_stage_path_prepares_and_compiles_a_verified_sidechain_route() 
             .channel(0)
             .unwrap()
             .iter()
-            .any(|sample| sample.abs() > 0.0);
+            .any(|sample| (*sample - 0.075).abs() < 0.0001);
         assert!(output
             .channel(0)
             .unwrap()
@@ -577,6 +832,65 @@ fn backend_plugin_stage_path_prepares_and_compiles_a_verified_sidechain_route() 
         std::thread::sleep(Duration::from_millis(3));
     }
     assert!(heard, "compiled route must receive prepared worker output");
+
+    // Capture opaque state from the exact production-prepared bridge, then
+    // prepare the saved route again with that asset. This exercises restore
+    // both during bus discovery and on the bound processing worker.
+    let reply = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "sessions.stop".into(),
+        params: Some(json!({"sessionId": session.id, "idempotencyKey": "again-stop"})),
+    });
+    assert!(reply.error.is_none(), "{:?}", reply.error);
+    let saved = plane.get_session(&session.id).unwrap().clone();
+    assert_eq!(
+        plane
+            .session_plugin_state_candidates(&session.id)
+            .unwrap()
+            .len(),
+        1
+    );
+    let restored = plane
+        .prepare_plugin_stages(&saved, 48_000, None)
+        .expect("reprepare saved main/key route with captured plugin state");
+    restored.publish(&plane, &session.id).unwrap();
+    let restored_paths = audiorouter_engine::compile_native_paths_with_plugins_and_audio(
+        &saved,
+        RuntimeGeneration::new(3),
+        &restored.stages,
+        &HashMap::new(),
+    )
+    .unwrap();
+    let graph = &restored_paths.paths()[0];
+    // AGain adds the declared key bus to main before applying its gain.
+    for (main, key, expected) in [(0.1, 0.0, 0.025), (0.0, 0.2, 0.05), (0.1, 0.2, 0.075)] {
+        for (id, block) in graph.input_node_ids().iter().zip(&mut inputs) {
+            for channel in 0..block.channels() {
+                block
+                    .channel_mut(channel)
+                    .unwrap()
+                    .fill(if id.as_str() == "main" { main } else { key });
+            }
+        }
+        let mut matched = false;
+        for _ in 0..40 {
+            output.clear();
+            graph
+                .process(&inputs, &mut scratch, &mut [&mut output])
+                .unwrap();
+            let samples = output.channel(0).unwrap();
+            assert!(samples.iter().all(|sample| sample.is_finite()));
+            matched |= samples
+                .iter()
+                .all(|sample| (*sample - expected).abs() < 0.0001);
+            std::thread::sleep(Duration::from_millis(3));
+        }
+        assert!(
+            matched,
+            "restored transfer for main={main}, key={key}, expected={expected}"
+        );
+    }
 }
 
 #[test]
