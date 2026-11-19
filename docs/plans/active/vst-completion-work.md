@@ -6,6 +6,32 @@ P2/P3 conformance and P6 editor completion, then the P9 release gate. The
 review fixes already on `feature/vst-plugin-experience` are the starting point;
 they are not repeated here.
 
+## Reconciled gap list (VS-01, 2026-11-18)
+
+This table supersedes the older "still open" lists further down. "Exercised"
+names a real-worker or dispatcher test; tests marked (N) run in the
+reproducible runner `tools/vst-qualification/run.ps1` and its nightly
+workflow (see [VST qualification runner](../../operations/vst-qualification.md)).
+The runner passed locally from an empty folder on 2026-11-18 (48 of 48: 47 tests and the census); it has not run
+on a hosted runner yet (the branch is not pushed).
+
+| Item | Implemented | Exercised | Missing locally | Blocked on |
+| --- | --- | --- | --- | --- |
+| VSTC-01 sidechain domain | port add/remove as graph transactions, saved sessions | `add_sidechain_port_adds_the_real_again_auxiliary_input_once_and_undoes` (N), `discovered_sidechain_port_plans_commit_replay_and_undo_atomically` (N), `a_sidechain_input_is_only_connected_by_name_and_never_summed` | none | — |
+| VSTC-02 bus discovery and multi-bus bridge | VST3 aux buses; VST2 explicitly labelled key pins | `vst3_bus_discovery` (3, N), `vst2_bus_discovery` (3, N), multi-bus and async bus worker tests (N) | none | — |
+| VSTC-03 engine sidechain | separate key branch, fail-closed, no allocation | `sidechain.rs` and `connected_mixers.rs` unit tests (sources, processed source, Mixer, connected Mixers, enabled/bypass flags), `sidechain_handoff_never_allocates_...`; real routes `backend_plugin_stage_path_prepares_and_compiles_a_verified_sidechain_route` (VST3, N) and `backend_compiles_the_verified_vst2_labelled_key_route` (VST2, N) | none | real-audio ducking by ear (owner) |
+| VSTC-04 control/API/MCP/UI | dispatcher, default MCP, Properties, replace/keep dialog, guides | 2026-11-15 records: MCP reachability, headed three-theme browser tests, guide coverage | none | — |
+| VSTC-05/07 programs and presets | VST2 programs, `.fxp`/`.fxb` import | worker and dispatcher tests (N); **fixed 2026-11-18:** a refused preset no longer stops the worker | a vendor-made `.fxp` file (only fixture chunks and synthetic presets) | — |
+| VSTC-06 shell plugins | exact sub-ID binding, names, saved routes | `real_worker_keeps_exact_shell_sub_id_and_refuses_unknown_selection` (N), `shell_scan_and_saved_route_bind_the_exact_sub_id` (N) | a real third-party shell that enumerates (the DirectX wrappers on this PC enumerate none) | — |
+| VSTC-08 VST3 units/programs | read-only units and programs, safe context-menu stub | `vst3_programs` UTF16Name and mda (N), `plugins_programs_dispatches_real_vst3_unit_hierarchy` (N) | none | — |
+| VSTC-09 multi-class, sample size | class selection, 64-bit-only refusal | `vst3_multi_class` (N), `vst3_sample_format` (N), `a_missing_requested_class_never_substitutes_another_effect` (N); validator on AGain and mda (N, supplemental) | none | — |
+| VSTC-10 editors | VST3 follow-parent resize with constraints, focus/DPI forwarding in the shell window, VST2 editor on its loader thread | `native_vst3_editor_survives_repeated_open_resize_and_close` (new, N: AGain fixed, DPF ProM resizable; also passed on Surge XT Effects), visible VST2/VST3 editor runs 2026-11-18 | none | focus, 100/150/200 % DPI and monitor moves by eye (owner) |
+| VSTC-11 release gate | census, compatibility page, runner, release manifest tooling | census 2026-11-18 (180/184 effects, 9/12 instruments); runner report | app-only release manifest on this branch's source (next) | hosted CI run and annotations, signed installer, live-ear checks (owner) |
+
+An earlier 2026-11-18 handoff listed "VST2 sidechain lifecycle" as remaining;
+that was wrong. `start_sidechain_bridge` already starts bound VST2 workers for
+explicitly labelled key pins, and the VST2 route test above passes.
+
 ## Objective
 
 VSTC-06 next slice: pass the selected shell ID to the worker and verify the
@@ -1161,3 +1187,10 @@ VST3 output parameter list (Windows, 2026-11-18, source `2726c89fd` plus this ch
 - `vst3_stateless_state` passes on ProM;
 - the full census re-run (Blue Cat skipped) gives the same 180 of 184 effects and 9 of 12 instruments, and the regenerated `plugin-census.md` is unchanged.
 No audio device or editor was opened.
+
+VS-03/05/06 slice (Windows, 2026-11-18): reproducible runner, editor lifecycle and a preset defect.
+- **Runner.** `tools/vst-qualification/run.ps1` builds the four workers, the pinned SDK samples (AGain, mda x64/x86, UTF16Name), the repository fixtures and a SHA-256-pinned DPF-Plugins v1.7 download, then runs each opt-in real-worker test by exact name (a test must report exactly one pass) plus a census, writing `report.json` with input hashes. `.github/workflows/vst-nightly.yml` runs it nightly and on demand, never on pull requests; `tools/quality/policy.mjs` classifies both. `tests/acceptance/m06-vst2-state-fixture.ps1` gained `-BuildOnly`. The first clean run found three runner mistakes (two `deterministic_audio` tests need `test-fixtures`; one stale test) and the defect below.
+- **Defect fixed: a refused VST2 preset stopped the worker.** Any `plugins.applyPreset` error (another plugin's preset, a damaged file) ended the worker process, so a wrong `.fxp` silenced the route until Stop/Play. The library already rolled the plugin back. The worker now answers `presetRejected: ...` and keeps running; the supervised client reports it as `UnsupportedFeature` without counting a failure. Only a failed rollback (`PresetRollbackFailed`) still stops the worker. Regression: `the_worker_protocol_lists_and_selects_real_programs` (now refused-then-still-processing for another plugin's preset and a damaged file, then a plugin-neutral preset applies) fails on the worker built before the fix and passes after.
+- **Editor lifecycle (VSTC-10).** New `native_vst3_editor_survives_repeated_open_resize_and_close`: hidden parent, three open/grow/shrink/close cycles with audio flowing, reopen in the same worker, state saved after. AGain stays 350x120 (fixed, never stretched); Surge XT Effects follows 600x490 -> 736x601 -> 450x368; DPF ProM follows and keeps its square aspect.
+- **Release manifest.** `tools/release/prepare-artifacts.ps1 -AppOnly` already writes `release-manifest.json` with the source revision and the SHA-256 of the shell, CLI and four workers; no new manifest tool is needed.
+Checks: workspace Clippy `-D warnings`, both format checks, plugin-host suites with `test-fixtures` (128 lib, 42 worker_process, all others), `node --test tools/quality/policy.test.mjs` (67), docs validation. Not run: the workflow on a hosted runner.

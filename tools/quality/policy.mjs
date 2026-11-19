@@ -9,7 +9,7 @@ export function classifyChanges(files, { full = false } = {}) {
     file = file.replaceAll('\\', '/').replace(/^\.\//, '');
     if (!file || file.includes('\0') || file.startsWith('/') || /^[a-z]:/i.test(file) || file.split('/').includes('..')) throw Error('Invalid changed path');
     if (file.endsWith('.md') || file.startsWith('docs/')) { flags.docs = true; continue; }
-    if (/^\.github\/workflows\/(ci|jev-review|quality|quality-history|pages|code-size|marketing-metrics|dependabot-auto-merge)\.yml$/.test(file) || file.startsWith('tools/quality/') || file.startsWith('tools/metrics/')) continue;
+    if (/^\.github\/workflows\/(ci|jev-review|quality|quality-history|pages|code-size|marketing-metrics|dependabot-auto-merge|vst-nightly)\.yml$/.test(file) || file.startsWith('tools/quality/') || file.startsWith('tools/metrics/')) continue;
     if (file === '.github/workflows/manual-release.yml') { flags.release = true; continue; }
     if (file.startsWith('.github/') || file === 'rust-toolchain.toml' || file.startsWith('.cargo/')) {
       for (const area of areas) flags[area] = true;
@@ -22,7 +22,7 @@ export function classifyChanges(files, { full = false } = {}) {
     match(/^ui\//, 'ui');
     match(/^(site\/|tools\/site\/)/, 'site');
     match(/^(tools\/m00-(wasapi-probe|native-wasapi-probe)\/|tests\/acceptance\/m00-)/, 'probe');
-    match(/^(tools\/m06-vst3-sdk\/|tests\/acceptance\/m06-)/, 'sdk');
+    match(/^(tools\/m06-vst3-sdk\/|tools\/vst-qualification\/|tests\/acceptance\/m06-)/, 'sdk');
     match(/^(tools\/release\/|drivers\/|tests\/acceptance\/m08-|src-tauri\/(?!src\/)|ui\/package(-lock)?\.json$)/, 'release');
     match(/^tools\/(build-desktop|test-build-desktop|run-vb-cable-desktop|stage-mcp-cli)\.ps1$/, 'backend', 'release');
     match(/^tools\/streamdeck\//, 'streamdeck');

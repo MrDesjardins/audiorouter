@@ -14,7 +14,8 @@ import { backendSpecs } from './browser-scope.mjs';
 test('affected areas are exact for assets, workflows, shell and packaging', () => {
   const cases = [
     [['docs/images/route.png', 'docs/data/result.csv', 'docs/image.svg'], ['docs']],
-    ...['ci', 'quality', 'pages', 'code-size', 'marketing-metrics', 'dependabot-auto-merge', 'jev-review'].map(name => [[`.github/workflows/${name}.yml`], []]),
+    ...['ci', 'quality', 'pages', 'code-size', 'marketing-metrics', 'dependabot-auto-merge', 'jev-review', 'vst-nightly'].map(name => [[`.github/workflows/${name}.yml`], []]),
+    [['tools/vst-qualification/run.ps1'], ['sdk']],
     [['.github/workflows/manual-release.yml'], ['release']],
     [['src-tauri/src/lib.rs'], ['backend']],
     [['src-tauri/tauri.release.conf.json'], ['backend', 'release']],

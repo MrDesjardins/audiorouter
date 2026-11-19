@@ -1,0 +1,50 @@
+name: VST nightly qualification
+
+# Builds the four plugin workers, the repository's test plugins, the pinned
+# Steinberg SDK samples and a pinned open-source DPF release, then runs every
+# opt-in real-worker VST2/VST3 test that needs nothing installed, plus a small
+# census. Same script as a local run: tools/vst-qualification/run.ps1.
+# It never runs on pull requests; editors, live audio, licensed plugins and
+# hardware MIDI stay attended checks (docs/operations/vst-qualification.md).
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 4 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vst-nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_INCREMENTAL: '0'
+
+jobs:
+  vst:
+    name: VST2/VST3 real-worker tests (x64 and x86)
+    runs-on: windows-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: 1.96.0
+          targets: i686-pc-windows-msvc
+      - name: Run the VST qualification
+        shell: pwsh
+        run: >-
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/vst-qualification/run.ps1
+          -OutputDirectory "${{ runner.temp }}/vst-nightly"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: vst-qualification
+          # The report, census and logs only; the built plugins are not kept.
+          path: |
+            ${{ runner.temp }}/vst-nightly/report.json
+            ${{ runner.temp }}/vst-nightly/census.json
+            ${{ runner.temp }}/vst-nightly/logs/
+          if-no-files-found: warn
+          retention-days: 30
