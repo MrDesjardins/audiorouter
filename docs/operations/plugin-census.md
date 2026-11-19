@@ -5,9 +5,9 @@ reports. Do not edit by hand; run the census and the script again.
 
 - AudioRouter version: 0.0.30
 - Date: 2026-11-18
-- Effects: 173 of 185 passed every step
-- Instruments: 9 of 17 played a note
-- Left out of this run: 2
+- Effects: 180 of 184 passed every step
+- Instruments: 9 of 12 played a note
+- Left out of this run: 8
 
 ## What the census does
 
@@ -16,6 +16,8 @@ VST3), fed a 220 Hz tone for 100 blocks at mono and at stereo, asked to save its
 state, then asked to restore it in the same worker and in a fresh one. "ok"
 means every step worked and the output was finite and not silent. Each
 instrument is started in stereo, checked for silence, then given one held note.
+A VST2 shell DLL is tested through its first sub-plugin. An effect that declares
+a sidechain input is not failed for silence, because only its main input is fed.
 
 It opens no audio device and no plugin window, so it says nothing about
 editors, about how a plugin sounds, or about a plugin on a live route. A plugin
@@ -36,8 +38,8 @@ that needs its vendor's licence app can load and still produce silence.
 | Airwindows Consolidated.vst3 | VST3 | 64 | ok |
 | AmplitudeImposer-vst.dll | VST2 | 64 | mono: silent; stereo: silent |
 | AmplitudeImposer-vst.dll | VST2 | 32 | mono: silent; stereo: silent |
-| AmplitudeImposer.vst3 | VST3 | 64 | mono: silent; stereo: silent |
-| AmplitudeImposer.vst3 | VST3 | 32 | mono: silent; stereo: silent |
+| AmplitudeImposer.vst3 | VST3 | 64 | ok (silent without its sidechain key, which the census does not feed) |
+| AmplitudeImposer.vst3 | VST3 | 32 | ok (silent without its sidechain key, which the census does not feed) |
 | CycleShifter-vst.dll | VST2 | 64 | ok |
 | CycleShifter-vst.dll | VST2 | 32 | ok |
 | CycleShifter.vst3 | VST3 | 64 | ok |
@@ -58,8 +60,6 @@ that needs its vendor's licence app can load and still produce silence.
 | DragonflyRoomReverb-vst.dll | VST2 | 32 | ok |
 | DragonflyRoomReverb.vst3 | VST3 | 64 | ok |
 | DragonflyRoomReverb.vst3 | VST3 | 32 | ok |
-| dxshell.dll | VST2 | 32 | mono: audio error: process: Protocol("vst2Processing:select a VST2 shell sub-plugin before processing"), silent, state not restored, did not close cleanly; stereo: audio error: process: Protocol("vst2Processing:select a VST2 shell sub-plugin before processing"), silent, state not restored, did not close cleanly |
-| dxshell.x64.dll | VST2 | 64 | mono: audio error: process: Protocol("vst2Processing:select a VST2 shell sub-plugin before processing"), silent, state not restored, did not close cleanly; stereo: audio error: process: Protocol("vst2Processing:select a VST2 shell sub-plugin before processing"), silent, state not restored, did not close cleanly |
 | FILT-R.vst3 | VST3 | 64 | ok |
 | GATE-12.vst3 | VST3 | 64 | ok |
 | glBars-vst.dll | VST2 | 64 | ok (default settings leave the test tone unchanged) |
@@ -96,8 +96,8 @@ that needs its vendor's licence app can load and still produce silence.
 | pitchproof.dll | VST2 | 32 | ok |
 | ProM.dll | VST2 | 64 | ok (default settings leave the test tone unchanged) |
 | ProM.dll | VST2 | 32 | ok (default settings leave the test tone unchanged) |
-| ProM.vst3 | VST3 | 64 | mono: state not restored; stereo: state not restored |
-| ProM.vst3 | VST3 | 32 | mono: state not restored; stereo: state not restored |
+| ProM.vst3 | VST3 | 64 | ok (default settings leave the test tone unchanged) |
+| ProM.vst3 | VST3 | 32 | ok (default settings leave the test tone unchanged) |
 | reacomp-standalone.dll | VST2 | 64 | ok (default settings leave the test tone unchanged) |
 | reacomp-standalone.dll | VST2 | 32 | ok (default settings leave the test tone unchanged) |
 | reacontrolmidi-standalone.dll | VST2 | 64 | mono: state not restored, did not close cleanly; stereo: state not restored, did not close cleanly |
@@ -123,6 +123,7 @@ that needs its vendor's licence app can load and still produce silence.
 | SoulForce.vst3 | VST3 | 32 | ok |
 | Surge XT Effects.vst3 | VST3 | 64 | ok (default settings leave the test tone unchanged) |
 | TDR Nova.dll | VST2 | 64 | ok |
+| TDR Nova.vst3 | VST3 | 64 | ok |
 | TIME-12.vst3 | VST3 | 64 | ok (default settings leave the test tone unchanged) |
 | uaudio_610_a.vst3 | VST3 | 64 | ok |
 | uaudio_610_b.vst3 | VST3 | 64 | ok |
@@ -136,8 +137,8 @@ that needs its vendor's licence app can load and still produce silence.
 | wolf-shaper.vst3 | VST3 | 64 | ok |
 | ZamAutoSat-vst.dll | VST2 | 64 | ok |
 | ZamAutoSat-vst.dll | VST2 | 32 | ok |
-| ZamAutoSat.vst3 | VST3 | 64 | mono: state not restored; stereo: state not restored |
-| ZamAutoSat.vst3 | VST3 | 32 | mono: state not restored; stereo: state not restored |
+| ZamAutoSat.vst3 | VST3 | 64 | ok |
+| ZamAutoSat.vst3 | VST3 | 32 | ok |
 | ZaMaximX2-vst.dll | VST2 | 64 | ok |
 | ZaMaximX2-vst.dll | VST2 | 32 | ok |
 | ZaMaximX2.vst3 | VST3 | 64 | ok |
@@ -216,21 +217,16 @@ that needs its vendor's licence app can load and still produce silence.
 | Plugin file | Format | Bits | Result |
 | --- | --- | --- | --- |
 | Dexed.vst3 | VST3 | 64 | plays a note |
-| dxishell.dll | VST2 | 32 | failed: process: Protocol("vst2Processing:select a VST2 shell sub-plugin before processing") |
-| dxishell.x64.dll | VST2 | 64 | failed: process: Protocol("vst2Processing:select a VST2 shell sub-plugin before processing") |
 | Kars-vst.dll | VST2 | 64 | plays a note |
 | Kars-vst.dll | VST2 | 32 | plays a note |
 | Kars.vst3 | VST3 | 64 | plays a note |
 | Kars.vst3 | VST3 | 32 | loads, silent with a note held |
-| mfxshell.dll | VST2 | 32 | failed: process: Protocol("vst2Processing:select a VST2 shell sub-plugin before processing") |
-| mfxshell.x64.dll | VST2 | 64 | failed: process: Protocol("vst2Processing:select a VST2 shell sub-plugin before processing") |
 | Nekobi-vst.dll | VST2 | 64 | plays a note |
 | Nekobi-vst.dll | VST2 | 32 | plays a note |
 | Nekobi.vst3 | VST3 | 64 | plays a note |
 | Nekobi.vst3 | VST3 | 32 | loads, silent with a note held |
 | RipplerX.vst3 | VST3 | 64 | plays a note |
 | Surge XT.vst3 | VST3 | 64 | plays a note |
-| TDR Nova.vst3 | VST3 | 64 | failed: native VST3 worker stopped: VST3 plugin is an effect, not an instrument |
 | uaudio_polymax.vst3 | VST3 | 64 | loads, silent with a note held |
 
 ## Left out
@@ -239,3 +235,9 @@ that needs its vendor's licence app can load and still produce silence.
 | --- | --- | --- | --- |
 | BC PatchWork Synth VST.dll | UNDEFINED | ? | not run (left out of this run) |
 | BC PatchWork VST.dll | UNDEFINED | ? | not run (left out of this run) |
+| dxishell.dll | VST2 | 32 | not testable: a shell DLL with no sub-plugin installed on this PC |
+| dxishell.x64.dll | VST2 | 64 | not testable: a shell DLL with no sub-plugin installed on this PC |
+| dxshell.dll | VST2 | 32 | not testable: a shell DLL with no sub-plugin installed on this PC |
+| dxshell.x64.dll | VST2 | 64 | not testable: a shell DLL with no sub-plugin installed on this PC |
+| mfxshell.dll | VST2 | 32 | not testable: a shell DLL with no sub-plugin installed on this PC |
+| mfxshell.x64.dll | VST2 | 64 | not testable: a shell DLL with no sub-plugin installed on this PC |

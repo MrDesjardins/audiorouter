@@ -97,6 +97,23 @@ fn census_width(
         Ok(worker) => worker,
         Err(error) => return json!({ "channels": channels, "failed": format!("start: {error:?}") }),
     };
+    // A plugin with a declared auxiliary input (a sidechain key) may be silent
+    // on purpose when only its main input is fed, as it is here. Only the VST3
+    // worker is asked: a failed bus query ends a VST2 worker.
+    let is_vst3 = matches!(kind, PluginWorkerKind::Vst3 | PluginWorkerKind::Vst3X86);
+    let key_inputs = if !is_vst3 {
+        0
+    } else {
+        worker.describe_buses(Instant::now()).map_or(0, |buses| {
+            buses
+                .inputs
+                .iter()
+                .filter(|bus| {
+                    bus.role == audiorouter_plugin_host::bus_discovery::AudioBusRole::Auxiliary
+                })
+                .count()
+        })
+    };
     let saved = worker.save_state(Instant::now());
     let state_bytes = saved.as_ref().map(|asset| asset.bytes.len()).ok();
     let (mut peak, mut difference, mut non_finite) = (0.0_f32, 0.0_f32, false);
@@ -151,6 +168,7 @@ fn census_width(
     };
     json!({
         "channels": channels,
+        "keyInputs": key_inputs,
         "stateBytes": state_bytes,
         "stateSaved": saved.is_ok(),
         "audioError": audio_error,
@@ -240,11 +258,55 @@ fn census_instrument(
     }
 }
 
+/// The sub-plugins a VST2 shell DLL offers, as (count, first ID, first name).
+/// A plain VST2 or any failure yields `None`: the census then tests the file
+/// as it is.
+fn shell_first_sub(
+    identity: &audiorouter_plugin_host::PluginIdentity,
+    root: &Path,
+) -> Option<(usize, u32, String)> {
+    if identity.format != PluginFormat::Vst2 {
+        return None;
+    }
+    let kind = PluginWorkerKind::for_identity(identity.format, identity.architecture);
+    let executable = require_plugin_worker(kind).ok()?;
+    let roots = [root.to_path_buf()];
+    let mut worker = SupervisedWorkerProcess::spawn_verified_with_sample_rate(
+        &executable,
+        identity,
+        &roots,
+        2,
+        48_000,
+        Instant::now(),
+    )
+    .or_else(|_| {
+        SupervisedWorkerProcess::spawn_instrument_verified(
+            &executable,
+            identity,
+            &roots,
+            2,
+            48_000,
+            Instant::now(),
+        )
+    })
+    .ok()?;
+    let plugins = worker.describe_shell(Instant::now()).ok()?;
+    let _ = worker.shutdown();
+    let first = plugins.first()?;
+    Some((plugins.len(), first.id, first.name.clone()))
+}
+
 fn census_one(path: &Path, root: &Path, plane: &mut ControlPlane) -> serde_json::Value {
-    let identity = match inspect_binary(path, std::slice::from_ref(&root.to_path_buf())) {
+    let mut identity = match inspect_binary(path, std::slice::from_ref(&root.to_path_buf())) {
         Ok(identity) => identity,
         Err(error) => return json!({ "path": path, "refused": format!("{error:?}") }),
     };
+    // A shell DLL hosts several effects behind one file. It cannot run until
+    // one is chosen, so the census tests the first and says so in the report.
+    let shell = shell_first_sub(&identity, root);
+    if let Some((_, id, _)) = &shell {
+        identity.metadata.class_ids = vec![format!("{id:08X}")];
+    }
     let compatibility = identity.compatibility();
     let mut result = json!({
         "path": path,
@@ -252,6 +314,10 @@ fn census_one(path: &Path, root: &Path, plane: &mut ControlPlane) -> serde_json:
         "architecture": format!("{:?}", identity.architecture),
         "compatibility": format!("{compatibility:?}"),
     });
+    if let Some((count, id, name)) = &shell {
+        result["shell"] =
+            json!({ "count": count, "testedId": format!("{id:08X}"), "testedName": name });
+    }
     if !matches!(
         compatibility,
         PluginCompatibility::SupportedVst3X64

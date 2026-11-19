@@ -762,6 +762,24 @@ fn inspect_binary_with_control(
 /// instrument.
 fn binary_declares_vst3_instrument(bytes: &[u8]) -> bool {
     const NEEDLE: &[u8] = b"Instrument|";
+    // A module that carries the whole category table (JUCE does, for example
+    // TDR Nova) lists instrument and effect categories side by side, so the
+    // strings say nothing about this plugin. Do not guess an instrument from
+    // them: a real instrument is still learned from its first refusal as an
+    // effect, while a wrongly guessed one would have no way back.
+    const TABLE: [&[u8]; 5] = [
+        b"Instrument|Drum",
+        b"Instrument|Piano",
+        b"Instrument|Sampler",
+        b"Fx|Reverb",
+        b"Fx|Delay",
+    ];
+    if TABLE
+        .iter()
+        .all(|category| contains_whole_string(bytes, category))
+    {
+        return false;
+    }
     // DPF plugins (Kars, Nekobi) declare the bare category `Instrument` as a
     // string of its own. Accept it only when the module declares no effect
     // category, so a framework's embedded word cannot turn an effect into one.
@@ -10013,6 +10031,31 @@ not a fingerprint
             "manifest.json",
             br#"{ "is_synth": false }"#
         ));
+    }
+
+    /// Regression (2026-11-18): JUCE modules such as TDR Nova embed the whole
+    /// category table (`Fx|Reverb` ... `Instrument|Piano`) next to the one
+    /// category the plugin declares, so an effect scanned as an instrument and
+    /// could not be added as an effect.
+    #[test]
+    fn an_embedded_category_table_does_not_make_an_effect_an_instrument() {
+        let mut table = Vec::new();
+        for category in [
+            "Fx",
+            "Fx|EQ",
+            "Fx|Delay",
+            "Fx|Reverb",
+            "Instrument",
+            "Instrument|Drum",
+            "Instrument|Piano",
+            "Instrument|Sampler",
+            "Instrument|Synth",
+        ] {
+            table.push(0);
+            table.extend_from_slice(category.as_bytes());
+            table.push(0);
+        }
+        assert!(!binary_declares_vst3_instrument(&table));
     }
 
     #[test]

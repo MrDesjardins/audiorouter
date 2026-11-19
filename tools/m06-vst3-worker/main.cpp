@@ -1195,11 +1195,22 @@ public:
             // The SDK's host order: the component takes its state first, then
             // the controller mirrors it with setComponentState.
             StateStream component_stream(component_state.data(), component_state.size());
-            require_result("VST3 component setState", component_->setState(&component_stream));
+            const auto component_result = component_->setState(&component_stream);
+            // DPF plugins with no parameters and no states save a single NUL
+            // byte, then refuse that same byte in setState (they wait for a
+            // 0xFE terminator that getState never wrote). The saved state is
+            // "nothing", so there is nothing to restore: accept exactly that
+            // value and nothing else, for the component and its controller.
+            const bool stateless_sentinel = component_state.size() == 1 && component_state[0] == 0;
+            if (!(stateless_sentinel && component_result != kResultOk)) {
+                require_result("VST3 component setState", component_result);
+            }
             if (controller_) {
                 StateStream controller_component_stream(component_state.data(), component_state.size());
-                require_result("VST3 controller component state", controller_->setComponentState(
-                    &controller_component_stream));
+                const auto controller_result = controller_->setComponentState(&controller_component_stream);
+                if (!(stateless_sentinel && controller_result != kResultOk)) {
+                    require_result("VST3 controller component state", controller_result);
+                }
             }
             if (!controller_state.empty()) {
                 if (!controller_) throw protocol_error("VST3 controller state is unavailable");
