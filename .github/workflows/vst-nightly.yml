@@ -7,11 +7,6 @@ name: VST nightly qualification
 # It never runs on pull requests; editors, live audio, licensed plugins and
 # hardware MIDI stay attended checks (docs/operations/vst-qualification.md).
 on:
-  # TEMPORARY: lets the first hosted run happen before the file is on main
-  # (GitHub dispatches and schedules only default-branch workflows). Remove
-  # this push trigger before the branch's pull request.
-  push:
-    branches: [work/vst-compatibility]
   workflow_dispatch:
   schedule:
     - cron: "23 4 * * *"
