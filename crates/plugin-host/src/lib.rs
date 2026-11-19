@@ -4980,6 +4980,11 @@ impl SupervisedWorkerProcess {
                 self.supervisor.heartbeat(now);
                 Ok(())
             }
+            // A refused preset is the caller's file, not a worker fault.
+            Err(error @ WorkerProcessError::UnsupportedFeature(_)) => {
+                self.supervisor.heartbeat(now);
+                Err(error)
+            }
             Err(error) => {
                 terminate_child(&mut self.process.child);
                 self.supervisor.record_failure(now);
@@ -7530,6 +7535,10 @@ impl WorkerProcess {
         .map_err(WorkerProcessError::Message)?;
         match self.read_control().map_err(WorkerProcessError::Message)? {
             WorkerMessage::PresetApplied => Ok(()),
+            // Refused and rolled back by the worker, which keeps running.
+            WorkerMessage::Failure { code } if code.starts_with("presetRejected") => {
+                Err(WorkerProcessError::UnsupportedFeature(code))
+            }
             WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
             _ => Err(WorkerProcessError::Protocol(
                 "unexpected preset application response".into(),

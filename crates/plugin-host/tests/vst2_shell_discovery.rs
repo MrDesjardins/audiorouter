@@ -201,23 +201,72 @@ fn the_worker_protocol_lists_and_selects_real_programs() {
         .select_program(65_535, std::time::Instant::now())
         .is_err());
     // A bounded synthetic program preset must travel the worker protocol.
-    let mut body = Vec::new();
-    body.extend_from_slice(b"FxCk");
-    body.extend_from_slice(&1_u32.to_be_bytes());
-    body.extend_from_slice(&0x1234_5678_u32.to_be_bytes());
-    body.extend_from_slice(&7_u32.to_be_bytes());
-    body.extend_from_slice(&4_u32.to_be_bytes());
-    body.extend_from_slice(&[0_u8; 28]);
-    body.extend_from_slice(&0.5_f32.to_be_bytes());
-    body.extend_from_slice(&0.25_f32.to_be_bytes());
-    body.extend_from_slice(&0.75_f32.to_be_bytes());
-    body.extend_from_slice(&0.5_f32.to_be_bytes());
-    let mut preset = b"CcnK".to_vec();
-    preset.extend_from_slice(&(body.len() as u32).to_be_bytes());
-    preset.extend_from_slice(&body);
-    worker
-        .apply_preset(&preset, std::time::Instant::now())
+    let preset_for = |fx_id: u32| {
+        let mut body = Vec::new();
+        body.extend_from_slice(b"FxCk");
+        body.extend_from_slice(&1_u32.to_be_bytes());
+        body.extend_from_slice(&fx_id.to_be_bytes());
+        body.extend_from_slice(&7_u32.to_be_bytes());
+        body.extend_from_slice(&4_u32.to_be_bytes());
+        body.extend_from_slice(&[0_u8; 28]);
+        body.extend_from_slice(&0.5_f32.to_be_bytes());
+        body.extend_from_slice(&0.25_f32.to_be_bytes());
+        body.extend_from_slice(&0.75_f32.to_be_bytes());
+        body.extend_from_slice(&0.5_f32.to_be_bytes());
+        let mut preset = b"CcnK".to_vec();
+        preset.extend_from_slice(&(body.len() as u32).to_be_bytes());
+        preset.extend_from_slice(&body);
+        preset
+    };
+    // Regression (2026-11-18): a refused preset stopped the worker, so a
+    // wrong .fxp silenced the route. Another plugin's preset and a damaged
+    // file are refused, and the same worker keeps answering and processing.
+    let still_running = |worker: &mut SupervisedWorkerProcess, sequence: u64| {
+        let frame = audiorouter_plugin_host::WorkerFrame::new(
+            sequence,
+            audiorouter_plugin_host::worker_clock_tick().saturating_add(10_000_000),
+            2,
+            vec![0.25; 256],
+        )
         .unwrap();
+        let processed = worker
+            .process(frame, Vec::new(), std::time::Instant::now())
+            .expect("the worker keeps processing after a refused preset");
+        assert!(processed.samples.iter().all(|sample| sample.is_finite()));
+        worker
+            .select_program(programs.programs[0].id, std::time::Instant::now())
+            .expect("the worker keeps answering after a refused preset");
+    };
+    let refused = worker
+        .apply_preset(&preset_for(0x1234_5678), std::time::Instant::now())
+        .expect_err("a preset for another plugin is refused");
+    assert!(
+        matches!(
+            &refused,
+            audiorouter_plugin_host::WorkerProcessError::UnsupportedFeature(code)
+                if code.contains("another plugin")
+        ),
+        "{refused:?}"
+    );
+    still_running(&mut worker, 1);
+    let mut damaged = preset_for(0);
+    damaged[0] = b'X';
+    let refused = worker
+        .apply_preset(&damaged, std::time::Instant::now())
+        .expect_err("a damaged preset is refused");
+    assert!(
+        matches!(
+            refused,
+            audiorouter_plugin_host::WorkerProcessError::UnsupportedFeature(_)
+        ),
+        "{refused:?}"
+    );
+    still_running(&mut worker, 2);
+    // A preset that names no plugin (fx ID 0) is applied.
+    worker
+        .apply_preset(&preset_for(0), std::time::Instant::now())
+        .unwrap();
+    still_running(&mut worker, 3);
     worker.shutdown().unwrap();
 }
 

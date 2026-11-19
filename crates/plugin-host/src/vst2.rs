@@ -1446,6 +1446,11 @@ pub enum Vst2LibraryError {
     StateTooLarge,
     InvalidEditor,
     NonFiniteOutput,
+    /// The preset names another plugin's unique ID; nothing was changed.
+    PresetForAnotherPlugin,
+    /// A preset failed part-way and the previous program and state could not
+    /// be put back, so the plugin's settings are unknown.
+    PresetRollbackFailed,
 }
 
 /// Sends `effCanDo` for one feature name.
@@ -2134,7 +2139,7 @@ impl Vst2Library {
         // readable for its lifetime.
         let unique_id = unsafe { (*self.effect).unique_id };
         if preset.fx_id != 0 && preset.fx_id != u32::from_ne_bytes(unique_id.to_ne_bytes()) {
-            return Err(Vst2LibraryError::InvalidState);
+            return Err(Vst2LibraryError::PresetForAnotherPlugin);
         }
         // Preset application is a live mutation. Capture the previous state
         // first and roll it back if any program/chunk operation fails, so a
@@ -2146,7 +2151,7 @@ impl Vst2Library {
             let program_restored =
                 previous_program.is_none_or(|index| self.set_program(index).is_ok());
             if !program_restored || self.restore_state(&before).is_err() {
-                return Err(Vst2LibraryError::InvalidState);
+                return Err(Vst2LibraryError::PresetRollbackFailed);
             }
             return Err(error);
         }

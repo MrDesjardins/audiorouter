@@ -685,15 +685,40 @@ fn run() -> Result<(), String> {
                     .map_err(|error| format!("program selection write failed: {error:?}"))?;
             }
             WorkerMessage::ApplyPreset { bytes } => {
+                // A preset the plugin refuses (bad file, another plugin's
+                // preset, a value it declines) is answered and the worker
+                // keeps processing: apply_preset already put the previous
+                // program and state back. Only a failed rollback, which leaves
+                // the plugin's settings unknown, stops the worker.
                 #[cfg(windows)]
-                if let Some(plugin) = vst2_plugins.get_mut(selected_instance) {
-                    let preset = audiorouter_plugin_host::vst2_preset::parse(&bytes)
-                        .map_err(|error| format!("VST2 preset rejected: {error}"))?;
-                    plugin
-                        .apply_preset(&preset)
-                        .map_err(|error| format!("VST2 preset apply failed: {error:?}"))?;
-                }
-                write_worker_message(&mut writer, &WorkerMessage::PresetApplied)
+                let response = if let Some(plugin) = vst2_plugins.get_mut(selected_instance) {
+                    use audiorouter_plugin_host::vst2::Vst2LibraryError;
+                    match audiorouter_plugin_host::vst2_preset::parse(&bytes) {
+                        Err(error) => WorkerMessage::Failure {
+                            code: format!("presetRejected: {error}"),
+                        },
+                        Ok(preset) => match plugin.apply_preset(&preset) {
+                            Ok(()) => WorkerMessage::PresetApplied,
+                            Err(Vst2LibraryError::PresetRollbackFailed) => {
+                                return Err("VST2 preset failed and its rollback failed".into())
+                            }
+                            Err(Vst2LibraryError::PresetForAnotherPlugin) => {
+                                WorkerMessage::Failure {
+                                    code: "presetRejected: the preset belongs to another plugin"
+                                        .into(),
+                                }
+                            }
+                            Err(error) => WorkerMessage::Failure {
+                                code: format!("presetRejected: {error:?}"),
+                            },
+                        },
+                    }
+                } else {
+                    WorkerMessage::PresetApplied
+                };
+                #[cfg(not(windows))]
+                let response = WorkerMessage::PresetApplied;
+                write_worker_message(&mut writer, &response)
                     .map_err(|error| format!("preset applied write failed: {error:?}"))?;
             }
             WorkerMessage::DescribeEditor => {
