@@ -2261,6 +2261,12 @@ impl RuntimeBusScheduler {
     /// Publish a complete worker output quantum from caller-owned blocks.
     /// This is the worker-side operation; the realtime graph only consumes
     /// the already staged slot below.
+    ///
+    /// The single worker owner publishes results in sequence order, so every
+    /// result still waiting when the pool is empty is older than this one and
+    /// can no longer be the graph's next match. Reuse the oldest instead of
+    /// refusing the newest: after a late worker start, a refusal here ended
+    /// the plugin although the graph would have caught up on its next pass.
     pub fn try_submit_outputs(
         &self,
         generation: RuntimeGeneration,
@@ -2281,6 +2287,7 @@ impl RuntimeBusScheduler {
         let mut slot = self
             .output_free
             .pop()
+            .or_else(|| self.output_ready.pop())
             .ok_or(RuntimeBusSchedulerError::OutputQueueFull)?;
         for (destination, source) in slot.blocks.iter_mut().zip(outputs) {
             if destination.copy_from(source).is_err() {
