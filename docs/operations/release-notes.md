@@ -14,7 +14,19 @@ Nothing yet.
   privacy mute, push-to-talk and soundboard slots are set under Settings →
   Keyboard shortcuts and work while AudioRouter is minimized. The old in-app
   Ctrl+Shift+S and Ctrl+Shift+M bindings and their Local shortcuts panel are
-  removed.
+  removed. Held keys release when the key is let go, shortcuts survive a
+  reload, a shortcut keeps its key if a press is dropped, and editing stays
+  within the app's limits.
+- **Easier global shortcut setup.** Creating a shortcut uses one complete form,
+  and deleting one shortcut or several at once is clearly labelled.
+- **A sidechain plugin keeps running when its first results arrive late.**
+- **The local HTTP API refuses a network plugin path.** A network `shellPath`
+  is rejected the same way a network scan directory already was.
+- **Tested more.** A reproducible VST qualification runner and nightly
+  workflow now exercise plugin editors and presets, and the installer
+  lifecycle (install, upgrade, rollback, uninstall, missing WebView2) was
+  exercised in a disposable guest, partly. Evidence is in the plan, not a claim of
+  full M08 qualification.
 - **Sidechain failures stay stopped during recovery.** A route with a failed
   sidechain plugin is no longer restarted automatically after sleep, device
   loss or a backend failure.
