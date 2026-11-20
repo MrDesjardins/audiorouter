@@ -2,11 +2,31 @@
 
 ## Unreleased
 
+Nothing yet.
+
+## 0.0.31 — 2026-11-19 (unsigned experimental preview)
+
+- **French and Simplified Chinese.** Settings → Appearance now has a language
+  selector. The desktop screens, tool editors, device and plugin panels, dialogs
+  and the tray menu follow the choice at once. Anything not yet translated shows
+  in English. Node cards now announce the tool name instead of its internal id.
 - **Global keyboard shortcuts are the only audio shortcuts.** Start or stop,
   privacy mute, push-to-talk and soundboard slots are set under Settings →
   Keyboard shortcuts and work while AudioRouter is minimized. The old in-app
   Ctrl+Shift+S and Ctrl+Shift+M bindings and their Local shortcuts panel are
-  removed.
+  removed. Held keys release when the key is let go, shortcuts survive a
+  reload, a shortcut keeps its key if a press is dropped, and editing stays
+  within the app's limits.
+- **Easier global shortcut setup.** Creating a shortcut uses one complete form,
+  and deleting one shortcut or several at once is clearly labelled.
+- **A sidechain plugin keeps running when its first results arrive late.**
+- **The local HTTP API refuses a network plugin path.** A network `shellPath`
+  is rejected the same way a network scan directory already was.
+- **Tested more.** A reproducible VST qualification runner and nightly
+  workflow now exercise plugin editors and presets, and the installer
+  lifecycle (install, upgrade, rollback, uninstall, missing WebView2) was
+  exercised in a disposable guest, partly. Evidence is in the plan, not a claim of
+  full M08 qualification.
 - **Sidechain failures stay stopped during recovery.** A route with a failed
   sidechain plugin is no longer restarted automatically after sleep, device
   loss or a backend failure.
