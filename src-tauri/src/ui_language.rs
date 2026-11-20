@@ -2,7 +2,7 @@
 // Run `npm --prefix ui run i18n:generate` after changing a language catalog.
 //! Native shell text drawn from the interface catalogs.
 
-pub const SUPPORTED: &[&str] = &["en"];
+pub const SUPPORTED: &[&str] = &["en", "fr", "zh-Hans"];
 
 /// One canonical supported tag, or `None` for an unsupported or malformed tag.
 pub fn canonical(candidate: &str) -> Option<&'static str> {
@@ -16,6 +16,16 @@ pub fn canonical(candidate: &str) -> Option<&'static str> {
 /// Exact tag first, then progressively broader parents (fr-CA -> fr,
 /// zh-Hant-TW -> zh-Hant -> zh).
 fn match_with_parents(candidate: &str) -> Option<&'static str> {
+    if let Some(tag) = canonical(candidate) {
+        return Some(tag);
+    }
+    let normalized = candidate.trim().replace('_', "-").to_ascii_lowercase();
+    if let Some(tag) = match normalized.as_str() {
+        "zh-cn" | "zh-sg" => canonical("zh-Hans"),
+        _ => None,
+    } {
+        return Some(tag);
+    }
     let mut parts: Vec<String> = candidate
         .trim()
         .replace('_', "-")
@@ -53,6 +63,8 @@ pub fn resolve(preference: Option<&str>, system: &[String]) -> &'static str {
 pub fn text(language: &str, key: &str) -> &'static str {
     match language {
         "en" => text_en(key),
+        "fr" => text_fr(key),
+        "zh-Hans" => text_zh_hans(key),
         _ => text_en(key),
     }
 }
@@ -108,6 +120,86 @@ fn text_en(key: &str) -> &'static str {
         "native.stopFailed" => "Stop failed: {{reason}}",
         "native.stopped" => "Stopped",
         "native.stoppedStatus" => "Stopped · {{mic}}",
+        _ => "",
+    }
+}
+
+fn text_fr(key: &str) -> &'static str {
+    match key {
+        "native.alreadyPlaying" => "Déjà en cours",
+        "native.autoplayFailed" => "Échec du démarrage automatique : le moteur audio n’a pas démarré",
+        "native.autoplayPaused" => "Le démarrage automatique est suspendu. Récupérez les sessions indisponibles dans AudioRouter.",
+        "native.liveRecordersUnavailable" => "Enregistreurs actifs : état indisponible",
+        "native.micMuted" => "Micro coupé",
+        "native.micOn" => "Micro activé",
+        "native.noSession" => "Aucune session à démarrer. Ouvrez AudioRouter et créez-en une.",
+        "native.notRecording" => "Aucun enregistrement en cours",
+        "native.open" => "Ouvrir AudioRouter",
+        "native.play" => "Démarrer",
+        "native.playFailed" => "Échec du démarrage : {{reason}}",
+        "native.playFailedConsent" => "Échec du démarrage : autorisez d’abord l’accès aux périphériques en cliquant sur Démarrer dans la fenêtre AudioRouter.",
+        "native.playFailedNoRoute" => "Échec du démarrage : aucun routage vers un périphérique. Ouvrez AudioRouter et choisissez les périphériques.",
+        "native.playing" => "En cours",
+        "native.playingSessionsStatus" => "{{count}} sessions en cours · {{mic}}",
+        "native.playingStatus" => "En cours · {{mic}}",
+        "native.quit" => "Quitter et arrêter l’audio",
+        "native.quitRefused" => "Impossible de quitter : le service audio n’a pas pu terminer les opérations en cours",
+        "native.recorderActive" => "actif",
+        "native.recorderArmed" => "armé",
+        "native.recorderFailed" => "en échec",
+        "native.recorderPaused" => "en pause",
+        "native.recorders" => "Enregistreurs : {{parts}}",
+        "native.recordingStatusUnavailable" => "État de l’enregistrement indisponible",
+        "native.restoreFailed" => "Échec de la reprise : le moteur audio n’a pas démarré",
+        "native.restorePaused" => "La reprise est suspendue. Récupérez les sessions enregistrées indisponibles.",
+        "native.restoredAll" => "Lecture reprise après le redémarrage",
+        "native.restoredPartial" => "{{restored}} routes sur {{total}} rétablies après le redémarrage",
+        "native.statusUnavailable" => "État indisponible",
+        "native.stopAudio" => "Arrêter l’audio",
+        "native.stopFailed" => "Échec de l’arrêt : {{reason}}",
+        "native.stopped" => "À l’arrêt",
+        "native.stoppedStatus" => "À l’arrêt · {{mic}}",
+        _ => "",
+    }
+}
+
+fn text_zh_hans(key: &str) -> &'static str {
+    match key {
+        "native.alreadyPlaying" => "已在播放",
+        "native.autoplayFailed" => "自动播放失败：音频引擎未启动",
+        "native.autoplayPaused" => "已暂停自动播放。请在 AudioRouter 中恢复不可用的已保存会话。",
+        "native.liveRecordersUnavailable" => "实时录音器状态不可用",
+        "native.micMuted" => "麦克风已静音",
+        "native.micOn" => "麦克风已开启",
+        "native.noSession" => "没有可播放的会话。请打开 AudioRouter 并创建一个会话。",
+        "native.notRecording" => "未在录音",
+        "native.open" => "打开 AudioRouter",
+        "native.play" => "播放",
+        "native.playFailed" => "播放失败：{{reason}}",
+        "native.playFailedConsent" => {
+            "播放失败：请先在 AudioRouter 窗口中点击“播放”，授予设备访问权限。"
+        }
+        "native.playFailedNoRoute" => "播放失败：没有设备路由。请打开 AudioRouter 并选择设备。",
+        "native.playing" => "正在播放",
+        "native.playingSessionsStatus" => "正在播放 {{count}} 个会话 · {{mic}}",
+        "native.playingStatus" => "正在播放 · {{mic}}",
+        "native.quit" => "退出并停止音频",
+        "native.quitRefused" => "无法退出：后台服务无法完成收尾操作",
+        "native.recorderActive" => "录音中",
+        "native.recorderArmed" => "已待命",
+        "native.recorderFailed" => "失败",
+        "native.recorderPaused" => "已暂停",
+        "native.recorders" => "录音器：{{parts}}",
+        "native.recordingStatusUnavailable" => "录音状态不可用",
+        "native.restoreFailed" => "恢复失败：音频引擎未启动",
+        "native.restorePaused" => "已暂停恢复。需要恢复不可用的已保存会话。",
+        "native.restoredAll" => "重启后已恢复播放",
+        "native.restoredPartial" => "重启后已恢复 {{restored}} 条路由，共 {{total}} 条",
+        "native.statusUnavailable" => "状态不可用",
+        "native.stopAudio" => "停止音频",
+        "native.stopFailed" => "停止失败：{{reason}}",
+        "native.stopped" => "已停止",
+        "native.stoppedStatus" => "已停止 · {{mic}}",
         _ => "",
     }
 }

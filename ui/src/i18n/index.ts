@@ -35,7 +35,7 @@ void i18n.use(initReactI18next).init({
   // English is the reference; a key that exists in no catalog is a build bug.
   // Render nothing rather than leaking a raw key into the interface.
   parseMissingKeyHandler: (key) => {
-    if (import.meta.env.DEV) console.warn(`[i18n] Missing message key: ${key}`);
+    if (import.meta.env?.DEV) console.warn(`[i18n] Missing message key: ${key}`);
     return "";
   },
 });

@@ -1,7 +1,7 @@
 import { expect, test } from "./browser-test";
 import { openPage } from "./workbench";
 import { mkdir, writeFile } from "node:fs/promises";
-import { SETTINGS_PAGES } from "../src/Workbench";
+import { SETTINGS_PAGES, settingsPageTitle } from "../src/Workbench";
 import { appendLibraryNode } from "../src/draft";
 import { demoSession } from "../src/fixtures";
 import { libraryEntries } from "../src/library";
@@ -15,7 +15,7 @@ const pages = [
   "Recording",
   "Apps",
   "Timing",
-  ...SETTINGS_PAGES.map(([, label]) => label),
+  ...SETTINGS_PAGES.map(([id]) => settingsPageTitle(id)),
 ];
 
 for (const theme of ["dark", "light", "high-contrast"]) {

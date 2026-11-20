@@ -35,6 +35,9 @@ function matchSupported(tag: string, supported: readonly string[]): string | nul
   if (!normalized) return null;
   const byLower = new Map(supported.map((entry) => [entry.toLowerCase(), entry]));
   const parts = normalized.split("-");
+  // Windows can report a Chinese region without a script.
+  const region = { "zh-CN": "zh-Hans", "zh-SG": "zh-Hans" }[normalized];
+  if (!byLower.has(normalized.toLowerCase()) && region && supported.includes(region)) return region;
   // Exact tag first, then progressively broader parents. This is what makes
   // `fr-CA` use `fr` and `zh-Hant-TW` try `zh-Hant` before `zh`.
   for (let length = parts.length; length >= 1; length -= 1) {

@@ -1,5 +1,6 @@
 import { normalizeLanguageTag, type LanguageDirection, type LocaleMetadata } from "./resolve";
 import { pseudolocalizeMessages } from "./pseudo";
+import { ENGLISH_MESSAGES } from "./generated/englishMessages";
 
 export const PSEUDO_LOCALE_TAG = "en-XA";
 
@@ -10,10 +11,25 @@ type LocaleFile = {
   messages?: unknown;
 };
 
-const localeFiles = import.meta.glob("./locales/*.json", { eager: true, import: "default" }) as Record<
-  string,
-  LocaleFile
->;
+/**
+ * The Playwright test loader runs shared modules in Node with no window and
+ * no Vite `import.meta.glob` transform. Node-side imports still need English
+ * text, so they use the generated module; the browser discovers every file.
+ */
+const nodeFallback: Record<string, LocaleFile> = {
+  "./locales/en.json": {
+    meta: { nativeName: "English", direction: "ltr" },
+    messages: ENGLISH_MESSAGES,
+  },
+};
+
+function bundledLocaleFiles(): Record<string, LocaleFile> {
+  if (typeof window === "undefined") return nodeFallback;
+  return import.meta.glob("./locales/*.json", { eager: true, import: "default" }) as Record<string, LocaleFile>;
+}
+
+const localeFiles = bundledLocaleFiles();
+const isDevelopment = Boolean(import.meta.env?.DEV);
 
 function direction(value: unknown): LanguageDirection | null {
   return value === "ltr" || value === "rtl" ? value : null;
@@ -50,14 +66,14 @@ export function discoverLocaleCatalogs(): {
     const nativeName = typeof meta?.nativeName === "string" ? meta.nativeName.trim() : "";
     const writingDirection = direction(meta?.direction);
     if (!tag || tag !== base || !nativeName || !writingDirection || !isRecord(file.messages)) {
-      if (import.meta.env.DEV) console.warn(`[i18n] Ignoring malformed language file ${path}`);
+      if (isDevelopment) console.warn(`[i18n] Ignoring malformed language file ${path}`);
       continue;
     }
     locales.push({ tag, nativeName, direction: writingDirection });
     resources[tag] = file.messages;
   }
   const english = resources.en;
-  if (import.meta.env.DEV && english) {
+  if (isDevelopment && english) {
     // Development builds only; never shipped and never used as translation
     // evidence. Selecting it exposes hardcoded strings and cramped layout.
     resources[PSEUDO_LOCALE_TAG] = pseudolocalizeMessages(english) as CatalogResource;

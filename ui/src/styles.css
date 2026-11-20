@@ -6889,12 +6889,13 @@ input[type="color"] {
 }
 .main-content > .inspector .inspector-flag {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(2.75rem, 1fr) minmax(0, max-content);
   align-items: end;
   gap: 0.5rem;
 }
 .main-content > .inspector .inspector-flag > label {
   display: grid;
+  overflow-wrap: anywhere;
   gap: 0.25rem;
   justify-items: start;
   color: #dce6ef;
@@ -6903,11 +6904,20 @@ input[type="color"] {
   color: #26364d;
 }
 .inspector-flag-state {
-  width: 3ch;
+  display: grid;
+  min-width: 0;
   padding-bottom: 0.25rem;
   color: var(--text-soft);
   font-size: var(--text-sm);
-  text-align: right;
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+.inspector-flag-state > span {
+  grid-area: 1 / 1;
+  align-self: end;
+}
+.inspector-flag-state > [aria-hidden="true"] {
+  visibility: hidden;
 }
 /* Tool visual editors (Graphic EQ, Bass & Treble, Dehum, Pitch, Delay, Volume/Gain). */
 .tool-visual {

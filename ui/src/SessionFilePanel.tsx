@@ -1,6 +1,8 @@
 import { useState } from "react";
 import type { Session, SessionFileImportResult } from "@audiorouter/contracts";
 import { formatUiError, type UiBackend } from "./backend";
+import { useMessages } from "./i18n/useMessages";
+import { tx } from "./i18n";
 
 type Invoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 
@@ -9,21 +11,18 @@ function shellInvoke(): Invoke | undefined {
 }
 
 export function importSummary(result: SessionFileImportResult): string {
-  const parts = [`Opened "${result.session.name}" as a new session.`];
-  if (result.renamed)
-    parts.push(
-      "A session with the same ID already existed here, so the copy is marked (imported); nothing was replaced.",
-    );
+  const parts = [tx("workflowUi.fileOpened", { name: result.session.name })];
+  if (result.renamed) parts.push(tx("workflowUi.fileRenamed"));
   const restored = result.mediaRestored + result.pluginStatesRestored;
   if (restored > 0)
     parts.push(
-      `Restored ${result.mediaRestored} audio file${result.mediaRestored === 1 ? "" : "s"} and ${result.pluginStatesRestored} plugin setting${result.pluginStatesRestored === 1 ? "" : "s"}.`,
+      tx("workflowUi.fileAssets", {
+        media: tx("workflowUi.fileMedia", { count: result.mediaRestored }),
+        plugins: tx("workflowUi.filePlugins", { count: result.pluginStatesRestored }),
+      }),
     );
-  if (result.missingAssets > 0)
-    parts.push(
-      `${result.missingAssets} node${result.missingAssets === 1 ? " refers" : "s refer"} to audio or plugin settings the file did not include; choose them again in Properties.`,
-    );
-  parts.push("Check each input and output node: device names can differ on this PC.");
+  if (result.missingAssets > 0) parts.push(tx("workflowUi.fileMissing", { count: result.missingAssets }));
+  parts.push(tx("workflowUi.fileCheck"));
   return parts.join(" ");
 }
 
@@ -45,6 +44,7 @@ export function SessionFilePanel({
   unsaved: boolean;
   onImported: (session: Session) => void;
 }) {
+  const tr = useMessages();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [typedPath, setTypedPath] = useState("");
@@ -53,7 +53,7 @@ export function SessionFilePanel({
     if (!invoke) {
       const path = typedPath.trim();
       if (!path) {
-        setMessage("Type the full path of a .audiorouter file first.");
+        setMessage(tr("workflowUi.typePath"));
         return null;
       }
       return path;
@@ -76,14 +76,12 @@ export function SessionFilePanel({
       try {
         const path = await choosePath("save");
         if (!path) return;
-        setMessage("Exporting the saved version…");
+        setMessage(tr("workflowUi.exporting"));
         // The Windows Save dialog already asked before replacing a file.
         const result = await backend.exportSessionFile(session.id, path, Boolean(invoke));
-        setMessage(
-          `Exported the saved version of "${session.name}" to ${result.path}. Unsaved edits are not included. The file includes saved tools and settings, imported audio and saved plugin settings. Plugins themselves must also be installed on the other PC.`,
-        );
+        setMessage(tr("workflowUi.fileExported", { name: session.name, path: result.path }));
       } catch (error) {
-        setMessage(formatUiError(error, "Unable to export the saved version."));
+        setMessage(formatUiError(error, tr("workflowUi.exportError")));
       }
     });
   const openFile = () =>
@@ -91,32 +89,28 @@ export function SessionFilePanel({
       try {
         const path = await choosePath("open");
         if (!path) return;
-        setMessage("Opening the session file…");
+        setMessage(tr("workflowUi.opening"));
         const result = await backend.importSessionFile(path);
         onImported(result.session);
         setMessage(importSummary(result));
       } catch (error) {
-        setMessage(formatUiError(error, "Unable to open the session file."));
+        setMessage(formatUiError(error, tr("workflowUi.openError")));
       }
     });
   return (
     <section className="session-file" aria-labelledby="session-file-heading">
-      <h3 id="session-file-heading">Session file</h3>
-      <p className="muted">
-        Back up this session, or move it to another PC, as one <code>.audiorouter</code> file. Opening a file adds it as
-        a new session and never replaces one.
-      </p>
+      <h3 id="session-file-heading">{tr("workflowUi.sessionFile")}</h3>
+      <p className="muted">{tr("workflowUi.fileIntro")}</p>
       {unsaved && (
         <p className="muted session-file-note" role="note">
-          You have unsaved edits. Export uses the saved version only. Use Save in the header first to include your
-          changes; if Save fails or reports a conflict, resolve it before exporting.
+          {tr("workflowUi.fileUnsaved")}
         </p>
       )}
       {!invoke && (
         <label>
-          File path
+          {tr("workflowUi.filePath")}
           <input
-            aria-label="Session file path"
+            aria-label={tr("workflowUi.sessionPath")}
             placeholder="C:\Users\you\Documents\My setup.audiorouter"
             value={typedPath}
             onChange={(event) => setTypedPath(event.target.value)}
@@ -131,7 +125,7 @@ export function SessionFilePanel({
           onClick={() => void saveFile()}
           disabled={!backend.connected || busy}
         >
-          Export saved version…
+          {tr("workflowUi.exportFile")}
         </button>
         <button
           type="button"
@@ -139,7 +133,7 @@ export function SessionFilePanel({
           onClick={() => void openFile()}
           disabled={!backend.connected || busy}
         >
-          Open file…
+          {tr("workflowUi.openFile")}
         </button>
       </div>
       {message && (

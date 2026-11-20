@@ -11,6 +11,7 @@
     "lint": "eslint . --max-warnings 0",
     "i18n:generate": "node scripts/generate-i18n.mjs && node scripts/generate-native-i18n.mjs",
     "i18n:check": "node scripts/check-i18n.mjs && node scripts/generate-native-i18n.mjs --check",
+    "i18n:audit": "node scripts/audit-i18n.mjs",
     "check:i18n": "npm run i18n:check",
     "format": "prettier --write src e2e",
     "format:check": "prettier --check src e2e",

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Node } from "@audiorouter/contracts";
 import type { RecorderStatus, UiBackend } from "./backend";
+import { useMessages } from "./i18n/useMessages";
 
 const FORMAT_LABELS: Record<string, string> = {
   wavPcm24: "WAV 24-bit",
@@ -57,20 +58,17 @@ export function RecordButton({
   onToggle: (nodeId: string, record: boolean) => void;
   compact?: boolean;
 }) {
+  const tr = useMessages();
   const recording = isNodeRecording(status);
   const elapsed = useRecordingClock(recording);
   const disabled = !connected || busy || !node.enabled || (!recording && !running);
-  const title = recording
-    ? "Stop and save the file"
-    : !running
-      ? "Press Play first: the Recorder saves what plays through it"
-      : "Start recording what reaches this node";
+  const title = tr(recording ? "workflowUi.stopSave" : !running ? "workflowUi.playFirst" : "workflowUi.startNode");
   return (
     <button
       type="button"
       className={`record-button${recording ? " is-recording" : ""}${compact ? " is-compact" : ""} nodrag nopan`}
       aria-pressed={recording}
-      aria-label={recording ? `Stop recording ${node.name}` : `Record ${node.name}`}
+      aria-label={tr(recording ? "workflowUi.stopName" : "workflowUi.recordName", { name: node.name })}
       title={title}
       disabled={disabled}
       onClick={(event) => {
@@ -79,7 +77,13 @@ export function RecordButton({
       }}
     >
       <span className="record-button-icon" aria-hidden="true" />
-      <span>{busy ? "…" : recording ? `Stop · ${formatElapsed(elapsed)}` : "Record"}</span>
+      <span>
+        {busy
+          ? "…"
+          : recording
+            ? tr("workflowUi.stopElapsed", { time: formatElapsed(elapsed) })
+            : tr("workflowUi.record")}
+      </span>
     </button>
   );
 }
@@ -98,6 +102,7 @@ export function RecordingFolderField({
   backend: Pick<UiBackend, "getRecordingRoot" | "setRecordingRoot">;
   connected: boolean;
 }) {
+  const tr = useMessages();
   const [root, setRoot] = useState<string | null | undefined>(undefined);
   const [value, setValue] = useState("");
   const [editing, setEditing] = useState(false);
@@ -137,7 +142,7 @@ export function RecordingFolderField({
       setRoot(result.root);
       setValue(result.root);
       setEditing(false);
-      setMessage(result.created ? "Folder created. Recordings will be saved here." : "Recordings will be saved here.");
+      setMessage(tr(result.created ? "recordingUi.folderCreated" : "recordingUi.folderSaved"));
       window.dispatchEvent(new Event(ROOT_CHANGED_EVENT));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
@@ -147,17 +152,17 @@ export function RecordingFolderField({
   };
   const showField = root === null || editing;
   return (
-    <div className={`recording-folder${root === null ? " is-missing" : ""}`} role="group" aria-label="Recording folder">
-      <strong>Recording folder</strong>
-      {root === null && (
-        <p className="muted">
-          Choose where recordings are saved before pressing Record. The suggested folder is created for you.
-        </p>
-      )}
+    <div
+      className={`recording-folder${root === null ? " is-missing" : ""}`}
+      role="group"
+      aria-label={tr("recordingUi.folder")}
+    >
+      <strong>{tr("recordingUi.folder")}</strong>
+      {root === null && <p className="muted">{tr("recordingUi.folderHelp")}</p>}
       {showField ? (
         <>
           <label className="recording-folder-field">
-            Folder path
+            {tr("recordingUi.folderPath")}
             <input
               type="text"
               value={value}
@@ -171,7 +176,7 @@ export function RecordingFolderField({
           </label>
           <div className="recording-folder-actions">
             <button type="button" className="primary" disabled={busy || !value.trim()} onClick={() => void save()}>
-              {busy ? "Saving…" : "Use this folder"}
+              {tr(busy ? "topbar.saving" : "recordingUi.useFolder")}
             </button>
             {root !== null && (
               <button
@@ -184,7 +189,7 @@ export function RecordingFolderField({
                   setMessage(null);
                 }}
               >
-                Cancel
+                {tr("common.cancel")}
               </button>
             )}
           </div>
@@ -203,7 +208,7 @@ export function RecordingFolderField({
                 setMessage(null);
               }}
             >
-              Change folder
+              {tr("recordingUi.changeFolder")}
             </button>
           </div>
         </>
@@ -236,22 +241,23 @@ export function RecorderControls({
   message: string | null;
   onToggle: (nodeId: string, record: boolean) => void;
 }) {
+  const tr = useMessages();
   const recording = isNodeRecording(status);
   const format = FORMAT_LABELS[String(node.parameters.format ?? "wavPcm24")] ?? "WAV 24-bit";
   const split = Number(node.parameters.splitMinutes ?? 0);
   const auto = node.parameters.autoRecord === true;
   return (
-    <section className="tool-visual recorder-controls" aria-label="Recorder controls">
+    <section className="tool-visual recorder-controls" aria-label={tr("workflowUi.controls")}>
       <div className="dynamics-heading">
         <div>
-          <strong>Recording</strong>
+          <strong>{tr("recordingUi.recording")}</strong>
           <small>
-            {format} · {split > 0 ? `new file every ${split} min` : "one file per take"}
-            {auto ? " · starts with Play" : ""}
+            {format} · {split > 0 ? tr("workflowUi.splitInterval", { minutes: split }) : tr("workflowUi.oneFile")}
+            {auto ? ` · ${tr("workflowUi.autoWithPlay")}` : ""}
           </small>
         </div>
         <span className={`dynamics-pill is-${recording ? "work" : "idle"}`} role="status">
-          {recording ? "Recording" : running ? "Ready" : "Not playing"}
+          {tr(recording ? "recordingUi.recording" : running ? "workflowUi.ready" : "workflowUi.notPlaying")}
         </span>
       </div>
       <RecordButton
@@ -263,16 +269,11 @@ export function RecorderControls({
         onToggle={onToggle}
       />
       <p className="muted dynamics-status">
-        {message ??
-          (recording
-            ? "Everything reaching this node is being saved. Stop saves the file; stopping playback also saves it."
-            : running
-              ? "Press Record to save what plays through this node. Turn on automatic recording below to start with every Play."
-              : "Press Play, then Record. Files are saved in the recording folder below.")}
+        {message ?? tr(recording ? "workflowUi.working" : running ? "workflowUi.readyHelp" : "workflowUi.stoppedHelp")}
       </p>
       {lastPath && (
         <p className="recorder-last-file" title={lastPath}>
-          Last file: <code>{lastPath.split(/[\\/]/).pop()}</code>
+          {tr("workflowUi.lastFile")} <code>{lastPath.split(/[\\/]/).pop()}</code>
         </p>
       )}
     </section>

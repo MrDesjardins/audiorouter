@@ -95,6 +95,7 @@ export function ProcessorParameterEditor({
   compact?: boolean;
 }) {
   const eqBackend = useContext(EqBackendContext);
+  const tr = useMessages();
   const pluginContext = useContext(PluginParameterContext);
   if (node.kind === "parametricEq")
     return <AdvancedEqEditor node={node} backend={eqBackend} connected={connected} onChange={onChange} />;
@@ -234,7 +235,7 @@ export function ProcessorParameterEditor({
               key={parameter.name}
               label={label}
               name={label}
-              sliderName={`${label} slider`}
+              sliderName={tr("parameterUi.slider", { name: label })}
               value={numericValue}
               min={parameter.minimum!}
               max={parameter.maximum!}
@@ -282,6 +283,7 @@ export function NodeTelemetryPanel({
   running: boolean;
 }) {
   const observation = snapshot?.nodeTelemetry.find((item) => item.nodeId === node.id);
+  const tr = useMessages();
   const applicationCaptureState =
     node.kind === "applicationCapture"
       ? (snapshot?.applicationCaptureStates.find((item) => item.nodeId === node.id) ?? null)
@@ -369,21 +371,31 @@ export function NodeTelemetryPanel({
               ? "Live"
               : "No readings";
   const note = !node.enabled
-    ? "This tool is off. Effects pass sound through; inputs and outputs contribute silence."
+    ? tr("workflowUi.offNote")
     : node.bypass
-      ? "This tool is bypassed. Its processing and live analysis are inactive; bypassed inputs, outputs and Mixers contribute silence."
+      ? tr("workflowUi.bypassNote")
       : (applicationCaptureState?.detail ??
         // Only notes that tell the user something; the status pill covers the rest.
-        (running && endpointOwned
-          ? "Another program has exclusive use of this device. Close it, then press Play again."
-          : null));
+        (running && endpointOwned ? tr("workflowUi.exclusiveNote") : null));
   return (
     <section className={`node-telemetry${running ? " is-live" : ""}`} aria-labelledby="node-telemetry-heading">
       <div className="node-telemetry-heading">
-        <h3 id="node-telemetry-heading">Live readings</h3>
+        <h3 id="node-telemetry-heading">{tr("workflowUi.live")}</h3>
         <span className={`node-telemetry-status${status === "Live" ? " is-live" : ""}`} role="status">
           {status === "Live" && <span className="node-telemetry-dot" aria-hidden="true" />}
-          {status}
+          {status === "Off"
+            ? tr("common.off")
+            : status === "Bypass"
+              ? tr("toolProperties.bypass")
+              : status === "Waiting for Play"
+                ? tr("workflowUi.waitingPlay")
+                : status === "Device busy"
+                  ? tr("workflowUi.deviceBusy")
+                  : status === "Live"
+                    ? tr("workflowUi.liveStatus")
+                    : status === "No readings"
+                      ? tr("workflowUi.noReadings")
+                      : status}
         </span>
       </div>
       {note && <p className="node-telemetry-note">{note}</p>}
@@ -884,7 +896,7 @@ export function PhysicalInputBinding({
             : "Voicemeeter Out B1 receives system sound only while the Voicemeeter mixer runs with B1 enabled. For an app-independent virtual cable, send Windows sound to CABLE Input and select CABLE Output here."}
       </small>
       <button type="button" className="secondary" onClick={onRefresh} disabled={disabled}>
-        Refresh available inputs
+        {tx("workflowUi.refreshInputs")}
       </button>
     </div>
   );
@@ -998,3 +1010,5 @@ export function CableBinding({
     </div>
   );
 }
+import { useMessages } from "./i18n/useMessages";
+import { tx } from "./i18n";

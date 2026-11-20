@@ -1,4 +1,6 @@
 import { cableUnavailableReason } from "./virtualCableStatus";
+import { tx } from "./i18n";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 import type { NodeKind, VirtualCableStatus } from "@audiorouter/contracts";
 
 /** Where an entry sits in the source -> tool -> destination signal-flow
@@ -295,10 +297,18 @@ export function filterLibraryEntries(entries: LibraryEntry[], query: string): Li
   const normalized = query.trim().toLocaleLowerCase();
   if (!normalized) return entries;
   return entries.filter((entry) =>
-    `${entry.label} ${entry.category} ${entry.note ?? ""} ${entry.unavailableReason ?? ""}`
+    `${entry.label} ${entry.category} ${entry.note ?? ""} ${entry.unavailableReason ?? ""} ${toolLabel(entry)} ${toolHelp(entry)}`
       .toLocaleLowerCase()
       .includes(normalized),
   );
+}
+
+export function toolLabel(entry: LibraryEntry): string {
+  return tx(`toolCatalog.${entry.id}.name` as MessageKey) || entry.label;
+}
+
+export function toolHelp(entry: LibraryEntry): string {
+  return tx(`toolCatalog.${entry.id}.help` as MessageKey) || entry.note || TOOL_HELP[entry.id] || entry.category;
 }
 
 export function libraryEntryAccessibleLabel(entry: LibraryEntry): string {
@@ -329,5 +339,12 @@ export const TOOL_HELP: Record<string, string> = {
 /** The explanation of the tool a node was made from. */
 export function toolDescription(kind: string): string | undefined {
   const entry = libraryEntries.find((item) => item.kind === kind);
-  return entry ? (entry.note ?? TOOL_HELP[entry.id]) : undefined;
+  return entry ? toolHelp(entry) : undefined;
+}
+
+export function toolKindLabel(kind: string): string {
+  const entry = libraryEntries.find((item) => (item.kind ?? item.virtualKind) === kind);
+  if (entry) return toolLabel(entry);
+  if (kind === "applicationCapture") return tx("toolShelf.application");
+  return kind;
 }

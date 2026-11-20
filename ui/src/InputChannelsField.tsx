@@ -1,13 +1,9 @@
 import type { DeviceListItem } from "@audiorouter/contracts";
+import { useMessages } from "./i18n/useMessages";
 
 export type InputChannelMode = "stereo" | "mono" | "left" | "right";
 
-const MODES: ReadonlyArray<{ value: InputChannelMode; label: string }> = [
-  { value: "stereo", label: "Stereo (as captured)" },
-  { value: "mono", label: "Mono: mix both channels" },
-  { value: "left", label: "Mono: left channel only (input 1)" },
-  { value: "right", label: "Mono: right channel only (input 2)" },
-];
+const MODES = ["stereo", "mono", "left", "right"] as const;
 
 /**
  * Physical Input channel handling (CAP-03): a stereo audio interface often
@@ -29,37 +25,40 @@ export function InputChannelsField({
   disabled: boolean;
   onChange: (name: "channelMode", value: InputChannelMode) => void;
 }) {
-  const selected: InputChannelMode = MODES.some((item) => item.value === mode) ? (mode as InputChannelMode) : "stereo";
+  const tr = useMessages();
+  const selected = MODES.find((item) => item === mode) ?? "stereo";
   const device = devices.find(
     (item): item is Extract<DeviceListItem, { state: "active" }> => item.state === "active" && item.id === endpointId,
   );
   const guidance = surround
-    ? "Not used while spatial audio renders surround to two ears."
+    ? "workflowUi.spatial"
     : device?.format.channels === 1
-      ? "This device is mono; its sound already reaches both ears."
+      ? "workflowUi.monoDevice"
       : selected === "stereo"
-        ? "Keeps left and right apart. If your voice is only in one ear, choose a mono option."
+        ? "workflowUi.stereoHelp"
         : selected === "mono"
-          ? "Mixes left and right into one signal sent to both ears."
-          : `Sends only the ${selected} channel to both ears; the other channel is ignored. Use it for one microphone on a stereo interface.`;
+          ? "workflowUi.monoHelp"
+          : selected === "left"
+            ? "workflowUi.leftHelp"
+            : "workflowUi.rightHelp";
   return (
-    <div className="node-binding-editor" aria-label="Input channel settings">
+    <div className="node-binding-editor" aria-label={tr("workflowUi.inputSettings")}>
       <label>
-        Channels
+        {tr("workflowUi.channels")}
         <select
-          aria-label="Input channels"
+          aria-label={tr("workflowUi.inputChannels")}
           value={selected}
           disabled={disabled || surround}
           onChange={(event) => onChange("channelMode", event.target.value as InputChannelMode)}
         >
           {MODES.map((item) => (
-            <option key={item.value} value={item.value}>
-              {item.label}
+            <option key={item} value={item}>
+              {tr(`workflowUi.${item}`)}
             </option>
           ))}
         </select>
       </label>
-      <small className="input-channels-guidance">{guidance}</small>
+      <small className="input-channels-guidance">{tr(guidance)}</small>
     </div>
   );
 }

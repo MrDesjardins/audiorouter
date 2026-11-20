@@ -16,7 +16,8 @@ import { NodeIdentity } from "./NodeIdentity";
 import { CanvasGroupInspector, type CanvasGroup, type useCanvasGroups } from "./CanvasGroups";
 import { SpatialAudioField } from "./SpatialAudioField";
 import { InputChannelsField } from "./InputChannelsField";
-import { libraryEntries, toolDescription } from "./library";
+import { toolDescription, toolKindLabel } from "./library";
+import { useMessages } from "./i18n/useMessages";
 import { EditableNodeName } from "./EditableNodeName";
 import { HelpDisclosure } from "./HelpDisclosure";
 import { PropertySection } from "./PropertySection";
@@ -156,6 +157,7 @@ export function PropertiesPanel({
   togglePrivacyMute: () => Promise<void>;
   privacyMuted: boolean;
 }) {
+  const tr = useMessages();
   const cableStatus = useVirtualCableStatus();
   const flagId = useId();
   const inspector = useRef<HTMLElement>(null);
@@ -221,29 +223,17 @@ export function PropertiesPanel({
               />
             </div>
           </div>
-          <span className="badge">
-            {libraryEntries.find((entry) => entry.kind === selectedNode.kind)?.label ?? selectedNode.kind}
-          </span>
+          <span className="badge">{toolKindLabel(selectedNode.kind)}</span>
         </div>
         {toolDescription(selectedNode.kind) && (
           <p className="muted tool-description">{toolDescription(selectedNode.kind)}</p>
         )}
         <ToolGuideLink key={selectedNode.kind} kind={selectedNode.kind} />
-        <HelpDisclosure title="How to edit this tool">
-          <p>Click the name to rename this tool. Press Enter or click away to finish; Escape cancels.</p>
-          <p>
-            Parameter edits save automatically after a short pause while audio plays. Other changes need Save at the
-            top; the canvas marks tools that need saving.
-          </p>
-          <p>
-            For delay and processing measurements, open Timing while audio plays. Ready means enabled for the next
-            playback; Active does not guarantee an incoming signal.
-          </p>
-          <p>
-            Off silences inputs and outputs; an off effect passes sound without processing. Bypass passes sound around
-            an effect; on a prepared input, output, or Mixer it silences that contribution. Live toggles do not require
-            Save or Stop and keep your other edits. Off devices remain open until Stop and contribute silence.
-          </p>
+        <HelpDisclosure title={tr("toolProperties.editHelp")}>
+          <p>{tr("toolProperties.rename")}</p>
+          <p>{tr("toolProperties.autosave")}</p>
+          <p>{tr("toolProperties.timing")}</p>
+          <p>{tr("toolProperties.flags")}</p>
         </HelpDisclosure>
         {selectedNode.kind === "meter" ? (
           <MeterInspector
@@ -720,7 +710,12 @@ export function PropertiesPanel({
         )}
         <ToolCompare backend={backend} session={session} node={selectedNode} running={sessionRunning} />
         {takesPresets(selectedNode) && (
-          <PropertySection kind={selectedNode.kind} title="My presets" summary="Save and reuse settings">
+          <PropertySection
+            kind={selectedNode.kind}
+            sectionId="My presets"
+            title={tr("toolProperties.presets")}
+            summary={tr("toolProperties.presetsSummary")}
+          >
             <ToolPresetPicker
               backend={backend}
               node={selectedNode}
@@ -745,7 +740,7 @@ export function PropertiesPanel({
           <div className="inspector-toggles">
             <div className="inspector-flag">
               <label>
-                Enabled
+                {tr("toolProperties.enabled")}
                 <input
                   type="checkbox"
                   checked={selectedNode.enabled}
@@ -755,12 +750,14 @@ export function PropertiesPanel({
                 />
               </label>
               <span className="inspector-flag-state" id={`${flagId}-enabled`}>
-                {selectedNode.enabled ? "On" : "Off"}
+                <span aria-hidden="true">{tr("common.on")}</span>
+                <span aria-hidden="true">{tr("common.off")}</span>
+                <span>{tr(selectedNode.enabled ? "common.on" : "common.off")}</span>
               </span>
             </div>
             <div className="inspector-flag">
               <label>
-                Bypass
+                {tr("toolProperties.bypass")}
                 <input
                   type="checkbox"
                   checked={selectedNode.bypass}
@@ -770,7 +767,9 @@ export function PropertiesPanel({
                 />
               </label>
               <span className="inspector-flag-state" id={`${flagId}-bypass`}>
-                {selectedNode.bypass ? "On" : "Off"}
+                <span aria-hidden="true">{tr("common.on")}</span>
+                <span aria-hidden="true">{tr("common.off")}</span>
+                <span>{tr(selectedNode.bypass ? "common.on" : "common.off")}</span>
               </span>
             </div>
           </div>
@@ -800,16 +799,21 @@ export function PropertiesPanel({
             onClick={() => void togglePrivacyMute()}
             disabled={!backend.connected}
           >
-            {privacyMuted ? "Turn off privacy mute" : "Turn on privacy mute"}
+            {tr(privacyMuted ? "toolProperties.privacyOff" : "toolProperties.privacyOn")}
           </button>
           <p className="muted">
             {!backend.connected
-              ? "Controls are disabled while disconnected."
+              ? tr("toolProperties.disconnected")
               : privacyMuted
-                ? "Privacy mute is on: every microphone and captured app is silent, not only this tool."
-                : "Privacy mute silences every microphone and captured app right away."}
+                ? tr("toolProperties.privacyMuted")
+                : tr("toolProperties.privacyHint")}
           </p>
-          <PropertySection kind={selectedNode.kind} title="Technical details" summary="Tool ID">
+          <PropertySection
+            kind={selectedNode.kind}
+            sectionId="Technical details"
+            title={tr("toolProperties.technical")}
+            summary={tr("toolProperties.toolId")}
+          >
             <NodeIdentity nodeId={selectedNode.id} />
           </PropertySection>
           <div className="inspector-tool-actions">
@@ -817,30 +821,30 @@ export function PropertiesPanel({
               <button
                 type="button"
                 className="secondary"
-                aria-label="Reset parameters"
+                aria-label={tr("toolProperties.resetParameters")}
                 onClick={resetNodeParameters}
                 disabled={!backend.connected}
               >
-                Reset
+                {tr("toolProperties.reset")}
               </button>
             )}
             <button
               type="button"
               className="secondary"
-              aria-label="Duplicate tool"
+              aria-label={tr("toolProperties.duplicateTool")}
               onClick={duplicateSelectedNode}
               disabled={!backend.connected}
             >
-              Duplicate
+              {tr("toolProperties.duplicate")}
             </button>
             <button
               type="button"
               className="danger"
-              aria-label="Remove tool"
+              aria-label={tr("toolProperties.removeTool")}
               onClick={removeSelectedNode}
               disabled={!backend.connected}
             >
-              Remove
+              {tr("toolProperties.remove")}
             </button>
           </div>
         </div>

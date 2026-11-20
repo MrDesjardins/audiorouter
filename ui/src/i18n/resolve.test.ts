@@ -20,6 +20,9 @@ describe("language tags", () => {
     expect(resolveLanguage("fr-CA", [], supported)).toBe("fr");
     expect(resolveLanguage("zh-Hant-TW", [], supported)).toBe("zh-Hant");
     expect(resolveLanguage("zh-Hans-CN", [], supported)).toBe("zh-Hans");
+    expect(resolveLanguage(null, ["zh-CN"], supported)).toBe("zh-Hans");
+    expect(resolveLanguage(null, ["zh-SG"], supported)).toBe("zh-Hans");
+    expect(resolveLanguage(null, ["zh-TW"], ["en", "zh-Hans"])).toBe("en");
     // No arbitrary regional substitution: pt-PT is not served by pt-BR.
     expect(resolveLanguage("pt-PT", [], supported)).toBe("en");
   });

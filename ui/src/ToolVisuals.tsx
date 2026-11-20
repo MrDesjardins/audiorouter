@@ -801,6 +801,7 @@ export function DelayEditor({ node, disabled, onChange }: { node: Node; disabled
 /* Volume and Gain: the same change in % and dB, on a level scale.    */
 
 export function LevelEditor({ node, disabled, onChange }: { node: Node; disabled: boolean; onChange: Change }) {
+  const tr = useMessages();
   const isVolume = node.kind === "volume";
   const percent = isVolume ? clamp(num(node, "percent", 100), 0, 200) : 100 * Math.pow(10, num(node, "gainDb", 0) / 20);
   const gainDb = isVolume ? (percent <= 0 ? -Infinity : 20 * Math.log10(percent / 100)) : num(node, "gainDb", 0);
@@ -809,7 +810,7 @@ export function LevelEditor({ node, disabled, onChange }: { node: Node; disabled
   const x = (db: number) => GL + clamp((db + 60) / 66, 0, 1) * (GR - GL);
   const choices = isVolume
     ? [
-        { label: "Mute", value: 0 },
+        { label: tr("levelEditor.mute"), value: 0 },
         { label: "50 %", value: 50 },
         { label: "71 % (−3 dB)", value: 71 },
         { label: "100 %", value: 100 },
@@ -823,15 +824,15 @@ export function LevelEditor({ node, disabled, onChange }: { node: Node; disabled
   const current = isVolume ? Math.round(percent) : Math.round(gainDb * 10) / 10;
   return (
     <ToolPanel
-      label={isVolume ? "Volume editor" : "Gain editor"}
-      title={isVolume ? "Volume" : "Gain"}
-      summary="Every 6 dB doubles or halves the level. Watch the result stay left of 0 dBFS to avoid clipping."
+      label={tr(isVolume ? "levelEditor.volumeEditor" : "levelEditor.gainEditor")}
+      title={tr(isVolume ? "parameterUi.labels.volume" : "parameterUi.labels.gain")}
+      summary={tr("levelEditor.hint")}
     >
       <div className="tool-bigvalue">
         <b>{isVolume ? `${Math.round(percent)} %` : signedDb(gainDb)}</b>
         <span>
           {percent <= 0
-            ? "silent"
+            ? tr("levelEditor.silent")
             : isVolume
               ? `= ${signedDb(gainDb)}`
               : `= ${Math.round(percent)} % (×${(percent / 100).toFixed(2)})`}
@@ -841,7 +842,11 @@ export function LevelEditor({ node, disabled, onChange }: { node: Node; disabled
         className="dynamics-graph"
         viewBox={`0 0 ${W} 64`}
         role="img"
-        aria-label={`A typical voice at ${reference} dBFS comes out at ${Number.isFinite(after) ? after.toFixed(1) : "silence"} dBFS`}
+        aria-label={
+          Number.isFinite(after)
+            ? tr("levelEditor.graph", { input: reference, output: after.toFixed(1) })
+            : tr("levelEditor.graphSilent", { input: reference })
+        }
       >
         <rect x={GL} y={8} width={GR - GL} height={38} className="dynamics-plot" />
         <rect x={x(0)} y={8} width={GR - x(0)} height={38} className="dynamics-over" />
@@ -854,14 +859,14 @@ export function LevelEditor({ node, disabled, onChange }: { node: Node; disabled
           </g>
         ))}
         <text x={GL - 4} y={20} textAnchor="end" className="dynamics-axis">
-          in
+          {tr("levelEditor.in")}
         </text>
         <rect x={GL} y={12} width={x(reference) - GL} height={10} rx={2} className="tool-level is-before" />
         <text x={x(reference) + 4} y={20} className="dynamics-axis">
-          typical voice −18 dBFS
+          {tr("levelEditor.voice")}
         </text>
         <text x={GL - 4} y={39} textAnchor="end" className="dynamics-axis">
-          out
+          {tr("levelEditor.out")}
         </text>
         {Number.isFinite(after) && (
           <rect
@@ -879,10 +884,16 @@ export function LevelEditor({ node, disabled, onChange }: { node: Node; disabled
           textAnchor={Number.isFinite(after) && x(after) > GR - 90 ? "end" : "start"}
           className={`dynamics-axis${after > 0 ? " tool-warning" : ""}`}
         >
-          {Number.isFinite(after) ? `${after.toFixed(1)} dBFS${after > 0 ? " — clips" : ""}` : "silent"}
+          {Number.isFinite(after)
+            ? `${after.toFixed(1)} dBFS${after > 0 ? ` — ${tr("levelEditor.clips")}` : ""}`
+            : tr("levelEditor.silent")}
         </text>
       </svg>
-      <div className="tool-presets" role="group" aria-label={isVolume ? "Volume choices" : "Gain choices"}>
+      <div
+        className="tool-presets"
+        role="group"
+        aria-label={tr(isVolume ? "levelEditor.volumeChoices" : "levelEditor.gainChoices")}
+      >
         {choices.map((choice) => (
           <button
             key={choice.label}
@@ -1116,3 +1127,4 @@ export function LiveLevelBar({ peakDb, rmsDb }: { peakDb: number; rmsDb: number 
     </div>
   );
 }
+import { useMessages } from "./i18n/useMessages";

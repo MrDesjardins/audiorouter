@@ -85,6 +85,7 @@ export function SignalFlowPanel({
   /** Returns whether the group was added (the picker then starts empty next time). */
   addApplicationGroupFromPicker: (applications: ApplicationRow[], executablePaths: string[]) => boolean;
 }) {
+  const tr = useMessages();
   const [applicationMode, setApplicationMode] = useState<"single" | "group">("single");
   const [groupApplicationKeys, setGroupApplicationKeys] = useState<string[]>([]);
   const [groupExecutablePaths, setGroupExecutablePaths] = useState<string[]>([]);
@@ -94,21 +95,21 @@ export function SignalFlowPanel({
     <section id="signal-flow-panel" className="canvas-panel" aria-labelledby="canvas-heading">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Signal flow</p>
-          <h2 id="canvas-heading">Canvas</h2>
+          <p className="eyebrow">{tr("canvasUi.signalFlow")}</p>
+          <h2 id="canvas-heading">{tr("canvasUi.canvas")}</h2>
         </div>
       </div>
       {flowCanvas}
       <fieldset className="connection-editor" disabled={!backend.connected}>
-        <legend>Add connection</legend>
+        <legend>{tr("canvasUi.addConnection")}</legend>
         <label>
-          Output
+          {tr("canvasUi.output")}
           <select
-            aria-label="Source output port"
+            aria-label={tr("canvasUi.sourcePort")}
             value={connectionSource}
             onChange={(event) => setConnectionSource(event.target.value)}
           >
-            <option value="">Choose source</option>
+            <option value="">{tr("canvasUi.chooseSource")}</option>
             {outputPorts.map((port) => (
               <option key={encodePort(port.nodeId, port.portName)} value={encodePort(port.nodeId, port.portName)}>
                 {port.nodeName} · {port.portName} · {port.channels}ch
@@ -118,13 +119,13 @@ export function SignalFlowPanel({
         </label>
         <span aria-hidden="true">→</span>
         <label>
-          Input
+          {tr("canvasUi.input")}
           <select
-            aria-label="Destination input port"
+            aria-label={tr("canvasUi.destinationPort")}
             value={connectionDestination}
             onChange={(event) => setConnectionDestination(event.target.value)}
           >
-            <option value="">Choose destination</option>
+            <option value="">{tr("canvasUi.chooseDestination")}</option>
             {inputPorts.map((port) => (
               <option key={encodePort(port.nodeId, port.portName)} value={encodePort(port.nodeId, port.portName)}>
                 {port.nodeName} · {port.portName} · {port.channels}ch
@@ -483,3 +484,4 @@ export function SignalFlowPanel({
     </section>
   );
 }
+import { useMessages } from "./i18n/useMessages";

@@ -2336,7 +2336,7 @@ describe("keyboard connection dialog", () => {
     openTab("Recording");
     const panel = await screen.findByRole("region", { name: "Recorder" });
     fireEvent.click(within(panel).getByRole("button", { name: "Arm" }));
-    await within(panel).findByText("Arming...");
+    await within(panel).findByText("Updating recorder…");
     fireEvent.click(within(panel).getByRole("button", { name: "Arm" }));
     expect(armRecorder).toHaveBeenCalledTimes(1);
     releaseArm({ sessionId: "demo-session", state: "armed", parts: [], pauses: [], lastFrame: 0 });

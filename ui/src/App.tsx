@@ -32,7 +32,7 @@ import type { Node, PluginParametersResult } from "@audiorouter/contracts";
 import { LIBRARY_DROP_SOURCE, SessionFlowCanvas, type CanvasLayoutHistoryControls } from "./SessionFlowCanvas";
 import {
   SETTINGS_PAGE_ICONS,
-  SETTINGS_PAGE_KEYWORDS,
+  settingsPageKeywords,
   SETTINGS_PAGES,
   settingsPageTitle,
   tabPlace,
@@ -1981,10 +1981,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const createSession = async () => {
     if (sessionCrudBusy.current || !backend.connected) return;
     const name = await askText({
-      title: "New session",
-      label: "Session name",
-      initialValue: "New session",
-      confirmLabel: "Create session",
+      title: m("workflowActions.newSession"),
+      label: m("workflowUi.sessionName"),
+      initialValue: m("workflowActions.newSession"),
+      confirmLabel: m("workflowActions.createSession"),
     });
     if (!name || sessionCrudBusy.current || !backend.connected) return;
     sessionCrudBusy.current = true;
@@ -2006,10 +2006,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const switched = await switchSession(result.session.id);
       if (switched.switched)
         setActionMessage(
-          `Created stopped session ${result.session.name}.${switched.stopped ? " The running session was stopped; press Play to start this one." : ""}`,
+          m(switched.stopped ? "workflowActions.sessionCreatedStopped" : "workflowActions.sessionCreated", {
+            name: result.session.name,
+          }),
         );
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to create session."));
+      setActionMessage(formatUiError(error, m("workflowActions.sessionCreateError")));
     } finally {
       sessionCrudBusy.current = false;
       setSessionCrudBusyState(false);
@@ -2027,10 +2029,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const switched = await switchSession(result.session.id);
       if (switched.switched)
         setActionMessage(
-          `Duplicated stopped session ${result.session.name}.${switched.stopped ? " The running session was stopped; press Play to start this one." : ""}`,
+          m(switched.stopped ? "workflowActions.sessionDuplicatedStopped" : "workflowActions.sessionDuplicated", {
+            name: result.session.name,
+          }),
         );
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to duplicate session."));
+      setActionMessage(formatUiError(error, m("workflowActions.sessionDuplicateError")));
     } finally {
       sessionCrudBusy.current = false;
       setSessionCrudBusyState(false);
@@ -2039,9 +2043,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const deleteSession = async () => {
     if (sessionCrudBusy.current || !backend.connected) return;
     const confirmed = await askConfirm({
-      title: `Delete “${session.name}”?`,
-      message: "This removes the session and its saved route. It cannot be undone.",
-      confirmLabel: "Delete session",
+      title: m("workflowActions.sessionDeleteTitle", { name: session.name }),
+      message: m("workflowActions.sessionDeleteHelp"),
+      confirmLabel: m("workflowUi.deleteSession"),
       destructive: true,
     });
     if (!confirmed || sessionCrudBusy.current || !backend.connected) return;
@@ -2064,9 +2068,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       }
       const fallback = remaining.find((item) => item.id !== session.id);
       if (fallback) await switchSession(fallback.id, true);
-      setActionMessage(`Deleted session ${session.name}.`);
+      setActionMessage(m("workflowActions.sessionDeleted", { name: session.name }));
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to delete session."));
+      setActionMessage(formatUiError(error, m("workflowActions.sessionDeleteError")));
     } finally {
       sessionCrudBusy.current = false;
       setSessionCrudBusyState(false);
@@ -3813,7 +3817,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         icon: SETTINGS_PAGE_ICONS[page],
         title: settingsPageTitle(page),
         detail: "Open in Settings",
-        keywords: SETTINGS_PAGE_KEYWORDS[page],
+        keywords: settingsPageKeywords(page),
         run: () => setWorkbenchTab(page),
       });
     }
@@ -4445,7 +4449,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   sessionFileContent={
                     // Its own boundary: the session picker and actions above
                     // must not wait for this lazily loaded section.
-                    <Suspense fallback={<p role="status">Loading session file tools...</p>}>
+                    <Suspense fallback={<p role="status">{m("workflowUi.loadingSessionFile")}</p>}>
                       <SessionFilePanel
                         backend={editorBackend}
                         session={session}

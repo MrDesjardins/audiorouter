@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { useMessages } from "./i18n/useMessages";
 
 /**
  * The app's own question dialogs, in place of the browser's confirm and prompt,
@@ -55,6 +56,7 @@ export function askText(question: Omit<TextQuestion, "kind">): Promise<string | 
 const FOCUSABLE = "input:not([disabled]), button:not([disabled])";
 
 function QuestionDialog({ question }: { question: Pending }) {
+  const tr = useMessages();
   const headingId = useId();
   const descriptionId = useId();
   const [text, setText] = useState(question.kind === "text" ? question.initialValue : "");
@@ -149,7 +151,7 @@ function QuestionDialog({ question }: { question: Pending }) {
           )}
           <div className="actions">
             <button ref={firstFocus} type="button" className="secondary" onClick={() => finish(false)}>
-              Cancel
+              {tr("common.cancel")}
             </button>
             <button
               type="submit"

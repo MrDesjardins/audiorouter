@@ -28,5 +28,10 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     expect(await hint.boundingBox()).toEqual(hintBox);
     await search.press("Escape");
     await expect(pages.getByRole("tab")).toHaveCount(15);
+
+    await search.fill("lang");
+    await expect(pages.getByRole("tab")).toHaveText(["Appearance"]);
+    await search.press("Enter");
+    await expect(page.getByRole("combobox", { name: "Language", exact: true })).toBeVisible();
   });
 }

@@ -699,29 +699,27 @@ function DuckTriggerEdge({ id, source, target, sourceX, sourceY, targetX, target
 const edgeTypes = { audioActions: AudioEdgeActions, duckTrigger: DuckTriggerEdge };
 
 /** Connection line styles; each state class matches the canvas edge styling. */
-export const SIGNAL_FLOW_LEGEND: ReadonlyArray<{ state: EdgeSignalState["state"] | "configured"; label: string }> = [
-  {
-    state: "active",
-    label:
-      "Moving lights: audio is flowing. Colour, glow and number of lights follow the level (teal quiet, gold speech, orange loud, red near clipping)",
-  },
-  { state: "configured", label: "Solid grey: connected, session stopped or not metered" },
-  { state: "silent", label: "Grey dots: running but silent" },
-  { state: "disabled", label: "Orange dashes: connection paused, node disabled, or muted" },
-  { state: "unavailable", label: "Yellow dots: source not connected yet (app closed or not started) or audio stale" },
-  { state: "faulted", label: "Red dots: a plugin on this path failed" },
-];
+export const SIGNAL_FLOW_LEGEND = [
+  { state: "active" },
+  { state: "configured" },
+  { state: "silent" },
+  { state: "disabled" },
+  { state: "unavailable" },
+  { state: "faulted" },
+] as const satisfies ReadonlyArray<{ state: EdgeSignalState["state"] | "configured" }>;
 
 function SignalFlowLegend() {
+  const tr = useMessages();
   return (
     <details className="canvas-legend">
-      <summary>Canvas legend</summary>
+      <summary>{tr("canvasUi.legend")}</summary>
       <p className="muted canvas-handle-legend">
-        <span className="canvas-handle-legend-dot canvas-handle-legend-dot-target" aria-hidden="true" /> Send (start)
-        <span className="canvas-handle-legend-dot canvas-handle-legend-dot-source" aria-hidden="true" /> Receive (end) -
-        drag from the sending tool's blue dot to the receiving tool's orange dot.
+        <span className="canvas-handle-legend-dot canvas-handle-legend-dot-target" aria-hidden="true" />{" "}
+        {tr("canvasUi.sendHandle")}
+        <span className="canvas-handle-legend-dot canvas-handle-legend-dot-source" aria-hidden="true" />{" "}
+        {tr("canvasUi.receiveHandle")}
       </p>
-      <ul className="signal-flow-legend" aria-label="Connection line legend">
+      <ul className="signal-flow-legend" aria-label={tr("canvasUi.connectionLegend")}>
         {SIGNAL_FLOW_LEGEND.map((item) => (
           <li
             key={item.state}
@@ -761,7 +759,7 @@ function SignalFlowLegend() {
                 </>
               )}
             </svg>
-            {item.label}
+            {tr(`canvasUi.${item.state}`)}
           </li>
         ))}
       </ul>
@@ -2330,6 +2328,7 @@ export function SessionFlowCanvas({
   canEdit = true,
   deviceUsers,
 }: SessionFlowCanvasProps) {
+  const tr = useMessages();
   const graphRunning = sessionRunning ?? diagnostics?.schedulerTelemetry?.activeGeneration != null;
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
   const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(optionalLocalStorage(), layoutKey));
@@ -2545,7 +2544,7 @@ export function SessionFlowCanvas({
     replaceEdgeSides(sides);
     if (restoredWidth !== undefined && restoredWidth !== panelWidth) onPanelWidth?.(restoredWidth);
     onLayoutHistoryStep?.(direction);
-    onLayoutMessage?.(direction === "undo" ? "Undid the canvas layout change." : "Redid the canvas layout change.");
+    onLayoutMessage?.(tr(direction === "undo" ? "workflowUi.canvasUndo" : "workflowUi.canvasRedo"));
   };
   // Escape cancels the drag in progress (Drag/drop criterion, 2026-11-07): a
   // card returns to where the drag began, and a connection is not made.
@@ -3261,10 +3260,9 @@ export function SessionFlowCanvas({
   return (
     <LiveCanvasProvider store={telemetryStore} diagnostics={diagnostics ?? null}>
       <FlowMotionProvider mode={flowAnimation}>
-        <div className="canvas-layout-actions" role="group" aria-label="Canvas layout actions">
+        <div className="canvas-layout-actions" role="group" aria-label={tr("canvasUi.layoutActions")}>
           <span className="muted" role="status" aria-live="polite">
-            {selectedNodeIds.length + selectedGroupIds.length} item
-            {selectedNodeIds.length + selectedGroupIds.length === 1 ? "" : "s"} selected
+            {tr("canvasUi.selected", { count: selectedNodeIds.length + selectedGroupIds.length })}
           </span>
           <button
             type="button"
@@ -3272,7 +3270,7 @@ export function SessionFlowCanvas({
             disabled={!layoutHistory.past.length}
             onClick={() => restoreLayout("undo")}
           >
-            Undo layout
+            {tr("canvasUi.undoLayout")}
           </button>
           <button
             type="button"
@@ -3280,19 +3278,14 @@ export function SessionFlowCanvas({
             disabled={!layoutHistory.future.length}
             onClick={() => restoreLayout("redo")}
           >
-            Redo layout
+            {tr("canvasUi.redoLayout")}
           </button>
-          <button
-            type="button"
-            className="secondary"
-            title="Inputs on the left, outputs on the right, tools in between, with room around every connection"
-            onClick={tidyLayout}
-          >
-            Arrange
+          <button type="button" className="secondary" title={tr("canvasUi.arrangeHint")} onClick={tidyLayout}>
+            {tr("canvasUi.arrange")}
           </button>
           {arrangeUndo?.layoutKey === layoutKey && (
             <button type="button" className="secondary" onClick={undoArrange}>
-              Undo arrange
+              {tr("canvasUi.undoArrange")}
             </button>
           )}
           {toolbarActions}
@@ -3301,10 +3294,10 @@ export function SessionFlowCanvas({
             className="secondary"
             aria-pressed={minimapOpen}
             ref={minimapToggleRef}
-            title="Show a small map of the whole route"
+            title={tr("canvasUi.mapHint")}
             onClick={() => toggleMinimap(!minimapOpen)}
           >
-            Map
+            {tr("canvasUi.map")}
           </button>
         </div>
         {canvasOverlay}
@@ -3312,7 +3305,7 @@ export function SessionFlowCanvas({
         <div
           className={`session-flow-canvas${connectionCancelled ? " connection-cancelled" : ""}`}
           id="routing-canvas"
-          aria-label="Signal-flow graph"
+          aria-label={tr("canvasUi.graphLabel")}
           tabIndex={-1}
           onKeyDown={(event) => {
             if (event.defaultPrevented || event.repeat || event.altKey) return;
@@ -3921,3 +3914,4 @@ export function SessionFlowCanvas({
     </LiveCanvasProvider>
   );
 }
+import { useMessages } from "./i18n/useMessages";

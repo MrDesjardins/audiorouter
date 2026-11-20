@@ -121,11 +121,11 @@ export const SETTINGS_PAGE_ICONS: Record<SettingsPage, IconName> = {
 };
 
 /** Words people search for, shared by the Settings search and Ctrl+K. */
-export const SETTINGS_PAGE_KEYWORDS: Record<SettingsPage, string> = {
+const SETTINGS_PAGE_KEYWORDS: Record<SettingsPage, string> = {
   virtualCables: "cable driver virtual device install",
   plugins: "vst vst2 vst3 effects scan folder",
   deviceAccess: "permission allow devices microphone privacy",
-  uiOptions: "theme dark light high contrast colors look animation autosave save",
+  uiOptions: "theme dark light high contrast colors look animation autosave save language",
   startup: "sign in login autostart autoplay tray",
   shortcuts: "keys keyboard hotkey shortcut chord",
   versions: "update release upgrade prerelease channel check now",
@@ -139,12 +139,18 @@ export const SETTINGS_PAGE_KEYWORDS: Record<SettingsPage, string> = {
   identity: "about version build",
 };
 
+/** Keep the English search alias available even after switching languages. */
+export function settingsPageKeywords(page: SettingsPage): string {
+  const keywords = SETTINGS_PAGE_KEYWORDS[page];
+  return page === "uiOptions" ? `${keywords} ${i18n.t("appearance.language")}` : keywords;
+}
+
 /** Settings pages whose name or keywords match, in their usual order. */
 export function matchingSettingsPages(query: string): Set<SettingsPage> {
   return new Set(
     SETTINGS_PAGES.filter(
       ([id]) =>
-        paletteScore({ title: settingsPageTitle(id), detail: "", keywords: SETTINGS_PAGE_KEYWORDS[id] }, query) > 0,
+        paletteScore({ title: settingsPageTitle(id), detail: "", keywords: settingsPageKeywords(id) }, query) > 0,
     ).map(([id]) => id),
   );
 }
@@ -181,33 +187,12 @@ export function tabPlace(tab: WorkbenchTab): "daily" | "status" | "settings" {
 }
 
 const TAB_HELP: Partial<Record<WorkbenchTab, { title: string; content: ReactNode }>> = {
-  tools: {
-    title: "How to build a route",
-    content: (
-      <ol>
-        <li>Add a source: Input Device, Test Signal, Audio File, or an application.</li>
-        <li>Add processing tools such as Gain or Advanced EQ if needed.</li>
-        <li>Add an Output Device and choose your speakers or headphones in Properties.</li>
-        <li>Drag from the sending tool's blue dot to the receiving tool's orange dot.</li>
-        <li>Press Play to hear it. Use Save at the top when the canvas marks changes that need saving.</li>
-      </ol>
-    ),
-  },
   timing: {
     title: "How to read timing",
     content: (
       <p>
         Play the session to see measured delay along each route. Timing shows where audio waits and how much processing
         adds; it does not prove that an input has signal.
-      </p>
-    ),
-  },
-  session: {
-    title: "How to manage sessions",
-    content: (
-      <p>
-        Switch between saved setups, create or duplicate a session, or export a stopped copy. Save at the top keeps
-        marked edits. Revert edits returns to the saved route.
       </p>
     ),
   },
@@ -768,6 +753,26 @@ export function Workbench({
           ))}
         </div>
       )}
+      {tab === "tools" && (
+        <div className="workbench-help">
+          <HelpDisclosure key={tab} title={tr("toolShelf.routeHelp")}>
+            <ol>
+              <li>{tr("toolShelf.step1")}</li>
+              <li>{tr("toolShelf.step2")}</li>
+              <li>{tr("toolShelf.step3")}</li>
+              <li>{tr("toolShelf.step4")}</li>
+              <li>{tr("toolShelf.step5")}</li>
+            </ol>
+          </HelpDisclosure>
+        </div>
+      )}
+      {tab === "session" && (
+        <div className="workbench-help">
+          <HelpDisclosure key={tab} title={tr("workflowUi.sessionHelp")}>
+            <p>{tr("workflowUi.sessionHelpBody")}</p>
+          </HelpDisclosure>
+        </div>
+      )}
       {TAB_HELP[tab] && (
         <div className="workbench-help">
           <HelpDisclosure key={tab} title={TAB_HELP[tab].title}>
@@ -785,14 +790,14 @@ export function Workbench({
         {tab === "tools" && (
           <div className="workbench-tool-search">
             <label>
-              Find a tool
+              {tr("toolShelf.find")}
               <input
                 ref={searchRef}
                 type="search"
-                aria-label="Find a tool"
+                aria-label={tr("toolShelf.find")}
                 value={librarySearch}
                 onChange={(event) => onLibrarySearch(event.target.value)}
-                placeholder="Input, gain, recorder…"
+                placeholder={tr("toolShelf.placeholder")}
               />
             </label>
           </div>
@@ -859,24 +864,18 @@ export function Workbench({
         {tab === "recording" && (
           <section className="workbench-page" role="tabpanel" {...panelProps}>
             <h2>{tr("workbench.recording")}</h2>
-            <p className="muted">
-              Recording starts only after you explicitly arm and start a recorder. Confirm the destination and format
-              before recording.
-            </p>
+            <p className="muted">{tr("workflowUi.recordingIntro")}</p>
             {recordingContent}
           </section>
         )}
         {tab === "session" && (
           <section className="workbench-page session-page" role="tabpanel" {...panelProps}>
             <h2>{tr("workbench.sessions")}</h2>
-            <p className="muted">
-              Switch between saved audio setups, or create a copy to try another arrangement. Use Save at the top when
-              you want to keep your edits.
-            </p>
+            <p className="muted">{tr("workflowUi.sessionIntro")}</p>
             <label>
-              Current session
+              {tr("workflowUi.currentSession")}
               <select
-                aria-label="Choose session"
+                aria-label={tr("workflowUi.chooseSession")}
                 value={selectedSessionId}
                 onChange={(event) => {
                   setRenaming(false);
@@ -892,9 +891,9 @@ export function Workbench({
             </label>
             {renaming ? (
               <label>
-                New session name
+                {tr("workflowUi.newSessionName")}
                 <TextField
-                  aria-label="Session name"
+                  aria-label={tr("workflowUi.sessionName")}
                   value={sessionName}
                   maxLength={120}
                   disabled={!connected}
@@ -907,21 +906,21 @@ export function Workbench({
               </label>
             ) : (
               <button type="button" className="secondary" onClick={() => setRenaming(true)} disabled={!connected}>
-                Rename
+                {tr("workflowUi.rename")}
               </button>
             )}
             <div className="session-action-grid">
               <button type="button" onClick={onNewSession} disabled={!connected}>
-                New
+                {tr("workflowUi.newSession")}
               </button>
               <button type="button" className="secondary" onClick={onDuplicate} disabled={!connected}>
-                Duplicate
+                {tr("workflowUi.duplicate")}
               </button>
               <button type="button" className="secondary" onClick={onDiscard} disabled={!connected}>
-                Revert edits
+                {tr("workflowUi.revert")}
               </button>
               <button type="button" className="danger" onClick={onDelete} disabled={!connected}>
-                Delete session
+                {tr("workflowUi.deleteSession")}
               </button>
             </div>
             {sessionFileContent}

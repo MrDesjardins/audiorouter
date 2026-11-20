@@ -1,7 +1,8 @@
-import { useMemo, useState, type DragEvent, type ReactNode, type RefObject } from "react";
+import { useState, type DragEvent, type ReactNode, type RefObject } from "react";
 import { Icon, libraryEntryIcon, type IconName } from "./icons";
 import { endLibraryDrag, startLibraryDrag } from "./libraryDrag";
-import { TOOL_HELP, type LibraryEntry } from "./library";
+import { toolHelp, toolLabel, type LibraryEntry } from "./library";
+import { useMessages } from "./i18n/useMessages";
 import { ToolGuideLink } from "./ToolGuideLink";
 import {
   kindOrder,
@@ -65,10 +66,6 @@ function returnToToolOnEscape(pressed: HTMLButtonElement, toolId: string) {
   document.addEventListener("keydown", listener, true);
 }
 
-const APPLICATION_HELP = "Capture audio from a running app into this route.";
-const GROUP_HELP = "A named visual background. It carries no audio.";
-const DESCRIPTION_PLACEHOLDER = "Point at a tool to see what it does. Click to add it, or drag it onto the canvas.";
-
 export function ToolShelf({
   tools,
   connected,
@@ -100,10 +97,11 @@ export function ToolShelf({
   const [shownRecents] = useState(readRecents);
   const [pins, setPins] = useState(readPins);
   const [openGroups, setOpenGroups] = useState(readOpenGroups);
-  const [described, setDescribed] = useState<ShelfTool | null>(null);
+  const [describedId, setDescribedId] = useState<string | null>(null);
+  const tr = useMessages();
   const query = search.trim().toLocaleLowerCase();
 
-  const all = useMemo<ShelfTool[]>(() => {
+  const all = (() => {
     const matches = (text: string) => !query || text.toLocaleLowerCase().includes(query);
     const fromLibrary = tools.map((entry): ShelfTool => {
       const kind = libraryEntryKind(entry);
@@ -111,8 +109,8 @@ export function ToolShelf({
       const { kind: addKind, virtualKind } = entry;
       return {
         id: entry.id,
-        label: entry.label,
-        help: entry.unavailableReason ?? entry.note ?? TOOL_HELP[entry.id] ?? entry.category,
+        label: toolLabel(entry),
+        help: entry.unavailableReason ?? toolHelp(entry),
         icon: libraryEntryIcon(entry),
         group: setup ? "setup" : TOOL_GROUP_OF[kind],
         order: kindOrder(kind),
@@ -131,8 +129,8 @@ export function ToolShelf({
     });
     const application: ShelfTool = {
       id: "application-source",
-      label: "Application source",
-      help: APPLICATION_HELP,
+      label: tr("toolShelf.application"),
+      help: tr("toolShelf.applicationHelp"),
       icon: "app-window",
       group: "input",
       order: kindOrder("applicationCapture"),
@@ -143,8 +141,8 @@ export function ToolShelf({
     };
     const group: ShelfTool = {
       id: "group",
-      label: "Group",
-      help: GROUP_HELP,
+      label: tr("toolShelf.group"),
+      help: tr("toolShelf.groupHelp"),
       icon: "square-dashed",
       group: "canvas",
       order: 0,
@@ -156,9 +154,10 @@ export function ToolShelf({
     return [...fromLibrary, ...[application, group].filter((item) => matches(`${item.label} ${item.help}`))].sort(
       (left, right) => left.order - right.order,
     );
-  }, [tools, connected, query, onAdd, onAddCable, onAddGroup, onApplicationPicker]);
+  })();
 
   const byId = new Map(all.map((tool) => [tool.id, tool]));
+  const described = describedId === null ? undefined : byId.get(describedId);
   const usable = new Set(all.filter((tool) => !tool.setup).map((tool) => tool.id));
   const topRows = shelfRows(pins, shownRecents, usable);
   const hasHistory = pins.length + shownRecents.length > 0;
@@ -177,8 +176,8 @@ export function ToolShelf({
       <div
         className={`tool-library-entry tool-row${pinned ? " is-pinned" : ""}`}
         key={tool.id}
-        onMouseEnter={() => setDescribed(tool)}
-        onFocus={() => setDescribed(tool)}
+        onMouseEnter={() => setDescribedId(tool.id)}
+        onFocus={() => setDescribedId(tool.id)}
       >
         <button
           type="button"
@@ -187,7 +186,7 @@ export function ToolShelf({
           disabled={tool.disabled}
           aria-description={tool.help}
           onDragStart={(event) => {
-            if (tool.dragKind) startLibraryDrag(event, tool.dragKind, tool.label);
+            if (tool.dragKind) startLibraryDrag(event, tool.dragKind, tool.guideName);
           }}
           onDragEnd={(event: DragEvent) => {
             endLibraryDrag();
@@ -211,9 +210,9 @@ export function ToolShelf({
           <button
             type="button"
             className="tool-pin"
-            aria-label={pinned ? `Unpin ${tool.label}` : `Pin ${tool.label}`}
+            aria-label={tr(pinned ? "toolShelf.unpin" : "toolShelf.pin", { name: tool.label })}
             aria-pressed={pinned}
-            title={pinned ? "Unpin" : "Pin to the top"}
+            title={tr(pinned ? "toolShelf.unpinTitle" : "toolShelf.pinTitle")}
             onClick={() =>
               setPins((current) => {
                 const next = togglePin(current, tool.id);
@@ -225,7 +224,7 @@ export function ToolShelf({
             <Icon name="star" size={14} />
           </button>
         )}
-        <ToolGuideLink kind={tool.guideKind} compact toolName={tool.guideName} />
+        <ToolGuideLink kind={tool.guideKind} compact toolName={tool.label} />
       </div>
     );
   };
@@ -236,7 +235,7 @@ export function ToolShelf({
       <small>{tool.setup?.reason}</small>
       {tool.setup?.opensCables && (
         <button type="button" className="secondary" onClick={onOpenVirtualCables}>
-          Open Virtual Cables
+          {tr("toolShelf.openCables")}
         </button>
       )}
     </div>
@@ -248,7 +247,7 @@ export function ToolShelf({
     <div className="tool-shelf">
       {nothingFound && (
         <div className="tool-search-empty">
-          <p role="status">No built-in tools match your search. Try a name such as Gain or Recorder.</p>
+          <p role="status">{tr("toolShelf.empty")}</p>
           <button
             type="button"
             className="secondary"
@@ -257,15 +256,15 @@ export function ToolShelf({
               searchRef.current?.focus();
             }}
           >
-            Clear tool search
+            {tr("toolShelf.clear")}
           </button>
         </div>
       )}
       {!searching && (
         <section className="tool-group tool-group-top" aria-labelledby="tool-group-top-heading">
           <div className="tool-group-heading">
-            <h3 id="tool-group-top-heading">{hasHistory ? "Recent" : "Common tools"}</h3>
-            <small>{hasHistory ? "Pin a tool to keep it here" : "Your recent tools replace these"}</small>
+            <h3 id="tool-group-top-heading">{tr(hasHistory ? "toolShelf.recent" : "toolShelf.common")}</h3>
+            <small>{tr(hasHistory ? "toolShelf.pinHint" : "toolShelf.recentHint")}</small>
           </div>
           {topRows.flatMap((id) => {
             const tool = byId.get(id);
@@ -273,7 +272,7 @@ export function ToolShelf({
           })}
         </section>
       )}
-      {SHELF_GROUPS.map(({ id, label }) => {
+      {SHELF_GROUPS.map(({ id }) => {
         const members = all.filter((tool) => tool.group === id);
         const isPlugins = id === "plugins";
         if (searching && members.length === 0 && !isPlugins) return null;
@@ -291,7 +290,7 @@ export function ToolShelf({
                 onClick={() => toggleGroup(id)}
               >
                 <Icon name={open ? "chevron-down" : "chevron-right"} size={14} />
-                <span>{label}</span>
+                <span>{tr(`toolShelf.${id}`)}</span>
                 {!isPlugins && <span className="tool-group-count">{members.length}</span>}
               </button>
             </h3>
@@ -311,7 +310,7 @@ export function ToolShelf({
             <span>{described.help}</span>
           </>
         ) : (
-          <span>{DESCRIPTION_PLACEHOLDER}</span>
+          <span>{tr("toolShelf.preview")}</span>
         )}
       </div>
     </div>

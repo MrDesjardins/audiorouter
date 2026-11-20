@@ -311,9 +311,134 @@ Still open (next bounded tasks):
    en-XA, live switching during audio, packaged shell/tray, Narrator.
 5. Add the guarded check against new unlocalized visible strings.
 
-No additional language is declared supported; only English ships. Rollback:
-revert the localization change and the optional preference; no audio session
-or database schema changed.
+## French and Simplified Chinese test build
+
+The owner selected French and Simplified Chinese for the next desktop test
+build. The two catalogs cover all 302 English reference messages and generate
+their tray text from the same files. Catalog validation uses each language's
+plural categories and checks placeholders against the matching English form
+or its general plural form. The window and native tray resolve Windows
+zh-CN and zh-SG to zh-Hans when an exact catalog is unavailable.
+
+Windows checks passed for catalog generation and validation, typecheck,
+lint, formatting, all 1,145 UI unit tests and the Edge Settings workflow
+that switches English → French → Simplified Chinese and checks the saved
+language after reload. Docs acceptance passed. Vite reports a main chunk
+size advisory (778 kB before compression).
+
+The normal output shell was locked by the running app. The release build
+completed in `target/ui-language-build` with `custom-protocol`, and the shell,
+CLI and four plug-in workers were staged in `target/ui-language-test`.
+The desktop WebView2 smoke used an isolated external backend and verified
+both Settings language changes and their native settings writes.
+Evidence is in `target/ui-language-test-smoke.json`. The Windows x64 ZIP is
+`target/AudioRouter-0.0.30-language-test-x64.zip` (SHA-256
+`A4D3CE2EC13197B706DC65DA69BF3D7267187328911BD8FF043390999481CAFF`).
+The broader string migration, fluent review, native tray visual review,
+attended Narrator and audio continuity qualification are still open.
+
+Settings search missed `lang` because Appearance's keywords did not include
+the language control. Index the English alias and the active language's
+caption in Settings and Ctrl+K. Check that Enter opens Appearance and
+exposes the Language selector in all three themes. Revert the search keyword
+change to roll it back. No driver or audio hardware is needed for this check.
+Windows Edge passed the three theme cases and localized search in French
+and Simplified Chinese. UI typecheck, lint, formatting and the release build
+passed. The isolated WebView2 smoke in `target/ui-language-test-smoke.json`
+confirmed the `lang` search opens Appearance in the rebuilt shell, staged at
+`target/ui-language-search-test`. Next, continue the remaining string migration.
+
+### Tools and shared Properties coverage
+
+Moved the route help, tool search, shelf headings, all built-in shelf labels
+and descriptions, guide links, and shared Properties help and actions into
+the three catalogs. The catalog test covers every built-in shelf entry.
+Localized search uses labels and descriptions alongside the existing English
+search terms. Saved section keys, tool IDs, graph operations, and existing
+node names retain their existing values. Rollback is a revert of this UI
+slice and regeneration of the catalog outputs.
+
+Windows verification: all 1,146 unit tests passed. Edge covered both shipped
+translations through tool search, selection, description, and the shared
+Enabled control. Still open under L10N-01/06: individual parameter captions
+and tool editors, canvas and session actions, plug-in and setup errors, and
+remaining recording, diagnostics and native text.
+
+The Windows release shell and companions are staged in
+`target/ui-localized-tools-test`. The isolated WebView2 smoke verified
+language switching, Settings search, and the Simplified Chinese tool shelf
+and tool description. Results: `target/ui-language-test-smoke.json`.
+
+### Canvas copy and source inventory
+
+Moved the canvas heading, layout toolbar, selection count, connection form
+labels and legend into the catalogs (UI-02/03/11, UI-37, L10N-01/07).
+The audit command `npm --prefix ui run i18n:audit` lists direct JSX text
+and display attributes. Add `-- --all` to inspect literals in TypeScript
+helpers as well. The output is a review queue because it includes technical
+values and preview fixtures. Revert the canvas text changes and regenerate
+the catalog outputs to roll back.
+
+Next, work through the inventory starting with device setup, plug-ins and
+individual tool settings. Confirm backend states and action messages are
+localized at the point of display.
+
+The shared built-in parameter editor now gets its known captions, help
+text, and format and switch choices from the three catalogs (UI-05/11/37).
+The editor and catalog still use stable parameter and option IDs. The next
+pass covers dedicated tool controls and status messages that bypass the
+shared editor, including dynamics, EQ, recording, and device and app
+properties. Rollback: revert the parameter text changes and regenerate the
+catalog outputs.
+
+The dedicated Gain and Volume editor also uses the catalogs for its title,
+instructions, chart text and preset group names. Windows verification passed
+catalog validation (656 keys), lint, formatting, the 1,146-test suite for the
+shared change, 11 focused tests after the dedicated editor change, and five
+Edge scenarios including the translated Gain editor in both languages. The
+release shell built and passed the isolated WebView2 smoke for the language
+selector, canvas and shelf. Test build: `target/ui-localized-parameters-test`.
+The existing Vite chunk-size advisory and browser runner notices remain.
+
+The French Properties screenshot exposed the shared flag state column's
+English-sized `3ch` width. Size the column from both translated states and
+let long text wrap. The regression checks horizontal overflow, accessible
+state descriptions and switch positions in all three themes (UI-11/17/37).
+Rollback is limited to the flag layout and markup. No live audio is needed.
+All six Edge cases passed, including French at 960 px. Screenshots in all
+three themes show the complete state label. The release build and isolated
+WebView2 smoke passed. Test folder: `target/ui-localized-layout-test`.
+
+### Session, Recording and Properties workflow text
+
+Migrated canvas undo/redo feedback, input channel modes and spatial help,
+live-reading states, session management and history, session file summaries,
+recording folder and manual controls, library rows, file actions and
+confirmation messages (UI-05/08/09/11/37). User names, paths and backend state
+values keep their existing representation. Roll back the presentation edits
+and regenerate the catalogs to revert. Checks use a disposable route and
+require no audio hardware or driver access. Backend-supplied error detail,
+unmigrated telemetry values and other tool-specific panels remain separate
+localization work.
+
+Validation: the three catalogs pass with 908 keys. All seven Edge language
+scenarios passed, including Session and Recording in both languages. The
+full UI suite passed 1,146 tests before the final Recorder controls pass;
+109 focused tests, lint, format, typecheck, and docs passed after it.
+The rebuilt Windows shell opened both translated workflows during isolated
+WebView2 smoke. Test folder: `target/ui-localized-workflows-test`.
+
+PR #166's previous four Edge shards failed during Playwright startup.
+Playwright imports shared UI modules in Node, where Vite's
+`import.meta.glob` is unavailable. The Node loader now uses the generated
+English catalog, while Vite still discovers the bundled language files.
+Catalog validation checks that both generated outputs are current.
+Local Windows validation includes the CI browser fixture build and discovery
+of all 793 browser tests, all 1,146 UI unit tests, Rust format and shell
+Clippy, UI lint and format, website checks, and documentation validation.
+
+Rollback: remove the two locale files and regenerate native resources. Older
+builds resolve a saved unsupported locale through the usual fallback.
 
 ## References
 

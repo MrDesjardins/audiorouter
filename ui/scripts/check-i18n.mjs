@@ -1,8 +1,10 @@
 /** Validate the shipped language catalogs and the generated key union. */
 import { existsSync, readFileSync } from "node:fs";
 import {
+  ENGLISH_MESSAGES_FILE,
   GENERATED_FILE,
   LOCALE_DIR,
+  englishMessagesSource,
   flattenMessages,
   findDuplicateKeys,
   generatedKeysSource,
@@ -21,6 +23,7 @@ if (files.length === 0) errors.push(`No language files found in ${LOCALE_DIR}`);
 if (!files.includes("en.json")) errors.push("en.json is required as the reference catalog");
 
 const catalogs = new Map();
+let englishMessages = null;
 for (const file of files) {
   const raw = readFileSync(new URL(`../src/i18n/locales/${file}`, import.meta.url), "utf8");
   for (const duplicate of findDuplicateKeys(raw)) {
@@ -48,29 +51,33 @@ for (const file of files) {
   const flat = flattenMessages(parsed?.messages, [], problems);
   for (const problem of problems) errors.push(`${file}: ${problem}`);
   catalogs.set(tag, flat);
+  if (file === "en.json") englishMessages = parsed?.messages ?? null;
 }
 
 const reference = catalogs.get("en");
 if (reference) {
-  const referenceKeys = new Set(Object.keys(reference));
+  const referencePlurals = pluralBases(reference);
   for (const [tag, flat] of catalogs) {
     const keys = new Set(Object.keys(flat));
-    for (const key of referenceKeys) if (!keys.has(key)) errors.push(`${tag}: missing key "${key}"`);
-    for (const key of keys) if (!referenceKeys.has(key)) errors.push(`${tag}: unknown key "${key}"`);
-    const required = pluralCategories(tag);
-    for (const [base, present] of pluralBases(flat)) {
-      for (const category of required) {
-        if (!present.includes(category)) errors.push(`${tag}: "${base}" needs plural form "_${category}"`);
+    const expectedKeys = new Map(Object.keys(reference).map((key) => [key, key]));
+    for (const [base, categories] of referencePlurals) {
+      for (const category of categories) expectedKeys.delete(`${base}_${category}`);
+      for (const category of pluralCategories(tag)) {
+        const key = `${base}_${category}`;
+        expectedKeys.set(key, categories.includes(category) ? key : `${base}_other`);
       }
     }
+    for (const key of expectedKeys.keys()) if (!keys.has(key)) errors.push(`${tag}: missing key "${key}"`);
+    for (const key of keys) if (!expectedKeys.has(key)) errors.push(`${tag}: unknown key "${key}"`);
     for (const key of keys) {
       const bad = invalidMarkup(flat[key]);
       if (bad.length > 0) errors.push(`${tag}: "${key}" uses unsupported markup <${bad.join(">, <")}>`);
     }
     if (tag === "en") continue;
     for (const key of keys) {
-      if (!referenceKeys.has(key)) continue;
-      const expected = [...placeholders(reference[key])].sort();
+      const referenceKey = expectedKeys.get(key);
+      if (!referenceKey) continue;
+      const expected = [...placeholders(reference[referenceKey])].sort();
       const actual = [...placeholders(flat[key])].sort();
       if (expected.join("\u0000") !== actual.join("\u0000"))
         errors.push(`${tag}: "${key}" placeholders differ (expected ${expected.join(", ") || "none"})`);
@@ -84,6 +91,13 @@ if (existsSync(GENERATED_FILE) === false) {
   const current = readFileSync(GENERATED_FILE, "utf8").replace(/\r\n/g, "\n");
   if (current !== generatedKeysSource(reference))
     errors.push("src/i18n/generated/messageKeys.ts is stale; run i18n:generate");
+}
+if (existsSync(ENGLISH_MESSAGES_FILE) === false) {
+  errors.push("src/i18n/generated/englishMessages.ts is missing; run i18n:generate");
+} else if (englishMessages) {
+  const current = readFileSync(ENGLISH_MESSAGES_FILE, "utf8").replace(/\r\n/g, "\n");
+  if (current !== englishMessagesSource(englishMessages))
+    errors.push("src/i18n/generated/englishMessages.ts is stale; run i18n:generate");
 }
 
 if (errors.length > 0) {
