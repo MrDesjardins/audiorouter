@@ -3,6 +3,9 @@
  * backend names parameters for machines (`wetPercent`); the Properties panel
  * shows these instead. The unit is displayed separately, so labels omit it.
  */
+import { tx } from "./i18n";
+import type { MessageKey } from "./i18n/generated/messageKeys";
+
 export type ParameterText = { label: string; help: string };
 
 const GRAPHIC_EQ_BANDS = [
@@ -18,260 +21,281 @@ const GRAPHIC_EQ_BANDS = [
   "16 kHz",
 ];
 
-const TEXT: Record<string, Record<string, ParameterText>> = {
+const TEXT: Record<string, Record<string, { label: MessageKey; help: MessageKey }>> = {
   gain: {
     gainDb: {
-      label: "Gain",
-      help: "Makes the sound louder (positive) or quieter (negative). 0 dB leaves it unchanged.",
+      label: "parameterUi.labels.gain",
+      help: "parameterUi.gainHelp",
     },
   },
   volume: {
-    percent: { label: "Volume", help: "100 % leaves the sound unchanged, 0 % silences it, 200 % doubles it." },
+    percent: { label: "parameterUi.labels.volume", help: "parameterUi.volumeHelp" },
   },
   bassTreble: {
-    bassDb: { label: "Bass", help: "Boosts or cuts voice warmth and the low end. 0 dB leaves it unchanged." },
-    trebleDb: { label: "Treble", help: "Boosts or cuts voice brightness and articulation. 0 dB leaves it unchanged." },
+    bassDb: { label: "parameterUi.labels.bass", help: "parameterUi.help.bassTreble.bassDb" },
+    trebleDb: { label: "parameterUi.labels.treble", help: "parameterUi.help.bassTreble.trebleDb" },
     bassFrequencyHz: {
-      label: "Bass frequency",
-      help: "Raise this frequency to affect more of your voice. Default: 500 Hz. Original tuning: 120 Hz.",
+      label: "parameterUi.labels.bassFrequency",
+      help: "parameterUi.help.bassTreble.bassFrequencyHz",
     },
     trebleFrequencyHz: {
-      label: "Treble frequency",
-      help: "Lower this frequency to affect more of your voice. Default: 1500 Hz. Original tuning: 6000 Hz.",
+      label: "parameterUi.labels.trebleFrequency",
+      help: "parameterUi.help.bassTreble.trebleFrequencyHz",
     },
   },
   testSignal: {
-    frequencyHz: { label: "Tone frequency", help: "Pitch of the test tone. 440 Hz is the A above middle C." },
+    frequencyHz: { label: "parameterUi.labels.toneFrequency", help: "parameterUi.help.testSignal.frequencyHz" },
     levelDb: {
-      label: "Level",
-      help: "Loudness of the tone; 0 dBFS is the loudest possible. Start low, for example −18 dBFS.",
+      label: "parameterUi.labels.level",
+      help: "parameterUi.help.testSignal.levelDb",
     },
-    durationMs: { label: "Duration", help: "How long the tone plays each time you press its Play button." },
+    durationMs: { label: "parameterUi.labels.duration", help: "parameterUi.help.testSignal.durationMs" },
   },
   mute: {
-    muted: { label: "Muted", help: "Silences everything passing through this node." },
+    muted: { label: "parameterUi.labels.muted", help: "parameterUi.help.mute.muted" },
   },
   compressor: {
     thresholdDb: {
-      label: "Threshold",
-      help: "Sound louder than this is turned down, evening out loud and quiet moments.",
+      label: "parameterUi.labels.threshold",
+      help: "parameterUi.help.compressor.thresholdDb",
     },
     ratio: {
-      label: "Ratio",
-      help: "How strongly sound above the threshold is reduced: at 4, 4 dB over the threshold comes out 1 dB over.",
+      label: "parameterUi.labels.ratio",
+      help: "parameterUi.help.compressor.ratio",
     },
-    attackMs: { label: "Attack", help: "How quickly compression starts when the sound gets loud." },
-    releaseMs: { label: "Release", help: "How quickly compression lets go when the sound gets quieter." },
-    kneeDb: { label: "Knee", help: "Softens the change around the threshold. 0 dB is an abrupt change." },
-    makeupDb: { label: "Makeup gain", help: "Adds level back after compression so the result is not quieter overall." },
+    attackMs: { label: "parameterUi.labels.attack", help: "parameterUi.help.compressor.attackMs" },
+    releaseMs: { label: "parameterUi.labels.release", help: "parameterUi.help.compressor.releaseMs" },
+    kneeDb: { label: "parameterUi.labels.knee", help: "parameterUi.help.compressor.kneeDb" },
+    makeupDb: { label: "parameterUi.labels.makeupGain", help: "parameterUi.help.compressor.makeupDb" },
   },
   gate: {
     thresholdDb: {
-      label: "Threshold",
-      help: "Sound quieter than this is turned down, for example background noise between words.",
+      label: "parameterUi.labels.threshold",
+      help: "parameterUi.help.gate.thresholdDb",
     },
     rangeDb: {
-      label: "Range",
-      help: "How much quiet sound is turned down. 80 dB is nearly silent; lower values sound more natural.",
+      label: "parameterUi.labels.range",
+      help: "parameterUi.help.gate.rangeDb",
     },
     hysteresisDb: {
-      label: "Hysteresis",
-      help: "The gate closes only once the sound falls this far below the threshold, which prevents rapid on/off chatter.",
+      label: "parameterUi.labels.hysteresis",
+      help: "parameterUi.help.gate.hysteresisDb",
     },
     ratio: {
-      label: "Ratio",
-      help: "How steeply sound below the threshold is reduced. Higher values act more like an on/off switch.",
+      label: "parameterUi.labels.ratio",
+      help: "parameterUi.help.gate.ratio",
     },
-    attackMs: { label: "Attack", help: "How quickly the gate opens when you start speaking." },
+    attackMs: { label: "parameterUi.labels.attack", help: "parameterUi.help.gate.attackMs" },
     holdMs: {
-      label: "Hold",
-      help: "How long the gate stays open after the sound drops, so word endings are not cut off.",
+      label: "parameterUi.labels.hold",
+      help: "parameterUi.help.gate.holdMs",
     },
-    releaseMs: { label: "Release", help: "How quickly the gate closes after the hold time." },
+    releaseMs: { label: "parameterUi.labels.release", help: "parameterUi.help.gate.releaseMs" },
   },
   limiter: {
     ceilingDb: {
-      label: "Ceiling",
-      help: "The loudest level allowed out. Peaks above it are held down so they never clip.",
+      label: "parameterUi.labels.ceiling",
+      help: "parameterUi.help.limiter.ceilingDb",
     },
     lookaheadMs: {
-      label: "Look-ahead",
-      help: "Delays the sound slightly so sudden peaks are caught before they happen.",
+      label: "parameterUi.labels.lookAhead",
+      help: "parameterUi.help.limiter.lookaheadMs",
     },
-    releaseMs: { label: "Release", help: "How quickly the limiter stops reducing after a peak." },
+    releaseMs: { label: "parameterUi.labels.release", help: "parameterUi.help.limiter.releaseMs" },
   },
   delay: {
-    delayMs: { label: "Delay", help: "Holds the sound back by this time, for example to line audio up with video." },
+    delayMs: { label: "parameterUi.labels.delay", help: "parameterUi.help.delay.delayMs" },
   },
   pitch: {
-    semitones: { label: "Semitones", help: "Shifts the pitch in musical steps; 12 semitones is one octave." },
-    cents: { label: "Fine tune", help: "Small pitch adjustment; 100 cents make one semitone." },
+    semitones: { label: "parameterUi.labels.semitones", help: "parameterUi.help.pitch.semitones" },
+    cents: { label: "parameterUi.labels.fineTune", help: "parameterUi.help.pitch.cents" },
   },
   dehum: {
     frequencyHz: {
-      label: "Mains frequency",
-      help: "Base frequency of the hum: 50 Hz in most of Europe, Asia, Africa and Australia, 60 Hz in North America.",
+      label: "parameterUi.labels.mainsFrequency",
+      help: "parameterUi.help.dehum.frequencyHz",
     },
-    amountPercent: { label: "Amount", help: "How strongly the hum is removed." },
+    amountPercent: { label: "parameterUi.labels.amount", help: "parameterUi.help.dehum.amountPercent" },
     harmonics: {
-      label: "Harmonics",
-      help: "How many multiples of the hum frequency (for example 100 Hz, 150 Hz) are also removed.",
+      label: "parameterUi.labels.harmonics",
+      help: "parameterUi.help.dehum.harmonics",
     },
   },
   declick: {
     thresholdPercent: {
-      label: "Threshold",
-      help: "How much a spike must stand out to count as a click. Lower values remove more clicks but can soften consonants.",
+      label: "parameterUi.labels.threshold",
+      help: "parameterUi.help.declick.thresholdPercent",
     },
   },
   denoise: {
-    reductionPercent: { label: "Reduction", help: "How strongly the learned noise is removed." },
+    reductionPercent: { label: "parameterUi.labels.reduction", help: "parameterUi.help.denoise.reductionPercent" },
     floorPercent: {
-      label: "Noise left in",
-      help: "How much of the noise stays. 0 % removes all of it, which can sound unnatural.",
+      label: "parameterUi.labels.noiseLeftIn",
+      help: "parameterUi.help.denoise.floorPercent",
     },
-    learning: { label: "Learning", help: "On while the tool measures the noise to remove. Use Learn noise above." },
+    learning: { label: "parameterUi.labels.learning", help: "parameterUi.help.denoise.learning" },
   },
   speechDenoise: {
-    strengthPercent: { label: "Strength", help: "How strongly background noise around speech is reduced." },
+    strengthPercent: { label: "parameterUi.labels.strength", help: "parameterUi.help.speechDenoise.strengthPercent" },
   },
   firFilter: {
     wetPercent: {
-      label: "Wet mix",
-      help: "How much filtered (“wet”) sound you hear. 100 % is only the filtered sound, 0 % only the original (“dry”) sound; values in between blend them.",
+      label: "parameterUi.labels.wetMix",
+      help: "parameterUi.help.firFilter.wetPercent",
     },
     gainDb: {
-      label: "Output gain",
-      help: "Adjusts the level after filtering, for example to match the original loudness.",
+      label: "parameterUi.labels.outputGain",
+      help: "parameterUi.help.firFilter.gainDb",
     },
   },
   spectralGate: {
     thresholdDb: {
-      label: "Threshold above noise",
-      help: "How much louder than the learned noise a frequency must be to pass. Raise it if noise still comes through; lower it if your voice sounds thin.",
+      label: "parameterUi.labels.thresholdAboveNoise",
+      help: "parameterUi.help.spectralGate.thresholdDb",
     },
-    reductionDb: { label: "Reduction", help: "How much blocked frequencies are turned down. 80 dB is nearly silent." },
-    learning: { label: "Learning", help: "On while the tool measures the noise. Use Learn noise above." },
+    reductionDb: { label: "parameterUi.labels.reduction", help: "parameterUi.help.spectralGate.reductionDb" },
+    learning: { label: "parameterUi.labels.learning", help: "parameterUi.help.spectralGate.learning" },
   },
   timeShift: {
     bufferSeconds: {
-      label: "Rewind buffer",
-      help: "How many seconds of recent audio are kept so you can jump back and replay them.",
+      label: "parameterUi.labels.rewindBuffer",
+      help: "parameterUi.help.timeShift.bufferSeconds",
     },
   },
   recorder: {
     format: {
-      label: "File format",
-      help: "WAV 24-bit keeps full quality for editing; MP3 makes small files to share.",
+      label: "parameterUi.labels.fileFormat",
+      help: "parameterUi.help.recorder.format",
     },
     autoRecord: {
-      label: "Record automatically when Play starts",
-      help: "Every Play starts a new recording; Stop saves it.",
+      label: "parameterUi.labels.recordAutomaticallyWhenPlayStarts",
+      help: "parameterUi.help.recorder.autoRecord",
     },
     splitMinutes: {
-      label: "New file every",
-      help: "Start a new file after this many minutes so long sessions stay manageable. 0 keeps one file per take.",
+      label: "parameterUi.labels.newFileEvery",
+      help: "parameterUi.help.recorder.splitMinutes",
     },
   },
   duck: {
     keyNodeId: {
-      label: "Triggered by",
-      help: "The source or tool whose level turns this audio down, usually your microphone or voice chain.",
+      label: "parameterUi.labels.triggeredBy",
+      help: "parameterUi.help.duck.keyNodeId",
     },
     thresholdDb: {
-      label: "Trigger level",
-      help: "Ducking starts when the trigger is louder than this. Set it between your room noise and your voice.",
+      label: "parameterUi.labels.triggerLevel",
+      help: "parameterUi.help.duck.thresholdDb",
     },
     amountDb: {
-      label: "Amount",
-      help: "How far this audio is turned down while the trigger is active. 6 dB is about half as loud.",
+      label: "parameterUi.labels.amount",
+      help: "parameterUi.help.duck.amountDb",
     },
-    attackMs: { label: "Attack", help: "How quickly the audio goes down when you start talking." },
+    attackMs: { label: "parameterUi.labels.attack", help: "parameterUi.help.duck.attackMs" },
     holdMs: {
-      label: "Hold",
-      help: "How long the audio stays down after the trigger falls, so short pauses between words do not pump.",
+      label: "parameterUi.labels.hold",
+      help: "parameterUi.help.duck.holdMs",
     },
-    releaseMs: { label: "Release", help: "How quickly the audio comes back after the hold time." },
+    releaseMs: { label: "parameterUi.labels.release", help: "parameterUi.help.duck.releaseMs" },
   },
   funVoiceChanger: {
-    preset: { label: "Preset", help: "A starting voice. Pick one, then adjust any setting below." },
+    preset: { label: "parameterUi.labels.preset", help: "parameterUi.help.funVoiceChanger.preset" },
     gateDb: {
-      label: "Noise gate",
-      help: "Sound quieter than this is muted before the effects, so room noise does not trigger them. −90 dB is off.",
+      label: "parameterUi.labels.noiseGate",
+      help: "parameterUi.help.funVoiceChanger.gateDb",
     },
-    correctEnabled: { label: "Pitch correction", help: "Pulls your voice to the nearest note of the chosen scale." },
-    key: { label: "Key", help: "The key of the scale your voice is pulled to." },
+    correctEnabled: {
+      label: "parameterUi.labels.pitchCorrection",
+      help: "parameterUi.help.funVoiceChanger.correctEnabled",
+    },
+    key: { label: "parameterUi.labels.key", help: "parameterUi.help.funVoiceChanger.key" },
     scale: {
-      label: "Scale",
-      help: "Which notes are allowed. Chromatic allows every note; Monotone holds one note for a robot voice.",
+      label: "parameterUi.labels.scale",
+      help: "parameterUi.help.funVoiceChanger.scale",
     },
     retuneMs: {
-      label: "Retune speed",
-      help: "How quickly a note is pulled into tune. 0 ms snaps instantly, the hard tuned-vocal sound.",
+      label: "parameterUi.labels.retuneSpeed",
+      help: "parameterUi.help.funVoiceChanger.retuneMs",
     },
     humanizePercent: {
-      label: "Humanize",
-      help: "Leaves held notes a little loose so long notes keep their natural movement.",
+      label: "parameterUi.labels.humanize",
+      help: "parameterUi.help.funVoiceChanger.humanizePercent",
     },
-    shiftEnabled: { label: "Pitch and formant", help: "Moves your voice up or down and changes its size." },
-    pitchSemitones: { label: "Pitch", help: "How far the voice moves up or down, in semitones. 12 is one octave." },
-    pitchCents: { label: "Fine pitch", help: "Small pitch steps; 100 cents is one semitone." },
+    shiftEnabled: {
+      label: "parameterUi.labels.pitchAndFormant",
+      help: "parameterUi.help.funVoiceChanger.shiftEnabled",
+    },
+    pitchSemitones: { label: "parameterUi.labels.pitch", help: "parameterUi.help.funVoiceChanger.pitchSemitones" },
+    pitchCents: { label: "parameterUi.labels.finePitch", help: "parameterUi.help.funVoiceChanger.pitchCents" },
     formantSemitones: {
-      label: "Formant",
-      help: "The size of the voice without changing its note: lower sounds bigger, higher sounds smaller.",
+      label: "parameterUi.labels.formant",
+      help: "parameterUi.help.funVoiceChanger.formantSemitones",
     },
     ringEnabled: {
-      label: "Ring modulator",
-      help: "Multiplies the voice by a tone for metallic robot and alien sounds.",
+      label: "parameterUi.labels.ringModulator",
+      help: "parameterUi.help.funVoiceChanger.ringEnabled",
     },
-    ringHz: { label: "Ring frequency", help: "Low values buzz; high values sound bell-like and alien." },
-    ringDepthPercent: { label: "Ring depth", help: "How much of the ring-modulated sound replaces the voice." },
-    crushEnabled: { label: "Bit crusher", help: "Lowers the audio quality on purpose for a lo-fi, digital sound." },
-    crushBits: { label: "Bits", help: "Fewer bits add more grainy distortion. 16 is clean." },
-    crushDownsample: { label: "Downsample", help: "Holds each sample for longer, like a cheap old device. 1 is off." },
-    driveEnabled: { label: "Saturation", help: "Distorts the voice, from warm grit to a blown-out megaphone." },
-    drivePercent: { label: "Drive", help: "How hard the voice is pushed into distortion." },
+    ringHz: { label: "parameterUi.labels.ringFrequency", help: "parameterUi.help.funVoiceChanger.ringHz" },
+    ringDepthPercent: {
+      label: "parameterUi.labels.ringDepth",
+      help: "parameterUi.help.funVoiceChanger.ringDepthPercent",
+    },
+    crushEnabled: { label: "parameterUi.labels.bitCrusher", help: "parameterUi.help.funVoiceChanger.crushEnabled" },
+    crushBits: { label: "parameterUi.labels.bits", help: "parameterUi.help.funVoiceChanger.crushBits" },
+    crushDownsample: {
+      label: "parameterUi.labels.downsample",
+      help: "parameterUi.help.funVoiceChanger.crushDownsample",
+    },
+    driveEnabled: { label: "parameterUi.labels.saturation", help: "parameterUi.help.funVoiceChanger.driveEnabled" },
+    drivePercent: { label: "parameterUi.labels.drive", help: "parameterUi.help.funVoiceChanger.drivePercent" },
     whisperPercent: {
-      label: "Whisper",
-      help: "Replaces the voiced tone with breath while keeping the words. 0 % is off.",
+      label: "parameterUi.labels.whisper",
+      help: "parameterUi.help.funVoiceChanger.whisperPercent",
     },
-    toneEnabled: { label: "Tone", help: "Cuts lows and highs and adds a peak, for radio or phone sounds." },
-    lowCutHz: { label: "Low cut", help: "Removes bass below this frequency." },
-    highCutHz: { label: "High cut", help: "Removes treble above this frequency." },
-    peakHz: { label: "Peak frequency", help: "Where the tone peak boosts or cuts." },
-    peakDb: { label: "Peak", help: "How much the peak frequency is boosted (positive) or cut (negative)." },
-    modEnabled: { label: "Modulation", help: "Chorus doubles the voice; flanger adds a sweeping, jet-like sound." },
-    modType: { label: "Modulation type", help: "Chorus or flanger." },
-    modRateHz: { label: "Rate", help: "How fast the modulation sweeps." },
-    modDepthPercent: { label: "Depth", help: "How wide the modulation sweeps." },
-    modFeedbackPercent: { label: "Feedback", help: "Flanger only: stronger, ringing sweeps. Negative inverts them." },
-    spaceEnabled: { label: "Space", help: "Adds a room or cave echo around the voice." },
-    spaceSizePercent: { label: "Room size", help: "Small rooms sound close; large ones sound distant." },
-    spaceDecayMs: { label: "Echo length", help: "How long the echo takes to fade away." },
-    spaceLevelPercent: { label: "Echo level", help: "How loud the echo is next to the voice." },
-    mixPercent: { label: "Mix", help: "100 % is only the changed voice; lower values blend in your normal voice." },
-    outputDb: { label: "Output", help: "Level after the effects, to match your normal voice." },
+    toneEnabled: { label: "parameterUi.labels.tone", help: "parameterUi.help.funVoiceChanger.toneEnabled" },
+    lowCutHz: { label: "parameterUi.labels.lowCut", help: "parameterUi.help.funVoiceChanger.lowCutHz" },
+    highCutHz: { label: "parameterUi.labels.highCut", help: "parameterUi.help.funVoiceChanger.highCutHz" },
+    peakHz: { label: "parameterUi.labels.peakFrequency", help: "parameterUi.help.funVoiceChanger.peakHz" },
+    peakDb: { label: "parameterUi.labels.peak", help: "parameterUi.help.funVoiceChanger.peakDb" },
+    modEnabled: { label: "parameterUi.labels.modulation", help: "parameterUi.help.funVoiceChanger.modEnabled" },
+    modType: { label: "parameterUi.labels.modulationType", help: "parameterUi.help.funVoiceChanger.modType" },
+    modRateHz: { label: "parameterUi.labels.rate", help: "parameterUi.help.funVoiceChanger.modRateHz" },
+    modDepthPercent: { label: "parameterUi.labels.depth", help: "parameterUi.help.funVoiceChanger.modDepthPercent" },
+    modFeedbackPercent: {
+      label: "parameterUi.labels.feedback",
+      help: "parameterUi.help.funVoiceChanger.modFeedbackPercent",
+    },
+    spaceEnabled: { label: "parameterUi.labels.space", help: "parameterUi.help.funVoiceChanger.spaceEnabled" },
+    spaceSizePercent: {
+      label: "parameterUi.labels.roomSize",
+      help: "parameterUi.help.funVoiceChanger.spaceSizePercent",
+    },
+    spaceDecayMs: { label: "parameterUi.labels.echoLength", help: "parameterUi.help.funVoiceChanger.spaceDecayMs" },
+    spaceLevelPercent: {
+      label: "parameterUi.labels.echoLevel",
+      help: "parameterUi.help.funVoiceChanger.spaceLevelPercent",
+    },
+    mixPercent: { label: "parameterUi.labels.mix", help: "parameterUi.help.funVoiceChanger.mixPercent" },
+    outputDb: { label: "parameterUi.labels.output", help: "parameterUi.help.funVoiceChanger.outputDb" },
   },
   inputSwitch: {
-    selected: { label: "Active input", help: "Which input you hear: A or B." },
-    fade: { label: "Switch speed", help: "Normal changes over half a second; Slow fades over two seconds." },
+    selected: { label: "parameterUi.labels.activeInput", help: "parameterUi.help.inputSwitch.selected" },
+    fade: { label: "parameterUi.labels.switchSpeed", help: "parameterUi.help.inputSwitch.fade" },
   },
   outputSwitch: {
-    selected: { label: "Active output", help: "Which destination receives audio: A or B." },
+    selected: { label: "parameterUi.labels.activeOutput", help: "parameterUi.help.outputSwitch.selected" },
   },
 };
 
-const OPTION_LABELS: Record<string, string> = {
-  wavPcm24: "WAV 24-bit (best for editing)",
-  wavPcm16: "WAV 16-bit",
-  wavFloat32: "WAV 32-bit float",
-  flac24: "FLAC 24-bit (smaller, lossless)",
-  flac16: "FLAC 16-bit",
-  mp3: "MP3 (small, to share)",
-  a: "Input A",
-  b: "Input B",
-  normal: "Normal",
-  slow: "Slow",
+const OPTION_LABELS: Record<string, MessageKey> = {
+  wavPcm24: "parameterUi.wavPcm24",
+  wavPcm16: "parameterUi.wavPcm16",
+  wavFloat32: "parameterUi.wavFloat32",
+  flac24: "parameterUi.flac24",
+  flac16: "parameterUi.flac16",
+  mp3: "parameterUi.mp3",
+  a: "parameterUi.inputA",
+  b: "parameterUi.inputB",
+  normal: "parameterUi.normal",
+  slow: "parameterUi.slow",
 };
 
 /** Turn a machine name such as `wetPercent` into "Wet percent". */
@@ -288,12 +312,12 @@ export function humanizeParameterName(name: string): string {
 /** Label and explanation for a tool setting, with a readable fallback. */
 export function parameterText(kind: string, name: string): ParameterText {
   const known = TEXT[kind]?.[name];
-  if (known) return known;
+  if (known) return { label: tx(known.label), help: tx(known.help) };
   const band = /^band(\d+)Db$/.exec(name);
   if (kind === "graphicEq" && band && GRAPHIC_EQ_BANDS[Number(band[1])]) {
     return {
       label: GRAPHIC_EQ_BANDS[Number(band[1])],
-      help: `Boosts or cuts the sound around ${GRAPHIC_EQ_BANDS[Number(band[1])]}.`,
+      help: tx("parameterUi.bandHelp", { frequency: GRAPHIC_EQ_BANDS[Number(band[1])] }),
     };
   }
   return { label: humanizeParameterName(name), help: "" };
@@ -301,7 +325,8 @@ export function parameterText(kind: string, name: string): ParameterText {
 
 /** Display text for an option of a choice setting. */
 export function optionLabel(option: string): string {
-  return OPTION_LABELS[option] ?? humanizeParameterName(option);
+  const key = Object.hasOwn(OPTION_LABELS, option) ? OPTION_LABELS[option] : undefined;
+  return key ? tx(key) : humanizeParameterName(option);
 }
 
 /** Readable value with its unit, for the caption readout: "+3.0 dB", "1.5 kHz", "1.2 s". */

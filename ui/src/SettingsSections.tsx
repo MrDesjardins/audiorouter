@@ -8,14 +8,13 @@ import { ApiAutostartSetting, AutoplaySetting } from "./AutoplaySetting";
 import { GlobalKeybinds } from "./GlobalKeybinds";
 import { GraphList as NodeList } from "./GraphList";
 import { OsTransitionPanel, RecoveryCheckpointPanel, StartupPanel } from "./AdvancedPanels";
+import { useMessages } from "./i18n/useMessages";
 
 export function StartupSettings({ backend }: { backend: UiBackend }) {
+  const tr = useMessages();
   return (
     <div className="startup-group">
-      <p className="muted">
-        Start with Windows in the tray (no window) and, if you like, play the selected session and start the API right
-        away. Closing the window keeps audio playing in the tray.
-      </p>
+      <p className="muted">{tr("settings.startup.intro")}</p>
       <StartupPanel backend={backend} />
       <AutoplaySetting />
       <ApiAutostartSetting />
@@ -44,27 +43,28 @@ export function TroubleshootPanel({
   clearRecoverySafeMode: () => Promise<void>;
   safetyActionBusyState: boolean;
 }) {
+  const tr = useMessages();
   return (
     <details className="troubleshoot-group">
-      <summary>Troubleshoot and recover</summary>
+      <summary>{tr("settings.troubleshoot.heading")}</summary>
       <details className="device-troubleshooting">
-        <summary>Manual device binding</summary>
-        <p className="muted">
-          You normally do not need this. Choose each device in the Input Device or Output Device tool's Properties and
-          press Play. Use these controls to check a device's format, reopen a device after Windows reset it, run a
-          deliberate VB-Cable loopback test, or add a loopback source.
-        </p>
+        <summary>{tr("settings.troubleshoot.manualBinding")}</summary>
+        <p className="muted">{tr("settings.troubleshoot.manualHelp")}</p>
         {devicesContent}
       </details>
       <OsTransitionPanel backend={backend} onRefresh={refresh} />
       <section className="panel recovery-panel">
         <div className="section-heading">
-          <h3>Crash recovery</h3>
-          <span className="badge">{snapshot?.status.recovery.recentCrashes ?? 0} recent</span>
+          <h3>{tr("settings.troubleshoot.crashRecovery")}</h3>
+          <span className="badge">
+            {tr("settings.troubleshoot.recent", { count: snapshot?.status.recovery.recentCrashes ?? 0 })}
+          </span>
         </div>
         <p className="muted">
-          {snapshot?.status.recovery.safeMode ? "Safe mode is active." : "Normal startup mode."} Recovery state is owned
-          by the backend.
+          {snapshot?.status.recovery.safeMode
+            ? tr("settings.troubleshoot.safeMode")
+            : tr("settings.troubleshoot.normalMode")}{" "}
+          {tr("settings.troubleshoot.recoveryOwned")}
         </p>
         <button
           type="button"
@@ -72,7 +72,7 @@ export function TroubleshootPanel({
           onClick={() => void clearRecoverySafeMode()}
           disabled={!backend.connected || safetyActionBusyState || !snapshot?.status.recovery.safeMode}
         >
-          Clear safe mode
+          {tr("settings.troubleshoot.clearSafeMode")}
         </button>
       </section>
       <RecoveryCheckpointPanel backend={backend} />
@@ -106,7 +106,8 @@ export function CanvasKeyboardPanel({
   openPluginPicker: (edgeId?: string) => void;
   connectionContent: ReactElement;
 }) {
-  const title = mode === "routeList" ? "Route list" : "Connect without dragging";
+  const tr = useMessages();
+  const title = mode === "routeList" ? tr("settings.canvasKeyboard.routeList") : tr("settings.canvasKeyboard.connect");
   return (
     <section
       className="canvas-keyboard-panel"
@@ -121,7 +122,7 @@ export function CanvasKeyboardPanel({
       <header>
         <h3>{title}</h3>
         <button type="button" className="secondary" onClick={onClose}>
-          Close
+          {tr("settings.canvasKeyboard.close")}
         </button>
       </header>
       {mode === "routeList" ? (
@@ -136,9 +137,7 @@ export function CanvasKeyboardPanel({
         />
       ) : (
         <>
-          <p className="muted">
-            The same as dragging from one tool to another on the canvas, for keyboard and screen-reader use.
-          </p>
+          <p className="muted">{tr("settings.canvasKeyboard.connectHelp")}</p>
           {connectionContent}
         </>
       )}

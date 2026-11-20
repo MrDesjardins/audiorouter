@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useMessages } from "./i18n/useMessages";
 
 export function NodeIdentity({ nodeId }: { nodeId: string }) {
   return <IdentityFooter key={nodeId} id={nodeId} kind="node" />;
@@ -9,7 +10,8 @@ export function SessionIdentity({ sessionId }: { sessionId: string }) {
 }
 
 function IdentityFooter({ id, kind }: { id: string; kind: "node" | "session" }) {
-  const caption = kind === "node" ? "Node ID" : "Session ID";
+  const tr = useMessages();
+  const caption = tr(kind === "node" ? "workflowUi.nodeId" : "workflowUi.sessionId");
   const [message, setMessage] = useState("");
   const [copying, setCopying] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -28,11 +30,11 @@ function IdentityFooter({ id, kind }: { id: string; kind: "node" | "session" }) 
     try {
       await navigator.clipboard.writeText(id);
       if (!mounted.current) return;
-      setMessage("Copied.");
+      setMessage(tr("workflowUi.copied"));
       timer.current = setTimeout(() => setMessage(""), 2000);
     } catch {
       if (!mounted.current) return;
-      setMessage("Could not copy. Select the ID and copy it manually.");
+      setMessage(tr("workflowUi.copyError"));
     } finally {
       if (mounted.current) setCopying(false);
     }
@@ -47,8 +49,8 @@ function IdentityFooter({ id, kind }: { id: string; kind: "node" | "session" }) 
         <button
           type="button"
           className="secondary node-identity-copy"
-          aria-label={`Copy ${kind} ID`}
-          title={`Copy ${kind} ID for API integrations`}
+          aria-label={tr(kind === "node" ? "workflowUi.copyNode" : "workflowUi.copySession")}
+          title={tr(kind === "node" ? "workflowUi.nodeApi" : "workflowUi.sessionApi")}
           disabled={copying}
           onClick={() => void copy()}
         >

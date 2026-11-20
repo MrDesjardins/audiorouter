@@ -1,5 +1,8 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type InputHTMLAttributes } from "react";
 
+import { useMessages } from "./i18n/useMessages";
+import { tx } from "./i18n";
+
 type NumberFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type" | "min" | "max"> & {
   value: number;
   min?: number;
@@ -22,6 +25,7 @@ function isPartialNumber(text: string): boolean {
  * the saved value only when focus leaves with invalid text.
  */
 export function NumberField({ value, min, max, onValue, onBlur, onFocus, ...rest }: NumberFieldProps) {
+  useMessages(); // re-render on a language change so the range hint follows it
   const [text, setText] = useState(() => String(value));
   const editing = useRef(false);
   const [focused, setFocused] = useState(false);
@@ -107,8 +111,8 @@ export function NumberField({ value, min, max, onValue, onBlur, onFocus, ...rest
 
 /** Plain words for the allowed range, shown while typed text is outside it. */
 export function rangeHint(min?: number, max?: number): string {
-  if (min !== undefined && max !== undefined) return `Enter a number from ${min} to ${max}.`;
-  if (min !== undefined) return `Enter a number of at least ${min}.`;
-  if (max !== undefined) return `Enter a number no greater than ${max}.`;
-  return "Enter a number.";
+  if (min !== undefined && max !== undefined) return tx("g5.numRange", { min, max });
+  if (min !== undefined) return tx("g5.numMin", { min });
+  if (max !== undefined) return tx("g5.numMax", { max });
+  return tx("g5.numAny");
 }

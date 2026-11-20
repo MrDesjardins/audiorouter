@@ -1,7 +1,10 @@
 // Panels of the Advanced side-panel tab (moved from App.tsx).
 import { useEffect, useEffectEvent, useRef, useState, type ChangeEvent } from "react";
 import type { Node, RecordingRecoveryItem } from "@audiorouter/contracts";
+import { useMessages } from "./i18n/useMessages";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 import { formatUiError, type ClientRow, type UiBackend } from "./backend";
+import { backendText } from "./actionText";
 import { uiIdempotencyKey } from "./idempotency";
 import {
   processorAvailabilityText,
@@ -13,8 +16,10 @@ import { PanelMessage } from "./PanelMessage";
 import { EqResponsePreview } from "./NodeEditors";
 
 export function RecoveryCheckpointPanel({ backend }: { backend: UiBackend }) {
+  const tr = useMessages();
   const [items, setItems] = useState<RecordingRecoveryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const unavailableText = useEffectEvent(() => tr("g3Adv.recUnavailable"));
   useEffect(() => {
     let active = true;
     void backend
@@ -28,7 +33,7 @@ export function RecoveryCheckpointPanel({ backend }: { backend: UiBackend }) {
       .catch((reason) => {
         if (active) {
           setItems([]);
-          setError(formatUiError(reason, "Recording recovery unavailable."));
+          setError(formatUiError(reason, unavailableText()));
         }
       });
     return () => {
@@ -39,17 +44,17 @@ export function RecoveryCheckpointPanel({ backend }: { backend: UiBackend }) {
     <section className="panel recovery-checkpoints" aria-labelledby="recovery-checkpoints-heading">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Recorder files</p>
-          <h2 id="recovery-checkpoints-heading">Recovery checkpoints</h2>
+          <p className="eyebrow">{tr("g3Adv.recEyebrow")}</p>
+          <h2 id="recovery-checkpoints-heading">{tr("g3Adv.recHeading")}</h2>
         </div>
-        <span className="badge">{error ? "unavailable" : items.length}</span>
+        <span className="badge">{error ? tr("g3Adv.badgeUnavailable") : items.length}</span>
       </div>
       {error ? (
         <p className="muted">{error}</p>
       ) : items.length === 0 ? (
-        <p className="muted">No persisted recorder checkpoints were found.</p>
+        <p className="muted">{tr("g3Adv.recNone")}</p>
       ) : (
-        <ul aria-label="Persisted recorder checkpoints">
+        <ul aria-label={tr("g3Adv.recList")}>
           {items.map((item) => (
             <li key={item.recordingId}>
               <code>{item.recordingId}</code> — {item.status}
@@ -58,14 +63,13 @@ export function RecoveryCheckpointPanel({ backend }: { backend: UiBackend }) {
           ))}
         </ul>
       )}
-      <p className="muted">
-        This list is read-only. Recovery inspection does not open, repair, play, or delete audio files.
-      </p>
+      <p className="muted">{tr("g3Adv.recReadOnly")}</p>
     </section>
   );
 }
 
 export function StartupPanel({ backend }: { backend: UiBackend }) {
+  const tr = useMessages();
   const [status, setStatus] = useState<import("@audiorouter/contracts").StartupStatus | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -84,7 +88,7 @@ export function StartupPanel({ backend }: { backend: UiBackend }) {
         if (clearMessage) setMessage(null);
       })
       .catch((error) => {
-        if (generation === refreshGeneration.current) setMessage(formatUiError(error, "Startup status unavailable."));
+        if (generation === refreshGeneration.current) setMessage(formatUiError(error, tr("g3Adv.startupUnavailable")));
       });
     if (backend.startupRegistrationStatus)
       void backend
@@ -111,7 +115,7 @@ export function StartupPanel({ backend }: { backend: UiBackend }) {
   const change = async (next: boolean) => {
     if (busy || !backend.connected) return;
     setBusy(true);
-    setMessage(next ? "Turning on start at sign-in..." : "Turning off start at sign-in...");
+    setMessage(next ? tr("g3Adv.turningOn") : tr("g3Adv.turningOff"));
     try {
       const plan = await backend.planStartup(next);
       await backend.applyStartup(plan.planId, uiIdempotencyKey("startup-apply"));
@@ -121,13 +125,9 @@ export function StartupPanel({ backend }: { backend: UiBackend }) {
           await backend.registerStartup(planned);
           setNativeRegistration(planned ? "registered" : "unregistered");
           setEnabled(planned);
-          setMessage(
-            planned
-              ? "AudioRouter will start in the tray when you sign in to Windows."
-              : "AudioRouter will no longer start when you sign in.",
-          );
+          setMessage(planned ? tr("g3Adv.willStart") : tr("g3Adv.willNotStart"));
         } catch (error) {
-          setMessage(`Windows could not add AudioRouter to sign-in: ${formatUiError(error, "sign-in setup failed")}`);
+          setMessage(tr("g3Adv.signInFailed", { reason: formatUiError(error, tr("g3Adv.signInSetupFailed")) }));
         }
       } else {
         setEnabled(planned);
@@ -135,31 +135,31 @@ export function StartupPanel({ backend }: { backend: UiBackend }) {
       }
       refresh(false);
     } catch (error) {
-      setMessage(formatUiError(error, "Start at sign-in could not be changed."));
+      setMessage(formatUiError(error, tr("g3Adv.startupChangeFailed")));
     } finally {
       setBusy(false);
     }
   };
   const stateLabel = !backend.connected
-    ? "Unavailable"
+    ? tr("g3Adv.unavailable")
     : nativeRegistration === "registered"
-      ? "On"
+      ? tr("g3Adv.on")
       : nativeRegistration === "unregistered"
-        ? "Off"
+        ? tr("g3Adv.off")
         : status === null
-          ? "Loading…"
+          ? tr("g3Adv.loading")
           : status.enabled
-            ? "On"
-            : "Off";
+            ? tr("g3Adv.on")
+            : tr("g3Adv.off");
   return (
     <section className="panel startup-panel" aria-labelledby="startup-heading">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Background lifecycle</p>
-          <h2 id="startup-heading">Start at sign-in</h2>
+          <p className="eyebrow">{tr("settingsCopy.startupEyebrow")}</p>
+          <h2 id="startup-heading">{tr("settingsCopy.startupHeading")}</h2>
         </div>
         <button type="button" className="secondary" onClick={() => refresh()} disabled={busy}>
-          Refresh
+          {tr("g3Adv.refresh")}
         </button>
       </div>
       <div className="setting-toggle-row">
@@ -172,43 +172,43 @@ export function StartupPanel({ backend }: { backend: UiBackend }) {
             aria-busy={busy}
             onChange={(event) => void change(event.target.checked)}
           />
-          Start AudioRouter when I sign in to Windows
+          {tr("settingsCopy.startupToggle")}
         </label>
         <span className="setting-toggle-state" id="startup-state" data-testid="startup-state">
           {stateLabel}
         </span>
       </div>
       <p className="muted">
-        {backend.registerStartup
-          ? "AudioRouter opens in the tray at sign-in, for your Windows account only."
-          : "Windows sign-in setup is only available in the AudioRouter desktop app. Here the choice is saved but Windows is not changed."}
+        {tr(backend.registerStartup ? "settingsCopy.startupNative" : "settingsCopy.startupPreview")}
       </p>
       <p className="muted" role="status">
-        {message ?? status?.reason ?? " "}
+        {message ?? backendText(status?.reason) ?? " "}
       </p>
     </section>
   );
 }
 
 export function OsTransitionPanel({ backend, onRefresh }: { backend: UiBackend; onRefresh: () => void }) {
+  const tr = useMessages();
   const [result, setResult] = useState<import("@audiorouter/contracts").OsTransitionResult | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const revalidate = async () => {
     if (!backend.connected || !backend.osTransition || busy) return;
     setBusy(true);
-    setMessage("Refreshing endpoints and checking stopped routes...");
+    setMessage(tr("g3Adv.osRefreshing"));
     try {
       const next = await backend.osTransition("resume", uiIdempotencyKey("os-resume"));
       setResult(next);
       onRefresh();
+      const waiting = next.sessionIds.length + next.nativeSessionIds.length;
       setMessage(
         next.action === "revalidateBeforeRestart"
-          ? `Revalidation required for ${next.sessionIds.length + next.nativeSessionIds.length} stopped route${next.sessionIds.length + next.nativeSessionIds.length === 1 ? "" : "s"}. No route was restarted.`
-          : "No stopped routes are waiting for revalidation.",
+          ? tr(waiting === 1 ? "g3Adv.osRevalidate" : "g3Adv.osRevalidateOther", { n: waiting })
+          : tr("g3Adv.osNone"),
       );
     } catch (error) {
-      setMessage(formatUiError(error, "OS-transition revalidation failed."));
+      setMessage(formatUiError(error, tr("g3Adv.osFailed")));
     } finally {
       setBusy(false);
     }
@@ -223,13 +223,13 @@ export function OsTransitionPanel({ backend, onRefresh }: { backend: UiBackend; 
         await backend.startSession(sessionId, uiIdempotencyKey(`os-restart-${sessionId}`));
         started += 1;
       } catch (error) {
-        failures.push(`${sessionId}: ${formatUiError(error, "start failed")}`);
+        failures.push(`${sessionId}: ${formatUiError(error, tr("g3Adv.startFailed"))}`);
       }
     }
     setMessage(
       failures.length === 0
-        ? `Restarted ${started} validated portable route${started === 1 ? "" : "s"}. Native routes remain stopped.`
-        : `Restarted ${started} portable route${started === 1 ? "" : "s"}; ${failures.length} route${failures.length === 1 ? "" : "s"} failed. ${failures.join(" ")}`,
+        ? tr(started === 1 ? "g3Adv.osRestarted" : "g3Adv.osRestartedOther", { n: started })
+        : tr("g3Adv.osRestartedFailed", { started, failed: failures.length, details: failures.join(" ") }),
     );
     onRefresh();
     setBusy(false);
@@ -238,15 +238,12 @@ export function OsTransitionPanel({ backend, onRefresh }: { backend: UiBackend; 
     <section className="panel os-transition-panel" aria-labelledby="os-transition-heading">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Background lifecycle</p>
-          <h2 id="os-transition-heading">Resume validation</h2>
+          <p className="eyebrow">{tr("g3Adv.osEyebrow")}</p>
+          <h2 id="os-transition-heading">{tr("g3Adv.osHeading")}</h2>
         </div>
-        <span className="badge">{result?.endpointInventory ?? "not run"}</span>
+        <span className="badge">{result?.endpointInventory ?? tr("g3Adv.notRun")}</span>
       </div>
-      <p className="muted">
-        After sleep, sign-out, or an endpoint change, refresh the exact endpoint inventory before restarting any stopped
-        route.
-      </p>
+      <p className="muted">{tr("g3Adv.osIntro")}</p>
       <div className="actions">
         <button
           type="button"
@@ -254,7 +251,7 @@ export function OsTransitionPanel({ backend, onRefresh }: { backend: UiBackend; 
           onClick={() => void revalidate()}
           disabled={!backend.connected || !backend.osTransition || busy}
         >
-          Revalidate after resume
+          {tr("g3Adv.osRevalidateBtn")}
         </button>
         {result?.sessionIds.length ? (
           <button
@@ -263,28 +260,36 @@ export function OsTransitionPanel({ backend, onRefresh }: { backend: UiBackend; 
             onClick={() => void restartPortable()}
             disabled={!backend.connected || busy}
           >
-            Restart validated portable routes
+            {tr("g3Adv.osRestartBtn")}
           </button>
         ) : null}
       </div>
       {result && (
         <p className="muted" role="status">
-          Last result: {result.action}; portable routes {result.sessionIds.length}; native routes{" "}
-          {result.nativeSessionIds.length}.
+          {tr("g3Adv.osLast", {
+            action: result.action,
+            portable: result.sessionIds.length,
+            native: result.nativeSessionIds.length,
+          })}
         </p>
       )}
       <PanelMessage message={message} />
-      <p className="muted">
-        Native routes remain stopped until deliberate endpoint/driver validation. This action never changes Windows
-        defaults, volume, mute, or driver state.
-      </p>
+      <p className="muted">{tr("g3Adv.osNote")}</p>
     </section>
   );
 }
 
 export const CLIENT_ROLES = ["observer", "editor", "operator"] as const;
 
+const ROLE_LABELS = {
+  observer: "g3Adv.roleObserver",
+  editor: "g3Adv.roleEditor",
+  operator: "g3Adv.roleOperator",
+} as const satisfies Record<(typeof CLIENT_ROLES)[number], MessageKey>;
+
 export function ClientsPanel({ backend, initialClientId }: { backend: UiBackend; initialClientId?: string }) {
+  const tr = useMessages();
+  const roleLabel = (role: string) => (role in ROLE_LABELS ? tr(ROLE_LABELS[role as keyof typeof ROLE_LABELS]) : role);
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -302,7 +307,8 @@ export function ClientsPanel({ backend, initialClientId }: { backend: UiBackend;
         if (generation === refreshGeneration.current) setClients(result);
       })
       .catch((error) => {
-        if (generation === refreshGeneration.current) setMessage(formatUiError(error, "Client list unavailable."));
+        if (generation === refreshGeneration.current)
+          setMessage(formatUiError(error, tr("g3Adv.clientListUnavailable")));
       });
   };
   // Refresh when the backend connects or changes, with the latest state.
@@ -316,11 +322,11 @@ export function ClientsPanel({ backend, initialClientId }: { backend: UiBackend;
     setBusy(true);
     try {
       await backend.authorizeClient(clientId, newClientRole, uiIdempotencyKey(`client-authorize-${clientId}`));
-      setMessage(`Authorized ${clientId} as ${newClientRole}.`);
+      setMessage(tr("g3Adv.authorized", { id: clientId, role: roleLabel(newClientRole).toLowerCase() }));
       setNewClientId("");
       refresh();
     } catch (error) {
-      setMessage(formatUiError(error, "Unable to authorize client."));
+      setMessage(formatUiError(error, tr("g3Adv.authorizeFailed")));
     } finally {
       setBusy(false);
     }
@@ -330,10 +336,10 @@ export function ClientsPanel({ backend, initialClientId }: { backend: UiBackend;
     setBusy(true);
     try {
       await backend.revokeClient(clientId, uiIdempotencyKey(`client-revoke-${clientId}`));
-      setMessage(`Revoked ${clientId}.`);
+      setMessage(tr("g3Adv.revoked", { id: clientId }));
       refresh();
     } catch (error) {
-      setMessage(formatUiError(error, "Unable to revoke client."));
+      setMessage(formatUiError(error, tr("g3Adv.revokeFailed")));
     } finally {
       setBusy(false);
     }
@@ -342,27 +348,24 @@ export function ClientsPanel({ backend, initialClientId }: { backend: UiBackend;
     <section className="panel clients-panel" aria-labelledby="clients-heading">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Security</p>
-          <h2 id="clients-heading">Connected clients</h2>
+          <p className="eyebrow">{tr("g3Adv.secEyebrow")}</p>
+          <h2 id="clients-heading">{tr("g3Adv.clientsHeading")}</h2>
         </div>
         <button type="button" className="secondary" onClick={refresh} disabled={busy}>
-          Refresh
+          {tr("g3Adv.refresh")}
         </button>
       </div>
-      <p className="muted">
-        Every CLI, MCP, or shell connection is a separately authorized client. Revoke access immediately if a client
-        should no longer reach this backend.
-      </p>
+      <p className="muted">{tr("g3Adv.clientsIntro")}</p>
       {clients.length === 0 ? (
-        <p className="muted">No clients are known yet.</p>
+        <p className="muted">{tr("g3Adv.noClients")}</p>
       ) : (
-        <ul aria-label="Known clients">
+        <ul aria-label={tr("g3Adv.knownClients")}>
           {clients.map((client) => (
             <li key={client.clientId}>
               <strong>{client.clientId}</strong>{" "}
               <small>
-                {client.role}
-                {client.revoked ? " · revoked" : ""}
+                {roleLabel(client.role).toLowerCase()}
+                {client.revoked ? tr("g3Adv.revokedTag") : ""}
               </small>{" "}
               {!client.revoked && (
                 <button
@@ -371,7 +374,7 @@ export function ClientsPanel({ backend, initialClientId }: { backend: UiBackend;
                   disabled={!backend.connected || busy}
                   onClick={() => void revoke(client.clientId)}
                 >
-                  Revoke
+                  {tr("g3Adv.revoke")}
                 </button>
               )}
             </li>
@@ -380,10 +383,10 @@ export function ClientsPanel({ backend, initialClientId }: { backend: UiBackend;
       )}
       <div className="actions">
         <label>
-          Client ID
+          {tr("g3Adv.clientIdLabel")}
           <input
             type="text"
-            aria-label="New client ID"
+            aria-label={tr("g3Adv.newClientId")}
             value={newClientId}
             maxLength={120}
             disabled={!backend.connected || busy}
@@ -391,17 +394,16 @@ export function ClientsPanel({ backend, initialClientId }: { backend: UiBackend;
           />
         </label>
         <label>
-          Role
+          {tr("g3Adv.role")}
           <select
-            aria-label="New client role"
+            aria-label={tr("g3Adv.newClientRole")}
             value={newClientRole}
             disabled={!backend.connected || busy}
             onChange={(event) => setNewClientRole(event.target.value as (typeof CLIENT_ROLES)[number])}
           >
             {CLIENT_ROLES.map((role) => (
               <option key={role} value={role}>
-                {role.charAt(0).toUpperCase()}
-                {role.slice(1)}
+                {tr(ROLE_LABELS[role])}
               </option>
             ))}
           </select>
@@ -412,7 +414,7 @@ export function ClientsPanel({ backend, initialClientId }: { backend: UiBackend;
           disabled={!backend.connected || busy || !newClientId.trim()}
           onClick={() => void authorize()}
         >
-          Authorize client
+          {tr("g3Adv.authorize")}
         </button>
       </div>
       <PanelMessage message={message} />
@@ -431,38 +433,40 @@ export function ProcessorCatalog({
   node: Node | undefined;
   backend: UiBackend;
 }) {
+  const tr = useMessages();
   return (
     <section className="panel processor-catalog" aria-labelledby="processor-catalog-heading">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">DSP catalog</p>
-          <h2 id="processor-catalog-heading">Built-in processors</h2>
+          <p className="eyebrow">{tr("g3Adv.dspEyebrow")}</p>
+          <h2 id="processor-catalog-heading">{tr("g3Adv.procHeading")}</h2>
         </div>
         <span className="badge">{processors?.length ?? 0}</span>
       </div>
       {error ? (
         <p className="muted" role="status">
-          Processor catalog unavailable: {error}
+          {tr("g3Adv.procUnavailable", { error: backendText(error) })}
         </p>
       ) : processors === null ? (
-        <p className="muted">Connect to the backend to load the authoritative processor catalog.</p>
+        <p className="muted">{tr("g3Adv.procConnect")}</p>
       ) : processors.length === 0 ? (
-        <p className="muted">No built-in processors are advertised.</p>
+        <p className="muted">{tr("g3Adv.procNone")}</p>
       ) : (
-        <ul aria-label="Built-in processor catalog">
+        <ul aria-label={tr("g3Adv.procList")}>
           {processors.map((processor) => (
             <li key={`${processor.id}@${processor.version}`}>
               <strong>{processor.id}</strong>{" "}
               <small>
-                {processor.category} · {processorAvailabilityText(processor)} · {processorLatencyText(processor)}
+                {processor.category} · {processorAvailabilityText(processor, tr)} ·{" "}
+                {processorLatencyText(processor, tr)}
               </small>
               <br />
-              <small>Parameters: {processorParametersText(processor)}</small>
+              <small>{tr("g3Adv.parameters", { text: processorParametersText(processor, tr) })}</small>
             </li>
           ))}
         </ul>
       )}
-      <p className="muted">This catalog is read-only. Unavailable processors cannot be added or activated.</p>
+      <p className="muted">{tr("g3Adv.procReadOnly")}</p>
       {node && <EqResponsePreview node={node} backend={backend} />}
     </section>
   );
@@ -475,6 +479,7 @@ export function PresetCatalog({
   presets: import("@audiorouter/contracts").DiscoveryDocument["presets"] | null;
   error: string | null;
 }) {
+  const tr = useMessages();
   const request = (kind: "eq" | "voiceChain", presetId: string) => {
     globalThis.dispatchEvent(
       new CustomEvent(kind === "eq" ? "audiorouter:append-eq-preset" : "audiorouter:append-voice-preset", {
@@ -486,43 +491,44 @@ export function PresetCatalog({
     <section className="panel preset-catalog" aria-labelledby="preset-catalog-heading">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Saved starting points</p>
-          <h2 id="preset-catalog-heading">Presets</h2>
+          <p className="eyebrow">{tr("g3Adv.presetEyebrow")}</p>
+          <h2 id="preset-catalog-heading">{tr("g3Adv.presetHeading")}</h2>
         </div>
         <span className="badge">{presets ? presets.voiceChains.length + presets.eq.length : 0}</span>
       </div>
       {error ? (
         <p className="muted" role="status">
-          Preset catalog unavailable: {error}
+          {tr("g3Adv.presetUnavailable", { error: backendText(error) })}
         </p>
       ) : presets === null ? (
-        <p className="muted">Connect to the backend to load the authoritative preset catalog.</p>
+        <p className="muted">{tr("g3Adv.presetConnect")}</p>
       ) : (
-        <ul aria-label="Available presets">
+        <ul aria-label={tr("g3Adv.presetsList")}>
           {presets.voiceChains.map((preset) => (
             <li key={"voice-" + preset.id}>
-              <strong>{preset.name}</strong> <small>Voice chain · {preset.description}</small>
+              <strong>{preset.name}</strong>{" "}
+              <small>{tr("g3Adv.voiceChain", { description: preset.description })}</small>
               <button
                 type="button"
                 className="secondary"
                 disabled={!presets}
                 onClick={() => request("voiceChain", preset.id)}
               >
-                Add voice chain
+                {tr("g3Adv.addVoiceChain")}
               </button>
             </li>
           ))}
           {presets.eq.map((preset) => (
             <li key={"eq-" + preset.id}>
-              <strong>{preset.name}</strong> <small>EQ · {preset.description}</small>
+              <strong>{preset.name}</strong> <small>{tr("g3Adv.eqLine", { description: preset.description })}</small>
               <button type="button" className="secondary" disabled={!presets} onClick={() => request("eq", preset.id)}>
-                Add EQ
+                {tr("g3Adv.addEq")}
               </button>
             </li>
           ))}
         </ul>
       )}
-      <p className="muted">A preset adds ordinary tools to your route. Save when you want to keep them.</p>
+      <p className="muted">{tr("g3Adv.presetNote")}</p>
     </section>
   );
 }
@@ -540,6 +546,7 @@ export function SessionTransferPanel({
   quarantinedSessions?: import("@audiorouter/contracts").QuarantinedSession[];
   onRecovered?: () => void;
 }) {
+  const tr = useMessages();
   const [message, setMessage] = useState<string | null>(null);
   const [plan, setPlan] = useState<import("@audiorouter/contracts").SessionImportPlanResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -547,7 +554,7 @@ export function SessionTransferPanel({
   const exportOriginal = async (id: string) => {
     setBusy(true);
     try {
-      if (!backend.exportRawSession) throw new Error("Reconnect to export the original session.");
+      if (!backend.exportRawSession) throw new Error(tr("g3Adv.reconnectExport"));
       const { document: original } = await backend.exportRawSession(id);
       const url = URL.createObjectURL(new Blob([original], { type: "text/plain;charset=utf-8" }));
       const anchor = document.createElement("a");
@@ -555,9 +562,9 @@ export function SessionTransferPanel({
       anchor.download = "audiorouter-unavailable-session.txt";
       anchor.click();
       URL.revokeObjectURL(url);
-      setMessage("Exported the original saved text. Keep it for repair; it has not been validated for import.");
+      setMessage(tr("g3Adv.exportedOriginal"));
     } catch (error) {
-      setMessage(formatUiError(error, "Unable to export the original session."));
+      setMessage(formatUiError(error, tr("g3Adv.exportOriginalFailed")));
     } finally {
       setBusy(false);
     }
@@ -567,10 +574,10 @@ export function SessionTransferPanel({
     try {
       await backend.deleteSession(id, uiIdempotencyKey("delete-unavailable"));
       setPendingDelete(null);
-      setMessage("Deleted the unavailable session. Recordings were kept.");
+      setMessage(tr("g3Adv.deletedUnavailable"));
       onRecovered?.();
     } catch (error) {
-      setMessage(formatUiError(error, "Unable to delete the unavailable session."));
+      setMessage(formatUiError(error, tr("g3Adv.deleteUnavailableFailed")));
     } finally {
       setBusy(false);
     }
@@ -582,11 +589,11 @@ export function SessionTransferPanel({
       : new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(String(reader.result ?? ""));
-          reader.onerror = () => reject(reader.error ?? new Error("Unable to read import file."));
+          reader.onerror = () => reject(reader.error ?? new Error(tr("g3Adv.readFailed")));
           reader.readAsText(file);
         });
   const exportSession = async () => {
-    setMessage("Exporting the selected stopped-session configuration...");
+    setMessage(tr("g3Adv.exporting"));
     try {
       const exported = await backend.exportSession(session.id);
       const blob = new Blob([JSON.stringify(exported, null, 2)], { type: "application/json" });
@@ -596,9 +603,9 @@ export function SessionTransferPanel({
       anchor.download = `${exported.name.replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "") || "audiorouter-session"}.audiorouter.json`;
       anchor.click();
       URL.revokeObjectURL(url);
-      setMessage(`Exported ${exported.name}. Credentials, grants, recordings, and plugin binaries are not included.`);
+      setMessage(tr("g3Adv.exported", { name: exported.name }));
     } catch (error) {
-      setMessage(formatUiError(error, "Unable to export session."));
+      setMessage(formatUiError(error, tr("g3Adv.exportFailed")));
     }
   };
   const inspectImport = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -608,17 +615,17 @@ export function SessionTransferPanel({
     const request = ++importRequest.current;
     setPlan(null);
     setBusy(true);
-    setMessage("Validating the selected session import...");
+    setMessage(tr("g3Adv.validating"));
     try {
       const candidate = JSON.parse(await readFileText(file)) as import("@audiorouter/contracts").Session;
       const next = await backend.planSessionImport(candidate);
       if (request !== importRequest.current) return;
       setPlan(next);
-      setMessage(`Import validated for ${next.session.name}; it will remain stopped until you commit it.`);
+      setMessage(tr("g3Adv.validated", { name: next.session.name }));
     } catch (error) {
       if (request === importRequest.current) {
         setPlan(null);
-        setMessage(formatUiError(error, "Unable to validate session import."));
+        setMessage(formatUiError(error, tr("g3Adv.validateFailed")));
       }
     } finally {
       if (request === importRequest.current) setBusy(false);
@@ -627,14 +634,14 @@ export function SessionTransferPanel({
   const commitImport = async () => {
     if (!plan || busy || !backend.connected) return;
     setBusy(true);
-    setMessage("Committing the validated stopped-session import...");
+    setMessage(tr("g3Adv.committing"));
     try {
       const result = await backend.commitSessionImport(plan.planId, uiIdempotencyKey("session-import"));
       setPlan(null);
       onImported(result.session);
-      setMessage(`Imported stopped session ${result.session.name}. Review bindings before starting it.`);
+      setMessage(tr("g3Adv.imported", { name: result.session.name }));
     } catch (error) {
-      setMessage(formatUiError(error, "Unable to commit session import."));
+      setMessage(formatUiError(error, tr("g3Adv.commitFailed")));
     } finally {
       setBusy(false);
     }
@@ -643,16 +650,12 @@ export function SessionTransferPanel({
     <section className="panel session-transfer-panel" aria-labelledby="session-transfer-heading">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Portable configuration</p>
-          <h2 id="session-transfer-heading">Session transfer</h2>
+          <p className="eyebrow">{tr("g3Adv.transferEyebrow")}</p>
+          <h2 id="session-transfer-heading">{tr("g3Adv.transferHeading")}</h2>
         </div>
-        <span className="badge">stopped only</span>
+        <span className="badge">{tr("g3Adv.stoppedOnly")}</span>
       </div>
-      <p className="muted">
-        Graph-only JSON transfer for scripts and review. To back up or move a whole setup (including imported audio and
-        plugin settings), use Session → Session file instead. Imports never start audio, arm recorders, enable startup,
-        or include credentials, recordings, plugin binaries, or machine-specific authorization.
-      </p>
+      <p className="muted">{tr("g3Adv.transferIntro")}</p>
       <div className="actions">
         <button
           type="button"
@@ -660,12 +663,12 @@ export function SessionTransferPanel({
           onClick={() => void exportSession()}
           disabled={!backend.connected || busy}
         >
-          Export session
+          {tr("g3Adv.exportSession")}
         </button>
         <label className="file-picker">
-          Import session
+          {tr("g3Adv.importSession")}
           <input
-            aria-label="Import session configuration"
+            aria-label={tr("g3Adv.importAria")}
             type="file"
             accept=".json,.audiorouter.json,application/json"
             onChange={(event) => void inspectImport(event)}
@@ -679,21 +682,20 @@ export function SessionTransferPanel({
             onClick={() => void commitImport()}
             disabled={!backend.connected || busy}
           >
-            Save imported session
+            {tr("g3Adv.saveImported")}
           </button>
         )}
       </div>
       {plan && (
         <p className="muted" role="status">
-          Validated import: {plan.session.name} · expires in {Math.ceil(plan.expiresInMs / 1000)} seconds. Save the
-          imported session when you are ready.
+          {tr("g3Adv.validatedImport", { name: plan.session.name, seconds: Math.ceil(plan.expiresInMs / 1000) })}
         </p>
       )}
       <PanelMessage message={message} />
       {quarantinedSessions.length > 0 && (
-        <section aria-label="Unavailable sessions">
-          <h3>Unavailable sessions</h3>
-          <p>These sessions could not be loaded. Their original data is kept. Export a copy before deleting one.</p>
+        <section aria-label={tr("g3Adv.unavailableSessions")}>
+          <h3>{tr("g3Adv.unavailableSessions")}</h3>
+          <p>{tr("g3Adv.unavailableIntro")}</p>
           <ul>
             {quarantinedSessions.map((item) => (
               <li key={item.sessionId}>
@@ -706,7 +708,7 @@ export function SessionTransferPanel({
                     disabled={busy || !backend.connected || !backend.exportRawSession}
                     onClick={() => void exportOriginal(item.sessionId)}
                   >
-                    Export original file
+                    {tr("g3Adv.exportOriginal")}
                   </button>
                   {pendingDelete === item.sessionId ? (
                     <>
@@ -716,7 +718,7 @@ export function SessionTransferPanel({
                         disabled={busy || !backend.connected}
                         onClick={() => void deleteUnavailable(item.sessionId)}
                       >
-                        Confirm deletion
+                        {tr("g3Adv.confirmDeletion")}
                       </button>
                       <button
                         type="button"
@@ -724,7 +726,7 @@ export function SessionTransferPanel({
                         disabled={busy}
                         onClick={() => setPendingDelete(null)}
                       >
-                        Keep session
+                        {tr("g3Adv.keepSession")}
                       </button>
                     </>
                   ) : (
@@ -734,7 +736,7 @@ export function SessionTransferPanel({
                       disabled={busy || !backend.connected}
                       onClick={() => setPendingDelete(item.sessionId)}
                     >
-                      Delete unavailable session
+                      {tr("g3Adv.deleteUnavailable")}
                     </button>
                   )}
                 </div>

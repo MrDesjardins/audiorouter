@@ -1,3 +1,5 @@
+import { tx } from "./i18n";
+
 export type SetupStep = {
   id: string;
   label: string;
@@ -18,13 +20,13 @@ export function setupChecklist(input: {
   return [
     {
       id: "backend",
-      label: "Background service",
+      label: tx("h3.setBackend"),
       state: input.connected ? "ready" : "unavailable",
-      detail: input.connected ? "Connected" : "Not connected; changes cannot be applied",
+      detail: input.connected ? tx("h3.setConnected") : tx("h3.setNotConnected"),
     },
     {
       id: "audio",
-      label: "Audio engine",
+      label: tx("h3.setAudio"),
       state: !input.connected
         ? "unavailable"
         : input.audio === "available"
@@ -33,51 +35,51 @@ export function setupChecklist(input: {
             ? "idle"
             : "needs-attention",
       detail: !input.connected
-        ? "Not connected to the background service"
+        ? tx("h3.setAudioNoService")
         : input.audio === "available"
-          ? "Running"
+          ? tx("h3.setRunning")
           : input.activeSessionCount === 0
-            ? "Stopped — press Play to start a configured route"
-            : (input.audioReason ?? "Waiting for the service to report its audio status"),
+            ? tx("h3.setStopped")
+            : (input.audioReason ?? tx("h3.setAudioWaiting")),
     },
     {
       id: "storage",
-      label: "Saved settings",
+      label: tx("h3.setStorage"),
       state: input.storage !== null ? "ready" : input.connected ? "needs-attention" : "unavailable",
       detail:
         input.storage === "memory"
-          ? "In-memory storage; persistence is not durable"
+          ? tx("h3.setMemory")
           : input.storage === "sqlite"
-            ? "Sessions are saved on this PC"
-            : "Not available until the service reports its status",
+            ? tx("h3.setSqlite")
+            : tx("h3.setStorageNone"),
     },
     {
       id: "devices",
-      label: "Audio devices",
+      label: tx("h3.setDevices"),
       state: input.deviceCount > 0 ? "ready" : input.connected ? "needs-attention" : "unavailable",
       detail:
         input.deviceCount > 0
-          ? `${input.deviceCount} device${input.deviceCount === 1 ? "" : "s"} found (listed below)`
-          : "No devices found yet; press Refresh below",
+          ? tx(input.deviceCount === 1 ? "h3.setDevicesOne" : "h3.setDevicesMany", { count: input.deviceCount })
+          : tx("h3.setDevicesNone"),
     },
     {
       id: "vb-cable",
-      label: "Virtual cable (optional)",
+      label: tx("h3.setCable"),
       state: input.vbCablePairAvailable ? "ready" : input.connected ? "needs-attention" : "unavailable",
       detail: input.vbCablePairAvailable
-        ? "VB-Cable found: send a route to CABLE Input, then pick CABLE Output as the microphone in Discord, OBS or a game"
+        ? tx("h3.setCableFound")
         : input.connected
-          ? "No VB-Cable found. Install one only if other apps should hear AudioRouter's sound"
-          : "Unavailable until the device list is received",
+          ? tx("h3.setCableNone")
+          : tx("h3.setCableWait"),
     },
     {
       id: "applications",
-      label: "Apps playing sound",
+      label: tx("h3.setApps"),
       state: input.applicationCount > 0 ? "ready" : input.connected ? "needs-attention" : "unavailable",
       detail:
         input.applicationCount > 0
-          ? `${input.applicationCount} app${input.applicationCount === 1 ? "" : "s"} can be captured with Application source`
-          : "Select Discord/OBS in their own settings when needed",
+          ? tx(input.applicationCount === 1 ? "h3.setAppsOne" : "h3.setAppsMany", { count: input.applicationCount })
+          : tx("h3.setAppsNone"),
     },
   ];
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { useMessages } from "./i18n/useMessages";
 import { NumberField } from "./NumberField";
 import { StreamDeckPluginPanel } from "./StreamDeckPluginPanel";
 
@@ -13,6 +14,7 @@ type ApiStatus = {
 type LanAddress = { address: string; adapter: string };
 /** `builder` renders the request builder for the API base URL. */
 export function ApiPanel({ builder }: { builder?: (baseUrl: string) => ReactNode } = {}) {
+  const tr = useMessages();
   const [status, setStatus] = useState<ApiStatus>({ running: false, port: 17891, url: null, token: null });
   const [port, setPort] = useState(17891);
   // "" = this PC only; otherwise one of this PC's private addresses (HTTP-09).
@@ -38,10 +40,7 @@ export function ApiPanel({ builder }: { builder?: (baseUrl: string) => ReactNode
         }
       })
       .catch(() => {
-        if (active)
-          setMessage(
-            "Cannot read API token. Try Reveal API token, or generate a replacement if the saved token cannot be recovered.",
-          );
+        if (active) setMessage(tr("g6.apiPanelReadError"));
       });
     void loadAddresses();
     return () => {
@@ -61,10 +60,10 @@ export function ApiPanel({ builder }: { builder?: (baseUrl: string) => ReactNode
       }));
       if (action === "regenerate") {
         setRegenerateConfirm(false);
-        setMessage("New token generated. Copy it to update your integrations.");
+        setMessage(tr("g6.apiPanelRegenerated"));
       }
     } catch (error) {
-      setMessage(typeof error === "string" ? error : "API action failed. Reconnect and try again.");
+      setMessage(typeof error === "string" ? error : tr("g6.apiPanelActionFailed"));
       // Replacement can save successfully but fail to rebind the listener.
       try {
         setStatus(
@@ -81,24 +80,21 @@ export function ApiPanel({ builder }: { builder?: (baseUrl: string) => ReactNode
     if (!status.token) return;
     try {
       await navigator.clipboard.writeText(status.token);
-      setMessage("Token copied.");
+      setMessage(tr("settingsCopy.tokenCopied"));
     } catch {
-      setMessage("Select the token and copy it manually.");
+      setMessage(tr("settingsCopy.tokenManual"));
     }
   };
   return (
-    <section className="workbench-page" aria-label="API">
-      <p className="eyebrow">Local HTTP control</p>
-      <h2>API</h2>
-      <p className="muted">
-        Use REST calls from this PC, or from a device on your home network such as a control panel. Changes use the same
-        backend as this window and appear here automatically. Named-pipe JSON-RPC and MCP remain available.
-      </p>
-      {!invoke && <p role="status">HTTP control is available in the desktop application.</p>}
+    <section className="workbench-page" aria-label={tr("g6.apiPanelHeading")}>
+      <p className="eyebrow">{tr("settingsCopy.apiHeading")}</p>
+      <h2>{tr("g6.apiPanelHeading")}</h2>
+      <p className="muted">{tr("settingsCopy.apiIntro")}</p>
+      {!invoke && <p role="status">{tr("settingsCopy.apiDesktop")}</p>}
       <label>
-        Port
+        {tr("settingsCopy.port")}
         <NumberField
-          aria-label="API port"
+          aria-label={tr("settingsCopy.apiPort")}
           value={port}
           min={1024}
           max={65535}
@@ -110,86 +106,75 @@ export function ApiPanel({ builder }: { builder?: (baseUrl: string) => ReactNode
         />
       </label>
       <label>
-        Who can connect
+        {tr("settingsCopy.who")}
         <select
-          aria-label="Who can connect"
+          aria-label={tr("settingsCopy.who")}
           value={network}
           disabled={status.running || busy}
           onFocus={() => void loadAddresses()}
           onChange={(event) => setNetwork(event.currentTarget.value)}
         >
-          <option value="">This PC only</option>
+          <option value="">{tr("settingsCopy.pcOnly")}</option>
           {network && !addresses.some((entry) => entry.address === network) && (
-            <option value={network}>Local network · {network}</option>
+            <option value={network}>{tr("settingsCopy.networkOption", { name: network })}</option>
           )}
           {addresses.map((entry) => (
             <option key={entry.address} value={entry.address}>
-              Local network · {entry.adapter || "adapter"} ({entry.address})
+              {tr("settingsCopy.networkOption", {
+                name: `${entry.adapter || tr("settingsCopy.adapter")} (${entry.address})`,
+              })}
             </option>
           ))}
         </select>
       </label>
       {network ? (
-        <p className="muted">
-          Devices on this network that have the token can control AudioRouter, including Play, Stop and privacy mute.
-          Traffic is not encrypted, so use only a home network you trust. The first time, Windows Firewall may ask you
-          to allow AudioRouter on private networks.
-        </p>
+        <p className="muted">{tr("settingsCopy.networkAccess")}</p>
       ) : (
         <p className="muted">
-          Only programs on this PC can connect.
-          {addresses.length === 0 && invoke ? " No home or office network address was found." : ""}
+          {tr("settingsCopy.localAccess")}
+          {addresses.length === 0 && invoke ? ` ${tr("settingsCopy.noAddress")}` : ""}
         </p>
       )}
       <p role="status">
         {status.running
           ? status.network
-            ? `API running · this PC and local network (${status.network})`
-            : "API running · localhost only"
-          : "API stopped"}
+            ? tr("settingsCopy.apiNetwork", { address: status.network })
+            : tr("settingsCopy.apiLocal")
+          : tr("settingsCopy.apiStopped")}
       </p>
       <button type="button" disabled={!invoke || busy} onClick={() => void control(status.running ? "stop" : "start")}>
-        {busy ? "Working…" : status.running ? "Stop API" : "Start API"}
+        {tr(busy ? "settingsCopy.working" : status.running ? "settingsCopy.apiStop" : "settingsCopy.apiStart")}
       </button>
-      <p className="muted">
-        To start the API every time AudioRouter starts, turn on "Start the local API automatically" in Settings, under
-        When AudioRouter starts.
-      </p>
+      <p className="muted">{tr("settingsCopy.apiAutostart")}</p>
       {status.url && (
         <>
           <label>
-            URL
-            <input aria-label="API URL" readOnly value={status.url} />
+            {tr("g6.apiPanelUrl")}
+            <input aria-label={tr("g6.apiPanelUrlAria")} readOnly value={status.url} />
           </label>
           {status.networkUrl && (
             <label>
-              Network URL
-              <input aria-label="API network URL" readOnly value={status.networkUrl} />
+              {tr("settingsCopy.networkUrl")}
+              <input aria-label={tr("settingsCopy.apiNetworkUrl")} readOnly value={status.networkUrl} />
             </label>
           )}
           <button type="button" className="secondary" disabled={busy} onClick={() => void control("openDocs")}>
-            Open Swagger documentation
+            {tr("settingsCopy.swagger")}
           </button>
-          <p className="muted">
-            Swagger runs locally. Choose Authorize and enter the bearer token to try calls. Your token is saved securely
-            for this Windows account and stays the same when you stop or restart the API.
-          </p>
+          <p className="muted">{tr("settingsCopy.swaggerHelp")}</p>
         </>
       )}
-      <p className="muted">
-        Your saved token works with your own apps. It stays the same until you generate a replacement, even while the
-        API is stopped.
-      </p>
+      <p className="muted">{tr("settingsCopy.tokenHelp")}</p>
       {!status.token ? (
         <button type="button" className="secondary" disabled={!invoke || busy} onClick={() => void control("reveal")}>
-          Reveal API token
+          {tr("settingsCopy.revealToken")}
         </button>
       ) : (
         <>
           <label>
-            Bearer token
+            {tr("settingsCopy.bearer")}
             <textarea
-              aria-label="API bearer token"
+              aria-label={tr("settingsCopy.apiBearer")}
               rows={2}
               readOnly
               value={status.token}
@@ -198,7 +183,7 @@ export function ApiPanel({ builder }: { builder?: (baseUrl: string) => ReactNode
           </label>
           <div className="actions">
             <button type="button" className="secondary" disabled={busy} onClick={() => void copyToken()}>
-              Copy API token
+              {tr("g6.apiPanelCopyToken")}
             </button>
             <button
               type="button"
@@ -206,14 +191,12 @@ export function ApiPanel({ builder }: { builder?: (baseUrl: string) => ReactNode
               disabled={busy}
               onClick={() => setStatus({ ...status, token: null })}
             >
-              Hide API token
+              {tr("g6.apiPanelHideToken")}
             </button>
           </div>
         </>
       )}
-      <p className="muted">
-        Generate a new token only when you want to replace it. Existing integrations will need the new token.
-      </p>
+      <p className="muted">{tr("g6.apiPanelRegenerateHelp")}</p>
       {!regenerateConfirm ? (
         <button
           type="button"
@@ -221,17 +204,17 @@ export function ApiPanel({ builder }: { builder?: (baseUrl: string) => ReactNode
           disabled={!invoke || busy}
           onClick={() => setRegenerateConfirm(true)}
         >
-          Generate new token
+          {tr("g6.apiPanelGenerate")}
         </button>
       ) : (
         <div className="api-token-confirm">
-          <p>Replace the saved token? This disconnects integrations using the old token.</p>
+          <p>{tr("g6.apiPanelConfirm")}</p>
           <div className="actions">
             <button type="button" disabled={busy} onClick={() => void control("regenerate")}>
-              Replace API token
+              {tr("g6.apiPanelReplace")}
             </button>
             <button type="button" className="secondary" disabled={busy} onClick={() => setRegenerateConfirm(false)}>
-              Cancel
+              {tr("common.cancel")}
             </button>
           </div>
         </div>

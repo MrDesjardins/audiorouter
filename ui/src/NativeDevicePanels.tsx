@@ -13,6 +13,8 @@ import {
   sortDevicesAlphabetically,
   writeEndpointBindingHint,
 } from "./endpointBinding";
+import { boldMarkup } from "./boldMarkup";
+import { useMessages } from "./i18n/useMessages";
 
 export function VirtualDeviceLifecyclePanel({
   backend,
@@ -21,6 +23,7 @@ export function VirtualDeviceLifecyclePanel({
   backend: UiBackend;
   onAddVirtualBusNode: (busId: string, direction: "renderSource" | "captureSink") => void;
 }) {
+  const tr = useMessages();
   const [devices, setDevices] = useState<import("@audiorouter/contracts").VirtualDeviceInfo[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [action, setAction] = useState<"create" | "rename" | "setEnabled" | "delete">("create");
@@ -47,8 +50,7 @@ export function VirtualDeviceLifecyclePanel({
         }
       })
       .catch((error) => {
-        if (generation === refreshGeneration.current)
-          setMessage(formatUiError(error, "Virtual-device inventory unavailable."));
+        if (generation === refreshGeneration.current) setMessage(formatUiError(error, tr("g2.vdInventoryFail")));
       });
   };
   // Refresh when the backend connects or changes, with the latest state.
@@ -85,17 +87,17 @@ export function VirtualDeviceLifecyclePanel({
             ? { action, id: selectedId, enabled: !(selected?.enabled ?? false) }
             : { action, id: selectedId };
     if (!operation.id || ("name" in operation && !operation.name)) {
-      setMessage("Provide a valid bus ID and name.");
+      setMessage(tr("g2.vdNeedIdName"));
       return;
     }
     setBusy(true);
-    setMessage("Planning managed virtual-bus change...");
+    setMessage(tr("g2.vdPlanning"));
     try {
       const result = await backend.planVirtualDevice(operation);
       setPlan(result);
       setMessage(result.availability.reason);
     } catch (error) {
-      setMessage(formatUiError(error, "Unable to plan managed virtual-bus change."));
+      setMessage(formatUiError(error, tr("g2.vdPlanFail")));
     } finally {
       setBusy(false);
     }
@@ -103,14 +105,14 @@ export function VirtualDeviceLifecyclePanel({
   const applyPlan = async () => {
     if (!plan || busy || !backend.connected) return;
     setBusy(true);
-    setMessage("Applying desired virtual-bus state...");
+    setMessage(tr("g2.vdApplying"));
     try {
       const result = await backend.applyVirtualDevice(plan.planId, uiIdempotencyKey("virtual-device-apply"));
       setPlan(null);
-      setMessage(`${result.availability.reason}; no native endpoint is active in this build.`);
+      setMessage(tr("g2.vdApplied", { reason: result.availability.reason }));
       refresh();
     } catch (error) {
-      setMessage(formatUiError(error, "Unable to apply virtual-bus plan."));
+      setMessage(formatUiError(error, tr("g2.vdApplyFail")));
     } finally {
       setBusy(false);
     }
@@ -118,17 +120,17 @@ export function VirtualDeviceLifecyclePanel({
   const provision = async () => {
     if (!selected || busy || !backend.connected || !instanceId.trim()) return;
     setBusy(true);
-    setMessage("Provisioning the explicitly selected managed device...");
+    setMessage(tr("g2.vdProvisioning"));
     try {
       const result = await backend.provisionVirtualDevice(
         selected.id,
         instanceId.trim(),
         uiIdempotencyKey("virtual-device-provision"),
       );
-      setMessage(`${result.availability.reason}; device identity ${result.driverInstanceId} is retained.`);
+      setMessage(tr("g2.vdProvisioned", { reason: result.availability.reason, id: result.driverInstanceId }));
       refresh();
     } catch (error) {
-      setMessage(formatUiError(error, "Unable to provision the managed device."));
+      setMessage(formatUiError(error, tr("g2.vdProvisionFail")));
     } finally {
       setBusy(false);
     }
@@ -136,69 +138,78 @@ export function VirtualDeviceLifecyclePanel({
   const remove = async () => {
     if (!selected || busy || !backend.connected) return;
     setBusy(true);
-    setMessage("Removing the explicitly selected managed device...");
+    setMessage(tr("g2.vdRemoving"));
     try {
       const result = await backend.removeVirtualDevice(selected.id, uiIdempotencyKey("virtual-device-remove"));
-      setMessage(`${result.availability.reason}; managed device removed.`);
+      setMessage(tr("g2.vdRemoved", { reason: result.availability.reason }));
       refresh();
     } catch (error) {
-      setMessage(formatUiError(error, "Unable to remove the managed device."));
+      setMessage(formatUiError(error, tr("g2.vdRemoveFail")));
     } finally {
       setBusy(false);
     }
   };
+  const planLabel = {
+    create: tr("g2.vdPlanCreate"),
+    rename: tr("g2.vdPlanRename"),
+    setEnabled: tr("g2.vdPlanSetEnabled"),
+    delete: tr("g2.vdPlanDelete"),
+  }[action];
   return (
     <section className="panel virtual-device-lifecycle" aria-labelledby="virtual-device-lifecycle-heading">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Managed buses</p>
-          <h2 id="virtual-device-lifecycle-heading">Virtual-device lifecycle</h2>
+          <p className="eyebrow">{tr("g2.vdEyebrow")}</p>
+          <h2 id="virtual-device-lifecycle-heading">{tr("g2.vdTitle")}</h2>
         </div>
         <button type="button" className="secondary" onClick={refresh} disabled={!backend.connected || busy}>
-          Refresh
+          {tr("g2.refresh")}
         </button>
       </div>
       {devices.length === 0 ? (
-        <p className="muted">No managed virtual buses are currently listed.</p>
+        <p className="muted">{tr("g2.vdNone")}</p>
       ) : (
-        <ul aria-label="Managed virtual devices">
+        <ul aria-label={tr("g2.vdListAria")}>
           {devices.map((device) => (
             <li key={device.id}>
               <strong>{device.name}</strong>{" "}
               <small>
-                {device.enabled ? "enabled" : "disabled"} · {device.availability.reason} · lease{" "}
-                {device.leaseOwner ?? "none"}
+                {tr("g2.vdItem", {
+                  state: device.enabled ? tr("g2.enabled") : tr("g2.disabled"),
+                  reason: device.availability.reason,
+                  lease: device.leaseOwner ?? tr("g2.none"),
+                })}
               </small>
             </li>
           ))}
         </ul>
       )}
       <fieldset disabled={!backend.connected || busy}>
-        <legend>Desired-state operation</legend>
+        <legend>{tr("g2.vdOperation")}</legend>
         <label>
-          Action
+          {tr("g2.vdAction")}
           <select
-            aria-label="Virtual-device action"
+            aria-label={tr("g2.vdActionAria")}
             value={action}
             onChange={(event) => chooseAction(event.target.value as typeof action)}
           >
-            <option value="create">Create</option>
+            <option value="create">{tr("g2.vdCreate")}</option>
             <option value="rename" disabled={!selected}>
-              Rename
+              {tr("g2.vdRename")}
             </option>
             <option value="setEnabled" disabled={!selected}>
-              Enable/disable
+              {tr("g2.vdEnableDisable")}
             </option>
             <option value="delete" disabled={!selected}>
-              Delete
+              {tr("g2.vdDelete")}
             </option>
           </select>
         </label>
         {action !== "create" && (
           <label>
-            Existing bus
+            {tr("g2.vdExisting")}
             <select
-              aria-label="Existing virtual-device target"
+              aria-label={tr("g2.vdExistingAria")}
               value={selectedId}
               onChange={(event) => {
                 const next = devices.find((device) => device.id === event.target.value);
@@ -215,7 +226,7 @@ export function VirtualDeviceLifecyclePanel({
           </label>
         )}
         <label>
-          Bus ID
+          {tr("g2.vdBusId")}
           <input
             value={busId}
             maxLength={64}
@@ -225,7 +236,7 @@ export function VirtualDeviceLifecyclePanel({
         </label>
         {action !== "delete" && (
           <label>
-            Bus name
+            {tr("g2.vdBusName")}
             <input
               value={busName}
               maxLength={120}
@@ -240,7 +251,7 @@ export function VirtualDeviceLifecyclePanel({
           onClick={() => void createPlan()}
           disabled={!backend.connected || busy}
         >
-          Plan {action}
+          {planLabel}
         </button>
         {plan && (
           <button
@@ -249,12 +260,12 @@ export function VirtualDeviceLifecyclePanel({
             onClick={() => void applyPlan()}
             disabled={!backend.connected || busy}
           >
-            Apply planned state
+            {tr("g2.vdApplyPlan")}
           </button>
         )}
       </fieldset>
       <fieldset disabled={!backend.connected || busy || !selected}>
-        <legend>Graph bus nodes</legend>
+        <legend>{tr("g2.vdGraphNodes")}</legend>
         <div className="actions">
           <button
             type="button"
@@ -262,7 +273,7 @@ export function VirtualDeviceLifecyclePanel({
             onClick={() => onAddVirtualBusNode(selected.id, "renderSource")}
             disabled={!backend.connected || busy || !selected}
           >
-            Add render source to graph
+            {tr("g2.vdAddSource")}
           </button>
           <button
             type="button"
@@ -270,19 +281,17 @@ export function VirtualDeviceLifecyclePanel({
             onClick={() => onAddVirtualBusNode(selected.id, "captureSink")}
             disabled={!backend.connected || busy || !selected}
           >
-            Add capture sink to graph
+            {tr("g2.vdAddSink")}
           </button>
         </div>
-        <p className="muted">
-          Nodes are stopped and bound to this exact bus ID; endpoint availability remains reported by the backend.
-        </p>
+        <p className="muted">{tr("g2.vdNodesNote")}</p>
       </fieldset>
       <fieldset disabled={!backend.connected || busy || !selected}>
-        <legend>Native device ownership</legend>
+        <legend>{tr("g2.vdOwnership")}</legend>
         <label>
-          Instance ID
+          {tr("g2.vdInstanceId")}
           <input
-            aria-label="Managed device instance ID"
+            aria-label={tr("g2.vdInstanceAria")}
             value={instanceId}
             maxLength={256}
             onChange={(event) => setInstanceId(event.target.value)}
@@ -295,7 +304,7 @@ export function VirtualDeviceLifecyclePanel({
             onClick={() => void provision()}
             disabled={!backend.connected || busy || !selected || !instanceId.trim()}
           >
-            Provision managed device
+            {tr("g2.vdProvision")}
           </button>
           <button
             type="button"
@@ -303,20 +312,18 @@ export function VirtualDeviceLifecyclePanel({
             onClick={() => void remove()}
             disabled={!backend.connected || busy || !selected}
           >
-            Remove managed device
+            {tr("g2.vdRemove")}
           </button>
         </div>
       </fieldset>
       {message && <PanelMessage message={message} />}
-      <p className="muted">
-        Desired state uses plan/apply. Native ownership is a separate explicit <code>deviceAdministration</code>{" "}
-        operation and remains unavailable until the managed driver is loaded and qualified.
-      </p>
+      <p className="muted">{boldMarkup(tr("g2.vdFootnote"))}</p>
     </section>
   );
 }
 
 export function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
+  const tr = useMessages();
   const [state, setState] = useState<import("@audiorouter/contracts").VirtualRouteListResult | null>(null);
   const [routeText, setRouteText] = useState("[]");
   const [revisionText, setRevisionText] = useState("0");
@@ -335,8 +342,7 @@ export function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
         setMessage(null);
       })
       .catch((error) => {
-        if (generation === refreshGeneration.current)
-          setMessage(formatUiError(error, "Virtual-route inventory unavailable."));
+        if (generation === refreshGeneration.current) setMessage(formatUiError(error, tr("g2.vrInventoryFail")));
       });
   };
   // Refresh when the backend connects or changes, with the latest state.
@@ -354,20 +360,20 @@ export function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
     if (busy || !backend.connected) return;
     const baseRevision = Number.parseInt(revisionText, 10);
     if (!Number.isSafeInteger(baseRevision) || baseRevision < 0) {
-      setMessage("Base revision must be a non-negative integer.");
+      setMessage(tr("g2.vrRevisionInvalid"));
       return;
     }
     let routes: import("@audiorouter/contracts").VirtualBusRoute[];
     try {
       const parsed: unknown = JSON.parse(routeText);
-      if (!Array.isArray(parsed)) throw new Error("route JSON must be an array");
+      if (!Array.isArray(parsed)) throw new Error(tr("g2.vrNotArray"));
       routes = parsed as import("@audiorouter/contracts").VirtualBusRoute[];
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Route JSON is invalid.");
+      setMessage(error instanceof Error ? error.message : tr("g2.vrJsonInvalid"));
       return;
     }
     setBusy(true);
-    setMessage("Replacing explicit virtual-bus routes...");
+    setMessage(tr("g2.vrReplacing"));
     try {
       const result = await backend.replaceVirtualRoutes(
         baseRevision,
@@ -377,9 +383,9 @@ export function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
       setState({ revision: result.revision, routes: result.routes });
       setRouteText(JSON.stringify(result.routes, null, 2));
       setRevisionText(String(result.revision));
-      setMessage(`Virtual routes ${result.state} at revision ${result.revision}.`);
+      setMessage(tr("g2.vrReplaced", { state: result.state, revision: result.revision }));
     } catch (error) {
-      setMessage(formatUiError(error, "Unable to replace virtual-bus routes."));
+      setMessage(formatUiError(error, tr("g2.vrReplaceFail")));
     } finally {
       setBusy(false);
     }
@@ -388,22 +394,19 @@ export function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
     <section className="panel virtual-route-panel" aria-labelledby="virtual-route-heading">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Explicit cross-session routing</p>
-          <h2 id="virtual-route-heading">Virtual-bus routes</h2>
+          <p className="eyebrow">{tr("g2.vrEyebrow")}</p>
+          <h2 id="virtual-route-heading">{tr("g2.vrTitle")}</h2>
         </div>
         <div className="actions">
-          <span className="badge">rev {state?.revision ?? "-"}</span>
+          <span className="badge">{tr("g2.vrRev", { n: state?.revision ?? "-" })}</span>
           <button type="button" className="secondary" onClick={refresh} disabled={!backend.connected || busy}>
-            Refresh
+            {tr("g2.refresh")}
           </button>
         </div>
       </div>
-      <p className="muted">
-        Routes are replaced as one revisioned document. The backend validates bus identities, sessions, cycles,
-        authorization, and idempotency before changing desired state.
-      </p>
+      <p className="muted">{tr("g2.vrIntro")}</p>
       {state?.routes.length ? (
-        <ul aria-label="Explicit cross-session routes">
+        <ul aria-label={tr("g2.vrListAria")}>
           {state.routes.map((route) => (
             <li key={`${route.busId}-${route.producerSessionId}-${route.consumerSessionId}`}>
               <code>{route.busId}</code> · {route.producerSessionId} → {route.consumerSessionId}
@@ -411,23 +414,23 @@ export function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
           ))}
         </ul>
       ) : (
-        <p className="muted">No explicit cross-session routes are currently listed.</p>
+        <p className="muted">{tr("g2.vrNone")}</p>
       )}
       <fieldset disabled={!backend.connected || busy}>
-        <legend>Revisioned replacement</legend>
+        <legend>{tr("g2.vrReplacement")}</legend>
         <label>
-          Base revision
+          {tr("g2.vrBaseRevision")}
           <input
-            aria-label="Virtual-route base revision"
+            aria-label={tr("g2.vrBaseRevisionAria")}
             inputMode="numeric"
             value={revisionText}
             onChange={(event) => setRevisionText(event.target.value)}
           />
         </label>
         <label>
-          Routes JSON
+          {tr("g2.vrRoutesJson")}
           <textarea
-            aria-label="Virtual-route JSON"
+            aria-label={tr("g2.vrJsonAria")}
             value={routeText}
             onChange={(event) => setRouteText(event.target.value)}
             rows={6}
@@ -440,14 +443,11 @@ export function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
           onClick={() => void replace()}
           disabled={!backend.connected || busy}
         >
-          Replace routes
+          {tr("g2.vrReplace")}
         </button>
       </fieldset>
       <PanelMessage message={message} />
-      <p className="muted">
-        Disconnected preview mode never mutates route state. Replacement requires the backend’s{" "}
-        <code>deviceAdministration</code> permission and does not activate endpoints by itself.
-      </p>
+      <p className="muted">{boldMarkup(tr("g2.vrFootnote"))}</p>
     </section>
   );
 }
@@ -477,6 +477,7 @@ export function NativeEndpointPanel({
   renderEndpointId: string;
   setRenderEndpointId: (value: string) => void;
 }) {
+  const tr = useMessages();
   const activeCapture = sortDevicesAlphabetically(
     devices.filter(
       (device): device is Extract<DeviceListItem, { state: "active" }> =>
@@ -520,20 +521,20 @@ export function NativeEndpointPanel({
   const prepare = async () => {
     if (busy || !backend.connected) return;
     if (!backend.prepareNativeEndpoint) {
-      setMessage("Native endpoint preparation is unavailable in this backend.");
+      setMessage(tr("g2.neUnavailable"));
       return;
     }
     if (!captureEndpointId || !renderEndpointId) {
-      setMessage("Select both an active capture and render endpoint.");
+      setMessage(tr("g2.neSelectBoth"));
       return;
     }
     setBusy(true);
-    setMessage("Preparing exact endpoints in stopped state...");
+    setMessage(tr("g2.nePreparing"));
     try {
       const result = await backend.prepareNativeEndpoint(sessionId, captureEndpointId, renderEndpointId);
-      setMessage(`Prepared ${result.state}; start the session to activate audio.`);
+      setMessage(tr("g2.nePrepared", { state: result.state }));
     } catch (error) {
-      setMessage(formatUiError(error, "Native endpoint preparation failed."));
+      setMessage(formatUiError(error, tr("g2.nePrepareFail")));
     } finally {
       setBusy(false);
     }
@@ -541,20 +542,20 @@ export function NativeEndpointPanel({
   const rebind = async () => {
     if (busy || !backend.connected) return;
     if (!backend.rebindNativeEndpoint) {
-      setMessage("Native endpoint rebinding is unavailable in this backend.");
+      setMessage(tr("g2.neRebindUnavailable"));
       return;
     }
     if (!captureEndpointId || !renderEndpointId) {
-      setMessage("Select both active endpoints before rebinding.");
+      setMessage(tr("g2.neSelectBothRebind"));
       return;
     }
     setBusy(true);
-    setMessage("Refreshing and rebinding exact endpoints in stopped state...");
+    setMessage(tr("g2.neRebinding"));
     try {
       const result = await backend.rebindNativeEndpoint(sessionId, captureEndpointId, renderEndpointId);
-      setMessage(`Rebound ${result.state}; start the session to activate audio.`);
+      setMessage(tr("g2.neRebound", { state: result.state }));
     } catch (error) {
-      setMessage(formatUiError(error, "Native endpoint rebind failed."));
+      setMessage(formatUiError(error, tr("g2.neRebindFail")));
     } finally {
       setBusy(false);
     }
@@ -562,38 +563,38 @@ export function NativeEndpointPanel({
   const detach = async () => {
     if (busy || !backend.connected) return;
     if (!backend.detachNativeEndpoint) {
-      setMessage("Native endpoint detachment is unavailable in this backend.");
+      setMessage(tr("g2.neDetachUnavailable"));
       return;
     }
     setBusy(true);
-    setMessage("Detaching the stopped native worker...");
+    setMessage(tr("g2.neDetaching"));
     try {
       const result = await backend.detachNativeEndpoint(sessionId);
-      setMessage(`Native worker ${result.state}; select new endpoints before preparing again.`);
+      setMessage(tr("g2.neDetached", { state: result.state }));
     } catch (error) {
-      setMessage(formatUiError(error, "Native endpoint detachment failed."));
+      setMessage(formatUiError(error, tr("g2.neDetachFail")));
     } finally {
       setBusy(false);
     }
   };
   const selectVbCable = () => {
     if (!vbCablePair) {
-      setMessage("An unambiguous active VB-Cable input/output pair was not found.");
+      setMessage(tr("g2.neNoVbPair"));
       return;
     }
     setCaptureEndpointId(vbCablePair.captureEndpointId);
     setRenderEndpointId(vbCablePair.renderEndpointId);
     writeEndpointBindingHint(sessionId, vbCablePair.captureEndpointId, vbCablePair.renderEndpointId);
-    setMessage("VB-Cable pair selected. Review the graph, then prepare and start the session.");
+    setMessage(tr("g2.neVbPairSelected"));
   };
   const selectVbCableCapture = () => {
     if (!vbCableCaptureEndpointId) {
-      setMessage("An unambiguous active VB-Cable capture endpoint was not found.");
+      setMessage(tr("g2.neNoVbCapture"));
       return;
     }
     setCaptureEndpointId(vbCableCaptureEndpointId);
     writeEndpointBindingHint(sessionId, vbCableCaptureEndpointId, renderEndpointId);
-    setMessage("VB-Cable capture selected. Choose the physical render output, then prepare and start the session.");
+    setMessage(tr("g2.neVbCaptureSelected"));
   };
   return (
     <section
@@ -603,30 +604,24 @@ export function NativeEndpointPanel({
     >
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Native adapter</p>
-          <h2 id="native-endpoint-heading">Endpoint binding</h2>
+          <p className="eyebrow">{tr("g2.neEyebrow")}</p>
+          <h2 id="native-endpoint-heading">{tr("g2.neTitle")}</h2>
         </div>
-        <span className="badge">{sessionRunning ? "running" : "stopped"}</span>
+        <span className="badge">{sessionRunning ? tr("g2.neRunning") : tr("g2.neStopped")}</span>
       </div>
       <ol className="native-audio-steps">
-        <li>Saving is optional for a temporary preview. Save the route only when you want to keep it.</li>
-        <li>
-          Select the capture and render endpoints below. The current adapter needs both, including for Test Signal; no
-          microphone is chosen automatically.
-        </li>
-        <li>
-          Click Prepare native endpoints, then press Play to preview the current route. Save it in Session only if you
-          want to keep these edits.
-        </li>
+        <li>{tr("g2.neStep1")}</li>
+        <li>{tr("g2.neStep2")}</li>
+        <li>{tr("g2.neStep3")}</li>
       </ol>
       {missingCaptureHint && (
         <p className="muted" role="status">
-          Saved capture endpoint is unavailable. Select a replacement deliberately.
+          {tr("g2.neMissingCapture")}
         </p>
       )}
       {missingRenderHint && (
         <p className="muted" role="status">
-          Saved render endpoint is unavailable. Select a replacement deliberately.
+          {tr("g2.neMissingRender")}
         </p>
       )}
       <div className="actions">
@@ -635,33 +630,25 @@ export function NativeEndpointPanel({
           className="secondary"
           onClick={selectVbCableCapture}
           disabled={!backend.connected || !vbCableCaptureEndpointId || sessionRunning}
-          title={
-            vbCableCaptureEndpointId
-              ? "Select the exact active VB-Cable capture endpoint"
-              : "No unambiguous active VB-Cable capture endpoint found"
-          }
+          title={vbCableCaptureEndpointId ? tr("g2.neTitleVbCapture") : tr("g2.neTitleNoVbCapture")}
         >
-          Select VB-Cable capture
+          {tr("g2.neSelectVbCapture")}
         </button>
         <button
           type="button"
           className="secondary"
           onClick={selectVbCable}
           disabled={!backend.connected || !vbCablePair || sessionRunning}
-          title={
-            vbCablePair
-              ? "Select the exact active VB-Cable loopback endpoints"
-              : "No unambiguous active VB-Cable loopback pair found"
-          }
+          title={vbCablePair ? tr("g2.neTitleVbPair") : tr("g2.neTitleNoVbPair")}
         >
-          Select VB-Cable loopback pair
+          {tr("g2.neSelectVbPair")}
         </button>
-        {vbCablePair && <small>Active loopback pair detected</small>}
+        {vbCablePair && <small>{tr("g2.neLoopbackDetected")}</small>}
       </div>
       <label>
-        Capture endpoint
+        {tr("g2.neCaptureEndpoint")}
         <select
-          aria-label="Native capture endpoint"
+          aria-label={tr("g2.neCaptureAria")}
           value={captureEndpointId}
           disabled={!backend.connected || activeCapture.length === 0 || sessionRunning}
           onChange={(event) => {
@@ -669,7 +656,7 @@ export function NativeEndpointPanel({
             writeEndpointBindingHint(sessionId, event.target.value, renderEndpointId);
           }}
         >
-          <option value="">Select capture endpoint</option>
+          <option value="">{tr("g2.neSelectCapture")}</option>
           {activeCapture.map((device) => (
             <option key={device.id} value={device.id}>
               {deviceChoiceLabel(device)}
@@ -678,9 +665,9 @@ export function NativeEndpointPanel({
         </select>
       </label>
       <label>
-        Render endpoint
+        {tr("g2.neRenderEndpoint")}
         <select
-          aria-label="Native render endpoint"
+          aria-label={tr("g2.neRenderAria")}
           value={renderEndpointId}
           disabled={!backend.connected || activeRender.length === 0 || sessionRunning}
           onChange={(event) => {
@@ -688,7 +675,7 @@ export function NativeEndpointPanel({
             writeEndpointBindingHint(sessionId, captureEndpointId, event.target.value);
           }}
         >
-          <option value="">Select render endpoint</option>
+          <option value="">{tr("g2.neSelectRender")}</option>
           {activeRender.map((device) => (
             <option key={device.id} value={device.id}>
               {deviceChoiceLabel(device)}
@@ -702,14 +689,14 @@ export function NativeEndpointPanel({
           className="secondary"
           onClick={() => {
             if (!renderEndpointId) {
-              setMessage("Select an exact active render endpoint before adding an endpoint-loopback source.");
+              setMessage(tr("g2.neNeedRenderLoopback"));
               return;
             }
             onAddEndpointLoopback(renderEndpointId);
           }}
           disabled={!backend.connected || !renderEndpointId || sessionRunning}
         >
-          Add loopback source to graph
+          {tr("g2.neAddLoopback")}
         </button>
         <button
           type="button"
@@ -723,7 +710,7 @@ export function NativeEndpointPanel({
             sessionRunning
           }
         >
-          Prepare native endpoints
+          {tr("g2.nePrepare")}
         </button>
         <button
           type="button"
@@ -737,7 +724,7 @@ export function NativeEndpointPanel({
             sessionRunning
           }
         >
-          Rebind exact endpoints
+          {tr("g2.neRebind")}
         </button>
         <button
           type="button"
@@ -745,7 +732,7 @@ export function NativeEndpointPanel({
           onClick={() => void detach()}
           disabled={!backend.connected || !backend.detachNativeEndpoint || sessionRunning}
         >
-          Detach stopped worker
+          {tr("g2.neDetach")}
         </button>
         <button
           type="button"
@@ -753,19 +740,11 @@ export function NativeEndpointPanel({
           onClick={() => void (sessionRunning ? onStop() : onStart())}
           disabled={!backend.connected}
         >
-          {sessionRunning ? "Stop session" : "Start session"}
+          {sessionRunning ? tr("g2.neStopSession") : tr("g2.neStartSession")}
         </button>
       </div>
       <PanelMessage message={message} />
-      <p className="muted">
-        Preparation, rebinding, and detachment require <code>deviceAdministration</code>. If preparation reports
-        permission denied, close the desktop shell and relaunch it from PowerShell with{" "}
-        <code>$env:AUDIOROUTER_ALLOW_DEVICE_ADMIN = "1"</code> set for that process. This requires an enrolled operator
-        account. Physical endpoints and existing VB-Cable devices do not require the AudioRouter virtual driver.
-        Endpoint defaults, volume, and mute are never changed. Selected IDs are retained only as local UI hints; a
-        missing saved ID stays unselected until you deliberately choose a replacement. Use the loopback action only for
-        a deliberate CABLE Input → CABLE Output test; for normal monitoring choose a physical render endpoint.
-      </p>
+      <p className="muted">{boldMarkup(tr("g2.neFootnote"))}</p>
     </section>
   );
 }
@@ -781,6 +760,7 @@ export function NativeOutputFanoutPanel({
   devices: DeviceListItem[];
   sessionRunning: boolean;
 }) {
+  const tr = useMessages();
   const activeRender = sortDevicesAlphabetically(
     devices.filter(
       (device): device is Extract<DeviceListItem, { state: "active" }> =>
@@ -794,25 +774,25 @@ export function NativeOutputFanoutPanel({
   const prepare = async () => {
     if (busy || !backend.connected) return;
     if (!backend.prepareNativeOutputs) {
-      setMessage("Native output fan-out preparation is unavailable in this backend.");
+      setMessage(tr("g2.nfUnavailable"));
       return;
     }
     const parsedGeneration = Number(generation);
     if (!Number.isSafeInteger(parsedGeneration) || parsedGeneration < 1) {
-      setMessage("Generation must be a positive integer.");
+      setMessage(tr("g2.nfGeneration"));
       return;
     }
     if (endpointIds.length < 1 || endpointIds.length > 8) {
-      setMessage("Select one to eight exact render endpoints.");
+      setMessage(tr("g2.nfSelectRange"));
       return;
     }
     setBusy(true);
-    setMessage("Preparing exact stopped render branches...");
+    setMessage(tr("g2.nfPreparing"));
     try {
       const result = await backend.prepareNativeOutputs(sessionId, parsedGeneration, endpointIds);
-      setMessage(`Prepared ${result.outputCount} stopped render branches for generation ${result.generation}.`);
+      setMessage(tr("g2.nfPrepared", { n: result.outputCount, generation: result.generation }));
     } catch (error) {
-      setMessage(formatUiError(error, "Native output fan-out preparation failed."));
+      setMessage(formatUiError(error, tr("g2.nfPrepareFail")));
     } finally {
       setBusy(false);
     }
@@ -821,19 +801,16 @@ export function NativeOutputFanoutPanel({
     <section className="panel native-output-fanout-panel" aria-labelledby="native-output-fanout-heading">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Many-output routing</p>
-          <h2 id="native-output-fanout-heading">Physical render fan-out</h2>
+          <p className="eyebrow">{tr("g2.nfEyebrow")}</p>
+          <h2 id="native-output-fanout-heading">{tr("g2.nfTitle")}</h2>
         </div>
         <span className="badge">{endpointIds.length}/8</span>
       </div>
-      <p className="muted">
-        Select exact active render endpoints to receive the same processed graph output. Preparation is stopped; the
-        backend validates format, ownership, and generation.
-      </p>
+      <p className="muted">{tr("g2.nfIntro")}</p>
       <label>
-        Graph generation
+        {tr("g2.nfGenerationLabel")}
         <input
-          aria-label="Native output fan-out generation"
+          aria-label={tr("g2.nfGenerationAria")}
           type="number"
           min={1}
           step={1}
@@ -843,9 +820,9 @@ export function NativeOutputFanoutPanel({
         />
       </label>
       <label>
-        Render branches
+        {tr("g2.nfBranches")}
         <select
-          aria-label="Native output fan-out render endpoints"
+          aria-label={tr("g2.nfBranchesAria")}
           multiple
           size={Math.min(8, Math.max(3, activeRender.length))}
           value={endpointIds}
@@ -867,13 +844,10 @@ export function NativeOutputFanoutPanel({
           !backend.connected || !backend.prepareNativeOutputs || endpointIds.length === 0 || sessionRunning || busy
         }
       >
-        Prepare stopped fan-out
+        {tr("g2.nfPrepare")}
       </button>
       <PanelMessage message={message} />
-      <p className="muted">
-        This prepares explicit branches only; start/stop and graph validity remain backend-owned. It does not change
-        Windows defaults or volume.
-      </p>
+      <p className="muted">{tr("g2.nfFootnote")}</p>
     </section>
   );
 }
@@ -893,6 +867,7 @@ export function NativeMultiInputPanel({
   sessionRunning: boolean;
   applicationNodes: Node[];
 }) {
+  const tr = useMessages();
   const activeCapture = sortDevicesAlphabetically(
     devices.filter(
       (device): device is Extract<DeviceListItem, { state: "active" }> =>
@@ -932,21 +907,21 @@ export function NativeMultiInputPanel({
   const describe = (entry: MultiInputSourceRef): string => {
     if (entry.kind === "physical") return activeCapture.find((device) => device.id === entry.id)?.name ?? entry.id;
     const node = boundApplicationNodes.find((candidate) => candidate.id === entry.id);
-    return node ? `${node.name} (application)` : `${entry.id} (application)`;
+    return tr("g2.nmApplicationSuffix", { name: node ? node.name : entry.id });
   };
   const prepare = async () => {
     if (busy || !backend.connected) return;
     if (!backend.prepareNativeMultiInputs) {
-      setMessage("Native multi-input preparation is unavailable in this backend.");
+      setMessage(tr("g2.nmUnavailable"));
       return;
     }
     const parsedGeneration = Number(generation);
     if (!Number.isSafeInteger(parsedGeneration) || parsedGeneration < 1) {
-      setMessage("Generation must be a positive integer.");
+      setMessage(tr("g2.nfGeneration"));
       return;
     }
     if (sources.length < 2 || sources.length > 8) {
-      setMessage("Select two to eight exact capture sources.");
+      setMessage(tr("g2.nmSelectRange"));
       return;
     }
     let bindings: import("@audiorouter/contracts").NativeMultiInputSourceBinding[];
@@ -960,7 +935,7 @@ export function NativeMultiInputPanel({
           typeof node.parameters.creationTime100ns !== "string" ||
           typeof node.parameters.executable !== "string"
         ) {
-          throw new Error(`Application source ${entry.id} no longer has a bound process identity.`);
+          throw new Error(tr("g2.nmNoIdentity", { id: entry.id }));
         }
         return {
           kind: "application" as const,
@@ -972,18 +947,16 @@ export function NativeMultiInputPanel({
         };
       });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not build source bindings.");
+      setMessage(error instanceof Error ? error.message : tr("g2.nmBindFail"));
       return;
     }
     setBusy(true);
-    setMessage("Preparing exact stopped capture sources...");
+    setMessage(tr("g2.nmPreparing"));
     try {
       const result = await backend.prepareNativeMultiInputs(sessionId, parsedGeneration, bindings);
-      setMessage(
-        `Prepared ${result.sources.length} capture sources for generation ${result.generation}; start the session to activate routing.`,
-      );
+      setMessage(tr("g2.nmPrepared", { n: result.sources.length, generation: result.generation }));
     } catch (error) {
-      setMessage(formatUiError(error, "Native multi-input preparation failed."));
+      setMessage(formatUiError(error, tr("g2.nmPrepareFail")));
     } finally {
       setBusy(false);
     }
@@ -992,20 +965,16 @@ export function NativeMultiInputPanel({
     <section className="panel native-multi-input-panel" aria-labelledby="native-multi-input-heading">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Many-input routing</p>
-          <h2 id="native-multi-input-heading">Multiple capture sources</h2>
+          <p className="eyebrow">{tr("g2.nmEyebrow")}</p>
+          <h2 id="native-multi-input-heading">{tr("g2.nmTitle")}</h2>
         </div>
         <span className="badge">{sources.length}/8</span>
       </div>
-      <p className="muted">
-        Select exact active capture endpoints and/or bound application-capture nodes, then verify their explicit order
-        matches the committed mixer-input nodes. Preparation is stopped; session start binds the graph’s physical,
-        virtual, recorder, tool, and pre-bound plugin stages.
-      </p>
+      <p className="muted">{tr("g2.nmIntro")}</p>
       <label>
-        Graph generation
+        {tr("g2.nfGenerationLabel")}
         <input
-          aria-label="Native multi-input graph generation"
+          aria-label={tr("g2.nmGenerationAria")}
           type="number"
           min={1}
           step={1}
@@ -1015,9 +984,9 @@ export function NativeMultiInputPanel({
         />
       </label>
       <label>
-        Physical capture sources
+        {tr("g2.nmPhysical")}
         <select
-          aria-label="Native multi-input capture endpoints"
+          aria-label={tr("g2.nmPhysicalAria")}
           multiple
           size={Math.min(8, Math.max(3, activeCapture.length))}
           value={sources.filter((entry) => entry.kind === "physical").map((entry) => entry.id)}
@@ -1034,9 +1003,9 @@ export function NativeMultiInputPanel({
         </select>
       </label>
       <label>
-        Application capture sources
+        {tr("g2.nmApplications")}
         <select
-          aria-label="Native multi-input application sources"
+          aria-label={tr("g2.nmApplicationsAria")}
           multiple
           size={Math.min(8, Math.max(3, boundApplicationNodes.length))}
           value={sources.filter((entry) => entry.kind === "application").map((entry) => entry.id)}
@@ -1053,21 +1022,21 @@ export function NativeMultiInputPanel({
         </select>
       </label>
       <label>
-        Application capture policy
+        {tr("g2.nmPolicy")}
         <select
-          aria-label="Native multi-input application capture policy"
+          aria-label={tr("g2.nmPolicyAria")}
           value={mode}
           disabled={!backend.connected || sessionRunning || busy}
           onChange={(event) => setMode(event.target.value as "include" | "exclude")}
         >
-          <option value="include">Include selected application</option>
-          <option value="exclude">Exclude selected application</option>
+          <option value="include">{tr("g2.nmInclude")}</option>
+          <option value="exclude">{tr("g2.nmExclude")}</option>
         </select>
       </label>
       {sources.length > 0 && (
         <fieldset disabled={sessionRunning || busy}>
-          <legend>Source order</legend>
-          <ol aria-label="Selected multi-input source order">
+          <legend>{tr("g2.nmOrder")}</legend>
+          <ol aria-label={tr("g2.nmOrderAria")}>
             {sources.map((entry, index) => (
               <li key={`${entry.kind}-${entry.id}`}>
                 <span>{describe(entry)}</span>
@@ -1076,18 +1045,18 @@ export function NativeMultiInputPanel({
                   className="secondary"
                   onClick={() => reorder(index, -1)}
                   disabled={index === 0}
-                  aria-label={`Move ${entry.id} up`}
+                  aria-label={tr("g2.nmMoveUpAria", { id: entry.id })}
                 >
-                  Move up
+                  {tr("g2.nmMoveUp")}
                 </button>
                 <button
                   type="button"
                   className="secondary"
                   onClick={() => reorder(index, 1)}
                   disabled={index === sources.length - 1}
-                  aria-label={`Move ${entry.id} down`}
+                  aria-label={tr("g2.nmMoveDownAria", { id: entry.id })}
                 >
-                  Move down
+                  {tr("g2.nmMoveDown")}
                 </button>
               </li>
             ))}
@@ -1102,13 +1071,10 @@ export function NativeMultiInputPanel({
           !backend.connected || !backend.prepareNativeMultiInputs || sources.length < 2 || sessionRunning || busy
         }
       >
-        Prepare stopped multi-input
+        {tr("g2.nmPrepare")}
       </button>
       <PanelMessage message={message} />
-      <p className="muted">
-        No fallback microphone or application is selected. If an exact source changes, disappears, or exits, the backend
-        stops the worker and requires deliberate rebind.
-      </p>
+      <p className="muted">{tr("g2.nmFootnote")}</p>
     </section>
   );
 }

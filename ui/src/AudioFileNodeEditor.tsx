@@ -6,6 +6,7 @@ import { audioUploadProblem, uploadAudioMedia } from "./audioUpload";
 import { uiIdempotencyKey } from "./idempotency";
 import { PanelMessage } from "./PanelMessage";
 import { BooleanField } from "./BooleanField";
+import { useMessages } from "./i18n/useMessages";
 
 export function AudioFileNodeEditor({
   node,
@@ -34,10 +35,9 @@ export function AudioFileNodeEditor({
   onChange: (name: string, value: boolean | number | string) => void;
   onTransport: (nodeId: string, action: "play" | "pause" | "stop") => void;
 }) {
+  const tr = useMessages();
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState(
-    "Choose a WAV or MP3 file. Audio is decoded by the backend and routed through this graph.",
-  );
+  const [message, setMessage] = useState(() => tr("g2.afChoosePrompt"));
   const [selectedRecorder, setSelectedRecorder] = useState("");
   const [takeState, setTakeState] = useState<"idle" | "recording" | "importing">("idle");
   const activeTakeId = useRef<string | null>(null);
@@ -65,19 +65,17 @@ export function AudioFileNodeEditor({
       const recording = [...recordings]
         .reverse()
         .find((item) => item.recorderId === recorderId && item.state === "completed");
-      if (!recording) throw new Error("The temporary WAV take did not finalize. Check Recorder status and try again.");
+      if (!recording) throw new Error(tr("g2.afTakeNotFinal"));
       const media = await backend.importTemporaryRecording(recording.id);
       if (currentSessionIdRef.current === sessionId) {
         onChange("mediaId", media.mediaId);
         onChange("fileName", media.fileName);
       }
-      setMessage(
-        `Sound Check ready · ${Math.round(media.durationMs / 1000)} sec · expires in 24 hours. Save this Audio File source before replaying it through the effects.`,
-      );
+      setMessage(tr("g2.afSoundCheckReady", { sec: Math.round(media.durationMs / 1000) }));
       activeTakeId.current = null;
       setTakeState("idle");
     } catch (error) {
-      setMessage(formatUiError(error, "Temporary recording could not be imported."));
+      setMessage(formatUiError(error, tr("g2.afImportFailedTake")));
       setTakeState("idle");
     } finally {
       setBusy(false);
@@ -87,7 +85,7 @@ export function AudioFileNodeEditor({
     if (!selectedRecorder || busy || !backend.connected || !sessionRunning) return;
     const recorderId = `audio-file-take-${Date.now().toString(36)}`;
     setBusy(true);
-    setMessage("Preparing a 10-second Sound Check from the selected Recorder branch...");
+    setMessage(tr("g2.afPreparing"));
     try {
       const channels = recorderNode?.ports.find((port) => port.direction === "input")?.channels ?? 2;
       await backend.createRecorder({
@@ -108,14 +106,12 @@ export function AudioFileNodeEditor({
       await backend.startRecorder(sessionId, frame, uiIdempotencyKey("temporary-take-start"), selectedRecorder);
       activeTakeId.current = recorderId;
       setTakeState("recording");
-      setMessage(
-        "Recording Sound Check from the selected, already-routed Recorder. It stops automatically after 10 seconds.",
-      );
+      setMessage(tr("g2.afRecording"));
       stopTimer.current = setTimeout(() => {
         void stopAndImportTake();
       }, 10_000);
     } catch (error) {
-      setMessage(formatUiError(error, "Temporary recording could not start."));
+      setMessage(formatUiError(error, tr("g2.afTakeStartFailed")));
       setTakeState("idle");
     } finally {
       setBusy(false);
@@ -129,29 +125,33 @@ export function AudioFileNodeEditor({
       return;
     }
     setBusy(true);
-    setMessage(`Importing ${file.name}…`);
+    setMessage(tr("g2.afImporting", { name: file.name }));
     try {
       const media = await uploadAudioMedia(backend, file);
       if (currentSessionIdRef.current !== sessionId) return;
       onChange("mediaId", media.mediaId);
       onChange("fileName", media.fileName);
       setMessage(
-        `${media.fileName} · ${Math.round(media.durationMs / 1000)} sec · ${media.channels} channel${media.channels === 1 ? "" : "s"}. Save this Audio File source before replaying it through the effects.`,
+        tr("g2.afImported", {
+          name: media.fileName,
+          sec: Math.round(media.durationMs / 1000),
+          channels: media.channels === 1 ? tr("g2.afChannelOne") : tr("g2.afChannelMany", { n: media.channels }),
+        }),
       );
     } catch (error) {
-      setMessage(formatUiError(error, "Audio import failed."));
+      setMessage(formatUiError(error, tr("g2.afImportFailed")));
     } finally {
       setBusy(false);
     }
   };
   return (
-    <div className="node-binding-editor audio-file-editor" aria-label="Audio file source settings">
+    <div className="node-binding-editor audio-file-editor" aria-label={tr("g2.afSettingsAria")}>
       <div>
-        <p className="eyebrow">Audio source</p>
-        <strong>{String(node.parameters.fileName ?? "No file selected")}</strong>
+        <p className="eyebrow">{tr("g2.afSource")}</p>
+        <strong>{String(node.parameters.fileName ?? tr("g2.afNoFile"))}</strong>
       </div>
       <label>
-        Choose WAV or MP3
+        {tr("g2.afChooseFile")}
         <input
           type="file"
           accept="audio/wav,audio/mpeg,.wav,.mp3"
@@ -162,17 +162,17 @@ export function AudioFileNodeEditor({
           }}
         />
       </label>
-      <section className="temporary-take" aria-label="Sound Check">
-        <p className="eyebrow">Sound Check</p>
+      <section className="temporary-take" aria-label={tr("g2.afSoundCheck")}>
+        <p className="eyebrow">{tr("g2.afSoundCheck")}</p>
         <label>
-          Voice path Recorder
+          {tr("g2.afVoiceRecorder")}
           <select
-            aria-label="Recorder for temporary take"
+            aria-label={tr("g2.afRecorderAria")}
             value={selectedRecorder}
             disabled={!backend.connected || busy || takeState === "recording" || recorderNodes.length === 0}
             onChange={(event) => setSelectedRecorder(event.target.value)}
           >
-            <option value="">Choose an enabled Recorder</option>
+            <option value="">{tr("g2.afChooseRecorder")}</option>
             {recorderNodes.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name || item.id}
@@ -182,7 +182,7 @@ export function AudioFileNodeEditor({
         </label>
         {takeState === "recording" ? (
           <button type="button" className="secondary" disabled={busy} onClick={() => void stopAndImportTake()}>
-            Stop and prepare replay
+            {tr("g2.afStopPrepare")}
           </button>
         ) : (
           <button
@@ -191,23 +191,19 @@ export function AudioFileNodeEditor({
             disabled={!backend.connected || !sessionRunning || busy || !selectedRecorder}
             onClick={() => void startTemporaryTake()}
           >
-            {takeState === "importing" ? "Preparing Sound Check…" : "Record Sound Check"}
+            {takeState === "importing" ? tr("g2.afPreparingBtn") : tr("g2.afRecordBtn")}
           </button>
         )}
-        <small>
-          Connect the voice source through this Recorder and start the prepared session. Recording stops after 10
-          seconds or when you stop it. The sample expires after 24 hours. Save this Audio File source, then use Play to
-          hear it through the effects in the connected route. This control does not select or open a microphone.
-        </small>
+        <small>{tr("g2.afTakeHelp")}</small>
       </section>
-      <div className="audio-file-inspector-transport" aria-label="Audio file playback controls">
+      <div className="audio-file-inspector-transport" aria-label={tr("g2.afTransportAria")}>
         <button
           type="button"
           className="secondary"
           disabled={transportDisabled || !node.parameters.mediaId || state === "playing"}
           onClick={() => onTransport(node.id, "play")}
         >
-          Play
+          {tr("g2.afPlay")}
         </button>
         <button
           type="button"
@@ -215,7 +211,7 @@ export function AudioFileNodeEditor({
           disabled={transportDisabled || !node.parameters.mediaId || state !== "playing"}
           onClick={() => onTransport(node.id, "pause")}
         >
-          Pause
+          {tr("g2.afPause")}
         </button>
         <button
           type="button"
@@ -223,14 +219,16 @@ export function AudioFileNodeEditor({
           disabled={transportDisabled || !node.parameters.mediaId || state === "stopped"}
           onClick={() => onTransport(node.id, "stop")}
         >
-          Stop
+          {tr("g2.afStop")}
         </button>
         <span className="audio-file-node-state" role="status">
-          {state}
+          {tr(
+            state === "playing" ? "g2.afStatePlaying" : state === "paused" ? "g2.afStatePaused" : "g2.afStateStopped",
+          )}
         </span>
       </div>
       <BooleanField
-        label="Loop"
+        label={tr("g2.afLoop")}
         checked={node.parameters.loop === true}
         disabled={!backend.connected || busy}
         onChange={(checked) => onChange("loop", checked)}
@@ -238,10 +236,7 @@ export function AudioFileNodeEditor({
       <div className="audio-file-editor-status">
         <PanelMessage message={message} />
       </div>
-      <small>
-        Maximum imported file size is 64 MiB and duration 120 seconds. Playback uses this source in the current route
-        preview and the exact prepared native output route.
-      </small>
+      <small>{tr("g2.afLimits")}</small>
     </div>
   );
 }

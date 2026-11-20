@@ -5,6 +5,8 @@
  * messages are plain strings from many UI paths, so they are classified by
  * their stable phrasing.
  */
+import { englishOf } from "./actionText";
+
 export type ActionMessageTone = "error" | "warning" | "success" | "info";
 
 const ERROR_PATTERNS = [
@@ -40,12 +42,13 @@ export function markErrorMessage(text: string): string {
 
 export function actionMessageTone(message: string | null | undefined): ActionMessageTone {
   if (!message) return "info";
-  if (errorTexts.includes(message) || ERROR_PATTERNS.some((pattern) => pattern.test(message))) return "error";
-  if (WARNING_PATTERNS.some((pattern) => pattern.test(message))) return "warning";
+  const text = englishOf(message);
+  if (errorTexts.includes(message) || ERROR_PATTERNS.some((pattern) => pattern.test(text))) return "error";
+  if (WARNING_PATTERNS.some((pattern) => pattern.test(text))) return "warning";
   // Progress text ("Preparing…", "Starting…") stays informational even when
   // it names a later outcome.
-  if (/(\.\.\.|…)$/.test(message.trim())) return "info";
-  if (SUCCESS_PATTERNS.some((pattern) => pattern.test(message))) return "success";
+  if (/(\.\.\.|…)$/.test(text.trim())) return "info";
+  if (SUCCESS_PATTERNS.some((pattern) => pattern.test(text))) return "success";
   return "info";
 }
 
@@ -58,7 +61,7 @@ export const WARNING_LIFETIME_MS = 30_000;
  * progress text and messages offering a button stay until they change.
  */
 export function actionMessageLifetimeMs(message: string | null | undefined, hasAction: boolean): number | null {
-  if (!message || hasAction || /(\.\.\.|…)$/.test(message.trim())) return null;
+  if (!message || hasAction || /(\.\.\.|…)$/.test(englishOf(message).trim())) return null;
   switch (actionMessageTone(message)) {
     case "error":
       return null;

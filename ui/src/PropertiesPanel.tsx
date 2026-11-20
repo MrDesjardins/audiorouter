@@ -16,7 +16,8 @@ import { NodeIdentity } from "./NodeIdentity";
 import { CanvasGroupInspector, type CanvasGroup, type useCanvasGroups } from "./CanvasGroups";
 import { SpatialAudioField } from "./SpatialAudioField";
 import { InputChannelsField } from "./InputChannelsField";
-import { libraryEntries, toolDescription } from "./library";
+import { toolDescription, toolKindLabel } from "./library";
+import { useMessages } from "./i18n/useMessages";
 import { EditableNodeName } from "./EditableNodeName";
 import { HelpDisclosure } from "./HelpDisclosure";
 import { PropertySection } from "./PropertySection";
@@ -156,6 +157,7 @@ export function PropertiesPanel({
   togglePrivacyMute: () => Promise<void>;
   privacyMuted: boolean;
 }) {
+  const tr = useMessages();
   const cableStatus = useVirtualCableStatus();
   const flagId = useId();
   const inspector = useRef<HTMLElement>(null);
@@ -187,8 +189,8 @@ export function PropertiesPanel({
       aria-labelledby="workbench-tab-properties"
       tabIndex={0}
     >
-      <h2 id="inspector-heading">No tool selected</h2>
-      <p className="muted">This route is empty. Open the Tools tab and add a tool, such as your microphone.</p>
+      <h2 id="inspector-heading">{tr("g4Panel.noToolSelected")}</h2>
+      <p className="muted">{tr("g4Panel.emptyRoute")}</p>
     </section>
   ) : (
     <>
@@ -221,29 +223,17 @@ export function PropertiesPanel({
               />
             </div>
           </div>
-          <span className="badge">
-            {libraryEntries.find((entry) => entry.kind === selectedNode.kind)?.label ?? selectedNode.kind}
-          </span>
+          <span className="badge">{toolKindLabel(selectedNode.kind)}</span>
         </div>
         {toolDescription(selectedNode.kind) && (
           <p className="muted tool-description">{toolDescription(selectedNode.kind)}</p>
         )}
         <ToolGuideLink key={selectedNode.kind} kind={selectedNode.kind} />
-        <HelpDisclosure title="How to edit this tool">
-          <p>Click the name to rename this tool. Press Enter or click away to finish; Escape cancels.</p>
-          <p>
-            Parameter edits save automatically after a short pause while audio plays. Other changes need Save at the
-            top; the canvas marks tools that need saving.
-          </p>
-          <p>
-            For delay and processing measurements, open Timing while audio plays. Ready means enabled for the next
-            playback; Active does not guarantee an incoming signal.
-          </p>
-          <p>
-            Off silences inputs and outputs; an off effect passes sound without processing. Bypass passes sound around
-            an effect; on a prepared input, output, or Mixer it silences that contribution. Live toggles do not require
-            Save or Stop and keep your other edits. Off devices remain open until Stop and contribute silence.
-          </p>
+        <HelpDisclosure title={tr("toolProperties.editHelp")}>
+          <p>{tr("toolProperties.rename")}</p>
+          <p>{tr("toolProperties.autosave")}</p>
+          <p>{tr("toolProperties.timing")}</p>
+          <p>{tr("toolProperties.flags")}</p>
         </HelpDisclosure>
         {selectedNode.kind === "meter" ? (
           <MeterInspector
@@ -272,7 +262,7 @@ export function PropertiesPanel({
                     : n,
                 ),
               });
-              setActionMessage("Meter output added. Connect it to the next tool and Save to keep it.");
+              setActionMessage(tr("g4Panel.meterAdded"));
             }}
           />
         ) : selectedNode.kind === "duck" ? (
@@ -338,9 +328,9 @@ export function PropertiesPanel({
                   setVirtualBusDraftCable(draft, selectedNode.id, busId, cableStatus),
                   selectedNode.id + ":busId",
                 );
-                setActionMessage("Cable changed. Save to keep it.");
+                setActionMessage(tr("g4Panel.cableChanged"));
               } catch (error) {
-                setActionMessage(error instanceof Error ? error.message : "Unable to change the cable.");
+                setActionMessage(error instanceof Error ? error.message : tr("g4Panel.cableChangeFailed"));
               }
             }}
           />
@@ -370,7 +360,7 @@ export function PropertiesPanel({
                   },
                   `${selectedNode.id}:endpointBinding`,
                 );
-                setActionMessage("Input device changed. Save to confirm this binding.");
+                setActionMessage(tr("g4Panel.inputDeviceChanged"));
               }
             }}
           />
@@ -392,13 +382,14 @@ export function PropertiesPanel({
         {selectedNode.kind === "physicalInput" && (
           <PropertySection
             kind={selectedNode.kind}
-            title="Spatial audio"
+            title={tr("g4Panel.spatialAudio")}
+            sectionId="Spatial audio"
             summary={
               selectedNode.parameters.spatialMode === "headphones"
-                ? "Headphones"
+                ? tr("g4Panel.spatialHeadphones")
                 : selectedNode.parameters.spatialMode === "speakers"
-                  ? "Speakers"
-                  : "Off"
+                  ? tr("g4Panel.spatialSpeakers")
+                  : tr("g4Panel.spatialOff")
             }
           >
             <SpatialAudioField
@@ -661,7 +652,7 @@ export function PropertiesPanel({
             />
             {/* The plugin's own settings come right after its window button: adjusting it is
                 why the user selected it (owner, 2026-11-12). */}
-            <div aria-label="Plugin settings">
+            <div aria-label={tr("g4Panel.pluginSettings")}>
               <ProcessorParameterEditor
                 node={selectedNode}
                 processors={processors}
@@ -681,7 +672,7 @@ export function PropertiesPanel({
               sidechainBlockedReason={
                 JSON.stringify(session.nodes.find((node) => node.id === selectedNode.id)) !==
                 JSON.stringify(selectedNode)
-                  ? "Save or discard changes to this tool before adding a sidechain input."
+                  ? tr("g4Panel.sidechainBlocked")
                   : undefined
               }
               onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
@@ -689,7 +680,12 @@ export function PropertiesPanel({
                 recordDraftChange(removeNodeDraftParameters(draft, selectedNode.id, names), `${selectedNode.id}:remove`)
               }
             />
-            <PropertySection kind={selectedNode.kind} title="After a plugin update" summary="Use the new version">
+            <PropertySection
+              kind={selectedNode.kind}
+              title={tr("g4Panel.afterUpdate")}
+              sectionId="After a plugin update"
+              summary={tr("g4Panel.afterUpdateSummary")}
+            >
               <PluginRecoveryControls
                 node={selectedNode}
                 backend={backend}
@@ -698,7 +694,7 @@ export function PropertiesPanel({
                 disabledReason={
                   JSON.stringify(session.nodes.find((node) => node.id === selectedNode.id)?.parameters) !==
                   JSON.stringify(selectedNode.parameters)
-                    ? "Save or discard changes to this tool before preparing recovery."
+                    ? tr("g4Panel.recoveryBlocked")
                     : undefined
                 }
                 onPrepared={(original, parameters) => {
@@ -720,7 +716,12 @@ export function PropertiesPanel({
         )}
         <ToolCompare backend={backend} session={session} node={selectedNode} running={sessionRunning} />
         {takesPresets(selectedNode) && (
-          <PropertySection kind={selectedNode.kind} title="My presets" summary="Save and reuse settings">
+          <PropertySection
+            kind={selectedNode.kind}
+            sectionId="My presets"
+            title={tr("toolProperties.presets")}
+            summary={tr("toolProperties.presetsSummary")}
+          >
             <ToolPresetPicker
               backend={backend}
               node={selectedNode}
@@ -745,7 +746,7 @@ export function PropertiesPanel({
           <div className="inspector-toggles">
             <div className="inspector-flag">
               <label>
-                Enabled
+                {tr("toolProperties.enabled")}
                 <input
                   type="checkbox"
                   checked={selectedNode.enabled}
@@ -755,12 +756,14 @@ export function PropertiesPanel({
                 />
               </label>
               <span className="inspector-flag-state" id={`${flagId}-enabled`}>
-                {selectedNode.enabled ? "On" : "Off"}
+                <span aria-hidden="true">{tr("common.on")}</span>
+                <span aria-hidden="true">{tr("common.off")}</span>
+                <span>{tr(selectedNode.enabled ? "common.on" : "common.off")}</span>
               </span>
             </div>
             <div className="inspector-flag">
               <label>
-                Bypass
+                {tr("toolProperties.bypass")}
                 <input
                   type="checkbox"
                   checked={selectedNode.bypass}
@@ -770,7 +773,9 @@ export function PropertiesPanel({
                 />
               </label>
               <span className="inspector-flag-state" id={`${flagId}-bypass`}>
-                {selectedNode.bypass ? "On" : "Off"}
+                <span aria-hidden="true">{tr("common.on")}</span>
+                <span aria-hidden="true">{tr("common.off")}</span>
+                <span>{tr(selectedNode.bypass ? "common.on" : "common.off")}</span>
               </span>
             </div>
           </div>
@@ -800,16 +805,21 @@ export function PropertiesPanel({
             onClick={() => void togglePrivacyMute()}
             disabled={!backend.connected}
           >
-            {privacyMuted ? "Turn off privacy mute" : "Turn on privacy mute"}
+            {tr(privacyMuted ? "toolProperties.privacyOff" : "toolProperties.privacyOn")}
           </button>
           <p className="muted">
             {!backend.connected
-              ? "Controls are disabled while disconnected."
+              ? tr("toolProperties.disconnected")
               : privacyMuted
-                ? "Privacy mute is on: every microphone and captured app is silent, not only this tool."
-                : "Privacy mute silences every microphone and captured app right away."}
+                ? tr("toolProperties.privacyMuted")
+                : tr("toolProperties.privacyHint")}
           </p>
-          <PropertySection kind={selectedNode.kind} title="Technical details" summary="Tool ID">
+          <PropertySection
+            kind={selectedNode.kind}
+            sectionId="Technical details"
+            title={tr("toolProperties.technical")}
+            summary={tr("toolProperties.toolId")}
+          >
             <NodeIdentity nodeId={selectedNode.id} />
           </PropertySection>
           <div className="inspector-tool-actions">
@@ -817,30 +827,30 @@ export function PropertiesPanel({
               <button
                 type="button"
                 className="secondary"
-                aria-label="Reset parameters"
+                aria-label={tr("toolProperties.resetParameters")}
                 onClick={resetNodeParameters}
                 disabled={!backend.connected}
               >
-                Reset
+                {tr("toolProperties.reset")}
               </button>
             )}
             <button
               type="button"
               className="secondary"
-              aria-label="Duplicate tool"
+              aria-label={tr("toolProperties.duplicateTool")}
               onClick={duplicateSelectedNode}
               disabled={!backend.connected}
             >
-              Duplicate
+              {tr("toolProperties.duplicate")}
             </button>
             <button
               type="button"
               className="danger"
-              aria-label="Remove tool"
+              aria-label={tr("toolProperties.removeTool")}
               onClick={removeSelectedNode}
               disabled={!backend.connected}
             >
-              Remove
+              {tr("toolProperties.remove")}
             </button>
           </div>
         </div>
@@ -854,6 +864,7 @@ const DEVICE_APP_ROWS = 3;
 
 /** "Apps using this device" for a Physical Input or Output node (D1). */
 function DeviceAppsSection({ users }: { users: NodeDeviceUsers | null | "unavailable" }) {
+  const tr = useMessages();
   const details = typeof users === "object" && users ? users : null;
   // A warning wraps over two rows, so its device names stay readable.
   const room = DEVICE_APP_ROWS - (details?.warning ? 2 : 0);
@@ -864,20 +875,21 @@ function DeviceAppsSection({ users }: { users: NodeDeviceUsers | null | "unavail
   }));
   if (rows.length > room) {
     const hidden = rows.length - room + 1;
-    rows.splice(room - 1, rows.length, { key: "more", text: `and ${hidden} more` });
+    rows.splice(room - 1, rows.length, { key: "more", text: tr("g4Panel.devAppsMore", { count: hidden }) });
   }
-  if (details?.warning) rows.unshift({ key: "warning", text: `Check: ${details.warning}`, warning: true });
+  if (details?.warning)
+    rows.unshift({ key: "warning", text: tr("g4Panel.devAppsCheck", { warning: details.warning }), warning: true });
   const empty =
     users === "unavailable"
-      ? "Apps not checked: connect to AudioRouter."
+      ? tr("g4Panel.devAppsNotChecked")
       : details === null
-        ? "Checking apps…"
+        ? tr("g4Panel.devAppsChecking")
         : rows.length === 0
-          ? "No app is using it right now."
+          ? tr("g4Panel.devAppsNone")
           : null;
   return (
     <section className="device-apps" aria-labelledby="device-apps-heading">
-      <h4 id="device-apps-heading">Apps using this device</h4>
+      <h4 id="device-apps-heading">{tr("g4Panel.devAppsHeading")}</h4>
       <ul className="device-apps-list" aria-live="polite">
         {empty ? (
           <li className="muted">{empty}</li>

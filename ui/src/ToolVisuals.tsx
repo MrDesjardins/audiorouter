@@ -19,6 +19,8 @@ import { SliderInput } from "./Slider";
 import { svgPoint } from "./SvgHandle";
 import { formatParameterValue, parameterText } from "./parameterText";
 import { nextFallingLevel, nextPeakHold, type PeakHold } from "./dynamics";
+import { useMessages } from "./i18n/useMessages";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 
 type Change = (name: string, value: number) => void;
 type Band = {
@@ -188,12 +190,13 @@ function ToolPanel({
 export const GRAPHIC_EQ_FREQUENCIES = [31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
 /** Band names shared with the Properties text: "31.5 Hz", "1 kHz". */
 const bandLabel = (index: number) => parameterText("graphicEq", `band${index}Db`).label;
-const GRAPHIC_PRESETS: Array<{ name: string; title: string; gains: number[] }> = [
-  { name: "Flat", title: "Every band at 0 dB", gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
-  { name: "Voice clarity", title: "Less rumble and mud, more presence", gains: [-6, -4, -2, -1, 0, 1, 3, 4, 2, 0] },
-  { name: "Warm", title: "Fuller low-mids, softer top", gains: [0, 1, 3, 2, 0, -1, -1, 0, -1, -2] },
-  { name: "Cut rumble", title: "Removes desk thumps and low hum", gains: [-12, -8, -3, 0, 0, 0, 0, 0, 0, 0] },
-  { name: "Less harsh", title: "Tames sharp 2–8 kHz", gains: [0, 0, 0, 0, 0, 0, -2, -4, -3, -1] },
+type PresetText = { name: MessageKey; title: MessageKey };
+const GRAPHIC_PRESETS: Array<PresetText & { gains: number[] }> = [
+  { name: "g5.tvPFlat", title: "g5.tvPFlatTitle", gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+  { name: "g5.tvPClarity", title: "g5.tvPClarityTitle", gains: [-6, -4, -2, -1, 0, 1, 3, 4, 2, 0] },
+  { name: "g5.tvPWarm", title: "g5.tvPWarmTitle", gains: [0, 1, 3, 2, 0, -1, -1, 0, -1, -2] },
+  { name: "g5.tvPCutRumble", title: "g5.tvPCutRumbleTitle", gains: [-12, -8, -3, 0, 0, 0, 0, 0, 0, 0] },
+  { name: "g5.tvPLessHarsh", title: "g5.tvPLessHarshTitle", gains: [0, 0, 0, 0, 0, 0, -2, -4, -3, -1] },
 ];
 
 export function GraphicEqEditor({
@@ -207,6 +210,7 @@ export function GraphicEqEditor({
   disabled: boolean;
   onChange: Change;
 }) {
+  const tr = useMessages();
   const gains = GRAPHIC_EQ_FREQUENCIES.map((_, index) => clamp(num(node, `band${index}Db`, 0), -18, 18));
   const [selected, setSelected] = useState(5);
   const bands: Band[] = GRAPHIC_EQ_FREQUENCIES.map((frequencyHz, index) => ({
@@ -223,17 +227,8 @@ export function GraphicEqEditor({
     if (next !== gains[index]) onChange(`band${index}Db`, next);
   };
   return (
-    <ToolPanel
-      label="Graphic EQ editor"
-      title="Ten-band equalizer"
-      summary="Drag a fader up to boost or down to cut that band. Double-click a fader for 0 dB."
-    >
-      <svg
-        className="dynamics-graph"
-        viewBox={`0 0 ${W} 150`}
-        role="img"
-        aria-label="Combined frequency response of the ten bands"
-      >
+    <ToolPanel label={tr("g5.tvGraphicEditor")} title={tr("g5.tvGraphicTitle")} summary={tr("g5.tvGraphicHelp")}>
+      <svg className="dynamics-graph" viewBox={`0 0 ${W} 150`} role="img" aria-label={tr("g5.tvGraphicResponse")}>
         {frame}
         {GRAPHIC_EQ_FREQUENCIES.map((hz, index) => (
           <circle
@@ -248,7 +243,7 @@ export function GraphicEqEditor({
       </svg>
       {error && (
         <p className="muted" role="status">
-          Response unavailable: {error}
+          {tr("g5.tvRespUnavailable", { error })}
         </p>
       )}
       <div className="graphic-eq-faders">
@@ -260,9 +255,9 @@ export function GraphicEqEditor({
             </span>
             <SliderInput
               className="is-vertical"
-              aria-label={`${bandLabel(index)} band`}
+              aria-label={tr("g5.tvBandAria", { band: bandLabel(index) })}
               aria-valuetext={signedDb(gains[index])}
-              title="Double-click to restore 0 dB"
+              title={tr("g5.tvRestore0")}
               min={-18}
               max={18}
               step={0.5}
@@ -278,9 +273,9 @@ export function GraphicEqEditor({
         ))}
       </div>
       <label className="tool-exact">
-        <span>{bandLabel(selected)} band, exact (dB)</span>
+        <span>{tr("g5.tvBandExact", { band: bandLabel(selected) })}</span>
         <NumberField
-          aria-label={`${bandLabel(selected)} precise value`}
+          aria-label={tr("g5.preciseValue", { name: bandLabel(selected) })}
           value={gains[selected]}
           min={-18}
           max={18}
@@ -293,8 +288,8 @@ export function GraphicEqEditor({
         />
       </label>
       <Presets
-        label="Graphic EQ presets"
-        presets={GRAPHIC_PRESETS}
+        label={tr("g5.tvGraphicPresets")}
+        presets={GRAPHIC_PRESETS.map((preset) => ({ name: tr(preset.name), title: tr(preset.title) }))}
         disabled={disabled}
         isCurrent={(index) => GRAPHIC_PRESETS[index].gains.every((gain, band) => gain === gains[band])}
         onApply={(index) =>
@@ -310,16 +305,17 @@ export function GraphicEqEditor({
 /* ------------------------------------------------------------------ */
 /* Bass & Treble: two shelves you can drag on the curve.              */
 
-const TONE_PRESETS: Array<{ name: string; title: string; bassDb: number; trebleDb: number }> = [
-  { name: "Flat", title: "No change", bassDb: 0, trebleDb: 0 },
-  { name: "Warmer", title: "+3 dB bass, −1 dB treble", bassDb: 3, trebleDb: -1 },
-  { name: "Brighter", title: "+3 dB treble", bassDb: 0, trebleDb: 3 },
-  { name: "Less boomy", title: "−4 dB bass", bassDb: -4, trebleDb: 0 },
-  { name: "Radio voice", title: "−6 dB bass, +4 dB treble", bassDb: -6, trebleDb: 4 },
+const TONE_PRESETS: Array<PresetText & { bassDb: number; trebleDb: number }> = [
+  { name: "g5.tvPFlat", title: "g5.tvTFlatTitle", bassDb: 0, trebleDb: 0 },
+  { name: "g5.tvTWarmer", title: "g5.tvTWarmerTitle", bassDb: 3, trebleDb: -1 },
+  { name: "g5.tvTBrighter", title: "g5.tvTBrighterTitle", bassDb: 0, trebleDb: 3 },
+  { name: "g5.tvTLessBoomy", title: "g5.tvTLessBoomyTitle", bassDb: -4, trebleDb: 0 },
+  { name: "g5.tvTRadio", title: "g5.tvTRadioTitle", bassDb: -6, trebleDb: 4 },
 ];
 
 function ShelfHandle({
   label,
+  shortLabel,
   x,
   y,
   frequencyHz,
@@ -329,6 +325,8 @@ function ShelfHandle({
   onMove,
 }: {
   label: string;
+  /** The word drawn beside the handle. */
+  shortLabel: string;
   x: number;
   y: number;
   frequencyHz: number;
@@ -337,6 +335,7 @@ function ShelfHandle({
   disabled: boolean;
   onMove: (frequencyHz: number, gainDb: number, fromPoint?: { x: number; y: number }) => void;
 }) {
+  const tr = useMessages();
   const [dragging, setDragging] = useState(false);
   const key = (event: KeyboardEvent<SVGGElement>) => {
     const big = event.shiftKey;
@@ -359,7 +358,7 @@ function ShelfHandle({
       aria-valuemin={-12}
       aria-valuemax={12}
       aria-valuenow={gainDb}
-      aria-valuetext={`${signedDb(gainDb)} from ${Math.round(frequencyHz)} Hz`}
+      aria-valuetext={tr("g5.tvShelfValue", { db: signedDb(gainDb), hz: Math.round(frequencyHz) })}
       onPointerDown={(event) => {
         if (disabled || event.button !== 0) return;
         event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -377,11 +376,11 @@ function ShelfHandle({
       onPointerCancel={() => setDragging(false)}
       onKeyDown={disabled ? undefined : key}
     >
-      <title>{`${label}: ${signedDb(gainDb)} from ${Math.round(frequencyHz)} Hz. Drag, or arrows: up/down level, left/right frequency (Shift for bigger steps).`}</title>
+      <title>{tr("g5.tvShelfTitle", { label, db: signedDb(gainDb), hz: Math.round(frequencyHz) })}</title>
       <circle cx={x} cy={y} r={13} className="dynamics-handle-hit" />
       <circle cx={x} cy={y} r={6} className="dynamics-handle-dot" />
       <text x={x} y={y - 10} textAnchor="middle" className="tool-handle-label">
-        {label.split(" ")[0]}
+        {shortLabel}
       </text>
     </g>
   );
@@ -398,6 +397,7 @@ export function BassTrebleEditor({
   disabled: boolean;
   onChange: Change;
 }) {
+  const tr = useMessages();
   const svg = useRef<SVGSVGElement>(null);
   const bassDb = clamp(num(node, "bassDb", 0), -12, 12);
   const trebleDb = clamp(num(node, "trebleDb", 0), -12, 12);
@@ -420,24 +420,21 @@ export function BassTrebleEditor({
       if (db !== currentDb) onChange(`${prefix}Db`, db);
     };
   return (
-    <ToolPanel
-      label="Bass and Treble editor"
-      title="Tone curve"
-      summary="Drag Bass or Treble: up and down changes the level, sideways changes how much of the voice it affects."
-    >
+    <ToolPanel label={tr("g5.tvBassEditor")} title={tr("g5.tvToneCurve")} summary={tr("g5.tvToneHelp")}>
       <svg
         ref={svg}
         className="dynamics-graph"
         viewBox={`0 0 ${W} 170`}
         role="group"
-        aria-label="Bass and treble response"
+        aria-label={tr("g5.tvToneResponse")}
       >
         {frame}
         <rect x={GL} y={12} width={xForHz(bassHz) - GL} height={138} className="tool-zone is-bass" />
         <rect x={xForHz(trebleHz)} y={12} width={GR - xForHz(trebleHz)} height={138} className="tool-zone is-treble" />
         <ResponseCurve response={response} yForDb={yForDb} />
         <ShelfHandle
-          label="Bass shelf"
+          label={tr("g5.tvBassShelf")}
+          shortLabel={tr("g5.tvBassShort")}
           x={xForHz(bassHz)}
           y={yForDb(bassDb)}
           frequencyHz={bassHz}
@@ -447,7 +444,8 @@ export function BassTrebleEditor({
           onMove={move("bass", [80, 1000])}
         />
         <ShelfHandle
-          label="Treble shelf"
+          label={tr("g5.tvTrebleShelf")}
+          shortLabel={tr("g5.tvTrebleShort")}
           x={xForHz(trebleHz)}
           y={yForDb(trebleDb)}
           frequencyHz={trebleHz}
@@ -459,20 +457,22 @@ export function BassTrebleEditor({
       </svg>
       {error && (
         <p className="muted" role="status">
-          Response unavailable: {error}
+          {tr("g5.tvRespUnavailable", { error })}
         </p>
       )}
       <p className="tool-readout">
         <span>
-          Bass <b>{signedDb(bassDb)}</b> below {formatParameterValue(bassHz, "Hz", 1)}
+          {tr("g5.tvBassShort")} <b>{signedDb(bassDb)}</b>{" "}
+          {tr("g5.tvBelow", { hz: formatParameterValue(bassHz, "Hz", 1) })}
         </span>
         <span>
-          Treble <b>{signedDb(trebleDb)}</b> above {formatParameterValue(trebleHz, "Hz", 1)}
+          {tr("g5.tvTrebleShort")} <b>{signedDb(trebleDb)}</b>{" "}
+          {tr("g5.tvAbove", { hz: formatParameterValue(trebleHz, "Hz", 1) })}
         </span>
       </p>
       <Presets
-        label="Tone presets"
-        presets={TONE_PRESETS}
+        label={tr("g5.tvTonePresets")}
+        presets={TONE_PRESETS.map((preset) => ({ name: tr(preset.name), title: tr(preset.title) }))}
         disabled={disabled}
         isCurrent={(index) => TONE_PRESETS[index].bassDb === bassDb && TONE_PRESETS[index].trebleDb === trebleDb}
         onApply={(index) => {
@@ -516,6 +516,7 @@ export function dehumMagnitudeDb(
 }
 
 export function DehumEditor({ node, disabled, onChange }: { node: Node; disabled: boolean; onChange: Change }) {
+  const tr = useMessages();
   const fundamental = clamp(num(node, "frequencyHz", 60), 45, 65);
   const amount = clamp(num(node, "amountPercent", 50), 0, 100);
   const harmonics = clamp(Math.round(num(node, "harmonics", 4)), 1, 8);
@@ -531,12 +532,8 @@ export function DehumEditor({ node, disabled, onChange }: { node: Node; disabled
     .join(" ");
   const ticks = [50, 100, 200, 400];
   return (
-    <ToolPanel
-      label="Dehum editor"
-      title="Hum removal"
-      summary="Narrow cuts at the mains frequency and its multiples. Your voice between them is untouched."
-    >
-      <div className="tool-presets" role="group" aria-label="Mains frequency">
+    <ToolPanel label={tr("g5.tvDehumEditor")} title={tr("g5.tvHumTitle")} summary={tr("g5.tvHumHelp")}>
+      <div className="tool-presets" role="group" aria-label={tr("g5.tvMains")}>
         {[50, 60].map((hz) => (
           <button
             key={hz}
@@ -549,13 +546,17 @@ export function DehumEditor({ node, disabled, onChange }: { node: Node; disabled
             {hz} Hz
           </button>
         ))}
-        <small>50 Hz: Europe, Asia, Africa, Australia. 60 Hz: North America and parts of South America.</small>
+        <small>{tr("g5.tvMainsHelp")}</small>
       </div>
       <svg
         className="dynamics-graph"
         viewBox={`0 0 ${W} ${height}`}
         role="img"
-        aria-label={`Cuts of up to ${(0.36 * amount).toFixed(0)} dB at ${fundamental} Hz and ${harmonics - 1} multiples`}
+        aria-label={tr("g5.tvHumAria", {
+          db: (0.36 * amount).toFixed(0),
+          hz: fundamental,
+          count: harmonics - 1,
+        })}
       >
         <rect x={GL} y={top} width={GR - GL} height={bottom - top} className="dynamics-plot" />
         {[0, -10, -20, -30, -40].map((db) => (
@@ -580,10 +581,11 @@ export function DehumEditor({ node, disabled, onChange }: { node: Node; disabled
       </svg>
       <p className="tool-readout">
         <span>
-          Depth <b>{(0.36 * amount).toFixed(0)} dB</b> at {fundamental} Hz
+          {tr("g5.tvDepth")} <b>{(0.36 * amount).toFixed(0)} dB</b> {tr("g5.tvDepthAt", { hz: fundamental })}
         </span>
         <span>
-          Cuts <b>{harmonics}</b>:{" "}
+          {tr("g5.tvCuts")} <b>{harmonics}</b>
+          {tr("g5.tvColon")}
           {Array.from({ length: Math.min(harmonics, 4) }, (_, index) => fundamental * (index + 1)).join(", ")}
           {harmonics > 4 ? " … Hz" : " Hz"}
         </span>
@@ -595,18 +597,19 @@ export function DehumEditor({ node, disabled, onChange }: { node: Node; disabled
 /* ------------------------------------------------------------------ */
 /* Pitch: a keyboard showing where your voice moves.                  */
 
-const PITCH_CHOICES = [
-  { semitones: -12, name: "−12", title: "One octave lower" },
-  { semitones: -5, name: "−5", title: "A fourth lower: noticeably deeper" },
-  { semitones: -3, name: "−3", title: "Slightly deeper" },
-  { semitones: 0, name: "0", title: "Original pitch" },
-  { semitones: 3, name: "+3", title: "Slightly higher" },
-  { semitones: 5, name: "+5", title: "A fourth higher" },
-  { semitones: 12, name: "+12", title: "One octave higher" },
+const PITCH_CHOICES: Array<{ semitones: number; name: string; title: MessageKey }> = [
+  { semitones: -12, name: "−12", title: "g5.tvPc12Down" },
+  { semitones: -5, name: "−5", title: "g5.tvPc5Down" },
+  { semitones: -3, name: "−3", title: "g5.tvPc3Down" },
+  { semitones: 0, name: "0", title: "g5.tvOriginal" },
+  { semitones: 3, name: "+3", title: "g5.tvPc3Up" },
+  { semitones: 5, name: "+5", title: "g5.tvPc5Up" },
+  { semitones: 12, name: "+12", title: "g5.tvPc12Up" },
 ];
 const WHITE = [0, 2, 4, 5, 7, 9, 11];
 
 export function PitchEditor({ node, disabled, onChange }: { node: Node; disabled: boolean; onChange: Change }) {
+  const tr = useMessages();
   const semitones = clamp(Math.round(num(node, "semitones", 0)), -12, 12);
   const cents = clamp(num(node, "cents", 0), -100, 100);
   const total = semitones + cents / 100;
@@ -618,30 +621,37 @@ export function PitchEditor({ node, disabled, onChange }: { node: Node; disabled
   const whiteX = (key: number) => GL + whites.indexOf(key) * keyWidth;
   const blackX = (key: number) => whiteX(key - 1) + keyWidth * 0.68;
   const target = Math.round(total);
-  const describe =
+  const deeper = total < 0;
+  const size = Math.abs(total) >= 12 ? "octave" : Math.abs(total) >= 5 ? "clearly" : "slightly";
+  const describe = tr(
     total === 0
-      ? "Original pitch"
-      : `${Math.abs(total) >= 12 ? "An octave" : Math.abs(total) >= 5 ? "Clearly" : "Slightly"} ${total < 0 ? "deeper" : "higher"}`;
+      ? "g5.tvOriginal"
+      : size === "octave"
+        ? deeper
+          ? "g5.tvDescOctaveDeeper"
+          : "g5.tvDescOctaveHigher"
+        : size === "clearly"
+          ? deeper
+            ? "g5.tvDescClearlyDeeper"
+            : "g5.tvDescClearlyHigher"
+          : deeper
+            ? "g5.tvDescSlightlyDeeper"
+            : "g5.tvDescSlightlyHigher",
+  );
   return (
-    <ToolPanel
-      label="Pitch editor"
-      title="Voice pitch"
-      summary="Moves your voice up or down without changing its speed. 12 semitones is one octave."
-    >
+    <ToolPanel label={tr("g5.tvPitchEditor")} title={tr("g5.tvPitchTitle")} summary={tr("g5.tvPitchHelp")}>
       <div className="tool-bigvalue">
         <b>
           {total > 0 ? "+" : total < 0 ? "−" : ""}
           {Math.abs(total).toFixed(cents === 0 ? 0 : 2)}
         </b>
-        <span>
-          semitones · {describe} · frequency ×{ratio.toFixed(3)}
-        </span>
+        <span>{tr("g5.tvSemitonesLine", { describe, ratio: ratio.toFixed(3) })}</span>
       </div>
       <svg
         className="dynamics-graph tool-keyboard"
         viewBox={`0 0 ${W} 74`}
         role="img"
-        aria-label={`Keyboard: your voice moves from the marked key by ${total.toFixed(2)} semitones`}
+        aria-label={tr("g5.tvKeyboardAria", { n: total.toFixed(2) })}
       >
         {whites.map((key) => (
           <rect
@@ -668,7 +678,7 @@ export function PitchEditor({ node, disabled, onChange }: { node: Node; disabled
             />
           ))}
         <text x={whiteX(0) + keyWidth / 2} y={56} textAnchor="middle" className="tool-key-label">
-          you
+          {tr("g5.tvYou")}
         </text>
         {target !== 0 && (
           <text
@@ -681,16 +691,16 @@ export function PitchEditor({ node, disabled, onChange }: { node: Node; disabled
             textAnchor="middle"
             className="tool-key-label is-target"
           >
-            ▲ new
+            {tr("g5.tvNew")}
           </text>
         )}
       </svg>
-      <div className="tool-presets" role="group" aria-label="Pitch choices">
+      <div className="tool-presets" role="group" aria-label={tr("g5.tvPitchChoices")}>
         {PITCH_CHOICES.map((choice) => (
           <button
             key={choice.semitones}
             type="button"
-            title={choice.title}
+            title={tr(choice.title)}
             className={choice.semitones === semitones && cents === 0 ? "primary" : "secondary"}
             aria-pressed={choice.semitones === semitones && cents === 0}
             disabled={disabled}
@@ -712,6 +722,7 @@ export function PitchEditor({ node, disabled, onChange }: { node: Node; disabled
 
 const DELAY_CHOICES = [0, 20, 33, 67, 100, 200, 500];
 export function DelayEditor({ node, disabled, onChange }: { node: Node; disabled: boolean; onChange: Change }) {
+  const tr = useMessages();
   const delayMs = clamp(num(node, "delayMs", 0), 0, 1000);
   const span = delayMs <= 100 ? 100 : delayMs <= 300 ? 300 : 1000;
   const x = (ms: number) => GL + clamp(ms / span, 0, 1) * (GR - GL);
@@ -736,16 +747,12 @@ export function DelayEditor({ node, disabled, onChange }: { node: Node; disabled
     </g>
   );
   return (
-    <ToolPanel
-      label="Delay editor"
-      title="Delay"
-      summary="Holds the sound back. Use it to line your voice up with video, or to match another device."
-    >
+    <ToolPanel label={tr("g5.tvDelayEditor")} title={tr("g5.tvDelayTitle")} summary={tr("g5.tvDelayHelp")}>
       <svg
         className="dynamics-graph"
         viewBox={`0 0 ${W} 86`}
         role="img"
-        aria-label={`Original at 0 ms, delayed copy at ${delayMs} ms`}
+        aria-label={tr("g5.tvDelayAria", { ms: delayMs })}
       >
         <rect x={GL} y={8} width={GR - GL} height={58} className="dynamics-plot" />
         {[0, 0.25, 0.5, 0.75, 1].map((fraction) => (
@@ -761,24 +768,24 @@ export function DelayEditor({ node, disabled, onChange }: { node: Node; disabled
             </text>
           </g>
         ))}
-        {pulse(0, "tool-pulse is-dry", 14, "sound in")}
+        {pulse(0, "tool-pulse is-dry", 14, tr("g5.tvSoundIn"))}
         {pulse(
           delayMs,
           "tool-pulse is-wet",
           42,
-          delayMs === 0 ? "out (no delay)" : `out, ${Math.round(delayMs)} ms later`,
+          delayMs === 0 ? tr("g5.tvOutNoDelay") : tr("g5.tvOutLater", { ms: Math.round(delayMs) }),
         )}
       </svg>
       <p className="tool-readout">
         <span>
-          <b>{Math.round(delayMs * 48)}</b> samples at 48 kHz
+          <b>{Math.round(delayMs * 48)}</b> {tr("g5.tvSamplesAt")}
         </span>
         <span>
-          <b>{(delayMs / (1000 / 30)).toFixed(1)}</b> video frames at 30 fps ·{" "}
-          <b>{(delayMs / (1000 / 60)).toFixed(1)}</b> at 60 fps
+          <b>{(delayMs / (1000 / 30)).toFixed(1)}</b> {tr("g5.tvFramesAt30")}{" "}
+          <b>{(delayMs / (1000 / 60)).toFixed(1)}</b> {tr("g5.tvFramesAt60")}
         </span>
       </p>
-      <div className="tool-presets" role="group" aria-label="Delay choices">
+      <div className="tool-presets" role="group" aria-label={tr("g5.tvDelayChoices")}>
         {DELAY_CHOICES.map((ms) => (
           <button
             key={ms}
@@ -786,7 +793,7 @@ export function DelayEditor({ node, disabled, onChange }: { node: Node; disabled
             className={Math.round(delayMs) === ms ? "primary" : "secondary"}
             aria-pressed={Math.round(delayMs) === ms}
             disabled={disabled}
-            title={ms === 33 ? "One video frame at 30 fps" : ms === 67 ? "Two video frames at 30 fps" : undefined}
+            title={ms === 33 ? tr("g5.tvOneFrame") : ms === 67 ? tr("g5.tvTwoFrames") : undefined}
             onClick={() => onChange("delayMs", ms)}
           >
             {ms} ms
@@ -801,6 +808,7 @@ export function DelayEditor({ node, disabled, onChange }: { node: Node; disabled
 /* Volume and Gain: the same change in % and dB, on a level scale.    */
 
 export function LevelEditor({ node, disabled, onChange }: { node: Node; disabled: boolean; onChange: Change }) {
+  const tr = useMessages();
   const isVolume = node.kind === "volume";
   const percent = isVolume ? clamp(num(node, "percent", 100), 0, 200) : 100 * Math.pow(10, num(node, "gainDb", 0) / 20);
   const gainDb = isVolume ? (percent <= 0 ? -Infinity : 20 * Math.log10(percent / 100)) : num(node, "gainDb", 0);
@@ -809,7 +817,7 @@ export function LevelEditor({ node, disabled, onChange }: { node: Node; disabled
   const x = (db: number) => GL + clamp((db + 60) / 66, 0, 1) * (GR - GL);
   const choices = isVolume
     ? [
-        { label: "Mute", value: 0 },
+        { label: tr("levelEditor.mute"), value: 0 },
         { label: "50 %", value: 50 },
         { label: "71 % (−3 dB)", value: 71 },
         { label: "100 %", value: 100 },
@@ -823,15 +831,15 @@ export function LevelEditor({ node, disabled, onChange }: { node: Node; disabled
   const current = isVolume ? Math.round(percent) : Math.round(gainDb * 10) / 10;
   return (
     <ToolPanel
-      label={isVolume ? "Volume editor" : "Gain editor"}
-      title={isVolume ? "Volume" : "Gain"}
-      summary="Every 6 dB doubles or halves the level. Watch the result stay left of 0 dBFS to avoid clipping."
+      label={tr(isVolume ? "levelEditor.volumeEditor" : "levelEditor.gainEditor")}
+      title={tr(isVolume ? "parameterUi.labels.volume" : "parameterUi.labels.gain")}
+      summary={tr("levelEditor.hint")}
     >
       <div className="tool-bigvalue">
         <b>{isVolume ? `${Math.round(percent)} %` : signedDb(gainDb)}</b>
         <span>
           {percent <= 0
-            ? "silent"
+            ? tr("levelEditor.silent")
             : isVolume
               ? `= ${signedDb(gainDb)}`
               : `= ${Math.round(percent)} % (×${(percent / 100).toFixed(2)})`}
@@ -841,7 +849,11 @@ export function LevelEditor({ node, disabled, onChange }: { node: Node; disabled
         className="dynamics-graph"
         viewBox={`0 0 ${W} 64`}
         role="img"
-        aria-label={`A typical voice at ${reference} dBFS comes out at ${Number.isFinite(after) ? after.toFixed(1) : "silence"} dBFS`}
+        aria-label={
+          Number.isFinite(after)
+            ? tr("levelEditor.graph", { input: reference, output: after.toFixed(1) })
+            : tr("levelEditor.graphSilent", { input: reference })
+        }
       >
         <rect x={GL} y={8} width={GR - GL} height={38} className="dynamics-plot" />
         <rect x={x(0)} y={8} width={GR - x(0)} height={38} className="dynamics-over" />
@@ -854,14 +866,14 @@ export function LevelEditor({ node, disabled, onChange }: { node: Node; disabled
           </g>
         ))}
         <text x={GL - 4} y={20} textAnchor="end" className="dynamics-axis">
-          in
+          {tr("levelEditor.in")}
         </text>
         <rect x={GL} y={12} width={x(reference) - GL} height={10} rx={2} className="tool-level is-before" />
         <text x={x(reference) + 4} y={20} className="dynamics-axis">
-          typical voice −18 dBFS
+          {tr("levelEditor.voice")}
         </text>
         <text x={GL - 4} y={39} textAnchor="end" className="dynamics-axis">
-          out
+          {tr("levelEditor.out")}
         </text>
         {Number.isFinite(after) && (
           <rect
@@ -879,10 +891,16 @@ export function LevelEditor({ node, disabled, onChange }: { node: Node; disabled
           textAnchor={Number.isFinite(after) && x(after) > GR - 90 ? "end" : "start"}
           className={`dynamics-axis${after > 0 ? " tool-warning" : ""}`}
         >
-          {Number.isFinite(after) ? `${after.toFixed(1)} dBFS${after > 0 ? " — clips" : ""}` : "silent"}
+          {Number.isFinite(after)
+            ? `${after.toFixed(1)} dBFS${after > 0 ? ` — ${tr("levelEditor.clips")}` : ""}`
+            : tr("levelEditor.silent")}
         </text>
       </svg>
-      <div className="tool-presets" role="group" aria-label={isVolume ? "Volume choices" : "Gain choices"}>
+      <div
+        className="tool-presets"
+        role="group"
+        aria-label={tr(isVolume ? "levelEditor.volumeChoices" : "levelEditor.gainChoices")}
+      >
         {choices.map((choice) => (
           <button
             key={choice.label}
@@ -917,6 +935,7 @@ export function InputSwitchEditor({
   disabled: boolean;
   onChange: (name: string, value: string) => void;
 }) {
+  const tr = useMessages();
   const selected = node.parameters.selected === "b" ? "b" : "a";
   const slow = node.parameters.fade === "slow";
   const sourceName = (port: "a" | "b") => {
@@ -924,16 +943,16 @@ export function InputSwitchEditor({
       (item) => item.enabled && item.destinationNode === node.id && item.destinationPort === port,
     );
     return edge
-      ? (session.nodes.find((item) => item.id === edge.sourceNode)?.name ?? "Unknown source")
-      : "Nothing connected";
+      ? (session.nodes.find((item) => item.id === edge.sourceNode)?.name ?? tr("g5.tvUnknownSource"))
+      : tr("g5.tvNothingConnected");
   };
   return (
     <ToolPanel
-      label="Input Switch editor"
-      title="Which input you hear"
-      summary={`Switching crossfades over ${slow ? "2 seconds" : "half a second"}, so there is no click.`}
+      label={tr("g5.tvInputEditor")}
+      title={tr("g5.tvInputTitle")}
+      summary={tr("g5.tvSwitchSummary", { time: tr(slow ? "g5.tvTwoSeconds" : "g5.tvHalfSecond") })}
     >
-      <div className="input-switch-choices" role="radiogroup" aria-label="Active input">
+      <div className="input-switch-choices" role="radiogroup" aria-label={tr("g5.tvActiveInput")}>
         {(["a", "b"] as const).map((port) => (
           <button
             key={port}
@@ -948,11 +967,11 @@ export function InputSwitchEditor({
           >
             <b>{port.toUpperCase()}</b>
             <span>{sourceName(port)}</span>
-            <small>{selected === port ? "Playing" : "Silent"}</small>
+            <small>{selected === port ? tr("g5.tvPlaying") : tr("g5.tvSilent")}</small>
           </button>
         ))}
       </div>
-      <div className="tool-presets" role="group" aria-label="Switch speed">
+      <div className="tool-presets" role="group" aria-label={tr("g5.tvSwitchSpeed")}>
         <button
           type="button"
           className={!slow ? "primary" : "secondary"}
@@ -962,7 +981,7 @@ export function InputSwitchEditor({
             if (slow) onChange("fade", "normal");
           }}
         >
-          Normal fade (0.5 s)
+          {tr("g5.tvFadeNormal")}
         </button>
         <button
           type="button"
@@ -973,7 +992,7 @@ export function InputSwitchEditor({
             if (!slow) onChange("fade", "slow");
           }}
         >
-          Slow fade (2 s)
+          {tr("g5.tvFadeSlow")}
         </button>
       </div>
     </ToolPanel>
@@ -994,20 +1013,17 @@ export function OutputSwitchEditor({
   disabled: boolean;
   onChange: (name: string, value: string) => void;
 }) {
+  const tr = useMessages();
   const selected = node.parameters.selected === "b" ? "b" : "a";
   const destinationName = (port: "a" | "b") => {
     const edge = session.edges.find((item) => item.enabled && item.sourceNode === node.id && item.sourcePort === port);
     return edge
-      ? (session.nodes.find((item) => item.id === edge.destinationNode)?.name ?? "Unknown destination")
-      : "Nothing connected";
+      ? (session.nodes.find((item) => item.id === edge.destinationNode)?.name ?? tr("g5.tvUnknownDest"))
+      : tr("g5.tvNothingConnected");
   };
   return (
-    <ToolPanel
-      label="Output Switch editor"
-      title="Where this signal goes"
-      summary="Audio fades down before the new output fades up. The two outputs never play at the same time."
-    >
-      <div className="input-switch-choices" role="radiogroup" aria-label="Active output">
+    <ToolPanel label={tr("g5.tvOutputEditor")} title={tr("g5.tvOutputTitle")} summary={tr("g5.tvOutputHelp")}>
+      <div className="input-switch-choices" role="radiogroup" aria-label={tr("g5.tvActiveOutput")}>
         {(["a", "b"] as const).map((port) => (
           <button
             key={port}
@@ -1022,7 +1038,7 @@ export function OutputSwitchEditor({
           >
             <b>{port.toUpperCase()}</b>
             <span>{destinationName(port)}</span>
-            <small>{selected === port ? "Playing" : "Silent"}</small>
+            <small>{selected === port ? tr("g5.tvPlaying") : tr("g5.tvSilent")}</small>
           </button>
         ))}
       </div>
@@ -1035,51 +1051,58 @@ export function OutputSwitchEditor({
 
 const STRENGTHS: Record<
   string,
-  { parameter: string; title: string; summary: string; choices: Array<{ name: string; value: number; title: string }> }
+  {
+    parameter: string;
+    title: MessageKey;
+    summary: MessageKey;
+    choices: Array<{ name: MessageKey; value: number; title: MessageKey }>;
+  }
 > = {
   declick: {
     parameter: "thresholdPercent",
-    title: "Click removal",
-    summary: "Lower thresholds catch more clicks; too low can soften consonants like “t” and “k”.",
+    title: "g5.tvClickTitle",
+    summary: "g5.tvClickSummary",
     choices: [
-      { name: "Gentle", value: 70, title: "Only obvious clicks" },
-      { name: "Normal", value: 50, title: "Mouth and cable clicks (default)" },
-      { name: "Strong", value: 30, title: "Busy clicks; listen for dull consonants" },
+      { name: "g5.tvClickGentle", value: 70, title: "g5.tvClickGentleTitle" },
+      { name: "g5.tvClickNormal", value: 50, title: "g5.tvClickNormalTitle" },
+      { name: "g5.tvClickStrong", value: 30, title: "g5.tvClickStrongTitle" },
     ],
   },
   speechDenoise: {
     parameter: "strengthPercent",
-    title: "Noise reduction around speech",
-    summary: "Higher strength removes more background noise but can make your voice sound processed.",
+    title: "g5.tvNoiseTitle",
+    summary: "g5.tvNoiseSummary",
     choices: [
-      { name: "Light", value: 40, title: "Quiet room" },
-      { name: "Medium", value: 70, title: "Fan or traffic (default)" },
-      { name: "Strong", value: 90, title: "Loud background; may sound processed" },
+      { name: "g5.tvNoiseLight", value: 40, title: "g5.tvNoiseLightTitle" },
+      { name: "g5.tvNoiseMedium", value: 70, title: "g5.tvNoiseMediumTitle" },
+      { name: "g5.tvNoiseStrong", value: 90, title: "g5.tvNoiseStrongTitle" },
     ],
   },
 };
 
 export function StrengthEditor({ node, disabled, onChange }: { node: Node; disabled: boolean; onChange: Change }) {
+  const tr = useMessages();
   const spec = STRENGTHS[node.kind];
   if (!spec) return null;
   const value = clamp(num(node, spec.parameter, spec.choices[1].value), 0, 100);
+  const title = tr(spec.title);
   return (
-    <ToolPanel label={`${spec.title} strength`} title={spec.title} summary={spec.summary}>
+    <ToolPanel label={tr("g5.tvStrengthAria", { title })} title={title} summary={tr(spec.summary)}>
       <div className="tool-strength" aria-hidden="true">
         <span style={{ width: `${value}%` }} />
       </div>
-      <div className="tool-presets" role="group" aria-label={`${spec.title} strength choices`}>
+      <div className="tool-presets" role="group" aria-label={tr("g5.tvStrengthChoices", { title })}>
         {spec.choices.map((choice) => (
           <button
-            key={choice.name}
+            key={choice.value}
             type="button"
-            title={choice.title}
+            title={tr(choice.title)}
             className={Math.round(value) === choice.value ? "primary" : "secondary"}
             aria-pressed={Math.round(value) === choice.value}
             disabled={disabled}
             onClick={() => onChange(spec.parameter, choice.value)}
           >
-            {choice.name} · {choice.value} %
+            {tr("g5.tvChoiceValue", { name: tr(choice.name), value: choice.value })}
           </button>
         ))}
       </div>
@@ -1091,6 +1114,7 @@ export function StrengthEditor({ node, disabled, onChange }: { node: Node; disab
 /* Live level strip for any playing node, with the Meter's ballistics. */
 
 export function LiveLevelBar({ peakDb, rmsDb }: { peakDb: number; rmsDb: number }) {
+  const tr = useMessages();
   const hold = useRef<PeakHold | null>(null);
   const bar = useRef<{ db: number; at: number } | null>(null);
   const now = performance.now();
@@ -1101,11 +1125,14 @@ export function LiveLevelBar({ peakDb, rmsDb }: { peakDb: number; rmsDb: number 
     <div
       className="live-level"
       role="meter"
-      aria-label="Live level"
+      aria-label={tr("g5.tvLiveLevel")}
       aria-valuemin={-60}
       aria-valuemax={6}
       aria-valuenow={clamp(rmsDb, -60, 6)}
-      aria-valuetext={`RMS ${rmsDb <= -110 ? "silent" : `${rmsDb.toFixed(1)} dBFS`}, peak ${peakDb <= -110 ? "silent" : `${peakDb.toFixed(1)} dBFS`}`}
+      aria-valuetext={tr("g5.tvMeterText", {
+        rms: rmsDb <= -110 ? tr("g5.tvSilentWord") : `${rmsDb.toFixed(1)} dBFS`,
+        peak: peakDb <= -110 ? tr("g5.tvSilentWord") : `${peakDb.toFixed(1)} dBFS`,
+      })}
     >
       <span
         className={`live-level-fill${hold.current.db > 0 ? " is-over" : hold.current.db > -6 ? " is-loud" : ""}`}

@@ -2,3 +2,4 @@ dist/
 dist-review-*/
 coverage/
 node_modules/
+src/i18n/generated/

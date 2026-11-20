@@ -1,4 +1,5 @@
 import { useRef, type KeyboardEvent, type PointerEvent } from "react";
+import { useMessages } from "./i18n/useMessages";
 import { clampSidebarWidth, DEFAULT_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH } from "./preferences";
 
 const KEYBOARD_STEP = 24;
@@ -19,6 +20,7 @@ export function SidebarResizer({
   onWidth: (width: number) => void;
   onResized?: (before: number, after: number) => void;
 }) {
+  const tr = useMessages();
   const drag = useRef<{ startX: number; startWidth: number; lastWidth: number } | null>(null);
   const change = (next: number) => {
     if (next === width) return;
@@ -68,11 +70,11 @@ export function SidebarResizer({
       className="sidebar-resizer"
       role="separator"
       aria-orientation="vertical"
-      aria-label="Resize the right panel"
+      aria-label={tr("g1.resizerLabel")}
       aria-valuemin={MIN_SIDEBAR_WIDTH}
       aria-valuemax={MAX_SIDEBAR_WIDTH}
       aria-valuenow={width}
-      title="Drag to resize the panel. Double-click to reset."
+      title={tr("g1.resizerTitle")}
       tabIndex={0}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

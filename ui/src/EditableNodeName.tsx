@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useMessages } from "./i18n/useMessages";
 
 export function EditableNodeName({
   name,
@@ -9,6 +10,7 @@ export function EditableNodeName({
   disabled: boolean;
   onRename: (name: string) => void;
 }) {
+  const tr = useMessages();
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(name);
   const cancelled = useRef(false);
@@ -20,7 +22,7 @@ export function EditableNodeName({
   };
   return editing ? (
     <input
-      aria-label="Tool name"
+      aria-label={tr("g2.toolNameLabel")}
       value={text}
       maxLength={120}
       disabled={disabled}
@@ -41,8 +43,8 @@ export function EditableNodeName({
       ref={button}
       type="button"
       className="editable-node-name"
-      title="Click to rename this tool"
-      aria-label={`Rename ${name}`}
+      title={tr("g2.clickRename")}
+      aria-label={tr("g2.renameTool", { name })}
       disabled={disabled}
       onClick={() => {
         cancelled.current = false;

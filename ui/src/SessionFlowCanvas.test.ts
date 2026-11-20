@@ -813,21 +813,21 @@ describe("canvas library drop positions", () => {
       }),
     );
 
-    const mic = within(getByLabelText("Microphone, physicalInput"));
+    const mic = within(getByLabelText("Microphone, Input Device"));
     expect(mic.queryByText("Input")).toBeNull();
     expect(mic.getByText("Input Device")).toBeTruthy();
     expect(mic.queryByText("No device chosen")).toBeNull();
     expect(mic.getByText("no device")).toBeTruthy();
 
-    const gain = within(getByLabelText("Voice gain, gain"));
+    const gain = within(getByLabelText("Voice gain, Gain"));
     expect(gain.queryByText("Native"), "a built-in tool shows no family badge").toBeNull();
     expect(gain.getByText("Gain", { selector: ".node-kind" })).toBeTruthy();
 
-    const headphones = within(getByLabelText("Headphones, physicalOutput"));
+    const headphones = within(getByLabelText("Headphones, Output Device"));
     expect(headphones.queryByText("Output")).toBeNull();
     expect(headphones.getByText("Output Device")).toBeTruthy();
 
-    const plugin = within(getByLabelText("ReaComp, plugin"));
+    const plugin = within(getByLabelText("ReaComp, VST3 Plugin"));
     expect(plugin.queryByText("VST")).toBeNull();
     expect(plugin.getByText("VST3 Plugin")).toBeTruthy();
   });

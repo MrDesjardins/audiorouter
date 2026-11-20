@@ -1,9 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { paletteResults, type PaletteItem } from "./paletteItems";
+import { paletteResults, type PaletteGroup, type PaletteItem } from "./paletteItems";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 import { Icon } from "./icons";
+import { useMessages } from "./i18n/useMessages";
+
+const GROUP_LABEL: Record<PaletteGroup, MessageKey> = {
+  Actions: "g1.paletteGroupActions",
+  Tools: "g1.paletteGroupTools",
+  Settings: "g1.paletteGroupSettings",
+  "On this route": "g1.paletteGroupRoute",
+  Sessions: "g1.paletteGroupSessions",
+};
 
 /** Ctrl+K: find an action, tool, setting, card or session. Nothing here can delete anything. */
 export function CommandPalette({ items, onClose }: { items: readonly PaletteItem[]; onClose: () => void }) {
+  const tr = useMessages();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const input = useRef<HTMLInputElement>(null);
@@ -34,7 +45,7 @@ export function CommandPalette({ items, onClose }: { items: readonly PaletteItem
         className="command-palette"
         role="dialog"
         aria-modal="true"
-        aria-label="Find anything"
+        aria-label={tr("g1.paletteLabel")}
         onMouseDown={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
@@ -62,8 +73,8 @@ export function CommandPalette({ items, onClose }: { items: readonly PaletteItem
             aria-expanded="true"
             aria-controls="command-palette-results"
             aria-activedescendant={current ? `palette-${current.id}` : undefined}
-            aria-label="Find a tool, setting, card or session"
-            placeholder="Find a tool, setting, card or session"
+            aria-label={tr("g1.paletteInput")}
+            placeholder={tr("g1.paletteInput")}
             value={query}
             onChange={(event) => {
               setQuery(event.target.value.slice(0, 80));
@@ -72,13 +83,13 @@ export function CommandPalette({ items, onClose }: { items: readonly PaletteItem
           />
         </label>
         <div ref={list} id="command-palette-results" className="command-palette-results" role="listbox">
-          {results.length === 0 && <p className="muted">Nothing matches “{query.trim()}”.</p>}
+          {results.length === 0 && <p className="muted">{tr("g1.paletteNoMatch", { query: query.trim() })}</p>}
           {results.map((item) => {
             const heading = item.group !== lastGroup ? item.group : null;
             lastGroup = item.group;
             return (
               <div key={item.id} role="presentation">
-                {heading && <p className="eyebrow command-palette-group">{heading}</p>}
+                {heading && <p className="eyebrow command-palette-group">{tr(GROUP_LABEL[heading])}</p>}
                 <div
                   id={`palette-${item.id}`}
                   role="option"
@@ -97,8 +108,8 @@ export function CommandPalette({ items, onClose }: { items: readonly PaletteItem
           })}
         </div>
         <div className="command-palette-foot">
-          <span>↑↓ move · Enter choose · Esc close</span>
-          <span>Nothing is deleted from here</span>
+          <span>{tr("g1.paletteKeys")}</span>
+          <span>{tr("g1.paletteSafe")}</span>
         </div>
       </section>
     </div>

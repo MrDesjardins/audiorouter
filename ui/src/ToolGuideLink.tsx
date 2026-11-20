@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMessages } from "./i18n/useMessages";
 const TOOL_GUIDES: Record<string, string> = {
   gain: "gain",
   volume: "volume",
@@ -42,7 +43,7 @@ const TOOL_GUIDES: Record<string, string> = {
 };
 export function ToolGuideLink({
   kind,
-  label = "Visual guide · controls & examples ↗",
+  label,
   compact = false,
   toolName,
 }: {
@@ -51,7 +52,8 @@ export function ToolGuideLink({
   compact?: boolean;
   toolName?: string;
 }) {
-  const [error, setError] = useState("");
+  const tr = useMessages();
+  const [error, setError] = useState(false);
   const slug = Object.hasOwn(TOOL_GUIDES, kind) ? TOOL_GUIDES[kind] : undefined;
   if (!slug) return null;
   const url = "https://audiorouter.org/tools/" + slug + ".html";
@@ -61,21 +63,21 @@ export function ToolGuideLink({
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        aria-label={compact ? `Open ${toolName ?? kind} guide` : undefined}
-        title={compact ? `How to use ${toolName ?? kind}` : undefined}
+        aria-label={compact ? tr("toolProperties.openGuide", { name: toolName ?? kind }) : undefined}
+        title={compact ? tr("toolProperties.guideTitle", { name: toolName ?? kind }) : undefined}
         onClick={(event) => {
           event.stopPropagation();
           const invoke = window.__TAURI_INTERNALS__?.invoke;
           if (invoke) {
             event.preventDefault();
-            setError("");
-            void invoke("open_tool_guide", { kind }).catch(() => setError("Could not open the guide. Visit " + url));
+            setError(false);
+            void invoke("open_tool_guide", { kind }).catch(() => setError(true));
           }
         }}
       >
-        {compact ? <span aria-hidden="true">?</span> : label}
+        {compact ? <span aria-hidden="true">?</span> : (label ?? tr("toolProperties.guide"))}
       </a>
-      {error && <small role="alert">{error}</small>}
+      {error && <small role="alert">{tr("toolProperties.guideError", { url })}</small>}
     </span>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useMessages } from "./i18n/useMessages";
 
 const CONFIRM_MS = 5000;
 /** The shell's prefix for a Quit the backend never answered (RES-4). */
@@ -22,6 +23,7 @@ export function QuitButton({
   /** Keeps unsaved route edits for the next launch; a failure must not block quitting. */
   beforeQuit?: () => Promise<void>;
 }) {
+  const tr = useMessages();
   const invoke = window.__TAURI_INTERNALS__?.invoke;
   const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -46,30 +48,30 @@ export function QuitButton({
       const reason = error instanceof Error ? error.message : String(error);
       if (reason.startsWith(QUIT_UNRESPONSIVE_PREFIX)) {
         setUnresponsive(true);
-        onMessage(
-          "Quit failed: AudioRouter's background service did not answer. Click Quit anyway to close it now. Audio stops, and a recording in progress is recovered the next time you open AudioRouter.",
-        );
+        onMessage(tr("quit.unresponsiveMessage"));
       } else {
-        onMessage(`Quit refused: ${reason}. Audio keeps playing; stop any recording and try again.`);
+        onMessage(tr("quit.refusedMessage", { reason }));
       }
       setArmed(false);
     } finally {
       setBusy(false);
     }
   };
-  const label = busy ? "Quitting…" : unresponsive ? "Quit anyway" : armed ? "Click again to quit" : "Quit";
+  const label = busy
+    ? tr("quit.quitting")
+    : unresponsive
+      ? tr("quit.anyway")
+      : armed
+        ? tr("quit.confirm")
+        : tr("quit.quit");
   return (
     <button
       type="button"
       className={armed || unresponsive ? "quit-button is-armed" : "quit-button secondary"}
       onClick={() => void quit()}
       disabled={busy}
-      title={
-        unresponsive
-          ? "Close AudioRouter now without waiting for its background service. Recordings in progress are recovered next time."
-          : "Stop audio, finish recordings and close AudioRouter (same as the tray's Quit). Unsaved edits come back next time you open it."
-      }
-      aria-label={unresponsive ? "Quit AudioRouter anyway" : armed ? "Confirm quit AudioRouter" : "Quit AudioRouter"}
+      title={unresponsive ? tr("quit.anywayTitle") : tr("quit.quitTitle")}
+      aria-label={unresponsive ? tr("quit.anywayLabel") : armed ? tr("quit.confirmLabel") : tr("quit.quitLabel")}
     >
       {label}
     </button>

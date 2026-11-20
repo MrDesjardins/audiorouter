@@ -1,4 +1,5 @@
 import type { DiagnosticsSnapshot, Session } from "@audiorouter/contracts";
+import { useMessages } from "./i18n/useMessages";
 
 type Node = Session["nodes"][number];
 type NodeTiming = NonNullable<DiagnosticsSnapshot["nodeTelemetry"][number]["timing"]>;
@@ -78,27 +79,26 @@ export function SignalTimingPanel({
   telemetry: DiagnosticsSnapshot["nodeTelemetry"];
   running: boolean;
 }) {
+  const tr = useMessages();
   const routes = signalTimingRoutes(session, running ? telemetry : []);
   return (
-    <section className="signal-timing" aria-label="Signal timing">
-      <p className="muted">
-        Average time the sound spends at each step on its way to an output. The longest bar is the step slowing the
-        sound most. Sources show how long audio waits before it is picked up; outputs show how much audio is queued
-        ahead of the device.
-      </p>
-      {!running && (
-        <p className="muted">
-          Press Play to measure. Timing is measured while a route with a Mixer or several paths is playing.
-        </p>
-      )}
-      {routes.length === 0 && <p className="muted">This route has no connected output.</p>}
+    <section className="signal-timing" aria-label={tr("g1.timingLabel")}>
+      <p className="muted">{tr("g1.timingIntro")}</p>
+      {!running && <p className="muted">{tr("g1.timingPressPlay")}</p>}
+      {routes.length === 0 && <p className="muted">{tr("g1.timingNoOutput")}</p>}
       {routes.map((route) => (
-        <article className="timing-route" key={route.output.id} aria-label={`Timing to ${route.output.name}`}>
+        <article
+          className="timing-route"
+          key={route.output.id}
+          aria-label={tr("g1.timingTo", { name: route.output.name })}
+        >
           <header>
             <strong>
               {route.steps[0]?.node.name} → {route.output.name}
             </strong>
-            <span className="timing-total">{route.measured ? `${formatMs(route.totalMs)} ms` : "not measured"}</span>
+            <span className="timing-total">
+              {route.measured ? `${formatMs(route.totalMs)} ms` : tr("g1.timingNotMeasured")}
+            </span>
           </header>
           <ol>
             {route.steps.map((step) => {
@@ -112,8 +112,12 @@ export function SignalTimingPanel({
                   <div className="timing-step-label">
                     <span>
                       {step.node.name}
-                      {!step.node.enabled ? " (off)" : step.node.bypass ? " (bypassed)" : ""}
-                      {slowest && <em> slowest</em>}
+                      {!step.node.enabled
+                        ? ` ${tr("g1.timingOff")}`
+                        : step.node.bypass
+                          ? ` ${tr("g1.timingBypassed")}`
+                          : ""}
+                      {slowest && <em> {tr("g1.timingSlowest")}</em>}
                     </span>
                     <span>{step.delayMs === null ? "–" : `${formatMs(step.delayMs)} ms`}</span>
                   </div>
@@ -122,9 +126,12 @@ export function SignalTimingPanel({
                   </div>
                   {step.processingUsAvg !== null && (
                     <small className="muted">
-                      processing{" "}
-                      {step.processingUsAvg < 100 ? step.processingUsAvg.toFixed(1) : step.processingUsAvg.toFixed(0)}{" "}
-                      µs per block
+                      {tr("g1.timingProcessing", {
+                        value:
+                          step.processingUsAvg < 100
+                            ? step.processingUsAvg.toFixed(1)
+                            : step.processingUsAvg.toFixed(0),
+                      })}
                     </small>
                   )}
                 </li>

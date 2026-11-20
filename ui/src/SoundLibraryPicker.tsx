@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { MethodResult } from "@audiorouter/contracts";
 import { formatUiError, type UiBackend } from "./backend";
 import { audioUploadProblem } from "./audioUpload";
+import { tx } from "./i18n";
+import { useMessages } from "./i18n/useMessages";
 import { MAX_USER_SOUND_SECONDS } from "./soundImport";
 
 type Library = MethodResult["soundLibrary.list"];
@@ -45,7 +47,7 @@ async function playPreview(
   source: { current: AudioBufferSourceNode | null },
 ): Promise<void> {
   const Context = globalThis.AudioContext;
-  if (!Context || !backend.soundLibraryRead) throw new Error("Preview is not available here.");
+  if (!Context || !backend.soundLibraryRead) throw new Error(tx("h1.pickPreviewNA"));
   const read = await backend.soundLibraryRead(id);
   const binary = atob(read.dataBase64);
   const bytes = new Uint8Array(binary.length);
@@ -76,6 +78,7 @@ export function SoundLibraryPicker({
   onChooseFile: (file: File) => void;
   onClose: () => void;
 }) {
+  const tr = useMessages();
   const [library, setLibrary] = useState<Library | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -88,7 +91,7 @@ export function SoundLibraryPicker({
   useEffect(() => {
     let cancelled = false;
     if (!backend.soundLibraryList) {
-      setProblem("The sound library is not available.");
+      setProblem(tx("h1.pickLibraryNA"));
       return;
     }
     backend
@@ -97,7 +100,7 @@ export function SoundLibraryPicker({
         if (!cancelled) setLibrary(result);
       })
       .catch((error) => {
-        if (!cancelled) setProblem(formatUiError(error, "The sound library could not be read."));
+        if (!cancelled) setProblem(formatUiError(error, tx("h1.pickLibraryFail")));
       });
     return () => {
       cancelled = true;
@@ -116,7 +119,7 @@ export function SoundLibraryPicker({
     setPreviewing(sound.id);
     playPreview(backend, sound.id, audioContext, previewSource)
       .then(() => setProblem(null))
-      .catch((error) => setProblem(formatUiError(error, "The sound could not be previewed.")))
+      .catch((error) => setProblem(formatUiError(error, tx("h1.pickPreviewFail"))))
       .finally(() => setPreviewing(null));
   };
   return (
@@ -135,19 +138,19 @@ export function SoundLibraryPicker({
       >
         <h2 id="sound-picker-heading">{title}</h2>
         <label>
-          Search sounds
+          {tr("h1.pickSearch")}
           <input
             ref={search}
             type="search"
             value={query}
-            placeholder="fart, applause, ta-da…"
+            placeholder={tr("h1.pickPlaceholder")}
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
         <label>
-          Category
+          {tr("h1.pickCategory")}
           <select value={category} onChange={(event) => setCategory(event.target.value)}>
-            <option value="">All categories</option>
+            <option value="">{tr("h1.pickAllCategories")}</option>
             {(library?.categories ?? []).map((item) => (
               <option key={item.id} value={item.id}>
                 {item.title}
@@ -155,7 +158,7 @@ export function SoundLibraryPicker({
             ))}
           </select>
         </label>
-        <ul className="sound-picker-list" aria-label="Built-in sounds">
+        <ul className="sound-picker-list" aria-label={tr("h1.pickBuiltIn")}>
           {shown.map((sound) => (
             <li key={sound.id} className="sound-picker-row">
               <span className="sound-picker-title" title={`${sound.title} · ${categoryTitle(sound.category)}`}>
@@ -165,20 +168,20 @@ export function SoundLibraryPicker({
               <button
                 type="button"
                 className="secondary"
-                aria-label={`Preview ${sound.title}`}
+                aria-label={tr("h1.pickPreviewTitle", { title: sound.title })}
                 disabled={previewing === sound.id}
                 onClick={() => preview(sound)}
               >
-                Preview
+                {tr("h1.pickPreview")}
               </button>
               <button
                 type="button"
                 className="primary"
-                aria-label={`Use ${sound.title}`}
+                aria-label={tr("h1.pickUseTitle", { title: sound.title })}
                 disabled={busy}
                 onClick={() => onChoose({ id: sound.id, title: sound.title })}
               >
-                Use
+                {tr("h1.pickUse")}
               </button>
             </li>
           ))}
@@ -186,15 +189,15 @@ export function SoundLibraryPicker({
         <p className="sound-picker-status" role="status">
           {problem ??
             (library === null
-              ? "Loading the sound library…"
+              ? tr("h1.pickLoading")
               : !library.installed
-                ? "The built-in sounds are not installed with this copy of AudioRouter."
+                ? tr("h1.pickNotInstalled")
                 : shown.length === 0
-                  ? "No sound matches."
-                  : `${shown.length} of ${library.sounds.length} sounds. Previews play on this computer only, not in your route.`)}
+                  ? tr("h1.pickNoMatch")
+                  : tr("h1.pickCount", { shown: shown.length, total: library.sounds.length }))}
         </p>
         <label>
-          Or use your own file (WAV or MP3, up to {MAX_USER_SOUND_SECONDS} seconds)
+          {tr("h1.pickOwnFile", { seconds: MAX_USER_SOUND_SECONDS })}
           <input
             type="file"
             accept="audio/wav,audio/mpeg,.wav,.mp3"
@@ -211,7 +214,7 @@ export function SoundLibraryPicker({
         </label>
         <div className="actions">
           <button type="button" className="secondary" onClick={onClose}>
-            Close
+            {tr("h1.pickClose")}
           </button>
         </div>
       </section>

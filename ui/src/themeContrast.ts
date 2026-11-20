@@ -1,4 +1,5 @@
-import { THEME_COLORS, type CustomTheme, type ThemeColor } from "./customTheme";
+import { themeColorLabel, type CustomTheme, type ThemeColor } from "./customTheme";
+import { tx } from "./i18n";
 
 // WCAG 1.4.3 / 1.4.11: text needs 4.5:1; state colours and accents used for marks and
 // large labels need 3:1. Each pair is a foreground the app draws on a backdrop.
@@ -92,7 +93,12 @@ export function themeContrastWarnings(theme: CustomTheme): ContrastWarning[] {
       back,
       ratio,
       minimum,
-      text: `${THEME_COLORS[fore]} on ${THEME_COLORS[back].toLowerCase()}: ${ratio.toFixed(1)}:1, needs ${minimum}:1`,
+      text: tx("h2.contrastText", {
+        fore: themeColorLabel(fore),
+        back: themeColorLabel(back).toLowerCase(),
+        ratio: ratio.toFixed(1),
+        minimum,
+      }),
     });
   }
   return warnings;

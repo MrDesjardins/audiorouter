@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type P
 import type { Node } from "@audiorouter/contracts";
 import type { UiBackend, ProcessorResponse } from "./backend";
 import { NumberField } from "./NumberField";
+import { useMessages } from "./i18n/useMessages";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 
 const BAND_COUNT = 16;
 const WIDTH = 380;
@@ -19,15 +21,15 @@ const COLORS = ["#52c7f7", "#a878f9", "#72a0ff", "#ff79b1", "#ff9c6b", "#ffd166"
 const TICKS = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
 const RESPONSE_FREQUENCIES = Array.from({ length: 96 }, (_, index) => 20 * Math.pow(1000, index / 95));
 const FILTERS = [
-  ["peaking", "Peaking/Band"],
-  ["lowShelf", "Low shelf"],
-  ["highShelf", "High shelf"],
-  ["lowPass", "Low pass"],
-  ["highPass", "High pass"],
-  ["notch", "Notch"],
-  ["bandPass", "Band pass"],
-  ["allPass", "All pass"],
-] as const;
+  ["peaking", "g5.eqPeaking"],
+  ["lowShelf", "g5.eqLowShelf"],
+  ["highShelf", "g5.eqHighShelf"],
+  ["lowPass", "g5.eqLowPass"],
+  ["highPass", "g5.eqHighPass"],
+  ["notch", "g5.eqNotch"],
+  ["bandPass", "g5.eqBandPass"],
+  ["allPass", "g5.eqAllPass"],
+] as const satisfies readonly (readonly [string, MessageKey])[];
 type FilterType = (typeof FILTERS)[number][0];
 type Band = { index: number; enabled: boolean; type: FilterType; frequencyHz: number; gainDb: number; q: number };
 
@@ -121,6 +123,7 @@ export function AdvancedEqEditor({
   connected: boolean;
   onChange: (name: string, value: boolean | number | string) => void;
 }) {
+  const tr = useMessages();
   const bands = useMemo(() => readBands(node.parameters), [node.parameters]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [response, setResponse] = useState<ProcessorResponse | null>(null);
@@ -247,13 +250,11 @@ export function AdvancedEqEditor({
   );
 
   return (
-    <section className="advanced-eq" aria-label="Advanced EQ editor">
+    <section className="advanced-eq" aria-label={tr("g5.eqEditor")}>
       <div className="advanced-eq-heading">
         <div>
-          <strong>Frequency response</strong>
-          <small>
-            {enabledCount} of {BAND_COUNT} points active
-          </small>
+          <strong>{tr("g5.eqResponse")}</strong>
+          <small>{tr("g5.eqActive", { count: enabledCount, total: BAND_COUNT })}</small>
         </div>
         <button
           type="button"
@@ -261,20 +262,16 @@ export function AdvancedEqEditor({
           onClick={() => addPoint()}
           disabled={!connected || enabledCount === BAND_COUNT}
         >
-          Add point
+          {tr("g5.eqAddPoint")}
         </button>
       </div>
-      <p className="muted">
-        Choose a point below to edit it without moving it. Drag to change frequency and applicable gain. The chart shows
-        ±12 dB; precise gain controls retain the full ±24 dB range. Double-click the graph to add a Peaking/Band point.
-        While audio plays, the shaded area shows the sound coming in: walk or shoot and watch which frequencies rise.
-      </p>
+      <p className="muted">{tr("g5.eqHelp")}</p>
       <svg
         ref={svgRef}
         className="advanced-eq-graph"
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         role="img"
-        aria-label="EQ frequency response and movable filter points"
+        aria-label={tr("g5.eqGraph")}
         onPointerMove={movePoint}
         onPointerUp={finishDrag}
         onPointerCancel={finishDrag}
@@ -310,7 +307,7 @@ export function AdvancedEqEditor({
         {liveArea && <polygon points={liveArea} className="advanced-eq-spectrum" aria-hidden="true" />}
         {liveArea && (
           <text x={LEFT + 6} y={TOP + 12} className="advanced-eq-spectrum-label">
-            Live sound in (before EQ)
+            {tr("g5.eqLive")}
           </text>
         )}
         {curve && <polyline points={curve} className="advanced-eq-curve" />}
@@ -321,7 +318,7 @@ export function AdvancedEqEditor({
             <g
               key={band.index}
               className="advanced-eq-point"
-              aria-label={`Point ${band.index + 1}`}
+              aria-label={tr("g5.eqPointN", { n: band.index + 1 })}
               onPointerDown={(event) => {
                 if (!connected || event.button !== 0) return;
                 event.stopPropagation();
@@ -357,14 +354,14 @@ export function AdvancedEqEditor({
         })}
       </svg>
       <p role="status" className="muted advanced-eq-status">
-        {responseError ? `Response unavailable: ${responseError}` : !response ? "Calculating response…" : " "}
+        {responseError ? tr("g5.eqUnavailable", { error: responseError }) : !response ? tr("g5.eqCalculating") : " "}
       </p>
       {selected && (
         <div className="advanced-eq-controls" key={selected.index}>
           <label className="advanced-eq-point-picker">
-            Select point
+            {tr("g5.eqSelectPoint")}
             <select
-              aria-label="EQ point"
+              aria-label={tr("g5.eqPointAria")}
               value={selectedIndex}
               onChange={(event) => {
                 setSelectedIndex(Number(event.target.value));
@@ -372,46 +369,55 @@ export function AdvancedEqEditor({
               }}
               disabled={enabledCount === 0}
             >
-              {!selected.enabled && <option value={selectedIndex}>Point {selectedIndex + 1} (inactive)</option>}
+              {!selected.enabled && (
+                <option value={selectedIndex}>{tr("g5.eqPointInactive", { n: selectedIndex + 1 })}</option>
+              )}
               {bands
                 .filter((band) => band.enabled)
-                .map((band) => (
-                  <option key={band.index} value={band.index}>
-                    Point {band.index + 1} — {band.frequencyHz} Hz — {FILTERS.find(([type]) => type === band.type)?.[1]}
-                  </option>
-                ))}
+                .map((band) => {
+                  const filter = FILTERS.find(([type]) => type === band.type);
+                  return (
+                    <option key={band.index} value={band.index}>
+                      {tr("g5.eqPointOption", {
+                        n: band.index + 1,
+                        hz: band.frequencyHz,
+                        type: filter ? tr(filter[1]) : "",
+                      })}
+                    </option>
+                  );
+                })}
             </select>
           </label>
           <div className="advanced-eq-selected">
-            <strong>Point {selected.index + 1}</strong>
+            <strong>{tr("g5.eqPointN", { n: selected.index + 1 })}</strong>
             <button
               type="button"
               className="secondary"
               onClick={() => onChange(`band${selected.index}Enabled`, false)}
               disabled={!connected || !selected.enabled}
             >
-              Remove point
+              {tr("g5.eqRemove")}
             </button>
           </div>
           <label>
-            Filter
+            {tr("g5.eqFilter")}
             <select
-              aria-label="EQ filter type"
+              aria-label={tr("g5.eqFilterAria")}
               value={selected.type}
               disabled={!connected || !selected.enabled}
               onChange={(event) => onChange(`band${selected.index}Type`, event.target.value)}
             >
               {FILTERS.map(([id, label]) => (
                 <option key={id} value={id}>
-                  {label}
+                  {tr(label)}
                 </option>
               ))}
             </select>
           </label>
           <label>
-            Frequency <span>Hz</span>
+            {tr("g5.eqFrequency")} <span>Hz</span>
             <NumberField
-              aria-label="EQ frequency Hz"
+              aria-label={tr("g5.eqFrequencyAria")}
               min={20}
               max={20000}
               step={1}
@@ -421,9 +427,9 @@ export function AdvancedEqEditor({
             />
           </label>
           <label>
-            Gain <span>dB</span>
+            {tr("g5.eqGain")} <span>dB</span>
             <NumberField
-              aria-label="EQ gain dB"
+              aria-label={tr("g5.eqGainAria")}
               min={-24}
               max={24}
               step={0.1}
@@ -437,9 +443,9 @@ export function AdvancedEqEditor({
             />
           </label>
           <label>
-            Q / width
+            {tr("g5.eqQ")}
             <NumberField
-              aria-label="EQ Q width"
+              aria-label={tr("g5.eqQAria")}
               min={0.1}
               max={20}
               step={0.1}
@@ -450,12 +456,12 @@ export function AdvancedEqEditor({
           </label>
           <small>
             {selected.type === "allPass"
-              ? "Changes phase without changing level. The response stays at 0 dB; frequency and Q control the phase transition."
+              ? tr("g5.eqAllPassHelp")
               : selected.type === "bandPass"
-                ? "Keeps a frequency band with unity gain at its center. Q controls bandwidth; gain does not apply."
+                ? tr("g5.eqBandPassHelp")
                 : selected.type === "notch" || selected.type === "lowPass" || selected.type === "highPass"
-                  ? "Gain does not apply to this filter. Q controls the shape."
-                  : "Q controls how broad or narrow the change is."}
+                  ? tr("g5.eqNoGainHelp")
+                  : tr("g5.eqQHelp")}
           </small>
         </div>
       )}

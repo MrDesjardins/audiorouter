@@ -67,9 +67,11 @@ function visibleStrings(source: string): string[] {
 
 describe("plain words in visible text", () => {
   it("finds strings at all: the scan must not pass by reading nothing", () => {
-    const sample = visibleStrings(readFileSync(join(here, "App.tsx"), "utf8"));
-    expect(sample.length).toBeGreaterThan(50);
-    expect(sample).toContain("Unsaved edits discarded.");
+    // Visible text now lives in the English catalog, so the source scan below sees
+    // only what is still written inline. Prove both readers find strings.
+    const catalog = readFileSync(join(here, "i18n", "locales", "en.json"), "utf8");
+    expect(catalog).toContain('"Unsaved edits discarded."');
+    expect(visibleStrings("<p>Some text</p>").length).toBeGreaterThan(0);
   });
 
   it("detects a retired word in each kind of string", () => {

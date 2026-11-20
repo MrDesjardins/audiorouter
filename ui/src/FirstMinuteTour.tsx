@@ -1,22 +1,24 @@
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
+import { useMessages } from "./i18n/useMessages";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 
 const STEPS = [
   {
     target: ".right-workbench",
-    title: "Add tools from here",
-    text: "Click a tool or drag it onto the canvas. Sound moves from left to right along the lines.",
+    title: "g1.tourStep1Title",
+    text: "g1.tourStep1Text",
   },
   {
     target: ".session-flow-canvas",
-    title: "Connect the dots",
-    text: "Drag from a blue dot on one card to the dot on the next.",
+    title: "g1.tourStep2Title",
+    text: "g1.tourStep2Text",
   },
   {
     target: "[data-tour='play']",
-    title: "Press Play",
-    text: "Play starts the route. Save at the top keeps it for next time.",
+    title: "g1.tourStep3Title",
+    text: "g1.tourStep3Text",
   },
-] as const;
+] as const satisfies readonly { target: string; title: MessageKey; text: MessageKey }[];
 
 export const TOUR_STEP_COUNT = STEPS.length;
 const COACH_WIDTH = 310;
@@ -24,6 +26,7 @@ const GAP = 14;
 
 /** Three short steps that point at the real controls. It presses nothing and never starts audio. */
 export function FirstMinuteTour({ onOpenTools, onClose }: { onOpenTools: () => void; onClose: () => void }) {
+  const tr = useMessages();
   const [step, setStep] = useState(0);
   const [box, setBox] = useState<DOMRect | null>(null);
   const next = useRef<HTMLButtonElement>(null);
@@ -81,17 +84,15 @@ export function FirstMinuteTour({ onOpenTools, onClose }: { onOpenTools: () => v
           }
         }}
       >
-        <small>
-          {step + 1} of {STEPS.length}
-        </small>
-        <h2 id="tour-heading">{current.title}</h2>
-        <p id="tour-text">{current.text}</p>
+        <small>{tr("g1.tourCount", { step: step + 1, total: STEPS.length })}</small>
+        <h2 id="tour-heading">{tr(current.title)}</h2>
+        <p id="tour-text">{tr(current.text)}</p>
         <div className="tour-actions">
           <button type="button" className="secondary" onClick={onClose}>
-            Skip tour
+            {tr("g1.tourSkip")}
           </button>
           <button ref={next} type="button" onClick={() => (last ? onClose() : setStep(step + 1))}>
-            {last ? "Done" : "Next"}
+            {last ? tr("g1.tourDone") : tr("g1.tourNext")}
           </button>
         </div>
       </section>

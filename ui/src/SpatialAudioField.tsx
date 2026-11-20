@@ -1,5 +1,6 @@
 import type { DeviceListItem } from "@audiorouter/contracts";
 import { SliderField } from "./Slider";
+import { useMessages } from "./i18n/useMessages";
 
 type SpatialMode = "off" | "headphones" | "speakers";
 
@@ -25,6 +26,7 @@ export function SpatialAudioField({
   running: boolean;
   onChange: (name: "spatialMode" | "spatialRoomPercent", value: SpatialMode | number) => void;
 }) {
+  const tr = useMessages();
   const device = devices.find(
     (item): item is Extract<DeviceListItem, { state: "active" }> => item.state === "active" && item.id === endpointId,
   );
@@ -34,35 +36,35 @@ export function SpatialAudioField({
   const layout = channels === 8 ? "7.1" : "5.1";
   const guidance =
     selected === "off"
-      ? "Plays the input as it is. Choose a surround mode to place a 5.1/7.1 game mix around you."
+      ? tr("g2.spGuideOff")
       : channels === null
-        ? "Choose the input device above. It must carry 5.1 or 7.1 audio; a 7.1 playback device appears as a Loopback choice."
+        ? tr("g2.spGuideNoDevice")
         : channels === 6 || channels === 8
           ? selected === "headphones"
-            ? `Renders this ${layout} input with a measured head (MIT KEMAR) to stereo for headphones.`
-            : `Renders this ${layout} input with a measured head (MIT KEMAR) for two speakers about ±30° in front of you, cancelling the sound each ear hears from the far speaker. Sit centred between them.`
-          : `This device has ${channels} channel(s); Play will refuse it. In Windows Sound settings, set the game's playback device (for example CABLE-B Input) to 7.1 with Configure speakers, then choose it above as a Loopback device.`;
+            ? tr("g2.spGuideHeadphones", { layout })
+            : tr("g2.spGuideSpeakers", { layout })
+          : tr("g2.spGuideChannels", { n: channels });
   return (
-    <div className="node-binding-editor" aria-label="Spatial audio settings">
+    <div className="node-binding-editor" aria-label={tr("g2.spSettingsAria")}>
       <label>
-        Spatial audio
+        {tr("g2.spLabel")}
         <select
-          aria-label="Spatial audio mode"
+          aria-label={tr("g2.spModeAria")}
           value={selected}
           disabled={disabled}
           onChange={(event) => onChange("spatialMode", event.target.value as SpatialMode)}
         >
-          <option value="off">Off (stereo as captured)</option>
-          <option value="headphones">Surround to headphones (5.1/7.1)</option>
-          <option value="speakers">Surround to speakers (5.1/7.1)</option>
+          <option value="off">{tr("g2.spOff")}</option>
+          <option value="headphones">{tr("g2.spHeadphones")}</option>
+          <option value="speakers">{tr("g2.spSpeakers")}</option>
         </select>
       </label>
       {selected !== "off" && (
         <SliderField
           className="spatial-room"
-          label="Room"
-          name="Room"
-          valueText={room === 0 ? "Off" : `${room} percent`}
+          label={tr("g2.spRoom")}
+          name={tr("g2.spRoom")}
+          valueText={room === 0 ? tr("g2.spRoomOff") : tr("g2.spRoomPercent", { n: room })}
           value={room}
           min={0}
           max={100}
@@ -70,13 +72,13 @@ export function SpatialAudioField({
           unit="%"
           defaultValue={0}
           disabled={disabled}
-          help={<small>Adds a small room around the virtual speakers; higher sounds further away.</small>}
+          help={<small>{tr("g2.spRoomHelp")}</small>}
           onChange={(value) => onChange("spatialRoomPercent", value)}
         />
       )}
       <small>
         {guidance}
-        {running ? " Changing these takes effect after Stop and Play." : ""}
+        {running ? ` ${tr("g2.spTakesEffect").trim()}` : ""}
       </small>
     </div>
   );

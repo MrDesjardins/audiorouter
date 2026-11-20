@@ -1,3 +1,7 @@
+import { tx } from "./i18n";
+import type { MessageKey } from "./i18n/generated/messageKeys";
+
+/** English names; use `themeColorLabel` for display. */
 export const THEME_COLORS = {
   background: "App background",
   surface: "Panels",
@@ -15,6 +19,26 @@ export const THEME_COLORS = {
   output: "Receiving ports",
 } as const;
 export type ThemeColor = keyof typeof THEME_COLORS;
+const THEME_COLOR_KEYS = {
+  background: "h2.themeColorBackground",
+  surface: "h2.themeColorSurface",
+  raised: "h2.themeColorRaised",
+  border: "h2.themeColorBorder",
+  text: "h2.themeColorText",
+  muted: "h2.themeColorMuted",
+  accent: "h2.themeColorAccent",
+  signal: "h2.themeColorSignal",
+  highlight: "h2.themeColorHighlight",
+  success: "h2.themeColorSuccess",
+  danger: "h2.themeColorDanger",
+  plugin: "h2.themeColorPlugin",
+  input: "h2.themeColorInput",
+  output: "h2.themeColorOutput",
+} as const satisfies Record<ThemeColor, MessageKey>;
+/** The colour name in the current language. */
+export function themeColorLabel(key: ThemeColor): string {
+  return tx(THEME_COLOR_KEYS[key]);
+}
 export type CustomTheme = {
   format: "audiorouter.theme";
   version: 1;
@@ -48,14 +72,14 @@ const KEY = "audiorouter.ui.custom-theme";
 export const MAX_THEME_BYTES = 32 * 1024;
 
 export function parseCustomTheme(text: string): CustomTheme {
-  if (text.length > MAX_THEME_BYTES) throw new Error("Theme files must be 32 KB or smaller.");
+  if (text.length > MAX_THEME_BYTES) throw new Error(tx("h2.themeErrSize"));
   let value: unknown;
   try {
     value = JSON.parse(text);
   } catch {
-    throw new Error("Choose a valid AudioRouter theme JSON file.");
+    throw new Error(tx("h2.themeErrJson"));
   }
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid theme file.");
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(tx("h2.themeErrInvalid"));
   const theme = value as Partial<CustomTheme>;
   if (
     theme.format !== "audiorouter.theme" ||
@@ -68,15 +92,15 @@ export function parseCustomTheme(text: string): CustomTheme {
     typeof theme.colors !== "object" ||
     Array.isArray(theme.colors)
   )
-    throw new Error("This is not a supported AudioRouter theme (version 1).");
+    throw new Error(tx("h2.themeErrVersion"));
   const colors = {} as Record<ThemeColor, string>;
   const known = Object.keys(THEME_COLORS) as ThemeColor[];
   if (Object.keys(theme.colors).some((key) => !known.includes(key as ThemeColor)))
-    throw new Error("The theme contains unsupported color settings.");
+    throw new Error(tx("h2.themeErrColors"));
   for (const key of known) {
     const color = theme.colors[key];
     if (typeof color !== "string" || !/^#[0-9a-f]{6}$/i.test(color))
-      throw new Error(`Use a six-digit hex color for ${THEME_COLORS[key]}.`);
+      throw new Error(tx("h2.themeErrHex", { color: themeColorLabel(key) }));
     colors[key] = color.toLowerCase();
   }
   return { format: "audiorouter.theme", version: 1, name: theme.name.trim(), base: theme.base, colors };
@@ -128,8 +152,7 @@ export function selectedCustomTheme(library: CustomThemeLibrary): CustomThemeEnt
 
 /** Add a theme (renamed if its name is taken) and select it. */
 export function addCustomTheme(library: CustomThemeLibrary, theme: CustomTheme): CustomThemeLibrary {
-  if (library.themes.length >= MAX_CUSTOM_THEMES)
-    throw new Error(`You can keep up to ${MAX_CUSTOM_THEMES} custom themes. Delete one first.`);
+  if (library.themes.length >= MAX_CUSTOM_THEMES) throw new Error(tx("h2.themeErrLimit", { max: MAX_CUSTOM_THEMES }));
   const id = newThemeId(library.themes);
   const entry = { id, theme: { ...structuredClone(theme), name: uniqueThemeName(library.themes, theme.name) } };
   return { selectedId: id, themes: [...library.themes, entry] };

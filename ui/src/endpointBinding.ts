@@ -1,5 +1,6 @@
 // Remembered endpoint bindings and device-choice helpers (moved from App.tsx).
 import type { DeviceListItem } from "@audiorouter/contracts";
+import { tx } from "./i18n";
 
 const DEVICE_NAME_CACHE_KEY = "audiorouter.ui.endpoint-names";
 const MAX_REMEMBERED_DEVICES = 512;
@@ -241,9 +242,9 @@ export function sortDevicesAlphabetically<T extends DeviceListItem>(devices: T[]
 export function deviceChoiceLabel(device: Extract<DeviceListItem, { state: "active" }>): string {
   const channels =
     device.format.channels === 1
-      ? "Mono · 1 channel"
+      ? tx("h2.deviceMono")
       : device.format.channels === 2
-        ? "Stereo · 2 channels"
-        : `${device.format.channels}-channel multichannel`;
+        ? tx("h2.deviceStereo")
+        : tx("h2.deviceMulti", { n: device.format.channels });
   return `${channels} · ${Math.round(device.format.sampleRateHz / 1000)} kHz — ${device.name}`;
 }

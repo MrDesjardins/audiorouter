@@ -1,11 +1,14 @@
 import type { DeviceListItem } from "@audiorouter/contracts";
 import { setDeviceHidden, useHiddenDevices } from "./hiddenDevices";
 import { BooleanField } from "./BooleanField";
+import { useMessages } from "./i18n/useMessages";
+import type { MessageKey } from "./i18n/generated/messageKeys";
+import { formatNumber } from "./i18n/format";
 
-const ROLE_LABELS: Record<string, string> = {
-  console: "Windows default",
-  multimedia: "Windows default",
-  communications: "Default for calls",
+const ROLE_LABELS: Record<string, MessageKey> = {
+  console: "devices.windowsDefault",
+  multimedia: "devices.windowsDefault",
+  communications: "devices.defaultForCalls",
 };
 
 /**
@@ -23,6 +26,7 @@ export function ThisPcDevices({
   connected: boolean;
   onRefresh: () => void;
 }) {
+  const tr = useMessages();
   const hidden = useHiddenDevices();
   const byName = (left: DeviceListItem, right: DeviceListItem) =>
     left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
@@ -36,24 +40,39 @@ export function ThisPcDevices({
           {heading} <span className="badge">{items.length}</span>
         </h4>
         {items.length === 0 ? (
-          <p className="muted">None found.</p>
+          <p className="muted">{tr("devices.noneFound")}</p>
         ) : (
           <ul aria-label={heading}>
             {items.map((device) => {
-              const roles = [...new Set(device.defaultRoles.map((role) => ROLE_LABELS[role]).filter(Boolean))];
+              const roles = [
+                ...new Set(
+                  device.defaultRoles
+                    .map((role) => ROLE_LABELS[role])
+                    .filter((role): role is MessageKey => Boolean(role))
+                    .map((role) => tr(role)),
+                ),
+              ];
               const shown = !hidden.has(device.id);
               return (
                 <li key={device.id} className={shown ? undefined : "is-hidden-device"}>
                   <strong>{device.name}</strong>
                   <small>
                     {"format" in device
-                      ? `${device.format.sampleRateHz / 1000} kHz · ${device.format.channels === 1 ? "mono" : device.format.channels === 2 ? "stereo" : `${device.format.channels} channels`}`
+                      ? tr("devices.formatSummary", {
+                          rate: formatNumber(device.format.sampleRateHz / 1000, { maximumFractionDigits: 1 }),
+                          layout:
+                            device.format.channels === 1
+                              ? tr("devices.mono")
+                              : device.format.channels === 2
+                                ? tr("devices.stereo")
+                                : tr("devices.channels", { count: device.format.channels }),
+                        })
                       : ""}
                     {roles.length > 0 ? ` · ${roles.join(", ")}` : ""}
                   </small>
                   <BooleanField
-                    label="Show in pickers"
-                    name={`Show ${device.name} in device pickers`}
+                    label={tr("devices.showInPickers")}
+                    name={tr("devices.showDevice", { name: device.name })}
                     checked={shown}
                     onChange={(checked) => setDeviceHidden(device.id, !checked)}
                   />
@@ -68,23 +87,15 @@ export function ThisPcDevices({
   return (
     <section className="panel this-pc-devices" aria-labelledby="this-pc-devices-heading">
       <div className="section-heading">
-        <h3 id="this-pc-devices-heading">Audio devices on this PC</h3>
+        <h3 id="this-pc-devices-heading">{tr("devices.heading")}</h3>
         <button type="button" className="secondary" onClick={onRefresh} disabled={!connected}>
-          Refresh
+          {tr("devices.refresh")}
         </button>
       </div>
-      <p className="muted">
-        What Windows offers right now. To use one, add an Input Device or Output Device tool and choose it in that
-        tool's Properties. AudioRouter never changes Windows defaults or volumes. Clear "Show in pickers" to keep a
-        device you never use (a monitor's speakers, a webcam microphone) out of the device lists on this PC.
-      </p>
-      {group("capture", "Inputs (microphones, line-in, virtual cables)")}
-      {group("render", "Outputs (speakers, headphones, virtual cables)")}
-      {inactive > 0 && (
-        <p className="muted">
-          {inactive} more {inactive === 1 ? "device is" : "devices are"} unplugged or disabled in Windows.
-        </p>
-      )}
+      <p className="muted">{tr("devices.help")}</p>
+      {group("capture", tr("devices.inputs"))}
+      {group("render", tr("devices.outputs"))}
+      {inactive > 0 && <p className="muted">{tr("devices.inactive", { count: inactive })}</p>}
     </section>
   );
 }

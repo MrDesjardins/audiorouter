@@ -2336,7 +2336,7 @@ describe("keyboard connection dialog", () => {
     openTab("Recording");
     const panel = await screen.findByRole("region", { name: "Recorder" });
     fireEvent.click(within(panel).getByRole("button", { name: "Arm" }));
-    await within(panel).findByText("Arming...");
+    await within(panel).findByText("Updating recorder…");
     fireEvent.click(within(panel).getByRole("button", { name: "Arm" }));
     expect(armRecorder).toHaveBeenCalledTimes(1);
     releaseArm({ sessionId: "demo-session", state: "armed", parts: [], pauses: [], lastFrame: 0 });
@@ -2367,7 +2367,7 @@ describe("keyboard connection dialog", () => {
     };
     const backend = { ...createDisconnectedBackend(), connected: true, listProcessors: async () => [processor] };
     await renderReady(<App backend={backend} />);
-    fireEvent.click(await screen.findByLabelText("Voice gain, gain"));
+    fireEvent.click(await screen.findByLabelText("Voice gain, Gain"));
 
     const slider = await screen.findByRole("slider", { name: "Gain slider" });
     const precise = screen.getByRole("spinbutton", { name: "Gain precise value" });
@@ -2439,7 +2439,7 @@ describe("keyboard connection dialog", () => {
     };
     fireEvent.dragStart(dropSource, { dataTransfer });
     fireEvent.drop(canvas, { dataTransfer });
-    fireEvent.click(await screen.findByLabelText("Gate 1, gate"));
+    fireEvent.click(await screen.findByLabelText("Gate 1, Gate"));
     fireEvent.change(await screen.findByRole("spinbutton", { name: "Threshold precise value" }), {
       target: { value: "-30" },
     });
@@ -2491,7 +2491,7 @@ describe("keyboard connection dialog", () => {
     };
     fireEvent.dragStart(dropSource, { dataTransfer });
     fireEvent.drop(canvas, { dataTransfer });
-    fireEvent.click(await screen.findByLabelText("Pitch shift 1, pitch"));
+    fireEvent.click(await screen.findByLabelText("Pitch shift 1, Pitch"));
     fireEvent.change(await screen.findByRole("spinbutton", { name: "Semitones precise value" }), {
       target: { value: "5" },
     });
@@ -2542,7 +2542,7 @@ describe("keyboard connection dialog", () => {
     };
     fireEvent.dragStart(dropSource, { dataTransfer });
     fireEvent.drop(canvas, { dataTransfer });
-    fireEvent.click(await screen.findByLabelText("Compressor 1, compressor"));
+    fireEvent.click(await screen.findByLabelText("Compressor 1, Compressor"));
     fireEvent.change(await screen.findByRole("spinbutton", { name: "Ratio precise value" }), {
       target: { value: "6" },
     });
@@ -2593,7 +2593,7 @@ describe("keyboard connection dialog", () => {
     };
     fireEvent.dragStart(dropSource, { dataTransfer });
     fireEvent.drop(canvas, { dataTransfer });
-    fireEvent.click(await screen.findByLabelText("Limiter 1, limiter"));
+    fireEvent.click(await screen.findByLabelText("Limiter 1, Limiter"));
     fireEvent.change(await screen.findByRole("spinbutton", { name: "Ceiling precise value" }), {
       target: { value: "-3" },
     });

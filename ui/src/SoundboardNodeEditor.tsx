@@ -8,7 +8,6 @@ import { SoundLibraryPicker } from "./SoundLibraryPicker";
 import {
   MAX_CAPTION_LENGTH,
   SOUNDBOARD_MODES,
-  SOUNDBOARD_MODE_LABELS,
   SOUNDBOARD_SLOTS,
   firstFreeSlot,
   setLabel,
@@ -19,6 +18,15 @@ import {
 } from "./soundboard";
 import { useSoundDrop } from "./soundboardDrop";
 import { SoundboardContext, useSoundboardLive } from "./soundboardLive";
+import { useMessages } from "./i18n/useMessages";
+import type { MessageKey } from "./i18n/generated/messageKeys";
+
+const MODE_MESSAGES = {
+  once: "g2.sbModeOnce",
+  loop: "g2.sbModeLoop",
+  toggle: "g2.sbModeToggle",
+  hold: "g2.sbModeHold",
+} as const satisfies Record<SoundboardMode, MessageKey>;
 
 const SLOT_FIELDS = ["MediaId", "FileName", "Caption", "GainDb", "Mode", "Set"] as const;
 
@@ -122,6 +130,7 @@ function SoundboardSlotRow({
   onDelete: () => void;
   onMessage: (message: string) => void;
 }) {
+  const tr = useMessages();
   const drop = useSoundDrop({ nodeId: node.id, slot: slot.slot, freeSlot: null, disabled, onMessage });
   return (
     <li className={`soundboard-slot${drop.active ? " is-drop-target" : ""}`} {...drop.handlers}>
@@ -131,11 +140,11 @@ function SoundboardSlotRow({
           {slot.fileName || (slot.set === null ? slot.mediaId : setLabel(slot.set))}
         </span>
         <span className="soundboard-slot-state" role="status">
-          {playing ? "Playing" : ""}
+          {playing ? tr("g2.sbPlaying") : ""}
         </span>
       </div>
       <label>
-        Caption
+        {tr("g2.sbCaption")}
         <input
           type="text"
           value={slot.caption}
@@ -146,8 +155,8 @@ function SoundboardSlotRow({
         />
       </label>
       <SliderField
-        label="Level"
-        name={`Level for sound ${slot.slot}`}
+        label={tr("g2.sbLevel")}
+        name={tr("g2.sbLevelName", { n: slot.slot })}
         value={slot.gainDb}
         min={-24}
         max={6}
@@ -158,7 +167,7 @@ function SoundboardSlotRow({
         onChange={(value) => onChange(slotParameter(slot.slot, "GainDb"), value)}
       />
       <label>
-        When pressed
+        {tr("g2.sbWhenPressed")}
         <select
           value={slot.mode}
           disabled={disabled}
@@ -166,7 +175,7 @@ function SoundboardSlotRow({
         >
           {SOUNDBOARD_MODES.map((mode) => (
             <option key={mode} value={mode}>
-              {SOUNDBOARD_MODE_LABELS[mode]}
+              {tr(MODE_MESSAGES[mode])}
             </option>
           ))}
         </select>
@@ -176,29 +185,29 @@ function SoundboardSlotRow({
           nodeId={node.id}
           slot={slot.slot}
           mode={slot.mode}
-          label={`Play ${slot.label}`}
+          label={tr("g2.sbPlay", { label: slot.label })}
           className="secondary"
           disabled={!backend.connected}
         >
-          Play
+          {tr("g2.sbPlayBtn")}
         </SoundPlayButton>
         <button
           type="button"
           className="secondary"
-          aria-label={`Change sound ${slot.slot}`}
+          aria-label={tr("g2.sbChangeAria", { n: slot.slot })}
           disabled={disabled}
           onClick={onPick}
         >
-          Change
+          {tr("g2.sbChange")}
         </button>
         <button
           type="button"
           className="secondary"
-          aria-label={`Delete sound ${slot.slot}`}
+          aria-label={tr("g2.sbDeleteAria", { n: slot.slot })}
           disabled={disabled}
           onClick={onDelete}
         >
-          Delete
+          {tr("g2.sbDelete")}
         </button>
       </div>
     </li>
@@ -218,22 +227,21 @@ export function SoundboardNodeEditor({
   onChange: (name: string, value: boolean | number | string) => void;
   onRemove: (names: string[]) => void;
 }) {
+  const tr = useMessages();
   const controller = useContext(SoundboardContext);
   const live = useSoundboardLive(node.id);
   const slots = soundboardSlots(node);
   const free = firstFreeSlot(node);
   // The slot the picker is choosing for; "new" adds to the first free slot.
   const [picking, setPicking] = useState<number | "new" | null>(null);
-  const [message, setMessage] = useState(
-    "Add up to nine sounds. Each shows as a button on the tool; press Play here or on the tool, or trigger it from a Stream Deck. You can also drop a WAV or MP3 file here, or on a sound to replace it.",
-  );
+  const [message, setMessage] = useState(() => tr("g2.sbIntro"));
   const drop = useSoundDrop({ nodeId: node.id, slot: null, freeSlot: free, disabled, onMessage: setMessage });
   const targetSlot = () => (picking === "new" || picking === null ? free : picking);
   const chooseLibrarySound = (sound: { id: string; title: string }) => {
     const slot = targetSlot();
     if (slot === null) return;
     controller.assign(node.id, slot, { mediaId: sound.id, fileName: sound.title }, picking !== "new");
-    setMessage(`${sound.title} is on button ${slot}. Save the change, then press Play.`);
+    setMessage(tr("g2.sbOnButton", { title: sound.title, slot }));
     setPicking(null);
   };
   const chooseFile = async (file: File) => {
@@ -246,20 +254,18 @@ export function SoundboardNodeEditor({
   };
   const remove = (slot: SoundboardSlot) => {
     onRemove(SLOT_FIELDS.map((field) => slotParameter(slot.slot, field)));
-    setMessage(`Button ${slot.slot} (${slot.label}) is removed. Save to keep this.`);
+    setMessage(tr("g2.sbRemoved", { slot: slot.slot, label: slot.label }));
   };
   const playingNow = (slot: number) => live?.slots.find((item) => item.slot === slot)?.playing === true;
   return (
     <div
       className={`node-binding-editor soundboard-editor${drop.active ? " is-drop-target" : ""}`}
-      aria-label="Soundboard settings"
+      aria-label={tr("g2.sbSettingsAria")}
       {...drop.handlers}
     >
       <div>
-        <p className="eyebrow">Soundboard</p>
-        <strong>
-          {slots.length} of {SOUNDBOARD_SLOTS} sounds
-        </strong>
+        <p className="eyebrow">{tr("g2.sbEyebrow")}</p>
+        <strong>{tr("g2.sbCount", { n: slots.length, max: SOUNDBOARD_SLOTS })}</strong>
       </div>
       <ol className="soundboard-slot-list">
         {slots.map((slot) => (
@@ -278,7 +284,7 @@ export function SoundboardNodeEditor({
         ))}
       </ol>
       <button type="button" className="primary" disabled={disabled || free === null} onClick={() => setPicking("new")}>
-        {free === null ? "All nine slots are used" : "Add sound"}
+        {free === null ? tr("g2.sbAllUsed") : tr("g2.sbAdd")}
       </button>
       <button
         type="button"
@@ -286,7 +292,7 @@ export function SoundboardNodeEditor({
         disabled={!controller.ready || slots.length === 0}
         onClick={() => controller.stop(node.id)}
       >
-        Stop all sounds
+        {tr("g2.sbStopAll")}
       </button>
       <div className="soundboard-editor-status">
         <PanelMessage message={message} />
@@ -294,7 +300,7 @@ export function SoundboardNodeEditor({
       {picking !== null && (
         <SoundLibraryPicker
           backend={backend}
-          title={picking === "new" ? "Add a sound" : `Change sound ${picking}`}
+          title={picking === "new" ? tr("g2.sbPickerAdd") : tr("g2.sbPickerChange", { n: picking })}
           busy={controller.importing}
           onChoose={chooseLibrarySound}
           onChooseFile={(file) => void chooseFile(file)}

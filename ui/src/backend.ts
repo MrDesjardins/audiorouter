@@ -492,6 +492,8 @@ export interface UiBackend {
   manageVirtualCable?(request: CableManagementRequest): Promise<unknown>;
   /** Native shell only; false when this installation has no cable driver package. */
   virtualCableManagementAvailable?(): Promise<boolean>;
+  /** Native shell only; presentation text such as the tray follows the choice. */
+  setUiLanguage?(language: string | null): Promise<void>;
   planStartup(enabled: boolean): Promise<StartupPlanResult>;
   applyStartup(planId: string, idempotencyKey: string): Promise<StartupApplyResult>;
   registerStartup?(enabled: boolean): Promise<string>;
@@ -865,6 +867,7 @@ export function createLiveBackend(
   startupRegistrationStatus?: () => Promise<"registered" | "unregistered">,
   manageVirtualCable?: (request: CableManagementRequest) => Promise<unknown>,
   virtualCableManagementAvailable?: () => Promise<boolean>,
+  setUiLanguage?: (language: string | null) => Promise<void>,
 ): UiBackend {
   return {
     connected: true,
@@ -1410,6 +1413,7 @@ export function createLiveBackend(
     ...(startupRegistrationStatus === undefined ? {} : { startupRegistrationStatus }),
     ...(manageVirtualCable === undefined ? {} : { manageVirtualCable }),
     ...(virtualCableManagementAvailable === undefined ? {} : { virtualCableManagementAvailable }),
+    ...(setUiLanguage === undefined ? {} : { setUiLanguage }),
   };
 }
 
@@ -1421,6 +1425,7 @@ export function createLiveBackendFromTransport(
   startupRegistrationStatus?: () => Promise<"registered" | "unregistered">,
   manageVirtualCable?: (request: CableManagementRequest) => Promise<unknown>,
   virtualCableManagementAvailable?: () => Promise<boolean>,
+  setUiLanguage?: (language: string | null) => Promise<void>,
 ): UiBackend {
   // Each request carries a correlation ID; failures are summarized (method,
   // category, ID) in the client diagnostics so they can be matched in the logs.
@@ -1431,5 +1436,6 @@ export function createLiveBackendFromTransport(
     startupRegistrationStatus,
     manageVirtualCable,
     virtualCableManagementAvailable,
+    setUiLanguage,
   );
 }

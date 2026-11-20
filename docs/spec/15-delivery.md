@@ -78,6 +78,7 @@ The ranges below include every normative ID; each milestone must attach evidence
 | UI-01–15 | M05/M07 | UC-01–10, keyboard/Narrator/usability |
 | UI-16 | M05 extension (2026-09-29) | Named visual groups, persistence, no audio changes, three-theme hit testing |
 | UI-27 | Setup check (2026-11-02; recovery UX extension 2026-11-15) | Per-finding regressions, check flags exactly what Play refuses, dispatcher/default MCP, three-theme Status tab and exact Properties field focus |
+| L10N-01–08 | M05 extension / M08 (2026-11-19) | Catalog validation, fallback and live switching, locale formatting, translated backend errors, three-theme 200% layout, native tray, fluent review |
 | HTTP-01–06 | M07/M05 extension (2026-09-29) | Shared-backend mutation/frontend refresh, token/origin/bounds, local Swagger and schema parity |
 | API-01–07, API-09–12 | M01, each feature extension | UC-07/10, protocol/parity tests |
 | API-08 | M01 baseline; M07 hardening | Reconnect/backpressure/resync |

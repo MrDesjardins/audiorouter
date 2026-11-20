@@ -1,11 +1,25 @@
 import type { Node, DiagnosticsSnapshot } from "@audiorouter/contracts";
 import { nodeAttention, type NodeAttention } from "./nodeAttention";
+import { useMessages } from "./i18n/useMessages";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 
-const ATTENTION_LABELS: Record<NodeAttention, string> = {
+const STATUS_MESSAGES = {
+  "No device": "workspaceAudit.noDevice",
+  "No input": "workspaceAudit.noInput",
+  Muted: "workspaceAudit.muted",
+  Disconnected: "workspaceAudit.disconnected",
+  Off: "common.off",
+  Bypass: "toolProperties.bypass",
+  Failed: "workspaceAudit.failed",
+  Active: "workspaceAudit.active",
+  Ready: "workspaceAudit.ready",
+} as const satisfies Record<string, MessageKey>;
+
+const ATTENTION_LABELS = {
   "no device": "No device",
   "no input": "No input",
   muted: "Muted",
-};
+} as const satisfies Record<NodeAttention, keyof typeof STATUS_MESSAGES>;
 
 export function nodePropertyStatus(
   node: Node,
@@ -13,7 +27,7 @@ export function nodePropertyStatus(
   running: boolean,
   snapshot: DiagnosticsSnapshot | null,
   unfed = false,
-): string {
+): keyof typeof STATUS_MESSAGES {
   if (!connected) return "Disconnected";
   if (!node.enabled) return "Off";
   if (node.bypass) return "Bypass";
@@ -56,14 +70,16 @@ export function NodePropertyStatus({
   snapshot: DiagnosticsSnapshot | null;
   unfed: boolean;
 }) {
+  const tr = useMessages();
   const status = nodePropertyStatus(node, connected, running, snapshot, unfed);
+  const label = tr(STATUS_MESSAGES[status]);
   return (
     <span
       className={`node-state node-property-status is-${nodePropertyStatusTone(status)}`}
       role="status"
-      aria-label={`Tool status: ${status}`}
+      aria-label={tr("workspaceAudit.toolStatus", { status: label })}
     >
-      {status}
+      {label}
     </span>
   );
 }

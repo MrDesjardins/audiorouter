@@ -444,7 +444,7 @@ describe("session refresh and playback regressions", () => {
     await screen.findByRole("heading", { name: saved.name });
     start();
     await messageBar().findByText(/Audio session is running/);
-    fireEvent.click(await screen.findByLabelText("Voice gain, gain"));
+    fireEvent.click(await screen.findByLabelText("Voice gain, Gain"));
     fireEvent.change(await screen.findByRole("slider", { name: "Gain slider" }), {
       target: { value: "-6" },
     });
@@ -482,7 +482,7 @@ describe("session refresh and playback regressions", () => {
     await screen.findByRole("heading", { name: saved.name });
     start();
     await messageBar().findByText(/Audio session is running/);
-    fireEvent.click(await screen.findByLabelText("Voice gain, gain"));
+    fireEvent.click(await screen.findByLabelText("Voice gain, Gain"));
     fireEvent.change(await screen.findByRole("slider", { name: "Gain slider" }), {
       target: { value: "-6" },
     });
@@ -547,7 +547,7 @@ describe("session refresh and playback regressions", () => {
       await screen.findByRole("heading", { name: saved.name });
       start();
       await messageBar().findByText(/Audio session is running/);
-      fireEvent.click(await screen.findByLabelText("Voice gain, gain"));
+      fireEvent.click(await screen.findByLabelText("Voice gain, Gain"));
       const slider = await screen.findByRole("slider", { name: "Gain slider" });
       fireEvent.change(slider, { target: { value: "-3" } });
       await waitFor(() => expect(backend.planGraph).toHaveBeenCalledTimes(1), { timeout: 3000 });

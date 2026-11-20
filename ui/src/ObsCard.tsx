@@ -3,6 +3,9 @@ import { AppLogo } from "./appLogos";
 import type { ObsChangeRequest, ObsPreview, ObsStatus } from "@audiorouter/contracts";
 import { AppStateBadge } from "./AppsPanel";
 import { obsFixes, type ObsCheck } from "./obsUsage";
+import { boldMarkup } from "./boldMarkup";
+import { useMessages } from "./i18n/useMessages";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 
 export interface ObsActions {
   connect(password?: string): Promise<unknown>;
@@ -14,11 +17,11 @@ export interface ObsActions {
   poll(): void;
 }
 
-const CHANGE_ERRORS: Record<NonNullable<ObsStatus["lastChange"]["error"]>, string> = {
-  changedInObs: "A setting changed in OBS after the preview, so it was left as it is. Check again, then fix it.",
-  refusedByObs: "OBS refused a change.",
-  connectionLost: "The connection to OBS was lost during the change.",
-};
+const CHANGE_ERRORS = {
+  changedInObs: "g2.obsErrChanged",
+  refusedByObs: "g2.obsErrRefused",
+  connectionLost: "g2.obsErrLost",
+} as const satisfies Record<NonNullable<ObsStatus["lastChange"]["error"]>, MessageKey>;
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -26,6 +29,7 @@ function errorText(error: unknown): string {
 
 /** The steps to turn on OBS's WebSocket server, or a password field when OBS asks for one. */
 function ConnectSteps({ status, actions }: { status: ObsStatus; actions: ObsActions | null }) {
+  const tr = useMessages();
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,21 +48,13 @@ function ConnectSteps({ status, actions }: { status: ObsStatus; actions: ObsActi
   return (
     <div className="obs-connect">
       <ol className="obs-steps">
-        <li>
-          In OBS, open <strong>Tools › WebSocket Server Settings</strong>.
-        </li>
-        <li>
-          Tick <strong>Enable WebSocket server</strong>, then choose <strong>OK</strong>.
-        </li>
-        <li>Connect. AudioRouter reads the server password from OBS's settings on this PC.</li>
+        <li>{boldMarkup(tr("g2.obsStep1"))}</li>
+        <li>{boldMarkup(tr("g2.obsStep2"))}</li>
+        <li>{tr("g2.obsStep3")}</li>
       </ol>
       {askPassword && (
         <label className="obs-password">
-          <span>
-            {status.connection === "wrongPassword"
-              ? "OBS refused the password. Paste the one from Show Connect Info:"
-              : "OBS asks for a password. Paste the one from Show Connect Info:"}
-          </span>
+          <span>{status.connection === "wrongPassword" ? tr("g2.obsPwWrong") : tr("g2.obsPwAsk")}</span>
           <input
             type="password"
             autoComplete="off"
@@ -77,18 +73,18 @@ function ConnectSteps({ status, actions }: { status: ObsStatus; actions: ObsActi
         >
           {/* Both labels share one cell, so the button keeps its width (UI-17). */}
           <span className="app-swap">
-            <span className={connecting ? "app-label-hidden" : undefined}>Connect to OBS</span>
-            <span className={connecting ? undefined : "app-label-hidden"}>Connecting…</span>
+            <span className={connecting ? "app-label-hidden" : undefined}>{tr("g2.obsConnect")}</span>
+            <span className={connecting ? undefined : "app-label-hidden"}>{tr("g2.obsConnecting")}</span>
           </span>
         </button>
       </div>
       <p className="muted obs-note" role="status">
         {error ??
           (status.connection === "serverOff"
-            ? "OBS's WebSocket server is off, or OBS is still starting."
+            ? tr("g2.obsServerOff")
             : status.connection === "failed"
-              ? "Could not connect to OBS. Check the steps above and connect again."
-              : "The password stays in memory while connected. It is never stored or shown.")}
+              ? tr("g2.obsFailed")
+              : tr("g2.obsPwNote"))}
       </p>
     </div>
   );
@@ -105,6 +101,7 @@ function FixDialog({
   actions: ObsActions;
   onClose: () => void;
 }) {
+  const tr = useMessages();
   const [chosen, setChosen] = useState(() => fixes.map(() => true));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -148,7 +145,7 @@ function FixDialog({
               )
             );
           });
-        if (!matches) throw new Error("OBS settings changed while this dialog was open. Cancel and check again.");
+        if (!matches) throw new Error(tr("g2.obsChangedMeanwhile"));
         return actions.apply(preview.previewId);
       })
       .then(() => {
@@ -178,11 +175,8 @@ function FixDialog({
         aria-labelledby="obs-fix-heading"
         aria-describedby="obs-fix-description"
       >
-        <h2 id="obs-fix-heading">Fix in OBS</h2>
-        <p id="obs-fix-description">
-          AudioRouter changes only the settings you tick. You can put them back with{" "}
-          <strong>Restore previous OBS settings</strong>.
-        </p>
+        <h2 id="obs-fix-heading">{tr("g2.obsFixTitle")}</h2>
+        <p id="obs-fix-description">{boldMarkup(tr("g2.obsFixDesc"))}</p>
         <ul className="obs-fix-list">
           {fixes.map((fix, index) => (
             <li key={fix.label}>
@@ -218,10 +212,14 @@ function FixDialog({
             disabled={busy || selected.length === 0}
             onClick={apply}
           >
-            {busy ? "Changing OBS…" : `Change ${selected.length} setting${selected.length === 1 ? "" : "s"}`}
+            {busy
+              ? tr("g2.obsChanging")
+              : selected.length === 1
+                ? tr("g2.obsChangeOne")
+                : tr("g2.obsChangeMany", { n: selected.length })}
           </button>
           <button type="button" className="secondary" disabled={busy} onClick={onClose}>
-            Cancel
+            {tr("g2.dsCancel")}
           </button>
         </div>
       </section>
@@ -238,6 +236,7 @@ export function ObsCard({
   status: ObsStatus | null;
   actions: ObsActions | null;
 }) {
+  const tr = useMessages();
   const [fixing, setFixing] = useState<{
     fixes: ReturnType<typeof obsFixes>;
     inputs: ObsStatus["inputs"];
@@ -263,17 +262,19 @@ export function ObsCard({
   const changeText =
     restoreError ??
     (change?.state === "applying"
-      ? "Changing OBS…"
+      ? tr("g2.obsChanging")
       : change?.state === "restoring"
-        ? "Restoring OBS settings…"
+        ? tr("g2.obsRestoring")
         : change?.state === "applied"
-          ? `Changed ${change.changed} OBS setting${change.changed === 1 ? "" : "s"}.`
+          ? change.changed === 1
+            ? tr("g2.obsChangedOne")
+            : tr("g2.obsChangedMany", { n: change.changed })
           : change?.state === "restored"
-            ? "OBS settings restored."
+            ? tr("g2.obsRestored")
             : change?.state === "failed"
               ? change.error
-                ? `${change.changed > 0 ? `${change.changed} setting${change.changed === 1 ? "" : "s"} completed before it stopped. ` : ""}${CHANGE_ERRORS[change.error]}`
-                : "The change did not complete."
+                ? `${change.changed === 1 ? tr("g2.obsPartialOne") : change.changed > 0 ? tr("g2.obsPartialMany", { n: change.changed }) : ""}${tr(CHANGE_ERRORS[change.error])}`
+                : tr("g2.obsNotComplete")
               : "");
   return (
     <section className="panel app-card" aria-labelledby="app-card-obs" data-app="obs">
@@ -289,13 +290,13 @@ export function ObsCard({
       {check.sources.length > 0 && (
         <table className="obs-sources">
           <caption className="app-label-hidden">
-            {check.view === "connected" ? "What OBS hears" : "What OBS heard when it last saved"}
+            {check.view === "connected" ? tr("g2.obsHears") : tr("g2.obsHeard")}
           </caption>
           <thead>
             <tr>
-              <th scope="col">Source</th>
-              <th scope="col">Device</th>
-              <th scope="col">Hears</th>
+              <th scope="col">{tr("g2.obsColSource")}</th>
+              <th scope="col">{tr("g2.obsColDevice")}</th>
+              <th scope="col">{tr("g2.obsColHears")}</th>
             </tr>
           </thead>
           <tbody>
@@ -303,7 +304,7 @@ export function ObsCard({
               <tr key={row.name} className={row.problem ? "is-check" : row.muted ? "is-muted" : undefined}>
                 <th scope="row" title={row.name}>
                   {row.name}
-                  {row.muted && <small> (muted)</small>}
+                  {row.muted && <small>{tr("g2.obsMuted")}</small>}
                 </th>
                 <td title={row.device}>{row.device}</td>
                 <td>
@@ -336,7 +337,7 @@ export function ObsCard({
               });
             }}
           >
-            Fix in OBS
+            {tr("g2.obsFixTitle")}
           </button>
           <button
             type="button"
@@ -353,7 +354,7 @@ export function ObsCard({
                 .finally(() => setRestoring(false));
             }}
           >
-            Restore previous OBS settings
+            {tr("g2.obsRestore")}
           </button>
           <button
             type="button"
@@ -367,7 +368,7 @@ export function ObsCard({
                 .catch(() => actions.poll());
             }}
           >
-            Disconnect
+            {tr("g2.obsDisconnect")}
           </button>
         </div>
       )}

@@ -4,6 +4,8 @@ import type { Node, RecorderFileFormat, RecordingRow, Session } from "@audiorout
 import type { RecorderStatus, UiBackend } from "./backend";
 import { RecordingFolderField } from "./RecorderControls";
 import { RecorderActions, RecordingActions, formatRecordingDuration } from "./RecordingPanels";
+import { recordingStateLabel } from "./recordingStateLabel";
+import { useMessages } from "./i18n/useMessages";
 
 export function RecordingWorkbench({
   backend,
@@ -70,6 +72,7 @@ export function RecordingWorkbench({
   previewMessage: string | null;
   recoveryMessage: string | null;
 }) {
+  const tr = useMessages();
   return (
     <>
       <RecordingFolderField backend={backend} connected={backend.connected} />
@@ -97,39 +100,39 @@ export function RecordingWorkbench({
         onRecycle={recycleRecording}
       />
       {/* The recording library: browse, search, preview and edit takes. Until 2026-10-04 it rendered only in an always-hidden panel. */}
-      <section className="recording-library" aria-label="Recording library">
+      <section className="recording-library" aria-label={tr("workflowUi.library")}>
         <div className="panel">
           <div className="section-heading">
-            <h2>Recordings</h2>
+            <h2>{tr("workflowUi.recordings")}</h2>
             <span className="badge">
               {recordingsError
-                ? "unavailable"
-                : `${visibleRecordings.length}${recordingSearch.trim() ? ` of ${recordings.length}` : ""} file${visibleRecordings.length === 1 ? "" : "s"}`}
+                ? tr("common.unavailable")
+                : tr(recordingSearch.trim() ? "workflowUi.filtered" : "workflowUi.files", {
+                    count: visibleRecordings.length,
+                    total: recordings.length,
+                  })}
             </span>
           </div>
           <label className="recording-search">
-            Search recordings
+            {tr("workflowUi.searchRecordings")}
             <input
               id="recording-search"
               type="search"
               value={recordingSearch}
               onChange={(event) => setRecordingSearch(event.target.value.slice(0, 160))}
-              placeholder="Title, path, or status"
+              placeholder={tr("workflowUi.searchPlaceholder")}
             />
           </label>
           {recordingsError ? (
-            <p className="muted">Recording library unavailable: {recordingsError}</p>
+            <p className="muted">{tr("workflowUi.libraryError", { reason: recordingsError })}</p>
           ) : recordings.length === 0 ? (
             <div className="recording-empty">
               <span aria-hidden="true">◉</span>
-              <h3>No completed recordings yet</h3>
-              <p>
-                Connect a Recorder, choose a recording folder, then press Record while the session is running. Your
-                completed takes will appear here.
-              </p>
+              <h3>{tr("workflowUi.noRecordings")}</h3>
+              <p>{tr("workflowUi.noRecordingsHelp")}</p>
             </div>
           ) : visibleRecordings.length === 0 ? (
-            <p className="muted">No recording matches this search.</p>
+            <p className="muted">{tr("workflowUi.noMatch")}</p>
           ) : (
             visibleRecordings.map((recording) => (
               <article
@@ -139,17 +142,21 @@ export function RecordingWorkbench({
               >
                 <div className="recording-row-heading">
                   <strong>{recording.title || recording.path.split(/[\\/]/).pop()}</strong>
-                  <span className="badge">{recording.missing ? "missing" : recording.state}</span>
+                  <span className="badge">
+                    {recording.missing ? tr("workflowUi.missing") : recordingStateLabel(recording.state)}
+                  </span>
                 </div>
                 <small className="recording-row-path">{recording.path}</small>
                 <small>
-                  Duration {formatRecordingDuration(recording.frames, recording.sampleRate)} · {recording.fileBytes}{" "}
-                  bytes
+                  {tr("workflowUi.duration", {
+                    duration: formatRecordingDuration(recording.frames, recording.sampleRate),
+                    bytes: recording.fileBytes,
+                  })}
                 </small>
                 <label>
-                  Title
+                  {tr("workflowUi.title")}
                   <input
-                    aria-label={`Title for ${recording.id}`}
+                    aria-label={tr("workflowUi.titleFor", { id: recording.id })}
                     value={metadataTitles[recording.id] ?? recording.title ?? ""}
                     onChange={(event) =>
                       setMetadataTitles((current) => ({ ...current, [recording.id]: event.target.value }))
@@ -157,9 +164,9 @@ export function RecordingWorkbench({
                   />
                 </label>
                 <label>
-                  Artist
+                  {tr("workflowUi.artist")}
                   <input
-                    aria-label={`Artist for ${recording.id}`}
+                    aria-label={tr("workflowUi.artistFor", { id: recording.id })}
                     value={metadataArtists[recording.id] ?? recording.artist ?? ""}
                     onChange={(event) =>
                       setMetadataArtists((current) => ({ ...current, [recording.id]: event.target.value }))
@@ -167,9 +174,9 @@ export function RecordingWorkbench({
                   />
                 </label>
                 <label>
-                  Comment
+                  {tr("workflowUi.comment")}
                   <input
-                    aria-label={`Comment for ${recording.id}`}
+                    aria-label={tr("workflowUi.commentFor", { id: recording.id })}
                     value={metadataComments[recording.id] ?? recording.comment ?? ""}
                     onChange={(event) =>
                       setMetadataComments((current) => ({ ...current, [recording.id]: event.target.value }))
@@ -183,7 +190,7 @@ export function RecordingWorkbench({
                     onClick={() => void saveRecordingMetadata(recording)}
                     disabled={!backend.connected}
                   >
-                    Save metadata
+                    {tr("workflowUi.saveMetadata")}
                   </button>
                   <button
                     type="button"
@@ -191,7 +198,7 @@ export function RecordingWorkbench({
                     onClick={() => void previewRecording(recording.id)}
                     disabled={!backend.connected}
                   >
-                    Preview
+                    {tr("workflowUi.preview")}
                   </button>
                   <button
                     type="button"
@@ -199,7 +206,7 @@ export function RecordingWorkbench({
                     onClick={() => void inspectRecovery(recording.id)}
                     disabled={!backend.connected}
                   >
-                    Recovery
+                    {tr("workflowUi.recovery")}
                   </button>
                   <button
                     type="button"
@@ -207,7 +214,7 @@ export function RecordingWorkbench({
                     onClick={() => void removeRecordingEntry(recording.id)}
                     disabled={!backend.connected}
                   >
-                    Remove entry
+                    {tr("workflowUi.removeEntry")}
                   </button>
                 </div>
               </article>

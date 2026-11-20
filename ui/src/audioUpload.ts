@@ -1,3 +1,4 @@
+import { tm } from "./actionText";
 import type { UiBackend } from "./backend";
 
 /** Largest WAV/MP3 accepted by the backend media store. */
@@ -5,8 +6,8 @@ export const MAX_AUDIO_UPLOAD_BYTES = 64 * 1024 * 1024;
 
 /** Validation message for a chosen file, or null when it can be uploaded. */
 export function audioUploadProblem(file: File): string | null {
-  if (!/\.(wav|mp3)$/i.test(file.name)) return "Choose a .wav or .mp3 file.";
-  if (file.size > MAX_AUDIO_UPLOAD_BYTES) return "Files are limited to 64 MiB.";
+  if (!/\.(wav|mp3)$/i.test(file.name)) return tm("h1.uploadWavMp3");
+  if (file.size > MAX_AUDIO_UPLOAD_BYTES) return tm("h1.uploadTooBig");
   return null;
 }
 

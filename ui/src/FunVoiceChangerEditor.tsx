@@ -2,18 +2,30 @@ import { PropertySection } from "./PropertySection";
 import type { DiagnosticsSnapshot, DiscoveryDocument, Node } from "@audiorouter/contracts";
 import { ProcessorParameterEditor } from "./NodeEditors";
 import type { ProcessorDescriptor } from "./processorCatalog";
+import { useMessages } from "./i18n/useMessages";
+import { tx } from "./i18n";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 
 type VoicePreset = NonNullable<DiscoveryDocument["presets"]["voiceChanger"]>[number];
 type VoiceTelemetry = NonNullable<DiagnosticsSnapshot["nodeTelemetry"][number]["voiceChanger"]>;
 type Value = boolean | number | string;
 
 /** Inspector sections in signal-chain order; each starts with its on switch. */
-export const VOICE_CHANGER_SECTIONS: ReadonlyArray<{ title: string; parameters: readonly string[] }> = [
-  { title: "Noise gate", parameters: ["gateDb"] },
-  { title: "Pitch correction", parameters: ["correctEnabled", "key", "scale", "retuneMs", "humanizePercent"] },
-  { title: "Pitch and formant", parameters: ["shiftEnabled", "pitchSemitones", "pitchCents", "formantSemitones"] },
+export const VOICE_CHANGER_SECTIONS: ReadonlyArray<{ id: string; title: MessageKey; parameters: readonly string[] }> = [
+  { id: "Noise gate", title: "g5.funGate", parameters: ["gateDb"] },
   {
-    title: "Character",
+    id: "Pitch correction",
+    title: "g5.funCorrect",
+    parameters: ["correctEnabled", "key", "scale", "retuneMs", "humanizePercent"],
+  },
+  {
+    id: "Pitch and formant",
+    title: "g5.funShift",
+    parameters: ["shiftEnabled", "pitchSemitones", "pitchCents", "formantSemitones"],
+  },
+  {
+    id: "Character",
+    title: "g5.funCharacter",
     parameters: [
       "ringEnabled",
       "ringHz",
@@ -25,14 +37,19 @@ export const VOICE_CHANGER_SECTIONS: ReadonlyArray<{ title: string; parameters: 
       "drivePercent",
     ],
   },
-  { title: "Whisper", parameters: ["whisperPercent"] },
-  { title: "Tone", parameters: ["toneEnabled", "lowCutHz", "highCutHz", "peakHz", "peakDb"] },
+  { id: "Whisper", title: "g5.funWhisper", parameters: ["whisperPercent"] },
+  { id: "Tone", title: "g5.funTone", parameters: ["toneEnabled", "lowCutHz", "highCutHz", "peakHz", "peakDb"] },
   {
-    title: "Modulation",
+    id: "Modulation",
+    title: "g5.funModulation",
     parameters: ["modEnabled", "modType", "modRateHz", "modDepthPercent", "modFeedbackPercent"],
   },
-  { title: "Space", parameters: ["spaceEnabled", "spaceSizePercent", "spaceDecayMs", "spaceLevelPercent"] },
-  { title: "Output", parameters: ["mixPercent", "outputDb"] },
+  {
+    id: "Space",
+    title: "g5.funSpace",
+    parameters: ["spaceEnabled", "spaceSizePercent", "spaceDecayMs", "spaceLevelPercent"],
+  },
+  { id: "Output", title: "g5.funOutput", parameters: ["mixPercent", "outputDb"] },
 ];
 
 const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
@@ -61,9 +78,9 @@ export function presetEdited(node: Node, preset: VoicePreset | undefined, neutra
 
 /** Tuner strip text; fixed-size slot, "—" while there is no reading. */
 export function tunerText(telemetry: VoiceTelemetry | null, running: boolean, pitchOn: boolean): string {
-  if (!pitchOn) return "— pitch stages off";
-  if (!running) return "— press Play to see your note";
-  if (!telemetry?.voiced || telemetry.note === null || telemetry.cents === null) return "— no voiced sound";
+  if (!pitchOn) return tx("g5.funTunerOff");
+  if (!running) return tx("g5.funTunerPlay");
+  if (!telemetry?.voiced || telemetry.note === null || telemetry.cents === null) return tx("g5.funTunerNone");
   const cents = Math.round(telemetry.cents);
   return `${noteName(telemetry.note)} ${cents >= 0 ? "+" : "−"}${Math.abs(cents)} ¢ · ${Math.round(telemetry.f0Hz ?? 0)} Hz`;
 }
@@ -94,6 +111,7 @@ export function FunVoiceChangerEditor({
   onChange: (name: string, value: Value) => void;
   onApply: (changes: Array<[string, Value]>) => void;
 }) {
+  const tr = useMessages();
   const presetId = typeof node.parameters.preset === "string" ? node.parameters.preset : "custom";
   const preset = presets?.find((candidate) => candidate.id === presetId);
   const neutral = presets?.find((candidate) => candidate.id === "custom");
@@ -106,11 +124,11 @@ export function FunVoiceChangerEditor({
   };
   const basic = preset?.basicParameters ?? [];
   return (
-    <section className="voice-changer" aria-label="Fun Voice Changer editor">
+    <section className="voice-changer" aria-label={tr("g5.funEditorAria")}>
       <label className="voice-changer-preset">
-        Preset
+        {tr("g5.funPreset")}
         <select
-          aria-label="Voice preset"
+          aria-label={tr("g5.funPresetAria")}
           value={presetId}
           disabled={!connected || !presets}
           onChange={(event) => apply(event.target.value)}
@@ -123,10 +141,10 @@ export function FunVoiceChangerEditor({
         </select>
       </label>
       <div className="voice-changer-preset-status">
-        <small className="muted">{preset?.description ?? "Loading presets…"}</small>
+        <small className="muted">{preset?.description ?? tr("g5.funLoading")}</small>
         {/* Always rendered so the row never changes height (UI-17). */}
         <span className={`badge voice-changer-edited${edited ? "" : " is-hidden"}`} aria-hidden={!edited}>
-          edited
+          {tr("g5.funEdited")}
         </span>
         <button
           type="button"
@@ -134,10 +152,10 @@ export function FunVoiceChangerEditor({
           disabled={!connected || !edited || !preset}
           onClick={() => apply(presetId)}
         >
-          Reset to preset
+          {tr("g5.funReset")}
         </button>
       </div>
-      <p className="voice-changer-tuner" role="status" aria-label="Detected note">
+      <p className="voice-changer-tuner" role="status" aria-label={tr("g5.funDetected")}>
         {tunerText(telemetry, running, pitchOn)}
       </p>
       {basic.length > 0 ? (
@@ -153,11 +171,11 @@ export function FunVoiceChangerEditor({
           />
         </div>
       ) : (
-        <p className="muted">Custom starts with every effect off. Turn on the sections below to build a voice.</p>
+        <p className="muted">{tr("g5.funCustom")}</p>
       )}
       <div className="voice-changer-sections">
         {VOICE_CHANGER_SECTIONS.map((section) => (
-          <PropertySection key={section.title} kind={node.kind} title={section.title}>
+          <PropertySection key={section.id} kind={node.kind} title={tr(section.title)} sectionId={section.id}>
             <ProcessorParameterEditor
               node={node}
               processors={processors}
@@ -170,9 +188,7 @@ export function FunVoiceChangerEditor({
           </PropertySection>
         ))}
       </div>
-      <small className="muted">
-        Output is mono and 21 ms late. Bypass skips that delay, so the timing jumps; compare with Mix at 0 % instead.
-      </small>
+      <small className="muted">{tr("g5.funLatency")}</small>
     </section>
   );
 }

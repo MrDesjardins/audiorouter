@@ -12,6 +12,9 @@ import { usePanelMemory } from "./usePanelMemory";
 import type { Session } from "@audiorouter/contracts";
 import type { ClientRow } from "./backend";
 import { lazy, startTransition, Suspense, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { i18n } from "./i18n";
+import type { MessageKey } from "./i18n/generated/messageKeys";
+import { useMessages } from "./i18n/useMessages";
 
 const ApiPanel = lazy(() => import("./ApiPanel").then((module) => ({ default: module.ApiPanel })));
 const LogFilesPanel = lazy(() => import("./LogFilesPanel").then((module) => ({ default: module.LogFilesPanel })));
@@ -39,54 +42,64 @@ export type StatusView = "status" | "apps" | "timing";
 
 export type WorkbenchTab = "tools" | "properties" | "session" | "recording" | StatusView | SettingsPage;
 
-const DAILY_TABS: [WorkbenchTab, string][] = [
-  ["tools", "Tools"],
-  ["properties", "Properties"],
-  ["status", "Status"],
-  ["session", "Session"],
-  ["recording", "Recording"],
+const DAILY_TABS: [WorkbenchTab, MessageKey][] = [
+  ["tools", "workbench.tools"],
+  ["properties", "workbench.properties"],
+  ["status", "workbench.status"],
+  ["session", "workbench.session"],
+  ["recording", "workbench.recording"],
 ];
 
-const STATUS_VIEWS: [StatusView, string][] = [
-  ["status", "Readiness"],
-  ["apps", "Apps"],
-  ["timing", "Timing"],
+const STATUS_VIEWS: [StatusView, MessageKey][] = [
+  ["status", "workbench.readiness"],
+  ["apps", "workbench.apps"],
+  ["timing", "workbench.timing"],
 ];
 
-const SETTINGS_GROUPS: { title: string; pages: [SettingsPage, string][] }[] = [
+const SETTINGS_GROUPS: { title: MessageKey; pages: [SettingsPage, MessageKey][] }[] = [
   {
-    title: "Audio setup",
+    title: "settingsGroups.audioSetup",
     pages: [
-      ["virtualCables", "Virtual Cables"],
-      ["plugins", "Plug-ins"],
-      ["deviceAccess", "Device access"],
+      ["virtualCables", "settingsPages.virtualCables"],
+      ["plugins", "settingsPages.plugins"],
+      ["deviceAccess", "settingsPages.deviceAccess"],
     ],
   },
   {
-    title: "This app",
+    title: "settingsGroups.thisApp",
     pages: [
-      ["uiOptions", "Appearance"],
-      ["startup", "When AudioRouter starts"],
-      ["shortcuts", "Keyboard shortcuts"],
-      ["versions", "New versions"],
-      ["help", "Help"],
+      ["uiOptions", "settingsPages.uiOptions"],
+      ["startup", "settingsPages.startup"],
+      ["shortcuts", "settingsPages.shortcuts"],
+      ["versions", "settingsPages.versions"],
+      ["help", "settingsPages.help"],
     ],
   },
   {
-    title: "For developers",
+    title: "settingsGroups.forDevelopers",
     pages: [
-      ["mcp", "AI assistants (MCP)"],
-      ["api", "API"],
-      ["diagnostics", "Logs and support"],
-      ["clients", "Connected clients"],
-      ["sessionJson", "Session as JSON"],
-      ["catalog", "Tool catalog"],
-      ["identity", "App identity"],
+      ["mcp", "settingsPages.mcp"],
+      ["api", "settingsPages.api"],
+      ["diagnostics", "settingsPages.diagnostics"],
+      ["clients", "settingsPages.clients"],
+      ["sessionJson", "settingsPages.sessionJson"],
+      ["catalog", "settingsPages.catalog"],
+      ["identity", "settingsPages.identity"],
     ],
   },
 ];
+
+const SETTINGS_PAGE_TITLE_KEYS = Object.fromEntries(SETTINGS_GROUPS.flatMap((group) => group.pages)) as Record<
+  SettingsPage,
+  MessageKey
+>;
 
 export const SETTINGS_PAGES = SETTINGS_GROUPS.flatMap((group) => group.pages);
+
+/** The Settings page name in the active language, for navigation and search. */
+export function settingsPageTitle(page: SettingsPage): string {
+  return i18n.t(SETTINGS_PAGE_TITLE_KEYS[page]) as string;
+}
 
 /** One icon per page; a Record, so a new page cannot ship without one. */
 export const SETTINGS_PAGE_ICONS: Record<SettingsPage, IconName> = {
@@ -108,11 +121,11 @@ export const SETTINGS_PAGE_ICONS: Record<SettingsPage, IconName> = {
 };
 
 /** Words people search for, shared by the Settings search and Ctrl+K. */
-export const SETTINGS_PAGE_KEYWORDS: Record<SettingsPage, string> = {
+const SETTINGS_PAGE_KEYWORDS: Record<SettingsPage, string> = {
   virtualCables: "cable driver virtual device install",
   plugins: "vst vst2 vst3 effects scan folder",
   deviceAccess: "permission allow devices microphone privacy",
-  uiOptions: "theme dark light high contrast colors look animation autosave save",
+  uiOptions: "theme dark light high contrast colors look animation autosave save language",
   startup: "sign in login autostart autoplay tray",
   shortcuts: "keys keyboard hotkey shortcut chord",
   versions: "update release upgrade prerelease channel check now",
@@ -126,11 +139,18 @@ export const SETTINGS_PAGE_KEYWORDS: Record<SettingsPage, string> = {
   identity: "about version build",
 };
 
+/** Keep the English search alias available even after switching languages. */
+export function settingsPageKeywords(page: SettingsPage): string {
+  const keywords = SETTINGS_PAGE_KEYWORDS[page];
+  return page === "uiOptions" ? `${keywords} ${i18n.t("appearance.language")}` : keywords;
+}
+
 /** Settings pages whose name or keywords match, in their usual order. */
 export function matchingSettingsPages(query: string): Set<SettingsPage> {
   return new Set(
     SETTINGS_PAGES.filter(
-      ([id, title]) => paletteScore({ title, detail: "", keywords: SETTINGS_PAGE_KEYWORDS[id] }, query) > 0,
+      ([id]) =>
+        paletteScore({ title: settingsPageTitle(id), detail: "", keywords: settingsPageKeywords(id) }, query) > 0,
     ).map(([id]) => id),
   );
 }
@@ -166,110 +186,16 @@ export function tabPlace(tab: WorkbenchTab): "daily" | "status" | "settings" {
   }
 }
 
-const TAB_HELP: Partial<Record<WorkbenchTab, { title: string; content: ReactNode }>> = {
-  tools: {
-    title: "How to build a route",
-    content: (
-      <ol>
-        <li>Add a source: Input Device, Test Signal, Audio File, or an application.</li>
-        <li>Add processing tools such as Gain or Advanced EQ if needed.</li>
-        <li>Add an Output Device and choose your speakers or headphones in Properties.</li>
-        <li>Drag from the sending tool's blue dot to the receiving tool's orange dot.</li>
-        <li>Press Play to hear it. Use Save at the top when the canvas marks changes that need saving.</li>
-      </ol>
-    ),
-  },
-  timing: {
-    title: "How to read timing",
-    content: (
-      <p>
-        Play the session to see measured delay along each route. Timing shows where audio waits and how much processing
-        adds; it does not prove that an input has signal.
-      </p>
-    ),
-  },
-  session: {
-    title: "How to manage sessions",
-    content: (
-      <p>
-        Switch between saved setups, create or duplicate a session, or export a stopped copy. Save at the top keeps
-        marked edits. Revert edits returns to the saved route.
-      </p>
-    ),
-  },
-  status: {
-    title: "How to read status",
-    content: (
-      <p>
-        Check the six readiness indicators and the audio devices available on this PC. Choose a tool’s device in
-        Properties.
-      </p>
-    ),
-  },
-  apps: {
-    title: "How Apps works",
-    content: (
-      <p>
-        AudioRouter asks Windows which apps use each audio device and compares that with your route. It only reads: it
-        never changes Discord, your games or Windows. Change a setting in the app, then switch back here to see the
-        check update.
-      </p>
-    ),
-  },
-  virtualCables: {
-    title: "How to use virtual cables",
-    content: (
-      <p>
-        A cable joins two apps: send audio to its render endpoint, then select its matching capture endpoint in the
-        receiving app.
-      </p>
-    ),
-  },
-  uiOptions: {
-    title: "How to personalize the UI",
-    content: (
-      <p>
-        Choose a theme, customize its colors, or exchange a theme file. These preferences stay on this PC and do not
-        change your audio.
-      </p>
-    ),
-  },
-  recording: {
-    title: "How to record audio",
-    content: (
-      <p>
-        Connect a Recorder to the audio you want to save, choose a recording folder and format, then start the session
-        and press Record. Recording starts only on your explicit action.
-      </p>
-    ),
-  },
-  mcp: {
-    title: "How to connect an assistant",
-    content: (
-      <p>
-        Choose the setup for your assistant and grant only the access it needs. Client permissions control reads and
-        edits. The activity section shows tool names and outcomes without audio or secret values.
-      </p>
-    ),
-  },
-  api: {
-    title: "How to use the API",
-    content: (
-      <p>
-        Start the optional HTTP listener, choose who can connect, and use its documentation or request builder. Keep the
-        bearer token private; API edits use the same backend as the app.
-      </p>
-    ),
-  },
-  diagnostics: {
-    title: "How to use logs",
-    content: (
-      <p>
-        Open the logs folder or copy a support bundle when investigating a problem. Verbose logging temporarily records
-        more detail. Support bundles are saved locally; they are not uploaded.
-      </p>
-    ),
-  },
+const TAB_HELP: Partial<Record<WorkbenchTab, { title: MessageKey; body: MessageKey }>> = {
+  timing: { title: "g6.wbHelpTimingTitle", body: "g6.wbHelpTimingBody" },
+  status: { title: "g6.wbHelpStatusTitle", body: "g6.wbHelpStatusBody" },
+  apps: { title: "g6.wbHelpAppsTitle", body: "g6.wbHelpAppsBody" },
+  virtualCables: { title: "g6.wbHelpCablesTitle", body: "g6.wbHelpCablesBody" },
+  uiOptions: { title: "g6.wbHelpUiTitle", body: "g6.wbHelpUiBody" },
+  recording: { title: "g6.wbHelpRecordingTitle", body: "g6.wbHelpRecordingBody" },
+  mcp: { title: "g6.wbHelpMcpTitle", body: "g6.wbHelpMcpBody" },
+  api: { title: "g6.wbHelpApiTitle", body: "g6.wbHelpApiBody" },
+  diagnostics: { title: "g6.wbHelpLogsTitle", body: "g6.wbHelpLogsBody" },
 };
 export type McpActivity = {
   timeUnixMs: number;
@@ -294,37 +220,55 @@ export type McpTunnelStatus = {
   runtimeAvailable: boolean;
 };
 
-function clientRoleGuidance(role: ClientRow["role"] | null) {
+const TUNNEL_DESCRIPTION_KEYS: Record<McpTunnelStatus["status"], MessageKey> = {
+  connected: "g6.wbTunnelDescConnected",
+  connecting: "g6.wbTunnelDescConnecting",
+  actionNeeded: "g6.wbTunnelDescAction",
+  needsSetup: "g6.wbTunnelDescNeedsSetup",
+  disconnected: "g6.wbTunnelDescDisconnected",
+  notConfigured: "g6.wbTunnelDescNotConfigured",
+};
+
+const TUNNEL_STATUS_KEYS: Record<McpTunnelStatus["status"], MessageKey> = {
+  connected: "g6.wbTunnelStatusConnected",
+  connecting: "g6.wbTunnelStatusConnecting",
+  actionNeeded: "g6.wbTunnelStatusAction",
+  needsSetup: "g6.wbTunnelStatusNeedsSetup",
+  disconnected: "g6.wbTunnelStatusDisconnected",
+  notConfigured: "g6.wbTunnelStatusNotConfigured",
+};
+
+function clientRoleGuidance(role: ClientRow["role"] | null): MessageKey {
   switch (role) {
     case "observer":
-      return "Read-only: the assistant can inspect sessions, devices, and route status.";
+      return "g6.wbRoleObserver";
     case "editor":
-      return "Can also create and change saved sessions and routes.";
+      return "g6.wbRoleEditor";
     case "operator":
-      return "Can also control audio that is already playing, including mute and Stop.";
+      return "g6.wbRoleOperator";
     default:
-      return "Authorize this exact client as Observer to allow read-only access. Change its role only when you need additional actions.";
+      return "g6.wbRoleNone";
   }
 }
 
-function mcpFailureGuidance(errorKind: string | null | undefined) {
+function mcpFailureGuidance(errorKind: string | null | undefined): MessageKey {
   switch (errorKind) {
     case "permissionDenied":
-      return "The client lacks permission for that action. Check its role under Client permissions; a role change is always your choice.";
+      return "g6.wbFailPermission";
     case "unavailable":
-      return "AudioRouter or a required local service was unavailable. Reconnect AudioRouter, then try the read-only session check again.";
+      return "g6.wbFailUnavailable";
     case "revisionConflict":
-      return "The session changed during the request. Ask the assistant to reread the session and review the new change before trying again.";
+      return "g6.wbFailRevision";
     case "invalidParams":
-      return "The request did not match the tool's required inputs. Ask the assistant to read the tool description and retry with the listed fields.";
+      return "g6.wbFailInvalid";
     case "notFound":
-      return "The requested session or item was not found. Refresh the session list and select an existing item.";
+      return "g6.wbFailNotFound";
     case "rateLimited":
-      return "Too many requests arrived at once. Wait briefly, then retry once.";
+      return "g6.wbFailRate";
     case "unsupported":
-      return "This action is not available in the current AudioRouter setup. Review the tool result and available capabilities.";
+      return "g6.wbFailUnsupported";
     default:
-      return "See the activity entry for the tool and outcome. Argument values are intentionally not stored.";
+      return "g6.wbFailDefault";
   }
 }
 
@@ -433,6 +377,7 @@ export function Workbench({
   apiBuilder?: (baseUrl: string) => ReactNode;
   verboseLogging?: VerboseLoggingControl;
 }) {
+  const tr = useMessages();
   const tabsRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const previousTab = useRef(tab);
@@ -493,9 +438,9 @@ export function Workbench({
   const openMcpSetupPage = (page: "tunnels" | "apiKeys" | "chatgptConnectors") => {
     setTunnelMessage("");
     void onOpenMcpSetupPage(page)
-      .then(() => setTunnelMessage("Opened the setup page in your browser."))
+      .then(() => setTunnelMessage(tr("g6.wbTunnelOpened")))
       .catch((error: unknown) =>
-        setTunnelMessage(error instanceof Error ? error.message : "Could not open the setup page."),
+        setTunnelMessage(error instanceof Error ? error.message : tr("g6.wbTunnelOpenFailed")),
       );
   };
   const [tunnelBusy, setTunnelBusy] = useState(false);
@@ -521,29 +466,29 @@ export function Workbench({
   const selectedMcpClient = mcpClients.find((client) => client.clientId === selectedMcpClientId);
   const selectedMcpClientRole = selectedMcpClient && !selectedMcpClient.revoked ? selectedMcpClient.role : null;
   const localCheckText = !mcpSetupInfo
-    ? "Checking the installed MCP command and local client access…"
+    ? tr("g6.wbCheckPending")
     : !mcpSetupInfo.cliAvailable
-      ? "The installed MCP command is missing. Repair or update AudioRouter before connecting an assistant."
+      ? tr("g6.wbCheckMissing")
       : !connected
-        ? "AudioRouter is not connected to its backend. Reconnect the app before testing MCP."
+        ? tr("g6.wbCheckOffline")
         : !localClientRole
           ? localClient?.revoked
-            ? "This client is revoked. Review Client permissions before reconnecting it."
-            : "This client is not authorized yet. Authorize it as Observer to allow read-only access."
+            ? tr("g6.wbCheckRevoked")
+            : tr("g6.wbCheckUnauthorized")
           : localClientActivity?.outcome === "error"
-            ? mcpFailureGuidance(localClientActivity.errorKind)
+            ? tr(mcpFailureGuidance(localClientActivity.errorKind))
             : localClientActivity?.outcome === "ok"
-              ? "A local MCP request succeeded. This confirms local access, not that an external connector is enabled."
-              : "Ready for a read-only test. Ask the assistant to list AudioRouter sessions, then check Recent MCP activity.";
+              ? tr("g6.wbCheckOk")
+              : tr("g6.wbCheckReady");
   const copy = (value: string) => {
     if (!navigator.clipboard) {
-      setCopyMessage("Clipboard unavailable. Select the text and copy it.");
+      setCopyMessage(tr("g6.wbClipboardUnavailable"));
       return;
     }
     void navigator.clipboard
       .writeText(value)
-      .then(() => setCopyMessage("Copied to clipboard."))
-      .catch(() => setCopyMessage("Clipboard unavailable. Select the text and copy it."));
+      .then(() => setCopyMessage(tr("g6.wbCopied")))
+      .catch(() => setCopyMessage(tr("g6.wbClipboardUnavailable")));
   };
   const tabs = DAILY_TABS;
   const selectedDailyTab: WorkbenchTab = place === "status" ? "status" : tab;
@@ -553,11 +498,11 @@ export function Workbench({
     "aria-labelledby": place === "status" ? `workbench-tab-status-view-${tab}` : `workbench-tab-${tab}`,
     tabIndex: 0,
   };
-  const page = (id: SettingsPage, heading: string, content: ReactNode, eyebrow?: string) =>
+  const page = (id: SettingsPage, content: ReactNode, eyebrow?: MessageKey) =>
     tab === id && (
       <section className="workbench-page" role="tabpanel" {...panelProps}>
-        {eyebrow && <p className="eyebrow">{eyebrow}</p>}
-        <h2>{heading}</h2>
+        {eyebrow && <p className="eyebrow">{tr(eyebrow)}</p>}
+        <h2>{settingsPageTitle(id)}</h2>
         {content}
       </section>
     );
@@ -567,26 +512,26 @@ export function Workbench({
       className={`right-workbench${inSettings ? " settings-view" : ""}`}
       id="routing-workbench"
       tabIndex={-1}
-      aria-label="Tools and settings"
+      aria-label={tr("workbench.toolsAndSettings")}
       onFocusCapture={(event) => {
         lastFocusedControl.current = event.target;
       }}
     >
       {inSettings && (
-        <nav className="settings-nav" aria-label="Settings">
+        <nav className="settings-nav" aria-label={tr("workbench.settings")}>
           <button
             type="button"
             className="secondary settings-back"
             onClick={() => startTransition(() => onTab(lastRouteTab.current))}
           >
-            <span aria-hidden="true">←</span> Back to the route
+            <span aria-hidden="true">←</span> {tr("workbench.backToRoute")}
           </button>
           <label className="settings-search">
-            <span>Find a setting</span>
+            <span>{tr("workbench.findSetting")}</span>
             <input
               type="search"
               value={settingsQuery}
-              placeholder="Shortcut, theme, logs…"
+              placeholder={tr("workbench.searchPlaceholder")}
               aria-describedby="settings-search-hint"
               onChange={(event) => setSettingsQuery(event.target.value)}
               onKeyDown={(event) => {
@@ -601,15 +546,13 @@ export function Workbench({
               }}
             />
             <small id="settings-search-hint">
-              {shownList.length === 0
-                ? "No settings match. Ctrl+K searches everything."
-                : "Ctrl+K searches everything."}
+              {shownList.length === 0 ? tr("workbench.noSettingsMatch") : tr("workbench.searchHint")}
             </small>
           </label>
           <div
             role="tablist"
             aria-orientation="vertical"
-            aria-label="Settings pages"
+            aria-label={tr("workbench.settingsPages")}
             ref={tabsRef}
             onKeyDown={(event) => {
               if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
@@ -626,7 +569,7 @@ export function Workbench({
             {SETTINGS_GROUPS.filter((group) => group.pages.some(([id]) => shownPages.has(id))).map((group) => (
               <div key={group.title} className="settings-nav-group" role="presentation">
                 <p className="eyebrow" role="presentation">
-                  {group.title}
+                  {tr(group.title)}
                 </p>
                 {group.pages
                   .filter(([id]) => shownPages.has(id))
@@ -643,7 +586,7 @@ export function Workbench({
                       onClick={() => startTransition(() => onTab(id))}
                     >
                       <Icon name={SETTINGS_PAGE_ICONS[id]} size={16} />
-                      {label}
+                      {tr(label)}
                     </button>
                   ))}
               </div>
@@ -652,10 +595,10 @@ export function Workbench({
         </nav>
       )}
       <div ref={inSettings ? undefined : tabsRef} className="workbench-tabs" hidden={inSettings}>
-        <div className="workbench-tablist" role="tablist" aria-label="Right sidebar">
+        <div className="workbench-tablist" role="tablist" aria-label={tr("workbench.sidebar")}>
           {tabs.map(([id, label]) => (
             <button
-              key={label}
+              key={id}
               type="button"
               role="tab"
               id={`workbench-tab-${id}`}
@@ -667,7 +610,7 @@ export function Workbench({
               tabIndex={selectedDailyTab === id ? 0 : -1}
               aria-selected={selectedDailyTab === id}
               aria-describedby={id === "status" && statusHasProblem ? "status-problem-description" : undefined}
-              title={id === "status" && statusHasProblem ? "Setup problems found. Open Status for details." : undefined}
+              title={id === "status" && statusHasProblem ? tr("workbench.statusProblem") : undefined}
               className={selectedDailyTab === id ? "active" : ""}
               onKeyDown={(event) => {
                 // The Properties overlay precedes the tablist in DOM order.
@@ -683,7 +626,7 @@ export function Workbench({
                   }
                   return;
                 }
-                const index = tabs.findIndex(([, name]) => name === label);
+                const index = tabs.findIndex(([key]) => key === id);
                 const next =
                   event.key === "Home"
                     ? 0
@@ -702,7 +645,7 @@ export function Workbench({
               }}
               onClick={() => startTransition(() => onTab(id))}
             >
-              {label}
+              {tr(label)}
               {id === "status" && (
                 <span
                   aria-hidden="true"
@@ -716,18 +659,18 @@ export function Workbench({
         <button
           type="button"
           className="settings-gear"
-          aria-label="Settings"
-          title="Settings"
+          aria-label={tr("workbench.settings")}
+          title={tr("workbench.settings")}
           onClick={() => startTransition(() => onTab(lastSettingsPage.current))}
         >
           <Icon name="settings" />
         </button>
       </div>
       <span id="status-problem-description" hidden>
-        Setup problems found. Open Status for details.
+        {tr("workbench.statusProblem")}
       </span>
       {place === "status" && (
-        <div className="status-views" role="tablist" aria-label="Status views">
+        <div className="status-views" role="tablist" aria-label={tr("g6.wbStatusViews")}>
           {STATUS_VIEWS.map(([id, label]) => (
             <button
               key={id}
@@ -750,36 +693,56 @@ export function Workbench({
               }}
               onClick={() => startTransition(() => onTab(id))}
             >
-              {label}
+              {tr(label)}
             </button>
           ))}
         </div>
       )}
+      {tab === "tools" && (
+        <div className="workbench-help">
+          <HelpDisclosure key={tab} title={tr("toolShelf.routeHelp")}>
+            <ol>
+              <li>{tr("toolShelf.step1")}</li>
+              <li>{tr("toolShelf.step2")}</li>
+              <li>{tr("toolShelf.step3")}</li>
+              <li>{tr("toolShelf.step4")}</li>
+              <li>{tr("toolShelf.step5")}</li>
+            </ol>
+          </HelpDisclosure>
+        </div>
+      )}
+      {tab === "session" && (
+        <div className="workbench-help">
+          <HelpDisclosure key={tab} title={tr("workflowUi.sessionHelp")}>
+            <p>{tr("workflowUi.sessionHelpBody")}</p>
+          </HelpDisclosure>
+        </div>
+      )}
       {TAB_HELP[tab] && (
         <div className="workbench-help">
-          <HelpDisclosure key={tab} title={TAB_HELP[tab].title}>
-            {TAB_HELP[tab].content}
+          <HelpDisclosure key={tab} title={tr(TAB_HELP[tab].title)}>
+            <p>{tr(TAB_HELP[tab].body)}</p>
           </HelpDisclosure>
         </div>
       )}
       <Suspense
         fallback={
           <section className="workbench-page workbench-loading" role="status" aria-busy="true">
-            Loading panel...
+            {tr("g6.wbLoadingPanel")}
           </section>
         }
       >
         {tab === "tools" && (
           <div className="workbench-tool-search">
             <label>
-              Find a tool
+              {tr("toolShelf.find")}
               <input
                 ref={searchRef}
                 type="search"
-                aria-label="Find a tool"
+                aria-label={tr("toolShelf.find")}
                 value={librarySearch}
                 onChange={(event) => onLibrarySearch(event.target.value)}
-                placeholder="Input, gain, recorder…"
+                placeholder={tr("toolShelf.placeholder")}
               />
             </label>
           </div>
@@ -808,62 +771,56 @@ export function Workbench({
         )}
         {tab === "timing" && (
           <section className="workbench-page" role="tabpanel" {...panelProps}>
-            <p className="eyebrow">Where the sound spends time</p>
-            <h2>Signal timing</h2>
+            <p className="eyebrow">{tr("g6.wbTimingEyebrow")}</p>
+            <h2>{tr("workbench.signalTiming")}</h2>
             {timingContent}
           </section>
         )}
         {tab === "properties" && (
           <section className="workbench-page">
-            <h2>Tool properties</h2>
-            <p className="muted">Select a tool on the canvas to edit it here.</p>
+            <h2>{tr("workbench.toolProperties")}</h2>
+            <p className="muted">{tr("g6.wbSelectTool")}</p>
           </section>
         )}
         {tab === "status" && (
           <section className="workbench-page" role="tabpanel" {...panelProps}>
-            <h2>Status</h2>
+            <h2>{tr("workbench.status")}</h2>
             {statusContent}
           </section>
         )}
         {tab === "apps" && (
           <section className="workbench-page" role="tabpanel" {...panelProps}>
-            <h2>Apps</h2>
+            <h2>{tr("workbench.apps")}</h2>
             {appsContent}
           </section>
         )}
-        {page("virtualCables", "Virtual Cables", virtualCablesContent)}
-        {page("uiOptions", "Appearance", uiOptionsContent)}
-        {page("plugins", "Plug-ins", settingsContent.plugins)}
-        {page("deviceAccess", "Device access", settingsContent.deviceAccess)}
-        {page("startup", "When AudioRouter starts", settingsContent.startup)}
-        {page("shortcuts", "Keyboard shortcuts", settingsContent.shortcuts)}
-        {page("versions", "New versions", settingsContent.versions)}
-        {page("help", "Help", settingsContent.help)}
-        {page("clients", "Connected clients", settingsContent.clients)}
-        {page("sessionJson", "Session as JSON", settingsContent.sessionJson, "For scripts")}
-        {page("catalog", "Tool catalog", settingsContent.catalog)}
-        {page("identity", "App identity", settingsContent.identity)}
+        {page("virtualCables", virtualCablesContent)}
+        {page("uiOptions", uiOptionsContent)}
+        {page("plugins", settingsContent.plugins)}
+        {page("deviceAccess", settingsContent.deviceAccess)}
+        {page("startup", settingsContent.startup)}
+        {page("shortcuts", settingsContent.shortcuts)}
+        {page("versions", settingsContent.versions)}
+        {page("help", settingsContent.help)}
+        {page("clients", settingsContent.clients)}
+        {page("sessionJson", settingsContent.sessionJson, "workbench.forScripts")}
+        {page("catalog", settingsContent.catalog)}
+        {page("identity", settingsContent.identity)}
         {tab === "recording" && (
           <section className="workbench-page" role="tabpanel" {...panelProps}>
-            <h2>Recording</h2>
-            <p className="muted">
-              Recording starts only after you explicitly arm and start a recorder. Confirm the destination and format
-              before recording.
-            </p>
+            <h2>{tr("workbench.recording")}</h2>
+            <p className="muted">{tr("workflowUi.recordingIntro")}</p>
             {recordingContent}
           </section>
         )}
         {tab === "session" && (
           <section className="workbench-page session-page" role="tabpanel" {...panelProps}>
-            <h2>Sessions</h2>
-            <p className="muted">
-              Switch between saved audio setups, or create a copy to try another arrangement. Use Save at the top when
-              you want to keep your edits.
-            </p>
+            <h2>{tr("workbench.sessions")}</h2>
+            <p className="muted">{tr("workflowUi.sessionIntro")}</p>
             <label>
-              Current session
+              {tr("workflowUi.currentSession")}
               <select
-                aria-label="Choose session"
+                aria-label={tr("workflowUi.chooseSession")}
                 value={selectedSessionId}
                 onChange={(event) => {
                   setRenaming(false);
@@ -879,9 +836,9 @@ export function Workbench({
             </label>
             {renaming ? (
               <label>
-                New session name
+                {tr("workflowUi.newSessionName")}
                 <TextField
-                  aria-label="Session name"
+                  aria-label={tr("workflowUi.sessionName")}
                   value={sessionName}
                   maxLength={120}
                   disabled={!connected}
@@ -894,21 +851,21 @@ export function Workbench({
               </label>
             ) : (
               <button type="button" className="secondary" onClick={() => setRenaming(true)} disabled={!connected}>
-                Rename
+                {tr("workflowUi.rename")}
               </button>
             )}
             <div className="session-action-grid">
               <button type="button" onClick={onNewSession} disabled={!connected}>
-                New
+                {tr("workflowUi.newSession")}
               </button>
               <button type="button" className="secondary" onClick={onDuplicate} disabled={!connected}>
-                Duplicate
+                {tr("workflowUi.duplicate")}
               </button>
               <button type="button" className="secondary" onClick={onDiscard} disabled={!connected}>
-                Revert edits
+                {tr("workflowUi.revert")}
               </button>
               <button type="button" className="danger" onClick={onDelete} disabled={!connected}>
-                Delete session
+                {tr("workflowUi.deleteSession")}
               </button>
             </div>
             {sessionFileContent}
@@ -919,24 +876,21 @@ export function Workbench({
         {tab === "mcp" && (
           <section className="workbench-page mcp-page" role="tabpanel" {...panelProps}>
             <header className="mcp-heading">
-              <p className="eyebrow">Model Context Protocol</p>
-              <h2>MCP connections</h2>
-              <p className="muted">
-                AudioRouter speaks standard MCP. Choose a local app below, or connect ChatGPT through its optional
-                OpenAI tunnel.
-              </p>
+              <p className="eyebrow">{tr("g6.wbMcpEyebrow")}</p>
+              <h2>{tr("workbench.mcpConnections")}</h2>
+              <p className="muted">{tr("settingsCopy.mcpIntro")}</p>
             </header>
 
             <section className="mcp-path-picker" aria-labelledby="mcp-path-heading">
-              <h3 id="mcp-path-heading">Where does your assistant run?</h3>
-              <div className="mcp-path-options" role="group" aria-label="Assistant connection type">
+              <h3 id="mcp-path-heading">{tr("settingsCopy.mcpWhere")}</h3>
+              <div className="mcp-path-options" role="group" aria-label={tr("settingsCopy.mcpType")}>
                 <button
                   type="button"
                   aria-pressed={mcpConnectionPath === "local"}
                   className={mcpConnectionPath === "local" ? "active" : "secondary"}
                   onClick={() => setMcpConnectionPath("local")}
                 >
-                  On this PC
+                  {tr("g6.wbPathLocal")}
                 </button>
                 <button
                   type="button"
@@ -944,7 +898,7 @@ export function Workbench({
                   className={mcpConnectionPath === "cowork" ? "active" : "secondary"}
                   onClick={() => setMcpConnectionPath("cowork")}
                 >
-                  Local Cowork
+                  {tr("g6.wbPathCowork")}
                 </button>
                 <button
                   type="button"
@@ -952,28 +906,28 @@ export function Workbench({
                   className={mcpConnectionPath === "chatgpt" ? "active" : "secondary"}
                   onClick={() => setMcpConnectionPath("chatgpt")}
                 >
-                  ChatGPT
+                  {tr("g6.wbPathChatgpt")}
                 </button>
               </div>
               <p className="muted mcp-path-note" aria-live="polite">
                 {mcpConnectionPath === "local"
-                  ? "Use the local stdio command for Codex, Claude Code, or another assistant running on this PC."
+                  ? tr("g6.wbNoteLocal")
                   : mcpConnectionPath === "cowork"
-                    ? "Local Cowork uses an exported plugin on this PC. Cloud Cowork cannot use the local command; remote access is not available yet."
-                    : "ChatGPT uses the optional OpenAI Secure MCP Tunnel below. It is separate from standard local MCP."}
+                    ? tr("g6.wbNoteCowork")
+                    : tr("g6.wbNoteChatgpt")}
               </p>
               <div className="mcp-client-access" role="status" aria-live="polite">
                 <strong>
                   {selectedMcpClientRole
-                    ? `${selectedMcpClientId}: ${selectedMcpClientRole}`
+                    ? tr("g6.wbClientRole", { id: selectedMcpClientId, role: selectedMcpClientRole })
                     : selectedMcpClient?.revoked
-                      ? `${selectedMcpClientId}: revoked`
-                      : `${selectedMcpClientId || "Client ID required"}: not authorized`}
+                      ? tr("g6.wbClientRevoked", { id: selectedMcpClientId })
+                      : tr("g6.wbClientNotAuthorized", {
+                          id: selectedMcpClientId || tr("g6.wbClientIdRequired"),
+                        })}
                 </strong>
-                <p>{clientRoleGuidance(selectedMcpClientRole)}</p>
-                <p className="muted">
-                  MCP clients cannot receive device administration or press Play to open audio devices.
-                </p>
+                <p>{tr(clientRoleGuidance(selectedMcpClientRole))}</p>
+                <p className="muted">{tr("g6.wbNoAdmin")}</p>
                 <button
                   type="button"
                   className="secondary"
@@ -988,7 +942,7 @@ export function Workbench({
                     }
                   }}
                 >
-                  Set client permissions
+                  {tr("g6.wbSetPermissions")}
                 </button>
               </div>
             </section>
@@ -997,74 +951,49 @@ export function Workbench({
               <section className="mcp-chatgpt-card" aria-labelledby="mcp-chatgpt-title">
                 <div className="mcp-card-heading">
                   <div>
-                    <h3 id="mcp-chatgpt-title">ChatGPT · OpenAI tunnel</h3>
+                    <h3 id="mcp-chatgpt-title">{tr("g6.wbTunnelTitle")}</h3>
                     <p className="muted mcp-tunnel-description">
-                      {mcpTunnelStatus?.status === "connected"
-                        ? "The AudioRouter tunnel is ready. Finish adding it in ChatGPT connector settings."
-                        : mcpTunnelStatus?.status === "connecting"
-                          ? "Starting the secure connection…"
-                          : mcpTunnelStatus?.status === "actionNeeded"
-                            ? "The tunnel stopped. Check the tunnel ID, key access, and internet connection."
-                            : mcpTunnelStatus?.status === "needsSetup"
-                              ? "Your tunnel ID is saved. Add its restricted runtime key to connect."
-                              : mcpTunnelStatus?.status === "disconnected"
-                                ? "Your OpenAI tunnel is set up and ready to connect."
-                                : mcpTunnelStatus?.status === "notConfigured"
-                                  ? "Connect an existing OpenAI tunnel to AudioRouter."
-                                  : "Checking the local tunnel…"}
+                      {tr(
+                        mcpTunnelStatus ? TUNNEL_DESCRIPTION_KEYS[mcpTunnelStatus.status] : "g6.wbTunnelDescChecking",
+                      )}
                     </p>
                   </div>
                   <span className={`mcp-status mcp-status-${mcpTunnelStatus?.status ?? "checking"}`}>
-                    {mcpTunnelStatus?.status === "connected"
-                      ? "Tunnel ready"
-                      : mcpTunnelStatus?.status === "connecting"
-                        ? "Connecting"
-                        : mcpTunnelStatus?.status === "actionNeeded"
-                          ? "Action needed"
-                          : mcpTunnelStatus?.status === "needsSetup"
-                            ? "Needs setup"
-                            : mcpTunnelStatus?.status === "disconnected"
-                              ? "Disconnected"
-                              : mcpTunnelStatus?.status === "notConfigured"
-                                ? "Not connected"
-                                : "Checking"}
+                    {tr(mcpTunnelStatus ? TUNNEL_STATUS_KEYS[mcpTunnelStatus.status] : "g6.wbTunnelStatusChecking")}
                   </span>
                 </div>
                 <p>
-                  ChatGPT uses the separate <code>audiorouter-chatgpt</code> client with read-only access. To let it
-                  create or edit sessions, grant Editor under Client permissions; grant Operator to also let it press
-                  Soundboard sounds and control audio that is playing. You still press Play here. Audio stays on this
-                  PC; only MCP requests and results cross the encrypted tunnel.
+                  {tr("g6.wbChatgptInfoBefore")}
+                  <code>audiorouter-chatgpt</code>
+                  {tr("g6.wbChatgptInfoAfter")}
                 </p>
                 {mcpTunnelStatus && !mcpTunnelStatus.runtimeAvailable && (
                   <p className="mcp-tunnel-error" role="status">
-                    The OpenAI tunnel runtime is missing from this AudioRouter installation. Update or reinstall
-                    AudioRouter, then try again.
+                    {tr("g6.wbRuntimeMissing")}
                   </p>
                 )}
                 {!mcpTunnelStatus && (
                   <p className="mcp-tunnel-message" role="status" aria-live="polite">
-                    Checking this PC for the optional OpenAI tunnel…
+                    {tr("g6.wbCheckingTunnel")}
                   </p>
                 )}
                 {mcpTunnelStatus?.runtimeAvailable &&
                   (!mcpTunnelStatus.configured || mcpTunnelStatus.status === "needsSetup" || showTunnelSetup) && (
                     <div className="mcp-tunnel-setup">
                       <p className="muted">
-                        <strong>1.</strong> Create or choose an OpenAI tunnel. <strong>2.</strong> Create a restricted
-                        runtime key with <strong>Tunnels Read + Use</strong>. <strong>3.</strong> Enter both below. The
-                        key is encrypted for your Windows account and is never saved in ChatGPT.
+                        <strong>1.</strong> {tr("g6.wbSetupStep1")} <strong>2.</strong> {tr("g6.wbSetupStep2")}{" "}
+                        <strong>Tunnels Read + Use</strong>. <strong>3.</strong> {tr("g6.wbSetupStep3")}
                       </p>
                       <button type="button" className="mcp-chatgpt-open" onClick={() => openMcpSetupPage("tunnels")}>
-                        Open OpenAI tunnel settings
+                        {tr("g6.wbOpenTunnelSettings")}
                       </button>
                       <button type="button" className="mcp-chatgpt-open" onClick={() => openMcpSetupPage("apiKeys")}>
-                        Create restricted runtime key
+                        {tr("g6.wbCreateKey")}
                       </button>
                       <label>
-                        Tunnel ID
+                        {tr("g6.wbTunnelId")}
                         <input
-                          aria-label="OpenAI tunnel ID"
+                          aria-label={tr("g6.wbTunnelIdAria")}
                           autoComplete="off"
                           value={tunnelIdInput || mcpTunnelStatus?.tunnelId || ""}
                           onChange={(event) => setTunnelIdInput(event.target.value.trim())}
@@ -1073,14 +1002,14 @@ export function Workbench({
                         />
                       </label>
                       <label>
-                        Restricted runtime key
+                        {tr("g6.wbRuntimeKey")}
                         <input
-                          aria-label="OpenAI restricted runtime key"
+                          aria-label={tr("g6.wbRuntimeKeyAria")}
                           type="password"
                           autoComplete="new-password"
                           value={runtimeKeyInput}
                           onChange={(event) => setRuntimeKeyInput(event.target.value)}
-                          placeholder="Paste the key once"
+                          placeholder={tr("g6.wbPasteKey")}
                           disabled={tunnelBusy}
                         />
                       </label>
@@ -1104,16 +1033,14 @@ export function Workbench({
                               setShowTunnelSetup(false);
                               return onMcpTunnelConnect();
                             })
-                            .then(() => setTunnelMessage("Secure tunnel starting."))
+                            .then(() => setTunnelMessage(tr("g6.wbTunnelStarting")))
                             .catch((error: unknown) =>
-                              setTunnelMessage(
-                                error instanceof Error ? error.message : "Could not connect the tunnel.",
-                              ),
+                              setTunnelMessage(error instanceof Error ? error.message : tr("g6.wbTunnelConnectFailed")),
                             )
                             .finally(() => setTunnelBusy(false));
                         }}
                       >
-                        {tunnelBusy ? "Connecting…" : "Save securely and connect"}
+                        {tunnelBusy ? tr("g6.wbConnecting") : tr("g6.wbSaveConnect")}
                       </button>
                     </div>
                   )}
@@ -1131,12 +1058,12 @@ export function Workbench({
                             onClick={() => {
                               setTunnelBusy(true);
                               void onMcpTunnelDisconnect()
-                                .then(() => setTunnelMessage("The local tunnel has stopped."))
-                                .catch(() => setTunnelMessage("Could not stop the local tunnel."))
+                                .then(() => setTunnelMessage(tr("g6.wbTunnelStopped")))
+                                .catch(() => setTunnelMessage(tr("g6.wbTunnelStopFailed")))
                                 .finally(() => setTunnelBusy(false));
                             }}
                           >
-                            Disconnect
+                            {tr("g6.wbDisconnect")}
                           </button>
                         ) : (
                           <button
@@ -1146,20 +1073,20 @@ export function Workbench({
                               setTunnelBusy(true);
                               setTunnelMessage("");
                               void onMcpTunnelConnect()
-                                .then(() => setTunnelMessage("Secure tunnel starting."))
+                                .then(() => setTunnelMessage(tr("g6.wbTunnelStarting")))
                                 .catch((error: unknown) =>
                                   setTunnelMessage(
-                                    error instanceof Error ? error.message : "Could not connect the tunnel.",
+                                    error instanceof Error ? error.message : tr("g6.wbTunnelConnectFailed"),
                                   ),
                                 )
                                 .finally(() => setTunnelBusy(false));
                             }}
                           >
                             {tunnelBusy
-                              ? "Connecting…"
+                              ? tr("g6.wbConnecting")
                               : mcpTunnelStatus.status === "actionNeeded"
-                                ? "Retry connection"
-                                : "Connect"}
+                                ? tr("g6.wbRetry")
+                                : tr("g6.wbConnect")}
                           </button>
                         )}
                       </div>
@@ -1171,21 +1098,18 @@ export function Workbench({
                               className="mcp-chatgpt-open"
                               onClick={() => openMcpSetupPage("chatgptConnectors")}
                             >
-                              Open ChatGPT connector settings
+                              {tr("g6.wbOpenConnectors")}
                             </button>
-                            <p className="muted mcp-tunnel-chat-guidance">
-                              Next: add this tunnel as a connector, then enable AudioRouter from the add-tools menu in a
-                              conversation.
-                            </p>
+                            <p className="muted mcp-tunnel-chat-guidance">{tr("g6.wbNextConnector")}</p>
                           </>
                         )}
                         {mcpTunnelStatus.status !== "connected" && (
                           <p className="muted mcp-tunnel-chat-guidance">
                             {mcpTunnelStatus.status === "actionNeeded"
-                              ? "Retry the tunnel connection. ChatGPT setup appears here after it connects."
+                              ? tr("g6.wbGuideRetry")
                               : mcpTunnelStatus.status === "connecting"
-                                ? "When the tunnel connects, add it in ChatGPT and enable it from the conversation's add-tools menu."
-                                : "After connecting, add this tunnel in ChatGPT, then enable it from the conversation's add-tools menu."}
+                                ? tr("g6.wbGuideConnecting")
+                                : tr("g6.wbGuideDefault")}
                           </p>
                         )}
                       </div>
@@ -1196,7 +1120,7 @@ export function Workbench({
                           disabled={tunnelBusy}
                           onClick={() => setShowTunnelSetup(true)}
                         >
-                          Update tunnel details
+                          {tr("g6.wbUpdateTunnel")}
                         </button>
                         <button
                           type="button"
@@ -1208,15 +1132,13 @@ export function Workbench({
                               .then(() => {
                                 setShowTunnelSetup(false);
                                 setTunnelIdInput("");
-                                setTunnelMessage(
-                                  "Saved details removed from this PC. The OpenAI tunnel and key still exist.",
-                                );
+                                setTunnelMessage(tr("g6.wbForgetRemoved"));
                               })
-                              .catch(() => setTunnelMessage("Could not remove the saved tunnel details."))
+                              .catch(() => setTunnelMessage(tr("g6.wbForgetFailed")))
                               .finally(() => setTunnelBusy(false));
                           }}
                         >
-                          Forget saved details
+                          {tr("g6.wbForget")}
                         </button>
                       </div>
                     </div>
@@ -1230,14 +1152,10 @@ export function Workbench({
             {mcpConnectionPath === "cowork" && (
               <section className="mcp-remote-info" aria-labelledby="mcp-cowork-title">
                 <div className="mcp-card-heading">
-                  <h3 id="mcp-cowork-title">Cowork</h3>
-                  <span className="mcp-status">Local plugin</span>
+                  <h3 id="mcp-cowork-title">{tr("g6.wbCoworkTitle")}</h3>
+                  <span className="mcp-status">{tr("g6.wbLocalPlugin")}</span>
                 </div>
-                <p className="muted">
-                  For local Cowork on this PC, export the plugin, then upload it in Cowork → Customize → Plugins. Keep
-                  AudioRouter running. Export enables read-only access; choose Editor in Client permissions to allow
-                  edits. Cloud Cowork tasks need a remote connection, which is not available yet.
-                </p>
+                <p className="muted">{tr("g6.wbCoworkHelp")}</p>
                 <div className="mcp-cowork-action">
                   {mcpSetupInfo?.cliAvailable && mcpSetupInfo.coworkPluginAvailable && onExportCoworkPlugin ? (
                     <button
@@ -1245,73 +1163,63 @@ export function Workbench({
                       disabled={!connected || coworkBusy}
                       onClick={() => {
                         setCoworkBusy(true);
-                        setCoworkMessage("Checking the local MCP connection…");
+                        setCoworkMessage(tr("g6.wbCoworkChecking"));
                         void onExportCoworkPlugin()
-                          .then((path) =>
-                            setCoworkMessage(`Saved to ${path}. Upload this ZIP in Cowork → Customize → Plugins.`),
-                          )
+                          .then((path) => setCoworkMessage(tr("g6.wbCoworkSaved", { path })))
                           .catch((error: unknown) =>
                             setCoworkMessage(error instanceof Error ? error.message : String(error)),
                           )
                           .finally(() => setCoworkBusy(false));
                       }}
                     >
-                      Export Cowork plugin
+                      {tr("g6.wbCoworkExport")}
                     </button>
                   ) : (
-                    <p className="muted">
-                      Open the current AudioRouter desktop app with its installed MCP command to export.
-                    </p>
+                    <p className="muted">{tr("g6.wbCoworkDesktopOnly")}</p>
                   )}
                 </div>
                 <p className="mcp-cowork-message" role="status" aria-live="polite">
-                  {coworkMessage || "The plugin is for this PC and does not include audio or credentials."}
+                  {coworkMessage || tr("g6.wbCoworkNote")}
                 </p>
               </section>
             )}
 
             {mcpConnectionPath === "local" && (
               <details className="mcp-secondary-section local-assistant-setup" open>
-                <summary>Connect a local assistant</summary>
-                <p>
-                  For Codex, Claude Code, or another assistant running on this PC. Your assistant launches AudioRouter’s
-                  local MCP command; keep AudioRouter open while using it.
-                </p>
+                <summary>{tr("g6.wbLocalSummary")}</summary>
+                <p>{tr("g6.wbLocalIntro")}</p>
                 <ol className="setup-instructions">
                   <li>
-                    <h3>Choose your assistant</h3>
+                    <h3>{tr("g6.wbChooseAssistant")}</h3>
                     <label>
-                      Assistant
+                      {tr("g6.wbAssistant")}
                       <select
-                        aria-label="Local assistant"
+                        aria-label={tr("g6.wbAssistantAria")}
                         value={localAssistant}
                         onChange={(event) => setLocalAssistant(event.target.value)}
                       >
                         <option value="codex">Codex</option>
                         <option value="claude">Claude Code</option>
-                        <option value="other">Another MCP app</option>
+                        <option value="other">{tr("g6.wbAssistantOther")}</option>
                       </select>
                     </label>
                   </li>
                   <li>
-                    <h3>Name this connection and grant access</h3>
-                    <p>This name identifies permissions in AudioRouter. It is not your assistant account.</p>
+                    <h3>{tr("g6.wbNameConnection")}</h3>
+                    <p>{tr("g6.wbNameHelp")}</p>
                     <label>
-                      Connection name
+                      {tr("g6.wbConnectionName")}
                       <input
-                        aria-label="Assistant client ID"
+                        aria-label={tr("g6.wbClientIdAria")}
                         value={mcpClientId}
                         maxLength={128}
                         onChange={(event) => setMcpClientId(event.target.value.trim())}
                       />
                     </label>
-                    <p className="muted">
-                      Use this exact connection name below. Start with observer access; allow edits only when you need
-                      them.
-                    </p>
+                    <p className="muted">{tr("g6.wbUseExactName")}</p>
                   </li>
                   <li>
-                    <h3>Check local access</h3>
+                    <h3>{tr("g6.wbCheckAccess")}</h3>
                     <p className="mcp-local-check" role="status" aria-live="polite">
                       {localCheckText}
                     </p>
@@ -1319,16 +1227,16 @@ export function Workbench({
                   <li>
                     <h3>
                       {localAssistant === "codex"
-                        ? "Add this to your Codex configuration"
+                        ? tr("g6.wbAddCodex")
                         : localAssistant === "claude"
-                          ? "Run this in PowerShell"
-                          : "Add a command connection in your MCP app"}
+                          ? tr("g6.wbRunPowershell")
+                          : tr("g6.wbAddCommand")}
                     </h3>
                     {mcpSetupInfo?.cliAvailable ? (
                       <>
                         {localAssistant === "codex" ? (
                           <>
-                            <p>Paste this block into your Codex config.toml, then reload its MCP connections.</p>
+                            <p>{tr("g6.wbPasteCodex")}</p>
                             <pre className="mcp-command">{codexConfig}</pre>
                             <button
                               type="button"
@@ -1336,12 +1244,12 @@ export function Workbench({
                               disabled={!mcpClientId}
                               onClick={() => copy(codexConfig)}
                             >
-                              Copy Codex config
+                              {tr("g6.wbCopyCodex")}
                             </button>
                           </>
                         ) : localAssistant === "claude" ? (
                           <>
-                            <p>Run this once, then restart Claude Code or reconnect its MCP server.</p>
+                            <p>{tr("g6.wbRunOnce")}</p>
                             <pre className="mcp-command">{claudeCommand}</pre>
                             <button
                               type="button"
@@ -1349,21 +1257,18 @@ export function Workbench({
                               disabled={!mcpClientId}
                               onClick={() => copy(claudeCommand)}
                             >
-                              Copy Claude command
+                              {tr("g6.wbCopyClaude")}
                             </button>
                           </>
                         ) : (
                           <>
-                            <p>
-                              Choose the standard command / stdio transport. Enter the executable and arguments
-                              separately.
-                            </p>
+                            <p>{tr("g6.wbStdioHelp")}</p>
                             <label>
-                              Executable
+                              {tr("g6.wbExecutable")}
                               <input readOnly value={cli} />
                             </label>
                             <label>
-                              Arguments
+                              {tr("g6.wbArguments")}
                               <textarea
                                 readOnly
                                 value={JSON.stringify([
@@ -1378,31 +1283,23 @@ export function Workbench({
                                 ])}
                               />
                             </label>
-                            <p className="muted">
-                              The app starts this command for you. Do not paste it into a web address field.
-                            </p>
+                            <p className="muted">{tr("g6.wbNotWebAddress")}</p>
                           </>
                         )}
                       </>
                     ) : (
                       <p className="mcp-tunnel-message" role="status">
-                        {mcpSetupInfo
-                          ? "The local MCP command is missing. Repair or update your AudioRouter installation before continuing."
-                          : "Checking the installed local MCP command…"}
+                        {mcpSetupInfo ? tr("g6.wbCliMissing") : tr("g6.wbCliChecking")}
                       </p>
                     )}
                   </li>
                   <li>
-                    <h3>Confirm the connection</h3>
-                    <p>
-                      Ask your assistant to list AudioRouter sessions. Check Recent MCP activity below for the request
-                      and its outcome. This check confirms a request reached AudioRouter; it cannot confirm an external
-                      app's connector approval or whether the assistant has enabled the connection in its conversation.
-                    </p>
+                    <h3>{tr("g6.wbConfirm")}</h3>
+                    <p>{tr("g6.wbConfirmHelp")}</p>
                   </li>
                 </ol>
                 <p className="mcp-copy-message" role="status">
-                  {copyMessage || "Copy a setup above when you are ready."}
+                  {copyMessage || tr("g6.wbCopyPrompt")}
                 </p>
               </details>
             )}
@@ -1412,22 +1309,18 @@ export function Workbench({
               data-client-permissions
               open={mcpConnectionPath === "local" && !localClientRole}
             >
-              <summary>Client permissions</summary>
-              <p className="muted">
-                Observer reads; Editor creates or changes sessions; Operator also controls audio that is already
-                playing. These roles do not grant device administration, microphone consent, recording access, or
-                permission to press Play.
-              </p>
+              <summary>{tr("g6.wbPermissions")}</summary>
+              <p className="muted">{tr("g6.wbPermissionsHelp")}</p>
               {clientsPanel(selectedMcpClientId)}
             </details>
 
             <details className="mcp-secondary-section">
-              <summary>Recent MCP activity</summary>
-              <p className="muted">Tool names and outcomes only. Audio and argument values are excluded.</p>
+              <summary>{tr("g6.wbActivity")}</summary>
+              <p className="muted">{tr("g6.wbActivityHelp")}</p>
               {mcpActivity.length === 0 ? (
-                <p className="muted mcp-empty">No MCP calls yet.</p>
+                <p className="muted mcp-empty">{tr("g6.wbNoActivity")}</p>
               ) : (
-                <ol className="diagnostic-list" aria-label="MCP tool activity">
+                <ol className="diagnostic-list" aria-label={tr("g6.wbActivityAria")}>
                   {mcpActivity.map((entry, index) => (
                     <li key={`${entry.timeUnixMs}-${index}`}>
                       <strong>
@@ -1435,9 +1328,12 @@ export function Workbench({
                       </strong>
                       <small>
                         {" "}
-                        {entry.outcome}
-                        {entry.errorKind ? ` (${entry.errorKind})` : ""} · client {entry.clientId} · fields:{" "}
-                        {entry.argumentFields.join(", ") || "none"}
+                        {tr("g6.wbActivityRow", {
+                          outcome: entry.outcome,
+                          error: entry.errorKind ? ` (${entry.errorKind})` : "",
+                          client: entry.clientId,
+                          fields: entry.argumentFields.join(", ") || tr("g6.wbNone"),
+                        })}
                       </small>
                     </li>
                   ))}
@@ -1448,28 +1344,23 @@ export function Workbench({
         )}
         {tab === "diagnostics" && (
           <section className="workbench-page" role="tabpanel" {...panelProps}>
-            <h2>Client diagnostics</h2>
+            <h2>{tr("workbench.clientDiagnostics")}</h2>
             <LogFilesPanel verbose={verboseLogging} clientDiagnostics={diagnostics} />
-            <p className="muted">
-              Recent interface error categories and route checkpoints. Up to 80 short entries are saved in this local
-              app profile so they survive a reload. Raw error text, file paths, and audio are excluded.
-            </p>
+            <p className="muted">{tr("g6.wbDiagIntro")}</p>
             <ol className="diagnostic-list">
               {diagnostics.map((row, index) => (
                 <li key={`${index}-${row}`}>{row}</li>
               ))}
             </ol>
-            <h3>Backend RPC</h3>
+            <h3>{tr("g6.wbBackendRpc")}</h3>
             {backendActivity.length === 0 ? (
-              <p className="muted">
-                No backend diagnostics have been recorded yet. Log files are stored under LocalAppData/AudioRouter/logs.
-              </p>
+              <p className="muted">{tr("g6.wbNoBackend")}</p>
             ) : (
-              <ol className="diagnostic-list" aria-label="Backend RPC activity">
+              <ol className="diagnostic-list" aria-label={tr("g6.wbBackendAria")}>
                 {backendActivity.map((entry, index) => (
                   <li key={`${String(entry.timeUnixMs)}-${index}`}>
-                    <strong>{String(entry.method ?? "RPC")}</strong> · {String(entry.outcome ?? "unknown")}
-                    {entry.errorCode == null ? "" : ` · code ${String(entry.errorCode)}`}
+                    <strong>{String(entry.method ?? "RPC")}</strong> · {String(entry.outcome ?? tr("g6.wbUnknown"))}
+                    {entry.errorCode == null ? "" : ` · ${tr("g6.wbErrorCode", { code: String(entry.errorCode) })}`}
                     {entry.errorKind == null ? "" : ` · ${String(entry.errorKind)}`}
                     <small> {JSON.stringify(entry.summary ?? entry.detail ?? {})}</small>
                   </li>

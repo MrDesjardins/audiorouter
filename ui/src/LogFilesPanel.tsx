@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import type { VerboseDiagnosticsStatus } from "@audiorouter/contracts";
+import { useMessages } from "./i18n/useMessages";
 
 /** The backend's opt-in verbose logging switch (`diagnostics.*Verbose`). */
 export type VerboseLoggingControl = {
@@ -27,7 +28,9 @@ export function LogFilesPanel({
   verbose,
   clientDiagnostics = [],
 }: { verbose?: VerboseLoggingControl; clientDiagnostics?: readonly string[] } = {}) {
+  const tr = useMessages();
   const invoke = window.__TAURI_INTERNALS__?.invoke;
+  const locateFailed = useEffectEvent(() => setMessage(tr("g3Logs.locateFail")));
   const [path, setPath] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -45,7 +48,7 @@ export function LogFilesPanel({
           if (active && typeof value === "string") setPath(value);
         })
         .catch(() => {
-          if (active) setMessage("Could not locate the logs folder. Try opening it below.");
+          if (active) locateFailed();
         });
     return () => {
       active = false;
@@ -85,9 +88,9 @@ export function LogFilesPanel({
     setMessage(null);
     try {
       await invoke("open_logs_folder");
-      setMessage("Logs folder opened. Select the log files to attach to your message.");
+      setMessage(tr("g3Logs.opened"));
     } catch {
-      setMessage("Could not open the logs folder. Copy the folder path and paste it into File Explorer.");
+      setMessage(tr("g3Logs.openFail"));
     } finally {
       setBusy(false);
     }
@@ -96,9 +99,9 @@ export function LogFilesPanel({
     if (!path) return;
     try {
       await navigator.clipboard.writeText(path);
-      setMessage("Folder path copied.");
+      setMessage(tr("g3Logs.copied"));
     } catch {
-      setMessage("Could not copy the path. Select the folder path below and copy it manually.");
+      setMessage(tr("g3Logs.copyFail"));
     }
   };
   const bundle = async () => {
@@ -109,15 +112,13 @@ export function LogFilesPanel({
       const name = await invoke("export_support_bundle", { clientDiagnostics: clientDiagnostics.slice(0, 100) });
       setMessage(
         typeof name === "string" && /^[A-Za-z0-9._-]{1,80}$/.test(name)
-          ? `Saved ${name} in the logs folder and selected it in File Explorer. Attach it to your message.`
-          : "Support bundle saved in the logs folder.",
+          ? tr("g3Logs.bundleSaved", { name })
+          : tr("g3Logs.bundleSavedPlain"),
       );
     } catch (error) {
       // The shell's messages are fixed sentences without paths.
       const text =
-        typeof error === "string" && error.length <= 160 && !/[\\/]/.test(error)
-          ? error
-          : "Could not create the support bundle. Use Open logs folder instead.";
+        typeof error === "string" && error.length <= 160 && !/[\\/]/.test(error) ? error : tr("g3Logs.bundleFail");
       setMessage(text);
     } finally {
       setBundleBusy(false);
@@ -130,7 +131,7 @@ export function LogFilesPanel({
       setVerboseState(verboseStateFrom(await verbose.set(enabled), Date.now()));
       setNow(Date.now());
     } catch {
-      setMessage("Could not change verbose logging. Check that AudioRouter is connected.");
+      setMessage(tr("g3Logs.verboseFail"));
     } finally {
       setVerboseBusy(false);
     }
@@ -138,30 +139,25 @@ export function LogFilesPanel({
   const verboseOn = verboseState.kind === "on";
   const verboseStatus =
     verboseState.kind === "loading"
-      ? "Checking…"
+      ? tr("g3Logs.checking")
       : verboseState.kind === "unavailable"
-        ? "Unavailable"
+        ? tr("g3Logs.unavailable")
         : verboseOn
-          ? `On · ${formatVerboseRemaining((verboseState.expiresAtMs - now) / 1000)} left`
-          : "Off";
+          ? tr("g3Logs.onLeft", { time: formatVerboseRemaining((verboseState.expiresAtMs - now) / 1000) })
+          : tr("g3Logs.off");
   return (
     <section className="log-files-panel" aria-labelledby="log-files-heading">
-      <h3 id="log-files-heading">Send logs for support</h3>
-      <p className="muted">
-        Copy support bundle saves one ZIP with the app and Windows versions, the latest backend, shell and MCP log
-        lines, and these client diagnostics. Nothing is uploaded. Or open the folder and attach shell.jsonl,
-        backend.jsonl, discovery.jsonl and network.jsonl, plus their .previous.jsonl files if present. For a problem
-        between two computers, send the folder from both. Include what happened and the approximate time.
-      </p>
+      <h3 id="log-files-heading">{tr("g3Logs.heading")}</h3>
+      <p className="muted">{tr("g3Logs.intro")}</p>
       <div className="actions">
         <button type="button" onClick={() => void bundle()} disabled={!invoke || bundleBusy}>
-          {bundleBusy ? "Saving bundle…" : "Copy support bundle"}
+          {bundleBusy ? tr("g3Logs.saving") : tr("g3Logs.copyBundle")}
         </button>
         <button type="button" className="secondary" onClick={() => void open()} disabled={!invoke || busy}>
-          {busy ? "Opening logs…" : "Open logs folder"}
+          {busy ? tr("g3Logs.opening") : tr("g3Logs.openFolder")}
         </button>
         <button type="button" className="secondary" onClick={() => void copy()} disabled={!path}>
-          Copy folder path
+          {tr("g3Logs.copyPath")}
         </button>
       </div>
       <div className="log-verbose">
@@ -172,23 +168,25 @@ export function LogFilesPanel({
             disabled={!verbose || verboseBusy || verboseState.kind === "loading" || verboseState.kind === "unavailable"}
             onChange={(event) => void toggleVerbose(event.target.checked)}
           />
-          <span>Verbose logging</span>
+          <span>{tr("g3Logs.verbose")}</span>
         </label>
-        <span className="log-verbose-status" role="status" aria-label="Verbose logging status">
+        <span className="log-verbose-status" role="status" aria-label={tr("g3Logs.verboseStatus")}>
           {verboseStatus}
         </span>
       </div>
-      <p className="muted">
-        Turn on while you reproduce a problem: the logs then also record routine reads and how long each request took,
-        for one hour at most. Settings, file paths and audio are never logged.
-      </p>
+      <p className="muted">{tr("g3Logs.verboseHelp")}</p>
       {path && (
         <label>
-          Logs folder
-          <input aria-label="Logs folder" readOnly value={path} onFocus={(event) => event.currentTarget.select()} />
+          {tr("g3Logs.folder")}
+          <input
+            aria-label={tr("g3Logs.folder")}
+            readOnly
+            value={path}
+            onFocus={(event) => event.currentTarget.select()}
+          />
         </label>
       )}
-      {!invoke && <p className="muted">Open the installed AudioRouter app to access this PC’s log files.</p>}
+      {!invoke && <p className="muted">{tr("g3Logs.needApp")}</p>}
       <p className="log-files-message" role="status">
         {message ?? ""}
       </p>

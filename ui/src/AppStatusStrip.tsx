@@ -1,12 +1,14 @@
 import type { AppCheck } from "./appUsage";
 import { KNOWN_APPS } from "./appUsage";
 import { Icon, type IconName } from "./icons";
+import { useMessages } from "./i18n/useMessages";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 
-const WORD: Record<AppCheck["state"], string> = {
-  ready: "ready",
-  check: "needs a check",
-  notRunning: "not running",
-  unknown: "waiting",
+const WORD: Record<AppCheck["state"], MessageKey> = {
+  ready: "appStatus.ready",
+  check: "appStatus.needsCheck",
+  notRunning: "appStatus.notRunning",
+  unknown: "appStatus.waiting",
 };
 const ICON: Record<AppCheck["state"], IconName> = {
   ready: "check",
@@ -21,9 +23,10 @@ const ICON: Record<AppCheck["state"], IconName> = {
  * accessible name and the tooltip, never only in colour.
  */
 export function AppStatusStrip({ checks, onOpen }: { checks: AppCheck[]; onOpen: (check: AppCheck) => void }) {
+  const tr = useMessages();
   if (checks.length === 0) return null;
   return (
-    <span className="app-status-strip" role="group" aria-label="Apps">
+    <span className="app-status-strip" role="group" aria-label={tr("workbench.apps")}>
       {checks.map((check) => {
         const label = KNOWN_APPS[check.appId].label;
         return (
@@ -31,7 +34,7 @@ export function AppStatusStrip({ checks, onOpen }: { checks: AppCheck[]; onOpen:
             key={check.appId}
             type="button"
             className={`app-status-chip is-${check.state}`}
-            aria-label={`${label}: ${WORD[check.state]}. Open Apps.`}
+            aria-label={tr("appStatus.aria", { app: label, state: tr(WORD[check.state]) })}
             title={`${label}: ${check.summary}`}
             onClick={() => onOpen(check)}
           >

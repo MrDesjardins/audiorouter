@@ -5,8 +5,10 @@ import { SOUNDBOARD_SLOTS, firstFreeSlot, soundboardSlots, type SoundboardSlot }
 import { useSoundDrop } from "./soundboardDrop";
 import { SoundPlayButton } from "./SoundboardNodeEditor";
 import { SoundboardContext, useSoundboardLive, type SoundboardLive } from "./soundboardLive";
+import { useMessages } from "./i18n/useMessages";
 
 function SoundboardCardButton({ node, slot, live }: { node: Node; slot: SoundboardSlot; live: SoundboardLive | null }) {
+  const tr = useMessages();
   // Dropping a file on a button replaces its sound (SND-19).
   const drop = useSoundDrop({ nodeId: node.id, slot: slot.slot, freeSlot: null, disabled: false });
   const state = live?.slots.find((item) => item.slot === slot.slot);
@@ -17,7 +19,7 @@ function SoundboardCardButton({ node, slot, live }: { node: Node; slot: Soundboa
         nodeId={node.id}
         slot={slot.slot}
         mode={slot.mode}
-        label={`Play ${slot.label}`}
+        label={tr("g2.sbPlay", { label: slot.label })}
         disabled={!node.enabled}
         className={`soundboard-button${playing ? " is-playing" : ""}`}
       >
@@ -39,6 +41,7 @@ function SoundboardCardButton({ node, slot, live }: { node: Node; slot: Soundboa
  * dropped on the card fills the first free slot; dropped on a button it replaces that sound.
  */
 export function SoundboardNodeControls({ node }: { node: Node }) {
+  const tr = useMessages();
   const live = useSoundboardLive(node.id);
   const controller = useContext(SoundboardContext);
   const slots = soundboardSlots(node);
@@ -47,31 +50,29 @@ export function SoundboardNodeControls({ node }: { node: Node }) {
   return (
     <div
       className={`soundboard-node nodrag nopan${drop.active ? " is-drop-target" : ""}`}
-      aria-label={`${node.name} sounds`}
+      aria-label={tr("g2.sbSoundsAria", { name: node.name })}
       {...drop.handlers}
     >
       {slots.map((slot) => (
         <SoundboardCardButton key={slot.slot} node={node} slot={slot} live={live} />
       ))}
       {free !== null && (
-        <button
-          type="button"
-          className="soundboard-button soundboard-add"
-          title="Select the tool to add sounds in its properties, or drop a WAV or MP3 file here"
-        >
+        <button type="button" className="soundboard-button soundboard-add" title={tr("g2.sbAddTitle")}>
           <span className="soundboard-button-caption">
-            {slots.length === 0 ? "Add sound in properties" : `+ Add sound (${slots.length}/${SOUNDBOARD_SLOTS})`}
+            {slots.length === 0
+              ? tr("g2.sbAddInProps")
+              : tr("g2.sbAddCount", { n: slots.length, max: SOUNDBOARD_SLOTS })}
           </span>
         </button>
       )}
       <button
         type="button"
         className="soundboard-stop"
-        aria-label={`Stop all sounds on ${node.name}`}
+        aria-label={tr("g2.sbStopAllAria", { name: node.name })}
         disabled={!controller.ready || slots.length === 0}
         onClick={() => controller.stop(node.id)}
       >
-        Stop all
+        {tr("g2.sbStopAllShort")}
       </button>
     </div>
   );

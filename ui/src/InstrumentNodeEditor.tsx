@@ -3,6 +3,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { Node } from "@audiorouter/contracts";
 import { formatUiError, type UiBackend } from "./backend";
 import { PanelMessage } from "./PanelMessage";
+import { useMessages } from "./i18n/useMessages";
 
 /** First key of the on-screen keyboard (C4 is 60; two octaves from here). */
 const FIRST_NOTE = 60;
@@ -58,6 +59,7 @@ export function InstrumentNodeEditor({
   disabled: boolean;
   onChange: (name: string, value: string) => void;
 }) {
+  const tr = useMessages();
   const [devices, setDevices] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const held = useRef(new Set<number>());
@@ -84,7 +86,7 @@ export function InstrumentNodeEditor({
       await backend.midiSendEvents(sessionId, node.id, events);
       setMessage(null);
     } catch (error) {
-      setMessage(formatUiError(error, "The note could not be sent."));
+      setMessage(formatUiError(error, tr("g3Instrument.sendFail")));
     }
   };
   const release = (note: number) => {
@@ -114,33 +116,33 @@ export function InstrumentNodeEditor({
   const whiteCount = WHITE_OFFSETS.length * OCTAVES + 1;
 
   return (
-    <div className="node-binding-editor instrument-editor" aria-label="Instrument keyboard and MIDI">
+    <div className="node-binding-editor instrument-editor" aria-label={tr("g3Instrument.aria")}>
       <div>
-        <p className="eyebrow">Play this instrument</p>
+        <p className="eyebrow">{tr("g3Instrument.play")}</p>
         <strong>{node.name}</strong>
       </div>
       <label className="field">
-        <span>Notes come from</span>
+        <span>{tr("g3Instrument.notesFrom")}</span>
         <select
           value={midiInput}
           disabled={disabled}
           onFocus={() => void refreshDevices()}
           onChange={(event) => onChange("midiInput", event.target.value)}
         >
-          <option value={INSTRUMENT_KEYBOARD_ONLY}>On-screen keyboard only</option>
-          <option value={INSTRUMENT_ALL_DEVICES}>Every connected MIDI keyboard</option>
+          <option value={INSTRUMENT_KEYBOARD_ONLY}>{tr("g3Instrument.kbOnly")}</option>
+          <option value={INSTRUMENT_ALL_DEVICES}>{tr("g3Instrument.allMidi")}</option>
           {devices.map((device) => (
             <option key={device} value={device}>
               {device}
             </option>
           ))}
-          {!known && <option value={midiInput}>{midiInput} (not connected)</option>}
+          {!known && <option value={midiInput}>{tr("g3Instrument.notConnected", { name: midiInput })}</option>}
         </select>
       </label>
       <div
         className="instrument-keyboard nodrag nopan"
         role="group"
-        aria-label="On-screen keyboard"
+        aria-label={tr("g3Instrument.kbGroup")}
         style={{ gridTemplateColumns: `repeat(${whiteCount}, 1fr)` }}
       >
         {keys.map((key) => (
@@ -166,24 +168,20 @@ export function InstrumentNodeEditor({
           type="button"
           className="secondary"
           disabled={!canPlay}
-          title="Silence every note this instrument is playing"
+          title={tr("g3Instrument.stopTitle")}
           onClick={() => {
             held.current.clear();
             void send([{ type: "allNotesOff" }]);
           }}
         >
-          Stop all notes
+          {tr("g3Instrument.stopAll")}
         </button>
       </div>
       <div className="instrument-status">
         {message ? (
           <PanelMessage message={message} small />
         ) : (
-          <small className="muted">
-            {running
-              ? "Hold a key to play. The keyboard is a mouse and touch control; a MIDI keyboard needs no clicking."
-              : "Press Play to hear it. The keyboard works while the route is playing."}
-          </small>
+          <small className="muted">{running ? tr("g3Instrument.holdKey") : tr("g3Instrument.pressPlay")}</small>
         )}
       </div>
     </div>

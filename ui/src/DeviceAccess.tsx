@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { UiBackend } from "./backend";
+import { useMessages } from "./i18n/useMessages";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 
 /** Play was refused because the user has not yet allowed this app to open
  * audio devices (device administration of the desktop shell). */
@@ -21,6 +23,7 @@ export function DeviceAccessDialog({
   onAllow: () => void;
   onCancel: () => void;
 }) {
+  const tr = useMessages();
   const allow = useRef<HTMLButtonElement>(null);
   useEffect(() => allow.current?.focus(), []);
   return (
@@ -38,11 +41,8 @@ export function DeviceAccessDialog({
         aria-labelledby="device-access-heading"
         aria-describedby="device-access-description"
       >
-        <h2 id="device-access-heading">Allow AudioRouter to use your audio devices?</h2>
-        <p id="device-access-description">
-          To play this session, AudioRouter opens the microphones, speakers and virtual cables in it. It asks once on
-          this computer. You can change this later under <strong>Settings → Device access</strong>.
-        </p>
+        <h2 id="device-access-heading">{tr("settings.deviceAccess.dialogTitle")}</h2>
+        <p id="device-access-description">{tr("settings.deviceAccess.dialogDescription")}</p>
         {error && (
           <p className="muted" role="alert">
             {error}
@@ -50,10 +50,10 @@ export function DeviceAccessDialog({
         )}
         <div className="actions">
           <button ref={allow} type="button" className="primary" disabled={busy} onClick={onAllow}>
-            {busy ? "Allowing…" : "Allow and play"}
+            {busy ? tr("settings.deviceAccess.allowing") : tr("settings.deviceAccess.allowAndPlay")}
           </button>
           <button type="button" className="secondary" disabled={busy} onClick={onCancel}>
-            Not now
+            {tr("settings.deviceAccess.notNow")}
           </button>
         </div>
       </section>
@@ -67,11 +67,12 @@ export function DeviceAccessSetting({
 }: {
   backend: Pick<UiBackend, "connected" | "getDeviceAccess" | "setDeviceAccess">;
 }) {
+  const tr = useMessages();
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [reading, setReading] = useState(true);
   const [readFailed, setReadFailed] = useState(false);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<MessageKey | null>(null);
   const [attempt, setAttempt] = useState(0);
   const generation = useRef(0);
   const writeBusy = useRef(false);
@@ -84,7 +85,7 @@ export function DeviceAccessSetting({
     setBusy(false);
     if (!available) {
       setReading(false);
-      setMessage("Connect to the desktop backend to check audio device access.");
+      setMessage("settings.deviceAccess.connectToCheck");
       return;
     }
     let cancelled = false;
@@ -94,19 +95,19 @@ export function DeviceAccessSetting({
       readBusy.current = true;
       setReading(true);
       setReadFailed(false);
-      setMessage("Checking audio device access…");
+      setMessage("settings.deviceAccess.checking");
       void Promise.resolve()
         .then(() => backend.getDeviceAccess!())
         .then((result) => {
           if (!cancelled && current === generation.current) {
             setAllowed(result.allowed);
-            setMessage("");
+            setMessage(null);
           }
         })
         .catch(() => {
           if (!cancelled && current === generation.current) {
             setReadFailed(true);
-            setMessage("Could not read audio device access. Use Check again.");
+            setMessage("settings.deviceAccess.readFailed");
           }
         })
         .finally(() => {
@@ -131,7 +132,7 @@ export function DeviceAccessSetting({
     const current = ++generation.current;
     writeBusy.current = true;
     setBusy(true);
-    setMessage("Saving audio device access…");
+    setMessage("settings.deviceAccess.saving");
     try {
       const result = await backend.setDeviceAccess!(
         next,
@@ -139,15 +140,13 @@ export function DeviceAccessSetting({
       );
       if (current === generation.current) {
         setAllowed(result.allowed);
-        setMessage(
-          result.allowed ? "Audio device access allowed." : "AudioRouter will ask before opening audio devices.",
-        );
+        setMessage(result.allowed ? "settings.deviceAccess.allowedMessage" : "settings.deviceAccess.withdrawnMessage");
         window.dispatchEvent(new Event(ACCESS_CHANGED_EVENT));
       }
     } catch {
       if (current === generation.current) {
         setReadFailed(true);
-        setMessage("Could not confirm the change. Check again before retrying.");
+        setMessage("settings.deviceAccess.confirmFailed");
       }
     } finally {
       if (current === generation.current) {
@@ -156,28 +155,33 @@ export function DeviceAccessSetting({
       }
     }
   };
+  const stateLabel = allowed ? tr("settings.deviceAccess.allowedState") : tr("settings.deviceAccess.askFirstState");
   return (
-    <div className="recording-folder device-access-setting" role="group" aria-label="Audio device access">
+    <div
+      className="recording-folder device-access-setting"
+      role="group"
+      aria-label={tr("settings.deviceAccess.heading")}
+    >
       <div className="setting-toggle-row">
-        <strong>Audio device access</strong>
+        <strong>{tr("settings.deviceAccess.heading")}</strong>
         <span className="setting-toggle-state device-access-state" data-testid="device-access-state">
           {!available
-            ? "Unavailable"
+            ? tr("common.unavailable")
             : allowed === null
               ? reading
-                ? "Loading…"
-                : "Unavailable"
-              : `${readFailed ? "Last known: " : ""}${allowed ? "Allowed" : "Ask first"}`}
+                ? tr("common.loading")
+                : tr("common.unavailable")
+              : `${readFailed ? `${tr("settings.deviceAccess.lastKnown", { state: stateLabel })}` : stateLabel}`}
         </span>
       </div>
       <p className="muted device-access-description">
         {readFailed
-          ? "The current access could not be confirmed. Check again before changing it."
+          ? tr("settings.deviceAccess.descriptionReadFailed")
           : allowed === null
-            ? "Choose whether AudioRouter may open your session's audio devices when you press Play."
+            ? tr("settings.deviceAccess.descriptionUnavailable")
             : allowed
-              ? "AudioRouter may open the audio devices of a session when you press Play."
-              : "AudioRouter asks before opening audio devices the first time you press Play."}
+              ? tr("settings.deviceAccess.descriptionAllowed")
+              : tr("settings.deviceAccess.descriptionAskFirst")}
       </p>
       <div className="recording-folder-actions">
         <button
@@ -187,7 +191,7 @@ export function DeviceAccessSetting({
           aria-busy={busy}
           onClick={() => void change(!allowed)}
         >
-          {allowed ? "Withdraw access" : "Allow access"}
+          {allowed ? tr("settings.deviceAccess.withdraw") : tr("settings.deviceAccess.allow")}
         </button>
         <button
           type="button"
@@ -195,11 +199,11 @@ export function DeviceAccessSetting({
           disabled={!available || busy || reading}
           onClick={() => setAttempt((value) => value + 1)}
         >
-          Check again
+          {tr("common.checkAgain")}
         </button>
       </div>
       <p className="device-access-message" role="status">
-        {message || " "}
+        {message ? tr(message) : " "}
       </p>
     </div>
   );

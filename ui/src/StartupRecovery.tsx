@@ -1,4 +1,5 @@
 import { useEffect, useEffectEvent, useState } from "react";
+import { useMessages } from "./i18n/useMessages";
 
 type Backup = { name: string; bytes: number };
 
@@ -11,8 +12,10 @@ export function StartupRecovery({
   /** Told once the backend has stopped because it cannot read saved data. */
   onDamaged?: () => void;
 }) {
+  const tr = useMessages();
   const invoke = window.__TAURI_INTERNALS__?.invoke;
-  const [message, setMessage] = useState("Checking the audio service…");
+  const [message, setMessage] = useState(() => tr("g3Misc.srChecking"));
+  const noBackupText = useEffectEvent(() => tr("g3Misc.srNoBackup"));
   const [backups, setBackups] = useState<Backup[]>([]);
   const [selected, setSelected] = useState("");
   const [armed, setArmed] = useState(false);
@@ -57,8 +60,7 @@ export function StartupRecovery({
           listed = true;
           setBackups(result as Backup[]);
           setSelected((result[0] as Backup | undefined)?.name ?? "");
-          if (!result.length)
-            setMessage("No validated backup is available. Your damaged data has been kept for diagnosis.");
+          if (!result.length) setMessage(noBackupText());
         }
       } catch {
         // The backend may still be releasing its storage handle. Retry without
@@ -83,13 +85,11 @@ export function StartupRecovery({
     setBusy(true);
     try {
       await invoke("restore_recovery_backup", { name: selected });
-      setRecoveryMessage(
-        "Backup restored. Routes are stopped and privacy mute is on. Reconnect clients and allow device access again when ready.",
-      );
+      setRecoveryMessage(tr("g3Misc.srRestored"));
       await onRestored();
     } catch (error) {
       setRecoveryMessage(
-        typeof error === "string" ? error : error instanceof Error ? error.message : "Backup restoration failed.",
+        typeof error === "string" ? error : error instanceof Error ? error.message : tr("g3Misc.srFailed"),
       );
     } finally {
       setBusy(false);
@@ -97,13 +97,13 @@ export function StartupRecovery({
     }
   };
   return (
-    <section aria-label="Saved data recovery" style={{ minHeight: "18rem" }}>
+    <section aria-label={tr("g3Misc.srAria")} style={{ minHeight: "18rem" }}>
       <p role="status" style={{ height: "4.5rem", overflow: "auto" }}>
         {recoveryMessage ?? message}
       </p>
       <div style={{ visibility: needsRecovery ? "visible" : "hidden" }} aria-hidden={!needsRecovery}>
         <label style={{ display: "grid", gap: "0.5rem" }}>
-          Recovery backup
+          {tr("g3Misc.srBackup")}
           <select
             value={selected}
             disabled={!backups.length || busy}
@@ -112,20 +112,19 @@ export function StartupRecovery({
               setArmed(false);
             }}
           >
-            {!backups.length && <option value="">No backup selected</option>}
+            {!backups.length && <option value="">{tr("g3Misc.srNoneSelected")}</option>}
             {backups.map((backup) => (
               <option key={backup.name} value={backup.name}>
-                {backup.name} ({Math.ceil(backup.bytes / 1048576)} MiB)
+                {tr("g3Misc.srMiB", { name: backup.name, size: Math.ceil(backup.bytes / 1048576) })}
               </option>
             ))}
           </select>
         </label>
         <p className="muted" style={{ minHeight: "4.5rem", marginBottom: "1rem" }}>
-          Restoration keeps the damaged database, replaces saved configuration, turns privacy mute on, and resets client
-          access and capture consent. Recordings do not resume.
+          {tr("g3Misc.srNote")}
         </p>
         <button type="button" disabled={!selected || busy} onClick={() => void restore()}>
-          {busy ? "Restoring…" : armed ? "Confirm restore selected backup" : "Restore selected backup"}
+          {busy ? tr("g3Misc.srRestoring") : armed ? tr("g3Misc.srConfirm") : tr("g3Misc.srRestore")}
         </button>
       </div>
     </section>

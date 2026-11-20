@@ -10,6 +10,7 @@ import {
   type ReactNode,
   type Ref,
 } from "react";
+import { useMessages } from "./i18n/useMessages";
 import { NumberField } from "./NumberField";
 
 const ratio = (value: number, min: number, max: number) =>
@@ -207,6 +208,7 @@ export function SliderField({
   description,
   onChange,
 }: SliderFieldProps) {
+  const tr = useMessages();
   const id = useId();
   const track = useRef<HTMLInputElement>(null);
   const short = sliderUnit(unit);
@@ -237,7 +239,7 @@ export function SliderField({
             aria-label={sliderName ?? name}
             aria-valuetext={spoken}
             aria-description={description}
-            title={inRange ? `Double-click to restore ${defaultLabel}` : undefined}
+            title={inRange ? tr("g5.sliderRestore", { value: defaultLabel }) : undefined}
             {...(log
               ? {
                   value: logTrackPosition(value, min, max),
@@ -277,7 +279,7 @@ export function SliderField({
         </div>
         <span className="slider-field-exact">
           <NumberField
-            aria-label={`${name} precise value`}
+            aria-label={tr("g5.preciseValue", { name })}
             aria-valuetext={spoken}
             value={value}
             min={min}
@@ -295,8 +297,8 @@ export function SliderField({
             <button
               type="button"
               className="secondary"
-              aria-label={`Reset ${name} to ${defaultLabel}`}
-              title={`Reset to ${defaultLabel}`}
+              aria-label={tr("g5.sliderResetAria", { name, value: defaultLabel })}
+              title={tr("g5.sliderResetTitle", { value: defaultLabel })}
               disabled={disabled}
               onClick={() => {
                 onChange(defaultValue);

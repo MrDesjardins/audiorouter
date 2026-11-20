@@ -3,6 +3,8 @@ import type { RecordingRow } from "@audiorouter/contracts";
 import { askConfirm } from "./AppDialog";
 import { formatUiError, type UiBackend } from "./backend";
 import { uiIdempotencyKey } from "./idempotency";
+import { tx } from "./i18n";
+import { recordingStateLabel } from "./recordingStateLabel";
 
 export function useRecordingActions({
   backend,
@@ -25,29 +27,32 @@ export function useRecordingActions({
   const [recordingMutationBusyState, setRecordingMutationBusyState] = useState(false);
   const previewRecording = async (recordingId: string) => {
     const request = ++previewRequest.current;
-    setPreviewMessage("Inspecting recording...");
+    setPreviewMessage(tx("workflowActions.inspect"));
     try {
       const result = await backend.previewRecording(recordingId);
       if (request === previewRequest.current)
-        setPreviewMessage(`${String(result.preview.status)} recording preview loaded.`);
+        setPreviewMessage(
+          tx("workflowActions.previewLoaded", { state: recordingStateLabel(String(result.preview.status)) }),
+        );
     } catch (error) {
-      if (request === previewRequest.current) setPreviewMessage(formatUiError(error, "Recording preview unavailable."));
+      if (request === previewRequest.current)
+        setPreviewMessage(formatUiError(error, tx("workflowActions.previewError")));
     }
   };
   const inspectRecovery = async (recordingId: string) => {
     const request = ++recoveryRequest.current;
-    setRecoveryMessage("Inspecting recorder recovery...");
+    setRecoveryMessage(tx("workflowActions.inspectRecovery"));
     try {
       const result = await backend.getRecordingRecovery(recordingId);
       if (request === recoveryRequest.current)
         setRecoveryMessage(
           result.status === "missing"
-            ? "No persisted recovery checkpoint is available."
-            : `Recovery checkpoint: ${result.checkpoint.state}.`,
+            ? tx("workflowActions.noCheckpoint")
+            : tx("workflowActions.checkpoint", { state: recordingStateLabel(result.checkpoint.state) }),
         );
     } catch (error) {
       if (request === recoveryRequest.current)
-        setRecoveryMessage(formatUiError(error, "Recording recovery unavailable."));
+        setRecoveryMessage(formatUiError(error, tx("workflowActions.recoveryError")));
     }
   };
   const saveRecordingMetadata = async (recording: RecordingRow) => {
@@ -71,9 +76,9 @@ export function useRecordingActions({
             : item,
         ),
       );
-      setPreviewMessage("Recording metadata saved; the audio file was unchanged.");
+      setPreviewMessage(tx("workflowActions.metadataSaved"));
     } catch (error) {
-      setPreviewMessage(formatUiError(error, "Unable to save recording metadata."));
+      setPreviewMessage(formatUiError(error, tx("workflowActions.metadataError")));
     } finally {
       recordingMutationBusy.current = false;
       setRecordingMutationBusyState(false);
@@ -81,9 +86,9 @@ export function useRecordingActions({
   };
   const removeRecordingEntry = async (recordingId: string) => {
     const confirmed = await askConfirm({
-      title: "Remove this library entry?",
-      message: "The recording leaves this list. The audio file stays on your disk.",
-      confirmLabel: "Remove entry",
+      title: tx("workflowActions.removeTitle"),
+      message: tx("workflowActions.removeHelp"),
+      confirmLabel: tx("workflowUi.removeEntry"),
       destructive: true,
     });
     if (!confirmed) return;
@@ -93,9 +98,9 @@ export function useRecordingActions({
     try {
       await backend.removeRecordingEntry(recordingId, uiIdempotencyKey("recording-entry-remove"));
       setRecordings((current) => current.filter((item) => item.id !== recordingId));
-      setPreviewMessage("Library entry removed; the audio file was preserved.");
+      setPreviewMessage(tx("workflowActions.removed"));
     } catch (error) {
-      setPreviewMessage(formatUiError(error, "Unable to remove recording entry."));
+      setPreviewMessage(formatUiError(error, tx("workflowActions.removeError")));
     } finally {
       recordingMutationBusy.current = false;
       setRecordingMutationBusyState(false);
@@ -110,9 +115,9 @@ export function useRecordingActions({
       setRecordings((current) =>
         current.map((item) => (item.id === recordingId ? { ...item, path: result.path, missing: false } : item)),
       );
-      setPreviewMessage("Recording renamed within the approved directory.");
+      setPreviewMessage(tx("workflowActions.renamed"));
     } catch (error) {
-      setPreviewMessage(formatUiError(error, "Unable to rename recording."));
+      setPreviewMessage(formatUiError(error, tx("workflowActions.renameError")));
     } finally {
       recordingMutationBusy.current = false;
       setRecordingMutationBusyState(false);
@@ -124,13 +129,9 @@ export function useRecordingActions({
     setRecordingMutationBusyState(true);
     try {
       const result = await backend.revealRecording(recordingId);
-      setPreviewMessage(
-        result.revealed
-          ? "Recording revealed by the operating system."
-          : "Recording is missing; no operating-system action was performed.",
-      );
+      setPreviewMessage(result.revealed ? tx("workflowActions.revealed") : tx("workflowActions.revealMissing"));
     } catch (error) {
-      setPreviewMessage(formatUiError(error, "Unable to reveal recording."));
+      setPreviewMessage(formatUiError(error, tx("workflowActions.revealError")));
     } finally {
       recordingMutationBusy.current = false;
       setRecordingMutationBusyState(false);
@@ -148,17 +149,17 @@ export function useRecordingActions({
       );
       setPreviewMessage(
         result.fileAction === "recycled"
-          ? "Recording recycled."
+          ? tx("workflowActions.recycled")
           : result.fileAction === "recycle"
-            ? "Recycle preview loaded; confirmation is still required."
-            : `Recording was not recycled: ${result.reason}.`,
+            ? tx("workflowActions.recyclePreview")
+            : tx("workflowActions.notRecycled", { reason: result.reason }),
       );
       if (result.fileAction === "recycled")
         setRecordings((current) =>
           current.map((item) => (item.id === recordingId ? { ...item, missing: true } : item)),
         );
     } catch (error) {
-      setPreviewMessage(formatUiError(error, "Unable to recycle recording."));
+      setPreviewMessage(formatUiError(error, tx("workflowActions.recycleError")));
     } finally {
       recordingMutationBusy.current = false;
       setRecordingMutationBusyState(false);

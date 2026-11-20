@@ -27,6 +27,7 @@ function remember(key: string, open: boolean) {
 export function PropertySection({
   kind,
   title,
+  sectionId = title,
   summary,
   defaultOpen = false,
   children,
@@ -34,12 +35,14 @@ export function PropertySection({
   /** The tool type whose memory this belongs to. */
   kind: string;
   title: string;
+  /** Existing storage key for a section whose title is translated. */
+  sectionId?: string;
   /** Current values, shown beside the title whether open or closed. */
   summary?: ReactNode;
   defaultOpen?: boolean;
   children: ReactNode;
 }) {
-  const key = `${kind}/${title}`;
+  const key = `${kind}/${sectionId}`;
   const [open, setOpen] = useState(() => readRemembered()[key] ?? defaultOpen);
   return (
     <details

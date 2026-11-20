@@ -19,6 +19,7 @@ import {
   type AppCheck,
   type AppCheckState,
 } from "./appUsage";
+import { tx } from "./i18n";
 
 /**
  * What OBS records, judged against the session (DEC-22). The backend reports
@@ -80,9 +81,9 @@ function resolveDevice(
 }
 
 function deviceText(input: ObsAudioInput, device: DeviceListItem | null, isDefault: boolean): string {
-  if (input.kind === "applicationCapture") return input.application ? appLabel(input.application) : "An application";
-  if (isDefault) return device ? `Default (${device.name})` : "Default device";
-  return device?.name ?? "A device that is not connected";
+  if (input.kind === "applicationCapture") return input.application ? appLabel(input.application) : tx("h1.obsAnApp");
+  if (isDefault) return device ? tx("h1.obsDefaultNamed", { name: device.name }) : tx("h1.obsDefaultDevice");
+  return device?.name ?? tx("h1.obsNotConnected");
 }
 
 /** Labels of the session's sources that reach a playback device. */
@@ -90,7 +91,7 @@ function sourcesReaching(session: Session, renderId: string, microphones: readon
   const labels = session.nodes
     .filter((node) => SOURCE_KINDS.includes(node.kind) && outputsReachedFrom(session, [node.id]).includes(renderId))
     .map((node) => {
-      if (microphones.includes(node.id)) return "Voice";
+      if (microphones.includes(node.id)) return tx("h1.obsVoice");
       if (node.kind === "applicationCapture" && typeof node.parameters.executable === "string")
         return appLabel(node.parameters.executable);
       return node.name;
@@ -103,7 +104,7 @@ export function pendingObsCheck(): ObsCheck {
   return {
     appId: "obs",
     state: "unknown",
-    summary: "Checking OBS…",
+    summary: tx("h1.obsChecking"),
     rows: [],
     view: "closed",
     sources: [],
@@ -139,6 +140,7 @@ export function obsCheck(
         .map((node) => endpointOf(session, node.id))
         .filter((id): id is string => id !== null)
     : [];
+  const voiceText = tx("h1.obsVoice");
   const canFix = !stale && view === "connected" && status.source === "live" && status.sceneCollection !== null;
 
   const carriesVoice = new Set<string>();
@@ -157,12 +159,12 @@ export function obsCheck(
     if (input.kind === "inputCapture") {
       const partner = cablePartner(device, devices);
       if (voice.some((cable) => cable.id === device.id)) {
-        row.hears = partner ? sourcesReaching(session, partner.id, microphones) : ["Voice"];
-        if (!row.hears.includes("Voice")) row.hears.unshift("Voice");
+        row.hears = partner ? sourcesReaching(session, partner.id, microphones) : [voiceText];
+        if (!row.hears.includes(voiceText)) row.hears.unshift(voiceText);
       } else if (microphoneIds.includes(device.id)) {
-        row.hears = ["Voice without effects"];
+        row.hears = [tx("h1.obsVoiceRaw")];
         if (voice.length > 0) {
-          row.problem = "Records your microphone without AudioRouter's effects.";
+          row.problem = tx("h1.obsProblemRaw");
           row.fix = { inputName: input.name, deviceId: voice[0].id };
           row.fixLabel = `${input.name}: ${device.name} → ${voice[0].name}`;
         }
@@ -171,8 +173,7 @@ export function obsCheck(
       } else {
         const cable = voice.find((item) => sixteenChannelTwin(item, devices)?.id === device.id);
         if (cable) {
-          row.problem =
-            "Records the 16-channel side of your voice cable. Windows lets only one side be used at a time.";
+          row.problem = tx("h1.obsProblem16Voice");
           row.fix = { inputName: input.name, deviceId: cable.id };
           row.fixLabel = `${input.name}: ${device.name} → ${cable.name}`;
         }
@@ -183,7 +184,7 @@ export function obsCheck(
         .map((id) => devices.find((item) => item.id === id))
         .find((item) => item && sixteenChannelTwin(item, devices)?.id === device.id);
       if (busy) {
-        row.problem = `Records the 16-channel side of ${busy.name}, which AudioRouter plays to. Windows lets only one side be used at a time.`;
+        row.problem = tx("h1.obsProblem16Out", { name: busy.name });
         row.fix = { inputName: input.name, deviceId: busy.id };
         row.fixLabel = `${input.name}: ${device.name} → ${busy.name}`;
       }
@@ -197,7 +198,7 @@ export function obsCheck(
       input.monitorOnly === false &&
       input.audioTracks &&
       input.audioTracks.length > 0 &&
-      (row.hears.includes("Voice") || voiceRenders.includes(device.id))
+      (row.hears.includes(voiceText) || voiceRenders.includes(device.id))
     )
       carriesVoice.add(input.name);
     return row;
@@ -220,7 +221,7 @@ export function obsCheck(
           other.audioTracks?.some((track) => input.audioTracks?.includes(track)),
       );
       if (!overlaps) continue;
-      row.problem = "Also plays your voice, so your voice is recorded twice on the same OBS audio track.";
+      row.problem = tx("h1.obsProblemTwice");
       const target = elsewhere ? devices.find((device) => device.id === elsewhere) : undefined;
       if (target) {
         row.fix = { inputName: row.name, deviceId: target.id };
@@ -247,24 +248,26 @@ export function obsCheck(
           ? "ready"
           : "unknown";
   const summary = stale
-    ? "Could not refresh OBS; showing the last check."
+    ? tx("h1.obsStale")
     : view === "notInstalled"
-      ? "OBS Studio is not installed on this PC."
+      ? tx("h1.obsNotInstalled")
       : view === "closed"
         ? status.source === "savedFile"
-          ? `OBS is closed. This is the setup it saved last${problems > 0 ? `, with ${problems} setting${problems === 1 ? "" : "s"} to check` : ""}.`
-          : "OBS is closed. Start it to check its audio sources."
+          ? problems > 0
+            ? tx(problems === 1 ? "h1.obsClosedSavedOne" : "h1.obsClosedSavedMany", { count: problems })
+            : tx("h1.obsClosedSaved")
+          : tx("h1.obsClosed")
         : problems > 0
-          ? `${problems} setting${problems === 1 ? "" : "s"} to check`
+          ? tx(problems === 1 ? "h1.settingsToCheckOne" : "h1.settingsToCheckMany", { count: problems })
           : carriesVoice.size > 0
-            ? "Ready"
+            ? tx("h1.ready")
             : view === "connect"
-              ? "Connect to check OBS's audio sources."
-              : sources.some((row) => row.hears.includes("Voice"))
-                ? "Voice source found. Check its scene, mute, monitoring and audio tracks in OBS."
+              ? tx("h1.obsConnect")
+              : sources.some((row) => row.hears.includes(voiceText))
+                ? tx("h1.obsVoiceFound")
                 : voice.length > 0
-                  ? `No OBS source records your processed voice. Add an Audio Input Capture with ${voice[0].name}.`
-                  : "No OBS source records your voice.";
+                  ? tx("h1.obsAddCapture", { name: voice[0].name })
+                  : tx("h1.obsNoVoice");
   return { appId: "obs", state, summary, rows: [], view, sources };
 }
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useComparing } from "./compareHold";
 import { Handle, type HandleSpec } from "./SvgHandle";
 import { PropertySection } from "./PropertySection";
+import { useMessages } from "./i18n/useMessages";
 import type { DiagnosticsSnapshot, Node } from "@audiorouter/contracts";
 import {
   compressorOutputDb,
@@ -68,8 +69,6 @@ function useHistory(
   return history;
 }
 
-const QUIET_VOICE_ADVICE = " Your voice is quiet: turn the microphone up, or add a Gain before this tool.";
-
 /**
  * Level statistics that keep the last good measurement while readings
  * continue, so the suggestion does not appear and vanish each time a pause
@@ -113,6 +112,7 @@ function TransferCurve({
   disabled: boolean;
   onChange: Change;
 }) {
+  const tr = useMessages();
   const svg = useRef<SVGSVGElement>(null);
   const { min, max, grid } = AXES[kind];
   const L = 46,
@@ -139,7 +139,7 @@ function TransferCurve({
     handles = [
       {
         name: "thresholdDb",
-        label: "Threshold",
+        label: tr("dynamicsUi.threshold"),
         value: settings.thresholdDb,
         min: -60,
         max: 0,
@@ -151,7 +151,7 @@ function TransferCurve({
       },
       {
         name: "ratio",
-        label: "Ratio",
+        label: tr("dynamicsUi.ratio"),
         value: settings.ratio,
         min: 1,
         max: 20,
@@ -174,7 +174,7 @@ function TransferCurve({
         />
         <line x1={x(settings.thresholdDb)} x2={x(settings.thresholdDb)} y1={T} y2={B} className="dynamics-threshold" />
         <text x={R - 4} y={T + 14} textAnchor="end" className="dynamics-zone-label">
-          turned down
+          {tr("dynamicsUi.turnedDown")}
         </text>
       </>
     );
@@ -185,7 +185,7 @@ function TransferCurve({
     handles = [
       {
         name: "thresholdDb",
-        label: "Threshold (opens)",
+        label: tr("dynamicsUi.thresholdOpens"),
         value: settings.thresholdDb,
         min: -80,
         max: 0,
@@ -197,7 +197,7 @@ function TransferCurve({
       },
       {
         name: "hysteresisDb",
-        label: "Hysteresis (closes this far below)",
+        label: tr("dynamicsUi.hysteresis"),
         value: settings.hysteresisDb,
         min: 0,
         max: 12,
@@ -217,7 +217,7 @@ function TransferCurve({
           <line x1={x(close)} x2={x(close)} y1={T} y2={B} className="dynamics-threshold is-close" />
         )}
         <text x={L + 4} y={T + 10} className="dynamics-zone-label">
-          turned down
+          {tr("dynamicsUi.turnedDown")}
         </text>
       </>
     );
@@ -227,7 +227,7 @@ function TransferCurve({
     handles = [
       {
         name: "ceilingDb",
-        label: "Ceiling",
+        label: tr("dynamicsUi.ceiling"),
         value: settings.ceilingDb,
         min: -12,
         max: 0,
@@ -258,7 +258,7 @@ function TransferCurve({
       className="dynamics-graph dynamics-transfer"
       viewBox="0 0 222 214"
       role="group"
-      aria-label="Transfer curve: sound in (across) against sound out (up)"
+      aria-label={tr("dynamicsUi.transferLabel")}
     >
       <rect x={L} y={T} width={R - L} height={B - T} className="dynamics-plot" />
       {guides}
@@ -291,11 +291,11 @@ function TransferCurve({
         ))}
       {live && (
         <circle cx={x(sample.inputDb)} cy={y(sample.outputDb)} r={5} className="dynamics-live-dot">
-          <title>{`Now: in ${db(sample.inputDb)} dB, out ${db(sample.outputDb)} dB`}</title>
+          <title>{tr("dynamicsUi.now", { input: db(sample.inputDb), output: db(sample.outputDb) })}</title>
         </circle>
       )}
       <text x={(L + R) / 2} y={212} textAnchor="middle" className="dynamics-axis-title">
-        in (dBFS)
+        {tr("dynamicsUi.axisIn")}
       </text>
       <text
         x={14}
@@ -304,7 +304,7 @@ function TransferCurve({
         transform={`rotate(-90 14 ${(T + B) / 2})`}
         className="dynamics-axis-title"
       >
-        out
+        {tr("dynamicsUi.axisOut")}
       </text>
       {handles.map((spec) => (
         <Handle key={spec.name} spec={spec} svg={svg} disabled={disabled} onChange={onChange} />
@@ -330,6 +330,7 @@ function VerticalMeter({
   reduction?: boolean;
   title: string;
 }) {
+  const tr = useMessages();
   const percent = (v: number) => clamp(((v - min) / (max - min)) * 100, 0, 100);
   const shown = value === null ? null : reduction ? clamp(value, 0, max) : value;
   return (
@@ -341,7 +342,7 @@ function VerticalMeter({
         aria-valuemin={reduction ? 0 : min}
         aria-valuemax={max}
         aria-valuenow={shown ?? (reduction ? 0 : min)}
-        aria-valuetext={shown === null ? "no reading" : `${db(reduction ? -shown : shown)} dB`}
+        aria-valuetext={shown === null ? tr("dynamicsUi.noReading") : `${db(reduction ? -shown : shown)} dB`}
       >
         {shown !== null &&
           (reduction ? (
@@ -379,6 +380,7 @@ function LevelHistory({
   disabled: boolean;
   onChange: Change;
 }) {
+  const tr = useMessages();
   const svg = useRef<SVGSVGElement>(null);
   const { min, max, grid } = AXES[kind];
   const L = 34,
@@ -409,7 +411,7 @@ function LevelHistory({
     kind === "limiter"
       ? {
           name: "ceilingDb",
-          label: "Ceiling line",
+          label: tr("dynamicsUi.ceilingLine"),
           value: threshold,
           min: -12,
           max: 0,
@@ -421,7 +423,7 @@ function LevelHistory({
         }
       : {
           name: "thresholdDb",
-          label: "Threshold line",
+          label: tr("dynamicsUi.thresholdLine"),
           value: threshold,
           min: kind === "gate" ? -80 : -60,
           max: 0,
@@ -437,7 +439,7 @@ function LevelHistory({
       className="dynamics-graph dynamics-history"
       viewBox="0 0 380 160"
       role="group"
-      aria-label="Last 8 seconds: level in, level out and gain reduction"
+      aria-label={tr("dynamicsUi.historyLabel")}
     >
       <rect x={L} y={T} width={R - L} height={B - T} className="dynamics-plot" />
       {ticks.map((value) => (
@@ -452,11 +454,11 @@ function LevelHistory({
         <>
           <line x1={L} x2={R} y1={y(statistics.noiseDb)} y2={y(statistics.noiseDb)} className="dynamics-stat" />
           <text x={L + 4} y={y(statistics.noiseDb) - 3} className="dynamics-stat-label">
-            room noise
+            {tr("dynamicsUi.roomNoise")}
           </text>
           <line x1={L} x2={R} y1={y(statistics.voiceDb)} y2={y(statistics.voiceDb)} className="dynamics-stat" />
           <text x={L + 4} y={y(statistics.voiceDb) - 3} className="dynamics-stat-label">
-            voice
+            {tr("dynamicsUi.voice")}
           </text>
         </>
       )}
@@ -502,13 +504,13 @@ function LevelHistory({
         −{reductionScale}
       </text>
       <text x={R - 4} y={STRIP_B + 11} textAnchor="end" className="dynamics-axis">
-        now
+        {tr("dynamicsUi.axisNow")}
       </text>
       <text x={L} y={STRIP_B + 11} className="dynamics-axis">
-        −8 s
+        {tr("dynamicsUi.axisEightSeconds")}
       </text>
       <text x={(L + R) / 2} y={STRIP_B + 11} textAnchor="middle" className="dynamics-axis">
-        {kind === "gate" ? "gate open (green) · turned down (red)" : "gain reduction (dB)"}
+        {kind === "gate" ? tr("dynamicsUi.gateStrip") : tr("dynamicsUi.reductionStrip")}
       </text>
       <Handle spec={thresholdSpec} svg={svg} disabled={disabled} onChange={onChange} />
     </svg>
@@ -516,6 +518,7 @@ function LevelHistory({
 }
 
 function ResponseSketchView({ kind, node }: { kind: DynamicsKind; node: Node }) {
+  const tr = useMessages();
   const sketch = useMemo(() => responseSketch(kind, node), [kind, node]);
   const L = 34,
     R = 372,
@@ -530,18 +533,18 @@ function ResponseSketchView({ kind, node }: { kind: DynamicsKind; node: Node }) 
     kind === "compressor" ? compressorSettings(node) : kind === "gate" ? gateSettings(node) : limiterSettings(node);
   const attack =
     "attackMs" in settings
-      ? `attack ${settings.attackMs} ms`
-      : `look-ahead ${(settings as { lookaheadMs: number }).lookaheadMs} ms`;
+      ? tr("dynamicsUi.attack", { ms: settings.attackMs })
+      : tr("dynamicsUi.lookahead", { ms: (settings as { lookaheadMs: number }).lookaheadMs });
   const tail =
     "holdMs" in settings
-      ? `hold ${settings.holdMs} ms · release ${settings.releaseMs} ms`
-      : `release ${settings.releaseMs} ms`;
+      ? tr("dynamicsUi.tailHold", { hold: settings.holdMs, release: settings.releaseMs })
+      : tr("dynamicsUi.tailRelease", { ms: settings.releaseMs });
   return (
     <svg
       className="dynamics-graph dynamics-sketch"
       viewBox="0 0 380 102"
       role="img"
-      aria-label={`How one spoken word is shaped: ${attack}, ${tail}`}
+      aria-label={tr("dynamicsUi.sketchLabel", { attack, tail })}
     >
       <rect x={L} y={T} width={R - L} height={B - T} className="dynamics-plot" />
       <rect
@@ -557,7 +560,7 @@ function ResponseSketchView({ kind, node }: { kind: DynamicsKind; node: Node }) 
         textAnchor="middle"
         className="dynamics-axis"
       >
-        a word ({kind === "gate" ? "voice" : "loud"})
+        {kind === "gate" ? tr("dynamicsUi.wordVoice") : tr("dynamicsUi.wordLoud")}
       </text>
       <line x1={L} x2={R} y1={y(0)} y2={y(0)} className="dynamics-grid" />
       <text x={L - 4} y={y(0) + 3} textAnchor="end" className="dynamics-axis">
@@ -606,6 +609,7 @@ export function DynamicsEditor({
   /** The rest, in a section that shows their values while closed. */
   timingControls?: ReactNode;
 }) {
+  const tr = useMessages();
   const active = running && node.enabled && !node.bypass;
   const hasLevels = Boolean(telemetry?.inputLevelDb?.length);
   const history = useHistory(kind, hasLevels ? telemetry : null, channels, active);
@@ -619,43 +623,45 @@ export function DynamicsEditor({
   const axes = AXES[kind];
   const comparing = useComparing(node.id);
   let status: string;
-  let pill: { text: string; tone: "good" | "idle" | "work" } = { text: "Not playing", tone: "idle" };
+  let pill: { text: string; tone: "good" | "idle" | "work" } = { text: tr("dynamicsUi.notPlaying"), tone: "idle" };
   // The pill names why there is no live reading, not just "Not playing".
   if (!node.enabled) {
-    status = "Off: enable this tool to process sound.";
-    pill = { text: "Off", tone: "idle" };
+    status = tr("dynamicsUi.offStatus");
+    pill = { text: tr("dynamicsUi.off"), tone: "idle" };
   } else if (node.bypass) {
-    status = "Bypassed: sound passes unchanged. Turn Bypass off to hear and see the effect.";
-    pill = { text: "Bypassed", tone: "idle" };
+    status = tr("dynamicsUi.bypassedStatus");
+    pill = { text: tr("dynamicsUi.bypassed"), tone: "idle" };
   } else if (comparing) {
-    status = "Comparing: this tool is out of the route while you hold.";
-    pill = { text: "Comparing", tone: "idle" };
-  } else if (!running) status = "Press Play, then talk: the moving dot shows where your voice sits on the curve.";
+    status = tr("dynamicsUi.comparingStatus");
+    pill = { text: tr("dynamicsUi.comparing"), tone: "idle" };
+  } else if (!running) status = tr("dynamicsUi.pressPlay");
   else if (!telemetry) {
-    status =
-      "Playing, but this tool sends no readings. Save the route if it has unsaved changes, and run only one AudioRouter window: a second window shows the first window's backend.";
-    pill = { text: "No readings", tone: "idle" };
+    status = tr("dynamicsUi.noReadingsStatus");
+    pill = { text: tr("dynamicsUi.noReadings"), tone: "idle" };
   } else if (!hasLevels) {
-    status =
-      "This backend reports gain reduction only. Close every AudioRouter window and start the current build to see live levels.";
-    pill = { text: "Old backend", tone: "idle" };
+    status = tr("dynamicsUi.oldBackendStatus");
+    pill = { text: tr("dynamicsUi.oldBackend"), tone: "idle" };
   } else if (kind === "gate") {
     const open = latest?.open ?? false;
-    pill = open ? { text: "Open", tone: "good" } : { text: `Closed −${(reduction ?? 0).toFixed(0)} dB`, tone: "work" };
-    status = open
-      ? "Gate open: your voice passes unchanged."
-      : "Gate closed: the room is turned down between words. If words are cut, lower the threshold or raise Hold.";
+    pill = open
+      ? { text: tr("dynamicsUi.open"), tone: "good" }
+      : { text: tr("dynamicsUi.closed", { db: (reduction ?? 0).toFixed(0) }), tone: "work" };
+    status = open ? tr("dynamicsUi.gateOpenStatus") : tr("dynamicsUi.gateClosedStatus");
   } else {
     const amount = reduction ?? 0;
-    pill = amount >= 0.5 ? { text: `−${amount.toFixed(1)} dB`, tone: "work" } : { text: "Not reducing", tone: "good" };
+    const amountText = amount.toFixed(1);
+    pill =
+      amount >= 0.5
+        ? { text: tr("dynamicsUi.reducing", { db: amountText }), tone: "work" }
+        : { text: tr("dynamicsUi.notReducing"), tone: "good" };
     status =
       kind === "limiter"
         ? amount >= 0.5
-          ? `Holding a peak down by ${amount.toFixed(1)} dB so it stays under the ceiling.`
-          : "Peaks are under the ceiling; nothing is changed."
+          ? tr("dynamicsUi.limiterHolding", { db: amountText })
+          : tr("dynamicsUi.limiterUnder")
         : amount >= 0.5
-          ? `Turning loud parts down by ${amount.toFixed(1)} dB. Around 3–6 dB on loud words sounds natural.`
-          : "Below the threshold: no compression right now.";
+          ? tr("dynamicsUi.compressorTurning", { db: amountText })
+          : tr("dynamicsUi.compressorBelow");
   }
   const suggestion = (() => {
     if (!statistics || kind === "limiter") return null;
@@ -664,12 +670,18 @@ export function DynamicsEditor({
       const value = suggestGateThreshold(statistics, hysteresisDb);
       return {
         value,
-        why: `closes at ${db(value - hysteresisDb, 0)} dB, ${(value - hysteresisDb - statistics.noiseDb).toFixed(0)} dB above room noise`,
+        why: tr("dynamicsUi.gateWhy", {
+          close: db(value - hysteresisDb, 0),
+          above: (value - hysteresisDb - statistics.noiseDb).toFixed(0),
+        }),
       };
     }
     const settings = compressorSettings(node);
     const { thresholdDb, reductionDb } = suggestCompressorThreshold(statistics, settings.ratio);
-    const why = `about ${reductionDb.toFixed(0)} dB off your loud words at ${settings.ratio.toFixed(1)}:1${reductionDb < 5.5 ? "; raise Ratio for more" : ""}`;
+    const why = tr(reductionDb < 5.5 ? "dynamicsUi.compressorWhyMore" : "dynamicsUi.compressorWhy", {
+      db: reductionDb.toFixed(0),
+      ratio: settings.ratio.toFixed(1),
+    });
     return { value: thresholdDb, why, quiet: statistics.voiceDb < QUIET_VOICE_DB };
   })();
   const currentThreshold =
@@ -681,12 +693,20 @@ export function DynamicsEditor({
   return (
     <section
       className="dynamics-editor"
-      aria-label={`${kind === "compressor" ? "Compressor" : kind === "gate" ? "Gate" : "Limiter"} live view`}
+      aria-label={tr("dynamicsUi.liveView", {
+        tool: tr(
+          kind === "compressor"
+            ? "dynamicsUi.kindCompressor"
+            : kind === "gate"
+              ? "dynamicsUi.kindGate"
+              : "dynamicsUi.kindLimiter",
+        ),
+      })}
     >
       <div className="dynamics-heading">
         <div>
-          <strong>Live response</strong>
-          <small>Drag the round handles. Exact values are below.</small>
+          <strong>{tr("dynamicsUi.liveResponse")}</strong>
+          <small>{tr("dynamicsUi.dragHandles")}</small>
         </div>
         <span className={`dynamics-pill is-${pill.tone}`} role="status">
           {pill.text}
@@ -703,28 +723,28 @@ export function DynamicsEditor({
         />
         <div className="dynamics-meters">
           <VerticalMeter
-            label="In"
+            label={tr("dynamicsUi.in")}
             value={input.level}
             peak={input.peak}
             min={axes.min}
             max={axes.max}
-            title="Level entering the tool"
+            title={tr("dynamicsUi.levelIn")}
           />
           <VerticalMeter
-            label={kind === "gate" ? "Down" : "GR"}
+            label={kind === "gate" ? tr("dynamicsUi.down") : tr("dynamicsUi.gr")}
             value={reduction}
             min={0}
             max={kind === "gate" ? Math.max(gateSettings(node).rangeDb, 6) : 24}
             reduction
-            title={kind === "gate" ? "How far the gate turns the sound down" : "Gain reduction"}
+            title={kind === "gate" ? tr("dynamicsUi.gateDown") : tr("dynamicsUi.gainReduction")}
           />
           <VerticalMeter
-            label="Out"
+            label={tr("dynamicsUi.out")}
             value={output.level}
             peak={output.peak}
             min={axes.min}
             max={axes.max}
-            title="Level leaving the tool"
+            title={tr("dynamicsUi.levelOut")}
           />
         </div>
       </div>
@@ -735,19 +755,25 @@ export function DynamicsEditor({
               width and the panel never jumps when a measurement arrives, lapses or turns into the quiet-voice advice. */}
           <div
             className="dynamics-suggestion-text"
-            data-reserve={`Last 8 s: room noise ≈ −100 dB, voice ≈ −100 dB. Suggested threshold −100 dB (about 10 dB off your loud words at 10.0:1; raise Ratio for more).${kind === "compressor" ? QUIET_VOICE_ADVICE : ""}`}
+            data-reserve={`${tr("dynamicsUi.suggestionText", {
+              noise: "−100",
+              voice: "−100",
+              value: "−100",
+              why: tr("dynamicsUi.compressorWhyMore", { db: 10, ratio: "10.0" }),
+            })}${kind === "compressor" ? tr("dynamicsUi.quietAdvice") : ""}`}
           >
             {suggestion && statistics ? (
               <span>
-                Last 8 s: room noise ≈ {db(statistics.noiseDb, 0)} dB, voice ≈ {db(statistics.voiceDb, 0)} dB. Suggested
-                threshold {db(suggestion.value, 0)} dB ({suggestion.why}).
-                {"quiet" in suggestion && suggestion.quiet && QUIET_VOICE_ADVICE}
+                {tr("dynamicsUi.suggestionText", {
+                  noise: db(statistics.noiseDb, 0),
+                  voice: db(statistics.voiceDb, 0),
+                  value: db(suggestion.value, 0),
+                  why: suggestion.why,
+                })}
+                {"quiet" in suggestion && suggestion.quiet && tr("dynamicsUi.quietAdvice")}
               </span>
             ) : (
-              <span className="muted">
-                Suggested threshold: press Play and talk normally for a few seconds, with short pauses, to measure your
-                voice and room noise.
-              </span>
+              <span className="muted">{tr("dynamicsUi.suggestionPrompt")}</span>
             )}
           </div>
           <button
@@ -756,7 +782,7 @@ export function DynamicsEditor({
             disabled={disabled || !suggestion || Math.abs(suggestion.value - currentThreshold) < 0.5}
             onClick={() => suggestion && onChange("thresholdDb", suggestion.value)}
           >
-            {suggestion ? `Use ${db(suggestion.value, 0)} dB` : "Use suggestion"}
+            {suggestion ? tr("dynamicsUi.use", { db: db(suggestion.value, 0) }) : tr("dynamicsUi.useSuggestion")}
           </button>
         </div>
       )}
@@ -764,13 +790,20 @@ export function DynamicsEditor({
       {timingControls && (
         <PropertySection
           kind={kind}
-          title={dynamicsControlSplit(kind).title}
+          title={tr(
+            kind === "compressor"
+              ? "dynamicsUi.timingKnee"
+              : kind === "gate"
+                ? "dynamicsUi.timingClosing"
+                : "dynamicsUi.timing",
+          )}
+          sectionId={dynamicsControlSplit(kind).title}
           summary={dynamicsTimingSummary(kind, node)}
         >
           {timingControls}
         </PropertySection>
       )}
-      <PropertySection kind={kind} title="Last 8 seconds">
+      <PropertySection kind={kind} title={tr("dynamicsUi.lastEight")} sectionId="Last 8 seconds">
         <LevelHistory
           kind={kind}
           node={node}
@@ -783,30 +816,27 @@ export function DynamicsEditor({
         <div className="dynamics-legend" aria-hidden="true">
           <span>
             <i className="dynamics-key is-input" />
-            In
+            {tr("dynamicsUi.in")}
           </span>
           <span>
             <i className="dynamics-key is-output" />
-            Out
+            {tr("dynamicsUi.out")}
           </span>
           <span>
             <i className="dynamics-key is-threshold" />
-            {kind === "limiter" ? "Ceiling" : "Threshold"}
+            {kind === "limiter" ? tr("dynamicsUi.ceiling") : tr("dynamicsUi.threshold")}
           </span>
           {kind === "gate" && (
             <span>
               <i className="dynamics-key is-close" />
-              Closes below
+              {tr("dynamicsUi.closesBelow")}
             </span>
           )}
         </div>
       </PropertySection>
-      <PropertySection kind={kind} title="How one word is shaped">
+      <PropertySection kind={kind} title={tr("dynamicsUi.howWord")} sectionId="How one word is shaped">
         <ResponseSketchView kind={kind} node={node} />
-        <small className="muted">
-          The line shows how far the tool turns the sound down over time (0 = unchanged). It updates as you change the
-          timing values.
-        </small>
+        <small className="muted">{tr("dynamicsUi.wordNote")}</small>
       </PropertySection>
     </section>
   );

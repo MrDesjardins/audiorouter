@@ -3,6 +3,8 @@ import { nextFallingLevel, nextPeakHold, type PeakHold } from "./dynamics";
 import type { Node, DiagnosticsSnapshot } from "@audiorouter/contracts";
 import type { UiBackend } from "./backend";
 import { formatUiError } from "./backend";
+import { useMessages } from "./i18n/useMessages";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 const percent = (db: number) => Math.max(0, Math.min(100, ((db + 60) / 66) * 100));
 const dbText = (db: number) => (db <= -120 ? "−∞" : `${db.toFixed(1)} dBFS`);
 
@@ -19,12 +21,12 @@ export function levelVerdict(peakDb: number | undefined): LevelVerdict {
   return "quiet";
 }
 
-const VERDICT_TEXT: Record<LevelVerdict, string> = {
-  waiting: "Voice guide: waiting for sound",
-  quiet: "Voice guide: too quiet. Raise the level before this point.",
-  zone: "Voice guide: in the zone",
-  loud: "Voice guide: loud. Lower the level a little.",
-  tooLoud: "Voice guide: too loud, close to clipping. Lower the level.",
+const VERDICT_TEXT: Record<LevelVerdict, MessageKey> = {
+  waiting: "g5.meterWaiting",
+  quiet: "g5.meterQuiet",
+  zone: "g5.meterZone",
+  loud: "g5.meterLoud",
+  tooLoud: "g5.meterTooLoud",
 };
 
 /**
@@ -58,6 +60,7 @@ export function MeterInspector({
   backend: UiBackend;
   onUpgrade: () => void;
 }) {
+  const tr = useMessages();
   const meter = snapshot?.nodeTelemetry.find((item) => item.nodeId === node.id)?.meter;
   const channels = node.ports.find((p) => p.direction === "input")?.channels ?? 2;
   const active = running && node.enabled && !node.bypass && backend.connected;
@@ -82,50 +85,50 @@ export function MeterInspector({
     setBusy(true);
     try {
       await backend.resetMeter(sessionId, node.id);
-      setMessage("Peak hold and clipping counters reset. Audio keeps playing.");
+      setMessage(tr("g5.meterResetDone"));
     } catch (error) {
-      setMessage(formatUiError(error, "Could not reset this meter."));
+      setMessage(formatUiError(error, tr("g5.meterResetFail")));
     } finally {
       setBusy(false);
     }
   };
   return (
-    <section className="meter-inspector" aria-label="Detailed Meter">
+    <section className="meter-inspector" aria-label={tr("g5.meterAria")}>
       <div className="meter-inspector-heading">
-        <h3>Signal level</h3>
+        <h3>{tr("g5.meterHeading")}</h3>
         <button
           type="button"
           className="secondary"
-          aria-label="Reset peak & clipping"
-          title="Reset peak hold and clipping counters; audio keeps playing"
+          aria-label={tr("g5.meterResetAria")}
+          title={tr("g5.meterResetTitle")}
           onClick={() => void reset()}
           disabled={!backend.connected || !meter || !backend.resetMeter || busy}
         >
-          {busy ? "Resetting…" : "Reset"}
+          {busy ? tr("g5.meterResetting") : tr("g5.meterReset")}
         </button>
       </div>
       <div className={`meter-clip-status${clipped ? " meter-clipped" : ""}`} role="status">
-        {clipped ? "Clipping recorded — reset to clear" : "No clipping recorded"}
+        {clipped ? tr("g5.meterClipped") : tr("g5.meterNoClip")}
       </div>
       <p className={`meter-level-verdict is-${verdict}`} data-verdict={verdict}>
-        {VERDICT_TEXT[verdict]}
+        {tr(VERDICT_TEXT[verdict])}
       </p>
       <p className="muted">
         {!backend.connected
-          ? "Disconnected: readings are unavailable."
+          ? tr("g5.meterDisconnected")
           : !node.enabled
-            ? "Off: metering is inactive; sound passes through."
+            ? tr("g5.meterOff")
             : node.bypass
-              ? "Bypass: metering is inactive; sound passes through."
+              ? tr("g5.meterBypass")
               : !running
-                ? "Press Play to measure the sound passing through this node."
+                ? tr("g5.meterPressPlay")
                 : !meter
-                  ? "Waiting for this meter's readings. Check its incoming connection."
-                  : "RMS shows your average level. Peak shows the current sample peak; Hold remembers the highest peak."}
+                  ? tr("g5.meterWaitingReadings")
+                  : tr("g5.meterExplain")}
       </p>
       {!node.ports.some((p) => p.direction === "output") && (
         <button type="button" className="secondary" disabled={!backend.connected} onClick={onUpgrade}>
-          Add pass-through output
+          {tr("g5.meterAddOutput")}
         </button>
       )}
       <div className="meter-inspector-display">
@@ -142,12 +145,13 @@ export function MeterInspector({
           const current = active ? meter?.channelCurrentPeakDb?.[channel] : undefined;
           const hold = meter?.channelPeakDb[channel] ?? -120;
           const clips = meter?.channelClippedSamples[channel] ?? 0;
+          const channelName = tr(channels === 1 ? "g5.meterMono" : channel === 0 ? "g5.meterLeft" : "g5.meterRight");
           return (
             <div className="meter-channel" key={channel}>
               <div
                 className="meter-channel-track"
                 role="meter"
-                aria-label={`${channels === 1 ? "Mono" : channel === 0 ? "Left" : "Right"} RMS level`}
+                aria-label={tr("g5.meterRmsLevel", { channel: channelName })}
                 aria-valuemin={-60}
                 aria-valuemax={6}
                 aria-valuenow={Math.max(-60, Math.min(6, rms))}
@@ -167,39 +171,32 @@ export function MeterInspector({
                 <span className="meter-hold-marker" style={{ bottom: `${percent(hold)}%` }} />
                 <span className="meter-zero-line" style={{ bottom: `${percent(0)}%` }} />
               </div>
-              <strong>{channels === 1 ? "Mono" : channel === 0 ? "Left" : "Right"}</strong>
+              <strong>{channelName}</strong>
               <dl className="meter-channel-values">
-                <dt>RMS</dt>
+                <dt>{tr("g5.meterRms")}</dt>
                 <dd>{dbText(rms)}</dd>
-                <dt>Peak</dt>
+                <dt>{tr("g5.meterPeak")}</dt>
                 <dd>{current === undefined ? "—" : dbText(current)}</dd>
-                <dt>Hold</dt>
+                <dt>{tr("g5.meterHold")}</dt>
                 <dd>{dbText(hold)}</dd>
-                <dt>Headroom</dt>
+                <dt>{tr("g5.meterHeadroom")}</dt>
                 <dd>{hold <= -120 ? "—" : `${(-hold).toFixed(1)} dB`}</dd>
-                <dt>Clipped samples</dt>
+                <dt>{tr("g5.meterClippedSamples")}</dt>
                 <dd className={clips ? "meter-clipped" : ""}>{clips.toLocaleString()}</dd>
-                <dt>Clipped time</dt>
+                <dt>{tr("g5.meterClippedTime")}</dt>
                 <dd className={clips ? "meter-clipped" : ""}>
                   {meter?.sampleRateHz ? `${(clips / meter.sampleRateHz).toFixed(3)} s` : "—"}
                 </dd>
-                <dt>Clipped share</dt>
+                <dt>{tr("g5.meterClippedShare")}</dt>
                 <dd>{meter?.observedFrames ? `${((clips / meter.observedFrames) * 100).toFixed(2)}%` : "—"}</dd>
               </dl>
             </div>
           );
         })}
       </div>
-      <p className="meter-inspector-legend">
-        Bar: RMS · thin line: recent peak (holds 1.2 s, then falls) · gold line: highest peak since reset · shaded band:
-        voice target zone, where spoken peaks should land (−18 to −6 dBFS). Above 0 dBFS exceeds full scale. Numbers
-        show exact current values.
-      </p>
+      <p className="meter-inspector-legend">{tr("g5.meterLegend")}</p>
       {message && <p role="status">{message}</p>}
-      <p className="muted">
-        Sample peaks, not true peak or LUFS. Clipped time counts samples above full scale per channel; it is not the
-        length of a continuous clipping event. Statistics restart when the audio graph is prepared or replaced.
-      </p>
+      <p className="muted">{tr("g5.meterFootnote")}</p>
     </section>
   );
 }

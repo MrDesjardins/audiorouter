@@ -3,6 +3,8 @@ import { AppLogo } from "./appLogos";
 import type { DeviceListItem } from "@audiorouter/contracts";
 import { CopyName } from "./AppsPanel";
 import type { DiscordSetupOptions } from "./discordRoute";
+import { boldMarkup } from "./boldMarkup";
+import { useMessages } from "./i18n/useMessages";
 
 /** "CABLE-A Input (VB-Audio Virtual Cable A)" as "CABLE-A Input", for the one-line review. */
 const cableShort = (name: string) => name.replace(/\s*\(VB-Audio[^)]*\)\s*$/i, "");
@@ -35,6 +37,7 @@ export function DiscordSetup({
   onClose: () => void;
   onOpenVirtualCables: () => void;
 }) {
+  const tr = useMessages();
   const [microphone, setMicrophone] = useState(options.microphone ?? "");
   const [cable, setCable] = useState(options.cable ?? "");
   const [cleanup, setCleanup] = useState(true);
@@ -46,55 +49,44 @@ export function DiscordSetup({
     <section className="panel app-card discord-setup" aria-labelledby="discord-setup-heading">
       <header className="app-card-heading">
         <AppLogo app="discord" />
-        <h3 id="discord-setup-heading">Set up for Discord</h3>
-        <span className="discord-setup-step">Step {added ? 2 : 1} of 2</span>
+        <h3 id="discord-setup-heading">{tr("g2.dsTitle")}</h3>
+        <span className="discord-setup-step">{tr("g2.dsStep", { n: added ? 2 : 1 })}</span>
       </header>
       {added ? (
         <>
-          <p className="muted">The route is added. Undo removes it in one step.</p>
+          <p className="muted">{tr("g2.dsAdded")}</p>
           <ol className="discord-setup-list">
+            <li>{boldMarkup(tr("g2.dsSavePlay"))}</li>
             <li>
-              <strong>Save</strong>, then press <strong>Play</strong>.
-            </li>
-            <li>
-              In Discord, open User Settings › Voice &amp; Video and set Input Device to <strong>{added.name}</strong>.
+              {boldMarkup(tr("g2.dsInDiscord", { name: added.name }))}
               <CopyName name={added.name} />
             </li>
-            <li>Local signal is not yet verified: make sound and check fresh route meters after Play.</li>
-            <li>
-              Receiving-app audio is not yet verified: open Discord and use its microphone test. The card below checks
-              device selection; Ready alone does not prove Discord hears audio.
-            </li>
+            <li>{tr("g2.dsLocalUnverified")}</li>
+            <li>{tr("g2.dsRemoteUnverified")}</li>
           </ol>
           <div className="obs-actions">
             <button type="button" className="secondary" onClick={onClose}>
-              Done
+              {tr("g2.dsDone")}
             </button>
           </div>
         </>
       ) : options.cables.length === 0 ? (
         <>
-          <p className="muted">
-            Discord needs a virtual cable: AudioRouter plays your voice into one end, and Discord records the other. No
-            active paired cable is available. Check Virtual Cables for missing, disabled or disconnected endpoints.
-          </p>
+          <p className="muted">{tr("g2.dsNeedsCable")}</p>
           <div className="obs-actions">
             <button type="button" className="primary" onClick={onOpenVirtualCables}>
-              Set up a virtual cable
+              {tr("g2.dsSetupCable")}
             </button>
             <button type="button" className="secondary" onClick={onClose}>
-              Cancel
+              {tr("g2.dsCancel")}
             </button>
           </div>
         </>
       ) : (
         <>
-          <p className="muted">
-            AudioRouter sends your microphone through a virtual cable, and Discord records the cable instead of the
-            microphone.
-          </p>
+          <p className="muted">{tr("g2.dsIntro")}</p>
           <label className="discord-setup-field">
-            <span>Microphone</span>
+            <span>{tr("g2.dsMicrophone")}</span>
             <select
               value={microphone}
               onChange={(event) => {
@@ -102,7 +94,7 @@ export function DiscordSetup({
                 setError(null);
               }}
             >
-              {microphone === "" && <option value="">Choose a microphone</option>}
+              {microphone === "" && <option value="">{tr("g2.dsChooseMic")}</option>}
               {options.microphones.map((device) => (
                 <option key={device.id} value={device.id}>
                   {device.name}
@@ -112,11 +104,11 @@ export function DiscordSetup({
           </label>
           <p className="muted">
             {chosenCable
-              ? `AudioRouter plays into ${chosenCable.input.name} (playback end). In Discord choose ${chosenCable.output.name} (recording end). Device availability does not verify signal.`
-              : "Choose an available paired cable before continuing."}
+              ? tr("g2.dsCableHint", { input: chosenCable.input.name, output: chosenCable.output.name })
+              : tr("g2.dsChooseCableFirst")}
           </p>
           <label className="discord-setup-field">
-            <span>Voice cable</span>
+            <span>{tr("g2.dsVoiceCable")}</span>
             <select
               value={cable}
               onChange={(event) => {
@@ -134,14 +126,19 @@ export function DiscordSetup({
           </label>
           <label className="discord-setup-check">
             <input type="checkbox" checked={cleanup} onChange={(event) => setCleanup(event.target.checked)} />
-            <span>Clean up my voice: Gate, Compressor and Limiter, adjustable later</span>
+            <span>{tr("g2.dsCleanup")}</span>
           </label>
           {/* Reserved: the summary and an error share fixed lines (UI-17). */}
           <p className={error ? "discord-setup-review is-error" : "discord-setup-review"} role="status">
             {error ??
               (chosenMicrophone && chosenCable
-                ? `Adds ${chosenMicrophone.name} → ${cleanup ? "Gate → Compressor → Limiter → " : ""}${cableShort(chosenCable.input.name)}. Discord's microphone: ${cableShort(chosenCable.output.name)}.`
-                : "Choose a microphone and a cable.")}
+                ? tr("g2.dsReview", {
+                    mic: chosenMicrophone.name,
+                    chain: cleanup ? tr("g2.dsChain") : "",
+                    cable: cableShort(chosenCable.input.name),
+                    output: cableShort(chosenCable.output.name),
+                  })
+                : tr("g2.dsChooseBoth"))}
           </p>
           <div className="obs-actions">
             <button
@@ -150,10 +147,10 @@ export function DiscordSetup({
               disabled={!connected || !chosenMicrophone || !chosenCable}
               onClick={() => setError(onAdd({ microphone, cable, cleanup }))}
             >
-              Add route
+              {tr("g2.dsAddRoute")}
             </button>
             <button type="button" className="secondary" onClick={onClose}>
-              Cancel
+              {tr("g2.dsCancel")}
             </button>
           </div>
         </>

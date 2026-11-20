@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import type { NetworkNodeTelemetry, Node } from "@audiorouter/contracts";
+import { tx } from "./i18n";
 import { DEFAULT_NETWORK_AUDIO_PORT } from "./draft";
+import { boldMarkup } from "./boldMarkup";
+import { useMessages } from "./i18n/useMessages";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 
 const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 
@@ -38,23 +42,31 @@ export function generatePairingKey(
   return Array.from(bytes, (byte) => PAIRING_SYMBOLS[byte & 31]).join("");
 }
 
+type Translate = (key: MessageKey, options?: Record<string, unknown>) => string;
+
+/** Translator for callers outside React components (the canvas); components pass their own. */
+const currentLanguage: Translate = tx;
+
 /** Short enough for the canvas node's one-line status. */
-function pairingProblemText(telemetry: NetworkNodeTelemetry): string {
-  const count = telemetry.authFailures ?? 0;
+function pairingProblemText(telemetry: NetworkNodeTelemetry, tr: Translate): string {
+  const n = telemetry.authFailures ?? 0;
   switch (telemetry.authProblem) {
     case "senderNotPaired":
-      return `${count} packets had no pairing key`;
+      return tr("g2.nwNoKey", { n });
     case "receiverNotPaired":
-      return `${count} packets had a pairing key`;
+      return tr("g2.nwHadKey", { n });
     case "senderOutdated":
-      return `${count} packets used an older AudioRouter`;
+      return tr("g2.nwOlder", { n });
     default:
-      return `${count} packets had another pairing key`;
+      return tr("g2.nwOtherKey", { n });
   }
 }
 
 /** What to change when audio arrives with the wrong pairing, or null. */
-export function pairingAdvice(telemetry: NetworkNodeTelemetry | null | undefined): string | null {
+export function pairingAdvice(
+  telemetry: NetworkNodeTelemetry | null | undefined,
+  tr: Translate = currentLanguage,
+): string | null {
   if (
     !telemetry ||
     telemetry.direction !== "receive" ||
@@ -64,45 +76,49 @@ export function pairingAdvice(telemetry: NetworkNodeTelemetry | null | undefined
     return null;
   switch (telemetry.authProblem) {
     case "senderNotPaired":
-      return "The sending computer has no pairing key. Copy this key into its Network Send.";
+      return tr("g2.nwAdviceNoKey");
     case "receiverNotPaired":
-      return "The sending computer uses a pairing key. Enter the same key here.";
+      return tr("g2.nwAdviceHasKey");
     case "senderOutdated":
-      return "Update AudioRouter on both computers. This sender does not support encrypted paired audio.";
+      return tr("g2.nwAdviceOutdated");
     default:
-      return "The sending computer uses a different pairing key. Enter the same key on both computers.";
+      return tr("g2.nwAdviceWrongKey");
   }
 }
 
 /** A one-line status of a running network node, or null when idle. */
-export function networkTelemetryText(telemetry: NetworkNodeTelemetry | null | undefined): string | null {
+export function networkTelemetryText(
+  telemetry: NetworkNodeTelemetry | null | undefined,
+  tr: Translate = currentLanguage,
+): string | null {
   if (!telemetry) return null;
   if (telemetry.direction === "send") {
     const problems = [
-      telemetry.droppedPackets ? `${telemetry.droppedPackets} dropped` : null,
+      telemetry.droppedPackets ? tr("g2.nwDropped", { n: telemetry.droppedPackets }) : null,
       telemetry.sendErrors
-        ? `${telemetry.sendErrors} send errors${telemetry.lastErrorCode === 10054 ? " (the receiving computer is not listening on this port)" : ""}`
+        ? tr(telemetry.lastErrorCode === 10054 ? "g2.nwSendErrorsClosed" : "g2.nwSendErrors", {
+            n: telemetry.sendErrors,
+          })
         : null,
     ].filter(Boolean);
-    return `Sending · ${telemetry.sentPackets ?? 0} packets${problems.length ? ` · ${problems.join(" · ")}` : ""}`;
+    return `${tr("g2.nwSending", { n: telemetry.sentPackets ?? 0 })}${problems.length ? ` · ${problems.join(" · ")}` : ""}`;
   }
   const received = telemetry.receivedPackets ?? 0;
   if (received === 0) {
-    if (telemetry.authFailures) return `Waiting for audio · ${pairingProblemText(telemetry)}`;
-    if (telemetry.rejectedFrom)
-      return `Waiting for audio · audio from ${telemetry.rejectedFrom} was ignored because it is not the address entered`;
+    if (telemetry.authFailures) return tr("g2.nwWaitingPairing", { problem: pairingProblemText(telemetry, tr) });
+    if (telemetry.rejectedFrom) return tr("g2.nwWaitingRejectedFrom", { from: telemetry.rejectedFrom });
     return telemetry.rejectedDatagrams
-      ? `Waiting for audio · ${telemetry.rejectedDatagrams} packets from another address were ignored`
-      : "Waiting for audio from the sending computer";
+      ? tr("g2.nwWaitingOtherAddress", { n: telemetry.rejectedDatagrams })
+      : tr("g2.nwWaiting");
   }
   const problems = [
-    telemetry.lostPackets ? `${telemetry.lostPackets} lost` : null,
-    telemetry.latePackets ? `${telemetry.latePackets} late` : null,
-    telemetry.underruns ? `${telemetry.underruns} gaps` : null,
-    telemetry.authFailures ? `${telemetry.authFailures} with another pairing key` : null,
-    telemetry.replayedPackets ? `${telemetry.replayedPackets} replayed` : null,
+    telemetry.lostPackets ? tr("g2.nwLost", { n: telemetry.lostPackets }) : null,
+    telemetry.latePackets ? tr("g2.nwLate", { n: telemetry.latePackets }) : null,
+    telemetry.underruns ? tr("g2.nwGaps", { n: telemetry.underruns }) : null,
+    telemetry.authFailures ? tr("g2.nwWithOtherKey", { n: telemetry.authFailures }) : null,
+    telemetry.replayedPackets ? tr("g2.nwReplayed", { n: telemetry.replayedPackets }) : null,
   ].filter(Boolean);
-  return `Receiving · ${received} packets · ${Math.round(telemetry.bufferedMs ?? 0)} ms buffered${problems.length ? ` · ${problems.join(" · ")}` : ""}`;
+  return `${tr("g2.nwReceiving", { n: received, ms: Math.round(telemetry.bufferedMs ?? 0) })}${problems.length ? ` · ${problems.join(" · ")}` : ""}`;
 }
 
 /** Properties of a Network Send or Network Receive node. Only valid values
@@ -118,6 +134,7 @@ export function NetworkNodeEditor({
   telemetry: NetworkNodeTelemetry | null | undefined;
   onChange: (name: string, value: number | string) => void;
 }) {
+  const tr = useMessages();
   const sending = node.kind === "networkSend";
   const addressKey = sending ? "host" : "sender";
   const savedAddress = typeof node.parameters[addressKey] === "string" ? String(node.parameters[addressKey]) : "";
@@ -161,62 +178,62 @@ export function NetworkNodeEditor({
   // is edited here, the counters describe the previous one.
   const advice =
     pairingKey === savedPairingKey && Boolean(telemetry?.paired) === savedPairingKey.length > 0
-      ? pairingAdvice(telemetry)
+      ? pairingAdvice(telemetry, tr)
       : null;
   const pairingNote = !pairingValid
-    ? "Use 16 to 128 letters, digits or symbols, or leave it blank."
+    ? tr("g2.nwPairingInvalid")
     : (advice ??
       (pairingKey.length === 0
         ? sending
-          ? "Not paired: anyone on your network can listen to this stream or send audio in its place."
-          : "Not paired: anyone on your network can send audio to this input."
+          ? tr("g2.nwSendUnpaired")
+          : tr("g2.nwRecvUnpaired")
         : sending
-          ? "Paired: audio is encrypted, and the other computer plays only audio with this key. Update both computers together."
-          : "Paired: only encrypted audio sent with this key is played. Update both computers together."));
-  const status = networkTelemetryText(telemetry);
+          ? tr("g2.nwSendPaired")
+          : tr("g2.nwRecvPaired")));
+  const status = networkTelemetryText(telemetry, tr);
   const thisPc = sending ? telemetry?.localAddress : telemetry?.thisAddress;
-  const addressLabel = sending ? "Receiving computer's IP address" : "Sending computer's IP address";
+  const addressLabel = sending ? tr("g2.nwAddrSend") : tr("g2.nwAddrRecv");
+  const portPhrase = portValid ? tr("g2.nwPortPhrase", { n: portNumber }) : tr("g2.nwSamePortPhrase");
+  const thisAddress = thisPc ? tr("g2.nwThisAddrKnown", { addr: thisPc }) : tr("g2.nwThisAddrUnknown");
 
   return (
     <div
       className="node-binding-editor network-node-editor"
-      aria-label={sending ? "Network send settings" : "Network receive settings"}
+      aria-label={sending ? tr("g2.nwSendAria") : tr("g2.nwRecvAria")}
     >
       <div>
-        <p className="eyebrow">{sending ? "Stream to another computer" : "Play audio from another computer"}</p>
-        <strong>{sending ? "Where should this audio go?" : "Which computer sends the audio?"}</strong>
+        <p className="eyebrow">{sending ? tr("g2.nwEyebrowSend") : tr("g2.nwEyebrowRecv")}</p>
+        <strong>{sending ? tr("g2.nwHeadSend") : tr("g2.nwHeadRecv")}</strong>
       </div>
-      <figure className="network-route-diagram" aria-label="Network audio direction">
+      <figure className="network-route-diagram" aria-label={tr("g2.nwDiagramAria")}>
         <div className="network-route-computer">
           <svg viewBox="0 0 48 36" aria-hidden="true">
             <rect x="6" y="2" width="36" height="24" rx="3" />
             <path d="M18 34h12M24 26v8M12 16h4l3-7 6 13 4-9h7" />
           </svg>
-          <strong>{sending ? "This PC" : "Sending PC"}</strong>
-          <span>Audio in</span>
-          <b>Network Send</b>
-          <code>{sending ? "Your input / mix" : addressValid ? address : "Sender IP"}</code>
+          <strong>{sending ? tr("g2.nwThisPc") : tr("g2.nwSendingPc")}</strong>
+          <span>{tr("g2.nwAudioIn")}</span>
+          <b>{tr("g2.nwToolSend")}</b>
+          <code>{sending ? tr("g2.nwYourInputMix") : addressValid ? address : tr("g2.nwSenderIp")}</code>
         </div>
         <div className="network-route-link">
           <span aria-hidden="true">→</span>
           <small>UDP</small>
-          <code>{portValid ? portNumber : "Port"}</code>
+          <code>{portValid ? portNumber : tr("g2.nwPortWord")}</code>
         </div>
         <div className="network-route-computer">
           <svg viewBox="0 0 48 36" aria-hidden="true">
             <rect x="6" y="2" width="36" height="24" rx="3" />
             <path d="M18 34h12M24 26v8M12 16h4l3-7 6 13 4-9h7" />
           </svg>
-          <strong>{sending ? "Receiving PC" : "This PC"}</strong>
-          <span>Audio out</span>
-          <b>Network Receive</b>
-          <code>{sending ? (addressValid ? address : "Destination IP") : "Your output / OBS"}</code>
+          <strong>{sending ? tr("g2.nwReceivingPc") : tr("g2.nwThisPc")}</strong>
+          <span>{tr("g2.nwAudioOut")}</span>
+          <b>{tr("g2.nwToolRecv")}</b>
+          <code>{sending ? (addressValid ? address : tr("g2.nwDestIp")) : tr("g2.nwYourOutputObs")}</code>
         </div>
         <figcaption>
-          {sending
-            ? `Set Receive's sender to ${thisPc ?? "this PC's IP"}.`
-            : `Set Send's destination to ${thisPc ?? "this PC's IP"}.`}{" "}
-          Use port {portValid ? portNumber : "the same port"} on both PCs.
+          {tr(sending ? "g2.nwSetSender" : "g2.nwSetDest", { addr: thisPc ?? tr("g2.nwThisPcIp") })}{" "}
+          {tr("g2.nwUsePortBoth", { port: portPhrase })}
         </figcaption>
       </figure>
       <label>
@@ -237,11 +254,9 @@ export function NetworkNodeEditor({
           }}
         />
       </label>
-      {address.length > 0 && !addressValid && (
-        <small role="alert">Enter a numeric IP address such as 192.168.1.20. Computer names are not used.</small>
-      )}
+      {address.length > 0 && !addressValid && <small role="alert">{tr("g2.nwAddrInvalid")}</small>}
       <label>
-        Port
+        {tr("g2.nwPortWord")}
         <input
           type="number"
           min={1}
@@ -259,13 +274,13 @@ export function NetworkNodeEditor({
       </label>
       <div className="network-pairing">
         <label>
-          Pairing key
+          {tr("g2.nwPairingKey")}
           <input
             type="text"
             autoComplete="off"
             spellCheck={false}
             maxLength={128}
-            placeholder="Blank: not paired"
+            placeholder={tr("g2.nwPairingPlaceholder")}
             value={pairingKey}
             disabled={disabled}
             aria-invalid={!pairingValid}
@@ -280,7 +295,7 @@ export function NetworkNodeEditor({
             disabled={disabled}
             onClick={() => changePairingKey(generatePairingKey())}
           >
-            Generate
+            {tr("g2.nwGenerate")}
           </button>
           <button
             type="button"
@@ -289,7 +304,7 @@ export function NetworkNodeEditor({
             onClick={copyPairingKey}
             aria-live="polite"
           >
-            {copied ? "Copied" : "Copy"}
+            {copied ? tr("g2.nwCopied") : tr("g2.nwCopy")}
           </button>
         </div>
         <p
@@ -302,7 +317,7 @@ export function NetworkNodeEditor({
       </div>
       {!sending && (
         <label>
-          Buffer (ms)
+          {tr("g2.nwBuffer")}
           <input
             type="number"
             min={10}
@@ -326,10 +341,7 @@ export function NetworkNodeEditor({
       )}
       {!sending && telemetry?.rejectedFrom && telemetry.rejectedFrom !== address && (
         <div className="network-node-fix" role="alert">
-          <span>
-            AudioRouter audio is arriving from <code>{telemetry.rejectedFrom}</code>. If that is the sending computer,
-            use its address.
-          </span>
+          <span>{boldMarkup(tr("g2.nwArrivingFrom", { from: telemetry.rejectedFrom }))}</span>
           <button
             type="button"
             className="secondary"
@@ -339,47 +351,19 @@ export function NetworkNodeEditor({
               onChange("sender", telemetry.rejectedFrom!);
             }}
           >
-            Use {telemetry.rejectedFrom}
+            {tr("g2.nwUseAddr", { from: telemetry.rejectedFrom })}
           </button>
         </div>
       )}
       {/* While playing, name this computer's real address: with several network
         adapters, the one ipconfig lists first is often not the one used. */}
       <small>
-        {sending ? (
-          <>
-            On the other computer, add a Network Receive node with{" "}
-            {thisPc ? (
-              <>
-                this computer's address <code>{thisPc}</code>
-              </>
-            ) : (
-              "this computer's IP address"
-            )}{" "}
-            as the sender and the same port. Both computers must be on the same local network. Use the same pairing key
-            on both computers to encrypt the audio. Without a key, audio is unencrypted.
-          </>
-        ) : (
-          <>
-            On the other computer, add a Network Send node with{" "}
-            {thisPc ? (
-              <>
-                this computer's address <code>{thisPc}</code>
-              </>
-            ) : (
-              "this computer's IP address"
-            )}{" "}
-            and port {portValid ? portNumber : "the same port"}. Audio from any other address is ignored. The first
-            time, Windows Firewall may ask you to allow AudioRouter on private networks. A larger buffer rides out Wi-Fi
-            hiccups but adds delay.
-          </>
+        {boldMarkup(
+          sending
+            ? tr("g2.nwFooterSend", { addr: thisAddress })
+            : tr("g2.nwFooterRecv", { addr: thisAddress, port: portPhrase }),
         )}
-        {!thisPc && (
-          <>
-            {" "}
-            To find a computer's IP address, run <code>ipconfig</code> and read its IPv4 Address.
-          </>
-        )}
+        {!thisPc && <> {boldMarkup(tr("g2.nwFindIp"))}</>}
       </small>
     </div>
   );

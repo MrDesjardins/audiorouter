@@ -1,4 +1,5 @@
 import type { Node } from "@audiorouter/contracts";
+import { useMessages } from "./i18n/useMessages";
 
 export function mergeNoiseProfiles(existing: unknown, additional: string | null): string | null {
   if (!additional || !/^[0-9a-fA-F]{128}$/.test(additional)) return null;
@@ -89,32 +90,33 @@ export function SpectralGateEditor({
   disabled: boolean;
   onChange: (changes: Array<[string, boolean | number | string]>) => void;
 }) {
+  const tr = useMessages();
   const learning = node.parameters.learning === true;
   const combinedProfile = mergeNoiseProfiles(node.parameters.noiseProfile, liveProfile);
   const threshold = typeof node.parameters.thresholdDb === "number" ? node.parameters.thresholdDb : 3;
   const learned = decodeProfileDb(learning ? combinedProfile : node.parameters.noiseProfile);
   const active = node.enabled && !node.bypass;
   const status = !node.enabled
-    ? "Off: enable this tool to see its live spectrum."
+    ? tr("h3.sgOff")
     : node.bypass
-      ? "Bypass: turn Bypass off to process sound and see the live spectrum."
+      ? tr("h3.sgBypass")
       : !running
-        ? "Start the route to see the live spectrum."
+        ? tr("h3.sgNotRunning")
         : !levelsDb
-          ? "Waiting for live spectrum readings. Check the incoming route and signal."
+          ? tr("h3.sgWaitingReadings")
           : learning
             ? liveProfile
-              ? "Learning: play only the noise you want removed, then stop learning."
-              : "Waiting for the first measurement…"
+              ? tr("h3.sgLearningHint")
+              : tr("h3.sgFirstMeasure")
             : learned
-              ? "Frequencies under the gate threshold line are turned down."
-              : "Learn the noise to start blocking it.";
+              ? tr("h3.sgActiveHint")
+              : tr("h3.sgLearnHint");
   return (
-    <section className="spectral-gate" aria-label="Spectral Gate editor">
+    <section className="spectral-gate" aria-label={tr("h3.sgEditor")}>
       <div className="advanced-eq-heading">
         <div>
-          <strong>Noise at every frequency</strong>
-          <small>{learning ? "Learning now" : learned ? "Learned noise is stored" : "No noise learned yet"}</small>
+          <strong>{tr("h3.sgHeading")}</strong>
+          <small>{learning ? tr("h3.sgLearningNow") : learned ? tr("h3.sgStored") : tr("h3.sgNone")}</small>
         </div>
         {!learning ? (
           <div className="actions">
@@ -129,19 +131,19 @@ export function SpectralGateEditor({
                 ]);
               }}
             >
-              {learned ? "Learn again" : "Learn noise"}
+              {learned ? tr("h3.sgLearnAgain") : tr("h3.sgLearn")}
             </button>
             {learned && (
               <button
                 type="button"
                 className="secondary"
                 disabled={disabled || !running || !active}
-                title="Keep the learned curve and add louder noise at each frequency"
+                title={tr("h3.sgAddNoiseTitle")}
                 onClick={() => {
                   onChange([["learning", true]]);
                 }}
               >
-                Add noise
+                {tr("h3.sgAddNoise")}
               </button>
             )}
           </div>
@@ -158,7 +160,7 @@ export function SpectralGateEditor({
               ])
             }
           >
-            Stop and keep
+            {tr("h3.sgStopKeep")}
           </button>
         )}
       </div>
@@ -166,7 +168,7 @@ export function SpectralGateEditor({
         className="advanced-eq-graph spectral-gate-graph"
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         role="img"
-        aria-label="Live spectrum with the learned noise and gate threshold"
+        aria-label={tr("h3.sgGraph")}
       >
         <rect x={LEFT} y={TOP} width={RIGHT - LEFT} height={BOTTOM - TOP} className="advanced-eq-plot" />
         {[-100, -80, -60, -40, -20, 0].map((db) => (
@@ -192,15 +194,15 @@ export function SpectralGateEditor({
       <div className="spectral-gate-legend" aria-hidden="true">
         <span>
           <i className="spectral-gate-key is-live" />
-          Live sound
+          {tr("h3.sgLive")}
         </span>
         <span>
           <i className="spectral-gate-key is-learned" />
-          Learned noise
+          {tr("h3.sgLearned")}
         </span>
         <span>
           <i className="spectral-gate-key is-threshold" />
-          Gate threshold
+          {tr("h3.sgThreshold")}
         </span>
       </div>
       <p role="status" className="muted spectral-gate-status">
