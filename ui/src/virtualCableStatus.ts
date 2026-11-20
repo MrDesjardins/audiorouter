@@ -4,6 +4,7 @@
 // props through every panel.
 import { useSyncExternalStore } from "react";
 import type { VirtualCableStatus } from "@audiorouter/contracts";
+import { tx } from "./i18n";
 
 let current: VirtualCableStatus | null = null;
 const listeners = new Set<() => void>();
@@ -69,12 +70,12 @@ export function cableUnavailableReason(status: VirtualCableStatus | null): strin
   if (status?.state === "installed" && presentCables(status).length > 0) return null;
   switch (status?.state) {
     case "needsRestart":
-      return "Restart Windows to finish installing AudioRouter cables.";
+      return tx("h1.cableRestart");
     case "needsRepair":
-      return "AudioRouter cables need a repair. Reinstall them, or use Input device with a virtual cable such as CABLE Output.";
+      return tx("h1.cableRepair");
     case "incompatible":
-      return "The installed AudioRouter cables are too old for this version. Update them, or use Input device with a virtual cable such as CABLE Output.";
+      return tx("h1.cableOld");
     default:
-      return "Install AudioRouter cables in Virtual Cables, or use Input device with a virtual cable such as CABLE Output.";
+      return tx("h1.cableInstall");
   }
 }

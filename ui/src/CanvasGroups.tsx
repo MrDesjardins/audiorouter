@@ -8,6 +8,8 @@ import { TextField } from "./TextField";
 import { BooleanField } from "./BooleanField";
 import { HelpDisclosure } from "./HelpDisclosure";
 import { optionalLocalStorage, readPresentationJson, writePresentationJson } from "./presentationStorage";
+import { useMessages } from "./i18n/useMessages";
+import { tx } from "./i18n";
 
 /** `locked` stops accidental moving or resizing on the canvas; Properties still edits it. */
 export type CanvasGroup = {
@@ -120,7 +122,7 @@ export function useCanvasGroups(sessionId: string) {
         ...current,
         {
           id,
-          name: "Group",
+          name: tx("g4Panel.groupDefault"),
           color: "#5599dd",
           opacity: 5,
           fontSize: 18,
@@ -169,13 +171,14 @@ export function useCanvasGroups(sessionId: string) {
   };
 }
 export function CanvasGroupRenderer({ data, selected }: NodeProps) {
+  const tr = useMessages();
   const group = data.group as CanvasGroup;
   // Lets the side grab zones keep one screen size at any zoom; re-renders only when the zoom changes.
   const zoom = useStore((state) => state.transform[2]);
   return (
     <div
       className={`canvas-group${group.locked ? " is-locked" : ""}`}
-      aria-label={`Group ${group.name}`}
+      aria-label={tr("g4Panel.groupAria", { name: group.name })}
       style={
         {
           "--group-zoom": zoom,
@@ -197,19 +200,15 @@ export function CanvasGroupRenderer({ data, selected }: NodeProps) {
       <div
         className="canvas-group-caption"
         style={{ fontSize: `${group.fontSize}px` }}
-        title={
-          !group.locked && data.movementBlocked
-            ? "A nested group is locked. Unlock it or turn off Move contents with group."
-            : undefined
-        }
+        title={!group.locked && data.movementBlocked ? tr("g4Panel.groupNestedLocked") : undefined}
       >
-        <strong>{group.name || "Group"}</strong>
+        <strong>{group.name || tr("g4Panel.groupDefault")}</strong>
         {group.locked && (
           <span
             className="canvas-group-lock"
             role="img"
-            aria-label="Locked"
-            title="Locked: unlock it in Properties to move or resize"
+            aria-label={tr("g4Panel.groupLocked")}
+            title={tr("g4Panel.groupLockedTip")}
           >
             <svg viewBox="0 0 16 16" aria-hidden="true">
               <rect x="3" y="7" width="10" height="7" rx="1.5" />
@@ -230,6 +229,7 @@ export function CanvasGroupInspector({
   onChange: (patch: Partial<CanvasGroup>) => void;
   onRemove: () => void;
 }) {
+  const tr = useMessages();
   return (
     <section
       className="panel inspector"
@@ -239,59 +239,52 @@ export function CanvasGroupInspector({
       aria-labelledby="workbench-tab-properties"
       tabIndex={0}
     >
-      <p className="eyebrow">Visual group</p>
-      <h2 id="inspector-heading">{group.name || "Group"}</h2>
+      <p className="eyebrow">{tr("g4Panel.visualGroup")}</p>
+      <h2 id="inspector-heading">{group.name || tr("g4Panel.groupDefault")}</h2>
       <ToolGuideLink kind="group" />
-      <HelpDisclosure title="How to arrange a group">
+      <HelpDisclosure title={tr("g4Panel.arrangeGroup")}>
         <p className="muted">
-          {group.locked
-            ? "Locked: the group cannot be moved, resized or deleted from the canvas. Unlock it to change its place or size."
-            : "Drag the caption or background to move the group. Drag any side or corner to resize it. With several groups selected (Ctrl+click), they all resize by the same amount."}{" "}
-          This group only organizes the canvas; audio connections stay unchanged.
+          {tr(group.locked ? "g4Panel.groupHelpLocked" : "g4Panel.groupHelpFree")} {tr("g4Panel.groupHelpOnly")}
         </p>
       </HelpDisclosure>
       <div className="group-properties">
         <div className="group-position-options">
           <BooleanField
-            label="Lock position and size"
-            name="Lock group position and size"
+            label={tr("g4Panel.lockPositionSize")}
+            name={tr("g4Panel.lockGroupName")}
             checked={group.locked === true}
             onChange={(locked) => onChange({ locked })}
-            help={<small>Prevents dragging or resizing the rectangle by accident.</small>}
+            help={<small>{tr("g4Panel.lockGroupHelp")}</small>}
           />
           <BooleanField
-            label="Move contents with group"
+            label={tr("g4Panel.moveContents")}
             checked={group.moveContents === true}
             onChange={(moveContents) => onChange({ moveContents })}
-            help={
-              <small>
-                Fully enclosed tools and nested groups follow together. A locked nested group blocks this move.
-              </small>
-            }
+            help={<small>{tr("g4Panel.moveContentsHelp")}</small>}
           />
         </div>
         <label>
-          Name
+          {tr("g4Panel.groupNameLabel")}
           <TextField
-            aria-label="Group name"
+            aria-label={tr("g4Panel.groupNameAria")}
             value={group.name}
             maxLength={120}
             onValue={(name) => onChange({ name })}
           />
         </label>
         <label>
-          Background color
+          {tr("g4Panel.groupColorLabel")}
           <input
             type="color"
-            aria-label="Group background color"
+            aria-label={tr("g4Panel.groupColorAria")}
             value={group.color}
             onChange={(event) => onChange({ color: event.target.value })}
           />
         </label>
         <label>
-          Font size (px)
+          {tr("g4Panel.groupFontLabel")}
           <NumberField
-            aria-label="Group font size"
+            aria-label={tr("g4Panel.groupFontAria")}
             value={group.fontSize}
             min={12}
             max={48}
@@ -300,8 +293,8 @@ export function CanvasGroupInspector({
           />
         </label>
         <SliderField
-          label="Opacity"
-          name="Group opacity"
+          label={tr("g4Panel.groupOpacity")}
+          name={tr("g4Panel.groupOpacityAria")}
           value={group.opacity}
           min={1}
           max={100}
@@ -312,7 +305,7 @@ export function CanvasGroupInspector({
         />
       </div>
       <button type="button" className="danger" onClick={onRemove}>
-        Delete group
+        {tr("g4Panel.deleteGroup")}
       </button>
     </section>
   );

@@ -1,6 +1,33 @@
 import { expect, test } from "./browser-test";
 import { openSettings } from "./workbench";
 
+for (const [tag, pagesLabel, help, apiIntro, hotkeys, hotkeysIntro] of [
+  [
+    "fr",
+    "Pages de paramètres",
+    "Aide",
+    "Envoyez des requêtes REST depuis ce PC",
+    "Raccourcis clavier",
+    "Ces raccourcis fonctionnent dans tout Windows",
+  ],
+  ["zh-Hans", "设置页面", "帮助", "可从此电脑或家庭网络中的设备", "键盘快捷键", "即使 AudioRouter 已最小化到系统托盘"],
+]) {
+  test(`${tag}: Settings translates help, API, and keyboard shortcut copy`, async ({ page }) => {
+    await page.goto("/route-harness.html");
+    await openSettings(page, "Appearance");
+    await page.getByRole("combobox", { name: "Language", exact: true }).selectOption(tag);
+    const pages = page.getByRole("tablist", { name: pagesLabel });
+    await pages.getByRole("tab", { name: help, exact: true }).click();
+    await expect(
+      page.getByText(tag === "fr" ? "Appuyez sur Ctrl+K où que vous soyez" : "在任意位置按 Ctrl+K", { exact: false }),
+    ).toBeVisible();
+    await pages.getByRole("tab", { name: "API", exact: true }).click();
+    await expect(page.getByText(apiIntro, { exact: false })).toBeVisible();
+    await pages.getByRole("tab", { name: hotkeys, exact: true }).click();
+    await expect(page.getByText(hotkeysIntro, { exact: false })).toBeVisible();
+  });
+}
+
 for (const [tag, back, session, chooser, history, file, recording, recorder, library, search] of [
   [
     "fr",

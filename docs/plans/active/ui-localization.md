@@ -437,6 +437,67 @@ Local Windows validation includes the CI browser fixture build and discovery
 of all 793 browser tests, all 1,146 UI unit tests, Rust format and shell
 Clippy, UI lint and format, website checks, and documentation validation.
 
+### Settings copy and per-file JSX review
+
+Moved the reported text from Keyboard shortcuts, Virtual Cables, Plug-ins,
+Startup, Help, AI assistants and API into the three catalogs (UI-11/29/37).
+The API pass also covers listener and network warnings. Revert the copy
+bindings and regenerate the catalogs to roll back. No live audio, driver
+installation, or API listener is needed to verify these labels.
+
+`npm --prefix ui run i18n:audit -- --tsx --by-file` gives each production
+TSX file its own section, including files with no candidates. It checks
+conditional JSX text and display attributes as well as literal children.
+Use `--all` with those flags to inspect data and action literals too. The
+output is an inventory, with technical values and preview text mixed in.
+
+Windows evidence: all 103 production TSX files were scanned. The refreshed
+display-focused report has 1,677 candidates in
+`target/ui-tsx-localization-review.txt`. Catalog validation passed at 952
+keys. Nine Edge scenarios passed, including the French and Simplified
+Chinese Settings checks. The staged Windows build in
+`target/ui-localized-settings-test` passed the isolated WebView2 smoke.
+Next, triage the remaining per-file candidates and migrate the app-owned
+copy, starting with the rest of the shortcut editor, plug-in dialogs, and
+MCP connection steps.
+
+### Simplified Chinese rendered audit
+
+Use the opt-in Edge fixture to visit every node kind, the daily workbench
+tabs, the two additional Status views, and all Settings pages. It selects
+Simplified Chinese through the app and records panel screenshots plus
+Latin-script text and accessible attributes. The fixture covers the plug-in
+and instrument inspectors with placeholders, without opening vendor code.
+It doesn't qualify live devices, third-party windows or hardware.
+
+The workspace screenshots identified English runtime status, route actions
+and warnings. The tool screenshots identified English tool status pills and
+device binding copy. Move those strings to the catalogs while preserving
+the stable route and device values (UI-04/05/08/11/37). Rollback is a revert
+of the text and audit changes. Specialized editors and Settings branches
+still need translation where their captured text shows English.
+
+Windows Edge captured 104 panels and scroll positions across 38 node kinds
+and 21 workbench and Settings views, plus the workspace screenshot. The
+evidence folder is `target/chinese-ui-audit`; `inventory.json` lists the
+files and detected display text by view. The capture and nine language
+scenarios passed, as did 104 focused unit tests, catalog validation,
+typecheck, lint, format and docs. This is capture coverage, not a clean
+translation verdict. Compressor and other specialized editors, Status,
+and MCP still show English. Migrated since then (2026-11-19): the Mic test
+card (`micTest.*`) and the Compressor, Gate and Limiter editor
+(`dynamicsUi.*`), with typecheck, catalog check, lint and the dynamics unit
+tests passing. A parallel pass then migrated the rest (namespaces `g1`-`g6`,
+`h1`-`h3`; the catalogs now hold about 3,700 messages). The rerun Chinese
+capture (104 panels) leaves only fixture data, units, product names, the
+English/Francais endonyms, API-page literals and diagnostics log lines in
+English. Backend-originated text stays English where the backend sends it
+(Fun Voice Changer presets, some node-issue messages). Known gap:
+`plainWords.test.ts` scans source literals, so the glossary is not yet
+enforced on the English catalog (about 30 existing messages still say "node").
+Previously: use the inventory to guide the next migration,
+then rerun the same opt-in capture.
+
 Rollback: remove the two locale files and regenerate native resources. Older
 builds resolve a saved unsupported locale through the usual fallback.
 

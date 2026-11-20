@@ -1,6 +1,16 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import type { Node } from "@audiorouter/contracts";
 import type { UiBackendSnapshot } from "./backend";
+import { useMessages } from "./i18n/useMessages";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 import { askConfirm } from "./AppDialog";
 import { SOUNDBOARD_SLOTS, soundboardSlots } from "./soundboard";
 
@@ -38,8 +48,9 @@ export interface KeybindRule {
 export const KEYBIND_NAME_MAX = 32;
 export const KEYBIND_MAX = 100;
 
-export function keybindLimitMessage(count: number): string | null {
-  return count >= KEYBIND_MAX ? `You can add up to ${KEYBIND_MAX} global keybinds.` : null;
+/** The message key (variable `max`) to show once the list is full, or null while there is room. */
+export function keybindLimitMessage(count: number): MessageKey | null {
+  return count >= KEYBIND_MAX ? "g6.kbLimit" : null;
 }
 
 /** Apply one drag stroke. Returns the same set when nothing changes. */
@@ -81,12 +92,14 @@ export function capKeybindName(name: string): string {
   return [...name].slice(0, KEYBIND_NAME_MAX).join("");
 }
 
-const ACTION_LABELS: Record<KeybindAction["type"], string> = {
-  sessionToggle: "Start or stop the session",
-  privacyMuteToggle: "Turn privacy mute on or off",
-  privacyMutePushToTalk: "Push to talk (unmute while held)",
-  soundboardTrigger: "Play soundboard slot",
+const ACTION_LABELS: Record<KeybindAction["type"], MessageKey> = {
+  sessionToggle: "g6.kbActionSession",
+  privacyMuteToggle: "g6.kbActionPrivacy",
+  privacyMutePushToTalk: "g6.kbActionPtt",
+  soundboardTrigger: "g6.kbActionSoundboard",
 };
+
+type Translate = (key: MessageKey, options?: Record<string, unknown>) => string;
 
 /** Push-to-talk and soundboard triggers need the key-up; the others fire once. */
 export function triggerModeFor(type: KeybindAction["type"]): KeybindMode {
@@ -360,20 +373,22 @@ function defaultAction(soundboards: Node[]): KeybindAction {
   };
 }
 
-function describeRuleSummary(rule: KeybindRule, nodes: Node[]): string {
+function describeRuleSummary(rule: KeybindRule, nodes: Node[], tr: Translate): string {
   const { action } = rule;
   const customName = rule.name?.trim();
-  const suffix = rule.enabled ? "" : " (disabled)";
+  const suffix = rule.enabled ? "" : tr("g6.kbDisabledSuffix");
   if (customName) {
     return `${customName}${suffix}`;
   }
-  const label = ACTION_LABELS[action.type];
+  const label = tr(ACTION_LABELS[action.type]);
   if (action.type !== "soundboardTrigger") {
     return `${label} — ${rule.trigger.keys}${suffix}`;
   }
   const board = nodes.find((node) => node.id === action.nodeId);
   const slotLabel = board ? soundboardSlots(board).find((entry) => entry.slot === action.slot)?.label : undefined;
-  const detail = slotLabel ? `Slot ${action.slot} — ${slotLabel}` : `Slot ${action.slot}`;
+  const detail = slotLabel
+    ? tr("g6.kbSlotLabeled", { slot: action.slot, label: slotLabel })
+    : tr("g6.kbSlot", { slot: action.slot });
   return `${label}: ${detail} — ${rule.trigger.keys}${suffix}`;
 }
 
@@ -402,6 +417,7 @@ function KeybindTrashIcon() {
 }
 
 export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | null }) {
+  const tr = useMessages();
   const invoke = shellInvoke();
   const [rules, setRules] = useState<KeybindRule[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -465,6 +481,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
     };
   }, []);
 
+  const loadErrorText = useEffectEvent(() => tr("g6.kbLoadError"));
   useEffect(() => {
     if (!invoke) return;
     let active = true;
@@ -476,7 +493,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
         }
       })
       .catch(() => {
-        if (active) setMessage("Could not load global keybindings.");
+        if (active) setMessage(loadErrorText());
       });
     return () => {
       active = false;
@@ -493,11 +510,11 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
     try {
       const saved = (await invoke("keybinds_save", { rules: nextRules })) as KeybindRule[];
       setRules(saved);
-      setMessage("Global keybindings saved.");
+      setMessage(tr("g6.kbSaved"));
       return true;
     } catch (error) {
       setRules(previous);
-      setMessage(typeof error === "string" ? error : "Could not save global keybindings.");
+      setMessage(typeof error === "string" ? error : tr("g6.kbSaveError"));
       return false;
     } finally {
       setBusy(false);
@@ -512,7 +529,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
   const addRule = () => {
     const limit = keybindLimitMessage(rules.length);
     if (limit) {
-      setMessage(limit);
+      setMessage(tr(limit, { max: KEYBIND_MAX }));
       return;
     }
     const action: KeybindAction = { type: "sessionToggle" };
@@ -556,17 +573,17 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
     if (count === 0) return;
     const name = targets[0].name?.trim() || targets[0].trigger.keys;
     const confirmed = await askConfirm({
-      title: count === 1 ? `Delete “${name}”?` : `Delete ${count} keybindings?`,
+      title: count === 1 ? tr("g6.kbDeleteTitleOne", { name }) : tr("g6.kbDeleteTitleMany", { count }),
       message:
         count === 1
-          ? `This removes only “${name}” (${targets[0].trigger.keys}). Its shortcut will no longer run. This cannot be undone.`
-          : `This removes the ${count} selected global keybindings. Their shortcuts will no longer run. This cannot be undone.`,
-      confirmLabel: count === 1 ? "Delete keybinding" : `Delete ${count} keybindings`,
+          ? tr("g6.kbDeleteMessageOne", { name, keys: targets[0].trigger.keys })
+          : tr("g6.kbDeleteMessageMany", { count }),
+      confirmLabel: count === 1 ? tr("g6.kbDeleteOne") : tr("g6.kbDeleteMany", { count }),
       destructive: true,
     });
     if (!confirmed) return;
     if (await persist(rulesRef.current.filter((rule) => !removeIds.has(rule.id)))) {
-      setMessage(count === 1 ? "Keybinding deleted." : `${count} keybindings deleted.`);
+      setMessage(count === 1 ? tr("g6.kbDeletedOne") : tr("g6.kbDeletedMany", { count }));
       requestAnimationFrame(() => addButtonRef.current?.focus());
     } else {
       setSelectedIds(previousSelection);
@@ -584,7 +601,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
 
   const finishRecording = (ruleId: string, keys: string, target: HTMLInputElement) => {
     if (!isValidTrigger(keys)) {
-      setMessage("That shortcut isn't valid. Try a letter, number, function key, or punctuation key.");
+      setMessage(tr("g6.kbInvalidShortcut"));
       return;
     }
     heldModifiersRef.current.clear();
@@ -608,7 +625,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
       <input
         type="checkbox"
         checked={selectedIds.has(rule.id)}
-        aria-label={`Select ${rule.name?.trim() || rule.trigger.keys}`}
+        aria-label={tr("g6.kbSelect", { name: rule.name?.trim() || rule.trigger.keys })}
         onChange={() => undefined}
         onPointerDown={(event) => beginSelectionDrag(rule.id, event)}
         onKeyDown={(event) => {
@@ -624,7 +641,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
   return (
     <section className="panel shortcut-panel">
       <div className="section-heading">
-        <h3>Global keybindings</h3>
+        <h3>{tr("g6.kbHeading")}</h3>
         {invoke && (
           <div className="actions">
             <button
@@ -633,15 +650,15 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
               onClick={addRule}
               disabled={!loaded || busy || !!draft || rules.length >= KEYBIND_MAX}
             >
-              Add keybinding
+              {tr("g6.kbAdd")}
             </button>
             {editingNames ? (
               <>
                 <button
                   type="button"
                   className="secondary"
-                  aria-label={allSelected ? "Clear selection" : "Select all keybinds"}
-                  title={allSelected ? "Clear selection" : "Select all keybinds"}
+                  aria-label={allSelected ? tr("g6.kbClearSelection") : tr("g6.kbSelectAll")}
+                  title={allSelected ? tr("g6.kbClearSelection") : tr("g6.kbSelectAll")}
                   onClick={() => setSelectedIds(allSelected ? new Set() : new Set(rules.map((rule) => rule.id)))}
                   disabled={!loaded || busy || rules.length === 0}
                 >
@@ -661,32 +678,32 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                 <button
                   type="button"
                   className="danger keybind-delete-selected"
-                  title="Delete the selected keybindings"
+                  title={tr("g6.kbDeleteSelectedHint")}
                   onClick={() => void removeRules(new Set(selectedIds))}
                   disabled={!loaded || busy || selectedCount === 0}
                 >
                   <KeybindTrashIcon />
-                  Delete selected <span className="keybind-selection-count">({selectedCount})</span>
+                  {tr("g6.kbDeleteSelected")} <span className="keybind-selection-count">({selectedCount})</span>
                 </button>
                 <button
                   type="button"
                   className="secondary"
-                  aria-label="Done editing keybind names"
-                  title="Exit name edit mode"
+                  aria-label={tr("g6.kbDoneAria")}
+                  title={tr("g6.kbDoneHint")}
                   onClick={() => {
                     setSelectedIds(new Set());
                     exitNameEdit();
                   }}
                 >
-                  Done
+                  {tr("g6.kbDone")}
                 </button>
               </>
             ) : (
               <button
                 type="button"
                 className="secondary keybind-manage"
-                aria-label="Manage keybindings"
-                title="Rename keybindings or select several to delete"
+                aria-label={tr("g6.kbManage")}
+                title={tr("g6.kbManageHint")}
                 disabled={!!draft || busy || !loaded}
                 onClick={() => setEditingNames(true)}
               >
@@ -702,26 +719,18 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                   <path d="M12 20h9" />
                   <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
                 </svg>
-                Manage
+                {tr("g6.kbManageText")}
               </button>
             )}
           </div>
         )}
       </div>
-      <p className="muted">
-        Windows-wide hotkeys that work even when AudioRouter is minimized to the tray. Supports keyboard combos,
-        function keys (F1–F24), and mouse side/middle buttons. These are the app's only audio shortcuts.
-      </p>
-      {editingNames && (
-        <p className="muted">Select keybindings to delete, or edit their names. Choose Done when finished.</p>
-      )}
+      <p className="muted">{tr("settingsCopy.hotkeysIntro")}</p>
+      {editingNames && <p className="muted">{tr("settingsCopy.hotkeysManage")}</p>}
       {!invoke ? (
-        <small className="muted">Global Windows keybindings are available in the desktop app.</small>
+        <small className="muted">{tr("settingsCopy.hotkeysDesktop")}</small>
       ) : rules.length === 0 && !draft ? (
-        <p className="muted">
-          No global keybindings yet. Add one to start or stop the session, mute the microphone, or play a soundboard
-          slot.
-        </p>
+        <p className="muted">{tr("settingsCopy.hotkeysEmpty")}</p>
       ) : (
         <div className="keybind-list">
           {(draft ? [draft, ...rules.filter((rule) => rule.id !== draft.id)] : rules).map((rule) => {
@@ -737,8 +746,8 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                       className="keybind-name"
                       value={rule.name ?? ""}
                       maxLength={KEYBIND_NAME_MAX}
-                      placeholder={describeRuleSummary({ ...rule, name: "" }, nodes)}
-                      aria-label={`Name for ${rule.trigger.keys}`}
+                      placeholder={describeRuleSummary({ ...rule, name: "" }, nodes, tr)}
+                      aria-label={tr("g6.kbNameFor", { keys: rule.trigger.keys })}
                       onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === "Escape") {
                           event.preventDefault();
@@ -752,26 +761,24 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                   <details className="keybind-body" inert={busy} open={draft?.id === rule.id ? true : undefined}>
                     <summary>
                       <span className="keybind-title">
-                        {isDraft ? "New keybinding" : describeRuleSummary(rule, nodes)}
+                        {isDraft ? tr("g6.kbNew") : describeRuleSummary(rule, nodes, tr)}
                         {!isDraft && rule.name?.trim() && (
                           <small className="muted">
-                            {rule.trigger.keys} · {ACTION_LABELS[rule.action.type]}
+                            {rule.trigger.keys} · {tr(ACTION_LABELS[rule.action.type])}
                           </small>
                         )}
                       </span>
                     </summary>
                     {isDraft && (
                       <>
-                        <p className="muted">
-                          Name it, choose what it does, and record a shortcut. It becomes active only when you save.
-                        </p>
+                        <p className="muted">{tr("g6.kbDraftHelp")}</p>
                         <label>
-                          Name
+                          {tr("g6.kbName")}
                           <input
                             autoFocus
                             value={rule.name ?? ""}
                             maxLength={KEYBIND_NAME_MAX}
-                            placeholder="e.g. Mute my microphone"
+                            placeholder={tr("g6.kbNamePlaceholder")}
                             onFocus={(event) => event.currentTarget.select()}
                             onChange={(event) => setDraft({ ...rule, name: capKeybindName(event.target.value) })}
                           />
@@ -779,7 +786,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                       </>
                     )}
                     <label>
-                      Action
+                      {tr("g6.kbAction")}
                       <select
                         value={rule.action.type}
                         onChange={(event) => {
@@ -797,7 +804,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                       >
                         {Object.entries(ACTION_LABELS).map(([value, label]) => (
                           <option key={value} value={value}>
-                            {label}
+                            {tr(label)}
                           </option>
                         ))}
                       </select>
@@ -806,7 +813,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                     {soundboardAction && (
                       <>
                         <label>
-                          Soundboard
+                          {tr("g6.kbSoundboard")}
                           {soundboards.length > 0 ? (
                             <select
                               value={soundboardAction.nodeId}
@@ -827,13 +834,11 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                               ))}
                             </select>
                           ) : isDraft ? (
-                            <small className="muted">
-                              Add a Soundboard tool to this session first, or choose another action.
-                            </small>
+                            <small className="muted">{tr("g6.kbNoSoundboard")}</small>
                           ) : (
                             <input
                               value={soundboardAction.nodeId}
-                              placeholder="Soundboard tool ID"
+                              placeholder={tr("g6.kbSoundboardId")}
                               onChange={(event) =>
                                 updateRule(rule.id, (current) => ({
                                   ...current,
@@ -847,7 +852,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                           )}
                         </label>
                         <label>
-                          Slot
+                          {tr("g6.kbSlotLabel")}
                           <select
                             value={soundboardAction.slot}
                             onChange={(event) => {
@@ -875,7 +880,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                                 const label = assignedBySlot.get(slot);
                                 return (
                                   <option key={slot} value={slot}>
-                                    {label ? `Slot ${slot} — ${label}` : `Slot ${slot}`}
+                                    {label ? tr("g6.kbSlotLabeled", { slot, label }) : tr("g6.kbSlot", { slot })}
                                   </option>
                                 );
                               });
@@ -885,16 +890,18 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                       </>
                     )}
                     {rule.action.type === "privacyMutePushToTalk" && (
-                      <small className="muted">Unmutes while the key is held and mutes again when released.</small>
+                      <small className="muted">{tr("g6.kbPttHelp")}</small>
                     )}
 
                     <label>
-                      Shortcut
+                      {tr("g6.kbShortcut")}
                       <input
                         readOnly
-                        placeholder="Click here, then press your shortcut"
-                        value={isRecording ? "Press key or mouse4/5…" : rule.trigger.keys}
-                        aria-label={`Global trigger for ${rule.name?.trim() || ACTION_LABELS[rule.action.type]}`}
+                        placeholder={tr("g6.kbShortcutPlaceholder")}
+                        value={isRecording ? tr("g6.kbPressKey") : rule.trigger.keys}
+                        aria-label={tr("g6.kbTriggerAria", {
+                          name: rule.name?.trim() || tr(ACTION_LABELS[rule.action.type]),
+                        })}
                         onFocus={() => {
                           heldModifiersRef.current.clear();
                           usedModifierComboRef.current = false;
@@ -919,9 +926,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                           const keys = chordFromCaptureKeyDown(event, heldModifiersRef.current);
                           if (!keys) {
                             if (event.code in MODIFIER_CODE_MAP) return;
-                            setMessage(
-                              "That key isn't supported. Use a letter, number, function key, or punctuation key.",
-                            );
+                            setMessage(tr("g6.kbUnsupportedKey"));
                             return;
                           }
                           usedModifierComboRef.current = true;
@@ -949,9 +954,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                       />
                     </label>
                     <small className="keybind-capture-help muted">
-                      {isRecording
-                        ? "Listening… Press Tab or click another field to cancel recording."
-                        : "Click or Tab into the shortcut field, then press a key combination or mouse side button."}
+                      {isRecording ? tr("g6.kbListening") : tr("g6.kbCaptureHelp")}
                     </small>
 
                     <div className="keybind-toggles">
@@ -963,12 +966,9 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                             updateRule(rule.id, (current) => ({ ...current, enabled: event.target.checked }))
                           }
                         />
-                        Enabled
+                        {tr("g6.kbEnabled")}
                       </label>
-                      <label
-                        className="autoplay-toggle"
-                        title="When checked, other apps still receive this key/button. Uncheck to block other apps from seeing it."
-                      >
+                      <label className="autoplay-toggle" title={tr("g6.kbPassHint")}>
                         <input
                           type="checkbox"
                           checked={rule.trigger.passthrough}
@@ -979,7 +979,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                             }))
                           }
                         />
-                        Pass key through
+                        {tr("g6.kbPass")}
                       </label>
                     </div>
                     {!isDraft && (
@@ -988,11 +988,11 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                           type="button"
                           className="danger"
                           disabled={busy}
-                          aria-label={`Delete keybinding ${rule.name?.trim() || rule.trigger.keys}`}
+                          aria-label={tr("g6.kbDeleteAria", { name: rule.name?.trim() || rule.trigger.keys })}
                           onClick={() => void removeRules(new Set([rule.id]))}
                         >
                           <KeybindTrashIcon />
-                          Delete keybinding
+                          {tr("g6.kbDeleteOne")}
                         </button>
                       </div>
                     )}
@@ -1000,19 +1000,22 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                       <>
                         <p className="keybind-draft-status muted" role="status">
                           {!rule.name?.trim()
-                            ? "Enter a name for this keybinding."
+                            ? tr("g6.kbNeedName")
                             : !rule.trigger.keys
-                              ? "Record a shortcut before saving."
+                              ? tr("g6.kbNeedShortcut")
                               : soundboardAction && !soundboardAction.nodeId.trim()
-                                ? "Choose a soundboard before saving."
+                                ? tr("g6.kbNeedSoundboard")
                                 : rules.some(
                                       (saved) =>
                                         saved.id !== rule.id &&
                                         saved.enabled &&
                                         saved.trigger.keys.toLowerCase() === rule.trigger.keys.toLowerCase(),
                                     )
-                                  ? "This shortcut is already assigned. Both actions will run."
-                                  : `Ready: ${rule.trigger.keys} → ${ACTION_LABELS[rule.action.type]}.`}
+                                  ? tr("g6.kbConflict")
+                                  : tr("g6.kbReady", {
+                                      keys: rule.trigger.keys,
+                                      action: tr(ACTION_LABELS[rule.action.type]),
+                                    })}
                         </p>
                         <div className="actions">
                           <button
@@ -1030,7 +1033,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                               }
                             }}
                           >
-                            Save keybinding
+                            {tr("g6.kbSave")}
                           </button>
                           <button
                             type="button"
@@ -1045,7 +1048,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
                               requestAnimationFrame(() => addButtonRef.current?.focus());
                             }}
                           >
-                            Cancel
+                            {tr("common.cancel")}
                           </button>
                         </div>
                       </>
@@ -1059,8 +1062,7 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
       )}
       {duplicateIds.size > 0 && (
         <p className="muted" role="alert">
-          {duplicateIds.size === 2 ? "Two keybinds share" : `${duplicateIds.size} keybinds share`} a shortcut; each one
-          runs. Change one to keep them separate.
+          {duplicateIds.size === 2 ? tr("g6.kbDuplicateTwo") : tr("g6.kbDuplicateMany", { count: duplicateIds.size })}
         </p>
       )}
       <p className="keybind-draft-status muted" role="status">

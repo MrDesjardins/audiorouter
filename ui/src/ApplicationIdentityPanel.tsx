@@ -1,21 +1,23 @@
 import type { ApplicationRow } from "./backend";
+import { useMessages } from "./i18n/useMessages";
 
 export function ApplicationIdentityPanel({ applications }: { applications: ApplicationRow[] }) {
+  const tr = useMessages();
   const identified = applications.filter((application) => application.executablePath !== null);
 
   return (
     <section className="panel application-identity-panel" aria-labelledby="application-identity-heading">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Binding identity</p>
-          <h2 id="application-identity-heading">Verified executable paths</h2>
+          <p className="eyebrow">{tr("g1.identEyebrow")}</p>
+          <h2 id="application-identity-heading">{tr("g1.identHeading")}</h2>
         </div>
         <span className="badge">{identified.length}</span>
       </div>
       {identified.length === 0 ? (
-        <p className="muted">No verified full executable paths are available in the current backend snapshot.</p>
+        <p className="muted">{tr("g1.identNone")}</p>
       ) : (
-        <ul aria-label="Verified application executable paths">
+        <ul aria-label={tr("g1.identListLabel")}>
           {identified.map((application) => (
             <li key={`${application.processId}-${application.creationTime100ns ?? "unknown"}`}>
               <strong>{application.executable}</strong>
@@ -27,10 +29,7 @@ export function ApplicationIdentityPanel({ applications }: { applications: Appli
           ))}
         </ul>
       )}
-      <p className="muted">
-        Identity is read-only discovery data; binding still requires verified process identity and backend
-        authorization.
-      </p>
+      <p className="muted">{tr("g1.identNote")}</p>
     </section>
   );
 }

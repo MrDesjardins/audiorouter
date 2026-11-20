@@ -1,6 +1,8 @@
 import { ToolGuideLink } from "./ToolGuideLink";
 // Plug-in scanning, tool list and inspector panels (moved from App.tsx).
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
+import type { MessageKey } from "./i18n/generated/messageKeys";
+import { useMessages } from "./i18n/useMessages";
 import type { MethodResult, Node } from "@audiorouter/contracts";
 import { formatUiError, type UiBackend } from "./backend";
 import { pluginCatalog, STANDARD_PLUGIN_FOLDERS, SUPPORTED_PLUGIN_COMPATIBILITY } from "./draft";
@@ -18,6 +20,7 @@ export function PluginScanPanel({
   onAddPlaceholder?: (entry: import("@audiorouter/contracts").PluginScanEntry) => void;
   headingId?: string;
 }) {
+  const tr = useMessages();
   const [directory, setDirectory] = useState("");
   const [result, setResult] = useState<import("@audiorouter/contracts").PluginScanResult | null>(null);
   const [inspectionPath, setInspectionPath] = useState("");
@@ -33,14 +36,14 @@ export function PluginScanPanel({
   }, [directory, inspectionPath]);
   const scan = async (shellPath?: string) => {
     if (!directory.trim()) {
-      setMessage("Enter an absolute plugin directory.");
+      setMessage(tr("g3Plug.enterDir"));
       return;
     }
     if (busy || !backend.connected) return;
     const requestedDirectory = directory.trim();
     const request = ++requestGeneration.current;
     setBusy(true);
-    setMessage("Scanning selected directory...");
+    setMessage(tr("g3Plug.scanning"));
     try {
       const next = shellPath
         ? await backend.scanPlugins(requestedDirectory, shellPath)
@@ -49,18 +52,14 @@ export function PluginScanPanel({
         setResult(next);
         setInspection(null);
         setInspectionPath("");
-        setMessage(
-          shellPath
-            ? "Checked the selected VST2 file for shell effects."
-            : "Plugin scan completed without loading plugin code.",
-        );
+        setMessage(shellPath ? tr("g3Plug.shellChecked") : tr("g3Plug.scanDone"));
       }
     } catch (error) {
       if (request === requestGeneration.current) {
         setResult(null);
         setInspection(null);
         setInspectionPath("");
-        setMessage(formatUiError(error, "Plugin scan unavailable."));
+        setMessage(formatUiError(error, tr("g3Plug.scanUnavailable")));
       }
     } finally {
       if (request === requestGeneration.current) setBusy(false);
@@ -68,28 +67,28 @@ export function PluginScanPanel({
   };
   const list = async () => {
     if (!directory.trim()) {
-      setMessage("Enter an absolute plugin directory.");
+      setMessage(tr("g3Plug.enterDir"));
       return;
     }
     if (busy || !backend.connected) return;
     const requestedDirectory = directory.trim();
     const request = ++requestGeneration.current;
     setBusy(true);
-    setMessage("Loading the last explicit plugin scan...");
+    setMessage(tr("g3Plug.loadingLast"));
     try {
       const next = await backend.listPlugins(requestedDirectory);
       if (request === requestGeneration.current && directoryRef.current.trim() === requestedDirectory) {
         setResult(next);
         setInspection(null);
         setInspectionPath("");
-        setMessage("Loaded the last backend scan without rescanning.");
+        setMessage(tr("g3Plug.loadedLast"));
       }
     } catch (error) {
       if (request === requestGeneration.current) {
         setResult(null);
         setInspection(null);
         setInspectionPath("");
-        setMessage(formatUiError(error, "Plugin inventory unavailable."));
+        setMessage(formatUiError(error, tr("g3Plug.inventoryUnavailable")));
       }
     } finally {
       if (request === requestGeneration.current) setBusy(false);
@@ -97,24 +96,24 @@ export function PluginScanPanel({
   };
   const inspect = async () => {
     if (!inspectionPath.trim()) {
-      setMessage("Enter an absolute plugin path.");
+      setMessage(tr("g3Plug.enterPath"));
       return;
     }
     if (busy || !backend.connected) return;
     const requestedPath = inspectionPath.trim();
     const request = ++requestGeneration.current;
     setBusy(true);
-    setMessage("Inspecting selected plugin path...");
+    setMessage(tr("g3Plug.inspecting"));
     try {
       const next = await backend.inspectPlugin(requestedPath);
       if (request === requestGeneration.current && inspectionPathRef.current.trim() === requestedPath) {
         setInspection(next);
-        setMessage("Plugin inspection completed without loading plugin code.");
+        setMessage(tr("g3Plug.inspectDone"));
       }
     } catch (error) {
       if (request === requestGeneration.current) {
         setInspection(null);
-        setMessage(formatUiError(error, "Plugin inspection unavailable."));
+        setMessage(formatUiError(error, tr("g3Plug.inspectUnavailable")));
       }
     } finally {
       if (request === requestGeneration.current) setBusy(false);
@@ -122,28 +121,28 @@ export function PluginScanPanel({
   };
   const retry = async () => {
     if (!directory.trim()) {
-      setMessage("Enter an absolute plugin directory.");
+      setMessage(tr("g3Plug.enterDir"));
       return;
     }
     if (busy || !backend.connected) return;
     const requestedDirectory = directory.trim();
     const request = ++requestGeneration.current;
     setBusy(true);
-    setMessage("Retrying selected directory scan...");
+    setMessage(tr("g3Plug.retrying"));
     try {
       const next = await backend.retryPlugins(requestedDirectory, uiIdempotencyKey("plugins-retry"));
       if (request === requestGeneration.current && directoryRef.current.trim() === requestedDirectory) {
         setResult(next);
         setInspection(null);
         setInspectionPath("");
-        setMessage("Plugin scan retry completed without loading plugin code.");
+        setMessage(tr("g3Plug.retryDone"));
       }
     } catch (error) {
       if (request === requestGeneration.current) {
         setResult(null);
         setInspection(null);
         setInspectionPath("");
-        setMessage(formatUiError(error, "Plugin scan retry unavailable."));
+        setMessage(formatUiError(error, tr("g3Plug.retryUnavailable")));
       }
     } finally {
       if (request === requestGeneration.current) setBusy(false);
@@ -152,7 +151,7 @@ export function PluginScanPanel({
   const selectInspectionPath = (path: string) => {
     setInspectionPath(path);
     setInspection(null);
-    setMessage("Selected the discovered path; inspect it explicitly when ready.");
+    setMessage(tr("g3Plug.selectedPath"));
   };
   const addToDraft = (entry: import("@audiorouter/contracts").PluginScanEntry) => {
     if (entry.identity && SUPPORTED_PLUGIN_COMPATIBILITY.includes(entry.identity.compatibility) && onAddPlaceholder) {
@@ -163,18 +162,16 @@ export function PluginScanPanel({
     <section className="panel plugin-scan-panel" aria-labelledby={headingId} aria-busy={busy}>
       <div className="section-heading">
         <div>
-          <p className="eyebrow">VST3 and VST2 discovery</p>
-          <h2 id={headingId}>Plugin scan</h2>
+          <p className="eyebrow">{tr("g3Plug.scanEyebrow")}</p>
+          <h2 id={headingId}>{tr("g3Plug.scanHeading")}</h2>
         </div>
         <span className="badge">{result?.entries.length ?? 0}</span>
       </div>
-      <p className="muted">
-        A directory scan reads file metadata. Checking a VST2 shell opens only the selected file in an isolated worker.
-      </p>
+      <p className="muted">{tr("settingsCopy.pluginScan")}</p>
       <label>
-        Absolute plugin directory
+        {tr("g3Plug.absDir")}
         <input
-          aria-label="Absolute plugin directory"
+          aria-label={tr("g3Plug.absDir")}
           value={directory}
           onChange={(event) => setDirectory(event.target.value)}
           disabled={!backend.connected}
@@ -183,19 +180,19 @@ export function PluginScanPanel({
       </label>
       <div className="actions">
         <button type="button" className="secondary" onClick={() => void scan()} disabled={!backend.connected || busy}>
-          Scan directory
+          {tr("g3Plug.scanDir")}
         </button>
         <button type="button" className="secondary" onClick={() => void list()} disabled={!backend.connected || busy}>
-          Load last scan
+          {tr("g3Plug.loadLast")}
         </button>
         <button type="button" className="secondary" onClick={() => void retry()} disabled={!backend.connected || busy}>
-          Retry scan
+          {tr("g3Plug.retryScan")}
         </button>
       </div>
       {result && (
-        <ul aria-label="Plugin scan results">
+        <ul aria-label={tr("g3Plug.scanResults")}>
           {result.entries.length === 0 ? (
-            <li className="muted">No VST3, VST2, or other DLL candidates found.</li>
+            <li className="muted">{tr("g3Plug.noCandidates")}</li>
           ) : (
             result.entries.map((entry) => {
               const supported = SUPPORTED_PLUGIN_COMPATIBILITY.includes(entry.identity?.compatibility ?? "");
@@ -205,7 +202,7 @@ export function PluginScanPanel({
                   <small>
                     {entry.identity
                       ? `${entry.identity.format} · ${entry.identity.architecture} · ${entry.identity.compatibility}`
-                      : `${entry.errorCode ?? "unknown"}: ${entry.error ?? "inspection failed"}`}
+                      : `${entry.errorCode ?? tr("g3Plug.unknown")}: ${entry.error ?? tr("g3Plug.inspectFailed")}`}
                   </small>
                   <button
                     type="button"
@@ -213,7 +210,7 @@ export function PluginScanPanel({
                     onClick={() => selectInspectionPath(entry.path)}
                     disabled={!backend.connected}
                   >
-                    Select for inspection
+                    {tr("g3Plug.selectInspect")}
                   </button>
                   {entry.identity?.format === "vst2" && (
                     <button
@@ -222,7 +219,7 @@ export function PluginScanPanel({
                       disabled={!backend.connected || busy}
                       onClick={() => void scan(entry.path)}
                     >
-                      Find shell effects
+                      {tr("g3Plug.findShell")}
                     </button>
                   )}
                   {supported && entry.identity?.format === "vst2" && entry.identity.classIds.length > 0
@@ -237,18 +234,20 @@ export function PluginScanPanel({
                               addToDraft({ ...entry, identity: { ...entry.identity, classIds: [id] } });
                           }}
                         >
-                          Add {entry.identity?.shellEffects?.find((effect) => effect.id === id)?.name ?? id}
+                          {tr("g3Plug.addNamed", {
+                            name: entry.identity?.shellEffects?.find((effect) => effect.id === id)?.name ?? id,
+                          })}
                         </button>
                       ))
                     : supported && (
                         <button
                           type="button"
                           className="secondary"
-                          aria-label={`Add to route: ${entry.path}`}
+                          aria-label={tr("g3Plug.addToRouteAria", { path: entry.path })}
                           onClick={() => addToDraft(entry)}
                           disabled={!backend.connected || !onAddPlaceholder}
                         >
-                          Add to route
+                          {tr("g3Plug.addToRoute")}
                         </button>
                       )}
                 </li>
@@ -258,9 +257,9 @@ export function PluginScanPanel({
         </ul>
       )}
       <label>
-        Absolute plugin path
+        {tr("g3Plug.absPath")}
         <input
-          aria-label="Absolute plugin path"
+          aria-label={tr("g3Plug.absPath")}
           value={inspectionPath}
           onChange={(event) => {
             setInspectionPath(event.target.value);
@@ -271,21 +270,17 @@ export function PluginScanPanel({
         />
       </label>
       <button type="button" className="secondary" onClick={() => void inspect()} disabled={!backend.connected || busy}>
-        Inspect path
+        {tr("g3Plug.inspectPath")}
       </button>
       {inspection && (
         <p className="muted" role="status">
           {inspection.identity
             ? `${inspection.identity.format} ${inspection.identity.architecture} · ${inspection.identity.compatibility}`
-            : `${inspection.errorCode ?? "unknown"}: ${inspection.error ?? "inspection failed"}`}
+            : `${inspection.errorCode ?? tr("g3Plug.unknown")}: ${inspection.error ?? tr("g3Plug.inspectFailed")}`}
         </p>
       )}
       <PanelMessage message={message} />
-      <p className="muted">
-        The explicit <code>pluginScan</code> permission is required by the backend; selecting a result only copies its
-        path, and inspection remains explicit. Adding a result to the route is a separate explicit action. Loading the
-        last scan never triggers a new filesystem scan.
-      </p>
+      <p className="muted">{tr("g3Plug.scanNote")}</p>
     </section>
   );
 }
@@ -311,9 +306,11 @@ export function PluginToolsGroup({
   onAdd: (entry: import("@audiorouter/contracts").PluginScanEntry) => void;
   onOpenPicker: () => void;
 }) {
+  const tr = useMessages();
   const [inventories, setInventories] = useState<import("@audiorouter/contracts").PluginScanResult[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const listUnavailable = useEffectEvent(() => tr("g3Plug.listUnavailable"));
   useEffect(() => {
     if (!connected || !backend.pluginInventory) return;
     let active = true;
@@ -323,7 +320,7 @@ export function PluginToolsGroup({
         if (active) setInventories(result.inventories);
       })
       .catch((error) => {
-        if (active) setMessage(formatUiError(error, "Plugin list unavailable."));
+        if (active) setMessage(formatUiError(error, listUnavailable()));
       });
     return () => {
       active = false;
@@ -331,7 +328,7 @@ export function PluginToolsGroup({
   }, [backend, connected, refreshKey]);
   const scanStandardFolders = async () => {
     setBusy(true);
-    setMessage("Scanning standard plugin folders…");
+    setMessage(tr("g3Plug.scanningStd"));
     const results: import("@audiorouter/contracts").PluginScanResult[] = [];
     let denied: string | null = null;
     const failures: string[] = [];
@@ -340,7 +337,7 @@ export function PluginToolsGroup({
         results.push(await backend.scanPlugins(folder));
       } catch (error) {
         if (/permission/i.test(error instanceof Error ? error.message : "")) {
-          denied = formatUiError(error, "Plugin scanning is not permitted.");
+          denied = formatUiError(error, tr("g3Plug.notPermitted"));
           break;
         }
         // Missing optional standard folders are normal. Other failures must
@@ -359,12 +356,19 @@ export function PluginToolsGroup({
       denied ??
         (failures.length
           ? formatUiError(
-              new Error(
-                `Plugin scan failed for ${failures.length} folder(s). ${failures.join("; ")} Found ${found} supported plugins in the folders scanned successfully.`,
-              ),
-              "Plugin scan failed.",
+              new Error(tr("g3Plug.scanFailedFolders", { n: failures.length, failures: failures.join("; "), found })),
+              tr("g3Plug.scanFailed"),
             )
-          : `Found ${found} supported plugin${found === 1 ? "" : "s"} in ${results.length} standard folder${results.length === 1 ? "" : "s"}. Other folders: use Scan another folder.`),
+          : tr(
+              results.length === 1
+                ? found === 1
+                  ? "g3Plug.foundStdOne"
+                  : "g3Plug.foundStdOneOther"
+                : found === 1
+                  ? "g3Plug.foundStd"
+                  : "g3Plug.foundStdOther",
+              { found, folders: results.length },
+            )),
     );
     setBusy(false);
   };
@@ -412,23 +416,21 @@ export function PluginToolsGroup({
   return (
     <>
       {instruments.length > 0 && (
-        <div className="tool-plugin-group" aria-label="Instruments">
+        <div className="tool-plugin-group" aria-label={tr("g3Plug.instruments")}>
           <div className="tool-library-entry">
-            <h4>Instruments (VST2/VST3)</h4>
+            <h4>{tr("g3Plug.instrumentsHeading")}</h4>
             <ToolGuideLink kind="instrument" compact toolName="Instrument" />
           </div>
           {renderRows(instruments)}
         </div>
       )}
-      <div className="tool-plugin-group" aria-label="Plugins">
+      <div className="tool-plugin-group" aria-label={tr("g3Plug.plugins")}>
         <div className="tool-library-entry">
-          <h4>Plugins (VST2/VST3)</h4>
+          <h4>{tr("g3Plug.pluginsHeading")}</h4>
           <ToolGuideLink kind="plugin" compact toolName="VST plugin" />
         </div>
         {renderRows(effects)}
-        {effects.length === 0 && !query && (
-          <p className="muted">No plugins found yet. Scan Windows' standard plugin folders, or pick another folder.</p>
-        )}
+        {effects.length === 0 && !query && <p className="muted">{tr("g3Plug.noneYet")}</p>}
         <div className="actions">
           <button
             type="button"
@@ -436,10 +438,10 @@ export function PluginToolsGroup({
             disabled={!connected || busy}
             onClick={() => void scanStandardFolders()}
           >
-            {busy ? "Scanning…" : "Scan standard folders"}
+            {busy ? tr("g3Plug.scanningShort") : tr("g3Plug.scanStd")}
           </button>
           <button type="button" className="secondary" disabled={!connected} onClick={onOpenPicker}>
-            Scan another folder…
+            {tr("g3Plug.scanAnother")}
           </button>
         </div>
         {message && <PanelMessage message={message} small />}
@@ -463,28 +465,29 @@ export function LoadedPluginsPanel({
   onUnload: (nodeId: string) => void;
   diagnostics: import("@audiorouter/contracts").DiagnosticsSnapshot | null;
 }) {
+  const tr = useMessages();
   const plugins = nodes.filter((node) => node.kind === "plugin");
   return (
     <section className="panel loaded-plugins-panel" aria-labelledby="loaded-plugins-heading">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Currently in this route</p>
-          <h2 id="loaded-plugins-heading">Loaded plugins</h2>
+          <p className="eyebrow">{tr("g3Plug.inRoute")}</p>
+          <h2 id="loaded-plugins-heading">{tr("g3Plug.loadedHeading")}</h2>
         </div>
         <span className="badge">{plugins.length}</span>
       </div>
       {plugins.length === 0 ? (
-        <p className="muted">No VST2/VST3 plugin is in this route yet. Scan a directory below and add one.</p>
+        <p className="muted">{tr("g3Plug.noneInRoute")}</p>
       ) : (
-        <ul aria-label="Loaded plugins">
+        <ul aria-label={tr("g3Plug.loadedList")}>
           {plugins.map((node) => {
             const format = node.parameters.format;
-            const formatLabel = format === "vst3" ? "VST3" : format === "vst2" ? "VST2" : "Plugin";
+            const formatLabel = format === "vst3" ? "VST3" : format === "vst2" ? "VST2" : tr("g3Plug.pluginWord");
             const fileName =
               String(node.parameters.path ?? "")
                 .replace(/\\/g, "/")
                 .split("/")
-                .pop() || "unbound";
+                .pop() || tr("g3Plug.unbound");
             const health = diagnostics?.nodeTelemetry.find((item) => item.nodeId === node.id)?.plugin ?? null;
             const healthAlert = health?.state === "failed" || health?.state === "quarantined";
             return (
@@ -499,15 +502,17 @@ export function LoadedPluginsPanel({
                 <span>
                   <strong>{node.name}</strong>{" "}
                   <small>
-                    {formatLabel} · {fileName} · {node.bypass ? "bypass" : node.enabled ? "active" : "stopped"}
-                    {health && ` · worker ${health.state}`}
+                    {formatLabel} · {fileName} ·{" "}
+                    {node.bypass ? tr("g3Plug.bypass") : node.enabled ? tr("g3Plug.active") : tr("g3Plug.stopped")}
+                    {health &&
+                      ` · ${tr("g3Plug.workerState", { state: tr(PLUGIN_HEALTH_LABELS[health.state] ?? "g3Plug.hUnknown").toLowerCase() })}`}
                   </small>
                 </span>
                 <button type="button" className="secondary" onClick={() => onSelect(node.id)} disabled={disabled}>
-                  Select
+                  {tr("g3Plug.select")}
                 </button>
                 <button type="button" className="secondary" onClick={() => onUnload(node.id)} disabled={disabled}>
-                  Unload
+                  {tr("g3Plug.unload")}
                 </button>
               </li>
             );
@@ -518,12 +523,12 @@ export function LoadedPluginsPanel({
   );
 }
 
-export const PLUGIN_HEALTH_LABELS: Record<string, string> = {
-  unknown: "Unknown",
-  stopped: "Stopped",
-  running: "Running",
-  failed: "Failed",
-  quarantined: "Quarantined",
+export const PLUGIN_HEALTH_LABELS: Record<string, MessageKey> = {
+  unknown: "g3Plug.hUnknown",
+  stopped: "g3Plug.hStopped",
+  running: "g3Plug.hRunning",
+  failed: "g3Plug.hFailed",
+  quarantined: "g3Plug.hQuarantined",
 };
 
 /**
@@ -545,6 +550,7 @@ export function PluginEditorControls({
   running: boolean;
   onStateSaved: (stateId: string) => void;
 }) {
+  const tr = useMessages();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const inShell = typeof window !== "undefined" && Boolean(window.__TAURI_INTERNALS__?.invoke);
@@ -558,11 +564,11 @@ export function PluginEditorControls({
       };
       setMessage(
         response?.error
-          ? `Editor unavailable: ${response.error.message ?? "the backend refused"}`
-          : "The plugin's window is open. Changes apply right away and are kept when you close it or press Stop. The sliders below still work; the latest change wins.",
+          ? tr("g3Plug.editorUnavailable", { reason: response.error.message ?? tr("g3Plug.backendRefused") })
+          : tr("g3Plug.windowOpen"),
       );
     } catch (error) {
-      setMessage(formatUiError(error, "The plugin editor could not be opened."));
+      setMessage(formatUiError(error, tr("g3Plug.editorFailed")));
     } finally {
       setBusy(false);
     }
@@ -573,46 +579,36 @@ export function PluginEditorControls({
     try {
       const result = await backend.savePluginState(sessionId, node.id);
       onStateSaved(result.stateId);
-      setMessage(
-        `Plugin settings saved (${Math.max(1, Math.round(result.sizeBytes / 1024))} KB). They are restored every time this route plays.`,
-      );
+      setMessage(tr("g3Plug.stateSaved", { kb: Math.max(1, Math.round(result.sizeBytes / 1024)) }));
     } catch (error) {
-      setMessage(formatUiError(error, "Plugin settings could not be saved."));
+      setMessage(formatUiError(error, tr("g3Plug.stateSaveFailed")));
     } finally {
       setBusy(false);
     }
   };
   return (
-    <div className="node-binding-editor" aria-label="Plugin editor and settings">
+    <div className="node-binding-editor" aria-label={tr("g3Plug.editorAria")}>
       <div>
-        <p className="eyebrow">Adjust this plugin</p>
+        <p className="eyebrow">{tr("g3Plug.adjust")}</p>
         <strong>{node.name}</strong>
       </div>
       <div className="actions">
         <button
           type="button"
           disabled={busy || !inShell}
-          title={
-            !inShell
-              ? "The plugin's window opens only in the desktop app."
-              : "Open the plugin's own window (no need to press Play first)"
-          }
+          title={!inShell ? tr("g3Plug.onlyDesktop") : tr("g3Plug.openOwn")}
           onClick={() => void openEditor()}
         >
-          Open plugin window
+          {tr("g3Plug.openWindow")}
         </button>
         <button
           type="button"
           className="secondary"
           disabled={busy || !running || !backend.savePluginState}
-          title={
-            !running
-              ? "Press Play first."
-              : "Keep the current settings now. They are also kept when you close the plugin's window or press Stop."
-          }
+          title={!running ? tr("g3Plug.pressPlayFirst") : tr("g3Plug.keepNow")}
           onClick={() => void saveState()}
         >
-          Save settings now
+          {tr("g3Plug.saveNow")}
         </button>
       </div>
       {message ? (
@@ -621,11 +617,11 @@ export function PluginEditorControls({
         <small className="muted">
           {node.kind === "instrument"
             ? !inShell
-              ? "The instrument's window opens only in the desktop app. You can still play it with the keyboard below."
-              : "Open the instrument's window to change its sound. Your changes are kept, even before you press Play."
+              ? tr("g3Plug.instOnlyDesktop")
+              : tr("g3Plug.instOpen")
             : !inShell
-              ? "The plugin's window opens only in the desktop app. You can still use the sliders below."
-              : "Open the plugin's window, or use the sliders below. Your changes are kept, even before you press Play."}
+              ? tr("g3Plug.plugOnlyDesktop")
+              : tr("g3Plug.plugOpen")}
         </small>
       )}
     </div>
@@ -647,6 +643,7 @@ export function PluginRecoveryControls({
   disabledReason?: string;
   onPrepared: (original: Node, parameters: Node["parameters"]) => boolean;
 }) {
+  const tr = useMessages();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const current = useRef(onPrepared);
@@ -662,32 +659,24 @@ export function PluginRecoveryControls({
   }, []);
   async function prepare(reset: boolean) {
     setBusy(true);
-    setMessage("Preparing plugin recovery…");
+    setMessage(tr("g3Plug.recPreparing"));
     try {
       const result = await backend.preparePluginUpdate(node.id, sessionId, reset);
       if (!mounted.current) return;
-      if (!current.current(node, result.parameters))
-        throw new Error("The tool changed while recovery was prepared. Try again.");
-      setMessage(
-        reset
-          ? "Prepared factory defaults. Save the route, then press Play. Your previous state files are kept."
-          : "Prepared the scanned version with your settings. Save the route, then press Play.",
-      );
+      if (!current.current(node, result.parameters)) throw new Error(tr("g3Plug.recChanged"));
+      setMessage(reset ? tr("g3Plug.recDefaults") : tr("g3Plug.recScanned"));
     } catch (error) {
-      if (mounted.current) setMessage(formatUiError(error, "Plugin recovery failed."));
+      if (mounted.current) setMessage(formatUiError(error, tr("g3Plug.recFailed")));
     } finally {
       if (mounted.current) setBusy(false);
     }
   }
   return (
-    <section aria-label="Plugin recovery">
-      <p>
-        After updating a plugin, scan its folder again, then use the scanned version here. Your wiring and previous
-        state files are kept.
-      </p>
+    <section aria-label={tr("g3Plug.recAria")}>
+      <p>{tr("g3Plug.recIntro")}</p>
       <div className="actions">
         <button type="button" disabled={running || busy || !!disabledReason} onClick={() => void prepare(false)}>
-          Use scanned version
+          {tr("g3Plug.useScanned")}
         </button>
         <button
           type="button"
@@ -695,13 +684,11 @@ export function PluginRecoveryControls({
           disabled={running || busy || !!disabledReason}
           onClick={() => void prepare(true)}
         >
-          Start from defaults
+          {tr("g3Plug.fromDefaults")}
         </button>
       </div>
       <div style={{ height: "7rem", overflow: "auto" }}>
-        <PanelMessage
-          message={disabledReason ?? (running ? "Stop this route before preparing plugin recovery." : message)}
-        />
+        <PanelMessage message={disabledReason ?? (running ? tr("g3Plug.stopFirst") : message)} />
       </div>
     </section>
   );
@@ -738,9 +725,10 @@ export function PluginNodeInspector({
   /** Remove settings from the node; "off" removes the key so older builds can still load the route. */
   onRemove?: (names: string[]) => void;
 }) {
+  const tr = useMessages();
   const path = typeof node.parameters.path === "string" ? node.parameters.path : "";
   const format = node.parameters.format;
-  const formatLabel = format === "vst3" ? "VST3" : format === "vst2" ? "VST2" : "Plugin";
+  const formatLabel = format === "vst3" ? "VST3" : format === "vst2" ? "VST2" : tr("g3Plug.pluginWord");
   const fingerprint = typeof node.parameters.fingerprint === "string" ? node.parameters.fingerprint : "";
   const fileName = path.replace(/\\/g, "/").split("/").pop() || path;
   const health = snapshot?.nodeTelemetry.find((item) => item.nodeId === node.id)?.plugin ?? null;
@@ -764,7 +752,7 @@ export function PluginNodeInspector({
       setUnits(result.units);
       setSelectedProgram(result.programs.length > 0 ? String(result.programs[0].id) : "");
     } catch (error) {
-      setProgramError(formatUiError(error, "Programs could not be listed."));
+      setProgramError(formatUiError(error, tr("g3Plug.programsFailed")));
     } finally {
       setProgramBusy(false);
     }
@@ -777,7 +765,7 @@ export function PluginNodeInspector({
     try {
       await backend.selectPluginProgram(sessionId, node.id, program);
     } catch (error) {
-      setProgramError(formatUiError(error, "The program could not be selected."));
+      setProgramError(formatUiError(error, tr("g3Plug.programFailed")));
     }
   };
   const applyPreset = async () => {
@@ -787,7 +775,7 @@ export function PluginNodeInspector({
     try {
       await backend.applyPluginPreset(sessionId, node.id, presetPath.trim());
     } catch (error) {
-      setProgramError(formatUiError(error, "The preset could not be imported."));
+      setProgramError(formatUiError(error, tr("g3Plug.presetFailed")));
     } finally {
       setProgramBusy(false);
     }
@@ -807,7 +795,7 @@ export function PluginNodeInspector({
     } catch (error) {
       setSidechain({
         busy: false,
-        error: formatUiError(error, "This plugin has no sidechain input to add."),
+        error: formatUiError(error, tr("g3Plug.noSidechain")),
         added: false,
       });
     }
@@ -821,7 +809,7 @@ export function PluginNodeInspector({
     } catch (error) {
       setSidechain({
         busy: false,
-        error: formatUiError(error, "The sidechain input could not be removed."),
+        error: formatUiError(error, tr("g3Plug.sidechainRemoveFailed")),
         added: false,
       });
     }
@@ -845,7 +833,7 @@ export function PluginNodeInspector({
       const result = await backend.resumePlugin(sessionId, node.id);
       setRetry({ pending: false, refused: !result.resumed, error: null });
     } catch (error) {
-      setRetry({ pending: false, refused: false, error: formatUiError(error, "Retry failed.") });
+      setRetry({ pending: false, refused: false, error: formatUiError(error, tr("g3Plug.retryFailed")) });
     }
   };
   // What the Voice protection card says. Every status is laid out in the same
@@ -863,37 +851,37 @@ export function PluginNodeInspector({
   });
   const retryNote = retry.error ? "error" : retry.refused ? "refused" : "ask";
   return (
-    <div className="node-binding-editor plugin-node-editor" aria-label="VST plugin binding">
+    <div className="node-binding-editor plugin-node-editor" aria-label={tr("g3Plug.bindingAria")}>
       <div>
-        <p className="eyebrow">{formatLabel} plugin loaded from disk</p>
-        <strong title={path}>{fileName || "No plugin binary bound"}</strong>
+        <p className="eyebrow">{tr("g3Plug.loadedFromDisk", { format: formatLabel })}</p>
+        <strong title={path}>{fileName || tr("g3Plug.noBinary")}</strong>
       </div>
       <label>
-        Binary path
-        <input aria-label="Plugin binary path" value={path} readOnly />
+        {tr("g3Plug.binaryPath")}
+        <input aria-label={tr("g3Plug.binaryPathAria")} value={path} readOnly />
       </label>
       <label>
-        SHA-256 fingerprint
-        <input aria-label="Plugin fingerprint" value={fingerprint} readOnly />
+        {tr("g3Plug.sha")}
+        <input aria-label={tr("g3Plug.shaAria")} value={fingerprint} readOnly />
       </label>
       {isVst2 || format === "vst3" ? (
-        <section className="plugin-programs" aria-label={`${formatLabel} programs and presets`}>
-          <span className="eyebrow">{formatLabel} programs</span>
+        <section className="plugin-programs" aria-label={tr("g3Plug.programsPresets", { format: formatLabel })}>
+          <span className="eyebrow">{tr("g3Plug.programsTitle", { format: formatLabel })}</span>
           <button
             type="button"
             disabled={programBusy || !backend?.listPluginPrograms || !sessionId}
             onClick={() => void loadPrograms()}
           >
-            {programBusy ? "Reading programs..." : "Load programs"}
+            {programBusy ? tr("g3Plug.reading") : tr("g3Plug.loadPrograms")}
           </button>
           {programs ? (
             programs.length === 0 ? (
-              <small>This plugin reports no programs.</small>
+              <small>{tr("g3Plug.noPrograms")}</small>
             ) : (
               <label>
-                Program
+                {tr("g3Plug.program")}
                 <select
-                  aria-label={`${formatLabel} program`}
+                  aria-label={tr("g3Plug.programAria", { format: formatLabel })}
                   value={selectedProgram}
                   disabled={!isVst2 || !backend?.selectPluginProgram || !sessionId}
                   onChange={(event) => void chooseProgram(event.target.value)}
@@ -908,26 +896,29 @@ export function PluginNodeInspector({
             )
           ) : null}
           {format === "vst3" && units.length > 0 ? (
-            <ul aria-label="VST3 unit hierarchy" className="plugin-unit-list">
+            <ul aria-label={tr("g3Plug.unitTree")} className="plugin-unit-list">
               {units.map((unit) => {
                 const parent = units.find((candidate) => candidate.id === unit.parent_id);
+                const names = unit.programs
+                  .slice(0, 6)
+                  .map((program) => program.name)
+                  .join(", ");
                 return (
                   <li key={unit.id}>
-                    <span>{unit.name || "Root unit"}</span>
-                    {parent ? <small>Within {parent.name}</small> : null}
+                    <span>{unit.name || tr("g3Plug.rootUnit")}</span>
+                    {parent ? <small>{tr("g3Plug.within", { name: parent.name })}</small> : null}
                     {unit.program_list_id !== null ? (
                       <>
                         <small>
-                          Program list · {unit.program_count} {unit.program_count === 1 ? "program" : "programs"}
+                          {tr(unit.program_count === 1 ? "g3Plug.programList" : "g3Plug.programListOther", {
+                            n: unit.program_count,
+                          })}
                         </small>
                         {unit.programs.length > 0 ? (
                           <small>
-                            Programs:{" "}
-                            {unit.programs
-                              .slice(0, 6)
-                              .map((program) => program.name)
-                              .join(", ")}
-                            {unit.programs.length > 6 ? `, and ${unit.programs.length - 6} more` : ""}
+                            {unit.programs.length > 6
+                              ? tr("g3Plug.programsMore", { names, n: unit.programs.length - 6 })
+                              : tr("g3Plug.programsList", { names })}
                           </small>
                         ) : null}
                       </>
@@ -940,12 +931,12 @@ export function PluginNodeInspector({
           {isVst2 ? (
             <>
               <label>
-                Preset file (.fxp or .fxb, beside the plugin)
+                {tr("g3Plug.presetFile")}
                 <input
-                  aria-label="VST2 preset path"
+                  aria-label={tr("g3Plug.presetPathAria")}
                   value={presetPath}
                   onChange={(event) => setPresetPath(event.target.value)}
-                  placeholder="Full path to the preset file"
+                  placeholder={tr("g3Plug.presetPlaceholder")}
                 />
               </label>
               <button
@@ -953,24 +944,21 @@ export function PluginNodeInspector({
                 disabled={programBusy || !backend?.applyPluginPreset || !sessionId || presetPath.trim() === ""}
                 onClick={() => void applyPreset()}
               >
-                Import preset
+                {tr("g3Plug.importPreset")}
               </button>
             </>
           ) : (
-            <small>VST3 units and programs are read-only; choose a program in the plugin&apos;s own window.</small>
+            <small>{tr("g3Plug.vst3ReadOnly")}</small>
           )}
           {programError ? <small role="alert">{programError}</small> : null}
         </section>
       ) : null}
       {format === "vst3" || (isVst2 && (!node.parameters.classId || node.parameters.classId === "default")) ? (
-        <section className="plugin-programs" aria-label="Sidechain input">
-          <span className="eyebrow">Sidechain input</span>
+        <section className="plugin-programs" aria-label={tr("g3Plug.sidechainAria")}>
+          <span className="eyebrow">{tr("g3Plug.sidechainAria")}</span>
           {hasSidechainPort || sidechain.added ? (
             <>
-              <small>
-                This plugin has a sidechain input named &quot;sidechain&quot;. Connect a source to it on the canvas; it
-                is not mixed into the main signal.
-              </small>
+              <small>{tr("g3Plug.sidechainHas")}</small>
               <button
                 type="button"
                 disabled={
@@ -982,7 +970,7 @@ export function PluginNodeInspector({
                 }
                 onClick={() => void removeSidechain()}
               >
-                {sidechain.busy ? "Removing..." : "Remove sidechain input"}
+                {sidechain.busy ? tr("g3Plug.removing") : tr("g3Plug.removeSidechain")}
               </button>
             </>
           ) : (
@@ -998,16 +986,14 @@ export function PluginNodeInspector({
                 }
                 onClick={() => void addSidechain()}
               >
-                {sidechain.busy ? "Checking the plugin..." : "Add sidechain input"}
+                {sidechain.busy ? tr("g3Plug.checkingPlugin") : tr("g3Plug.addSidechain")}
               </button>
               <div className="plugin-guard-stack">
                 <small {...shownWhen(sidechainBlockedReason === undefined)}>
-                  {isVst2
-                    ? "Works when the effect explicitly labels its key input."
-                    : "Works when the effect declares an auxiliary input."}
+                  {isVst2 ? tr("g3Plug.worksVst2") : tr("g3Plug.worksVst3")}
                 </small>
                 <small {...shownWhen(sidechainBlockedReason !== undefined)}>
-                  {sidechainBlockedReason ?? "Save or discard changes to this tool before adding a sidechain input."}
+                  {sidechainBlockedReason ?? tr("g3Plug.saveFirst")}
                 </small>
               </div>
             </>
@@ -1018,51 +1004,35 @@ export function PluginNodeInspector({
       <section
         className={`plugin-voice-guard${silenced ? " is-alert" : ""}`}
         role={silenced ? "alert" : undefined}
-        aria-label="Voice protection"
+        aria-label={tr("g3Plug.guardAria")}
       >
-        <span className="eyebrow">Voice protection</span>
+        <span className="eyebrow">{tr("g3Plug.guardEyebrow")}</span>
         <div className="plugin-guard-stack" aria-live="polite">
           <div {...shownWhen(guard === "watching")}>
-            <strong>On</strong>
-            <small>
-              If this plugin passes your microphone through unchanged for about 2 seconds, as an unlicensed plugin does,
-              AudioRouter mutes it so your voice is never sent on as if it were processed.
-            </small>
+            <strong>{tr("g3Plug.guardOn")}</strong>
+            <small>{tr("g3Plug.guardOnText")}</small>
           </div>
           <div {...shownWhen(guard === "hint")}>
-            <strong>Audio passes through unchanged</strong>
-            <small>
-              If you expected an effect, the plugin may not be licensed or activated: check it in its vendor&apos;s app
-              (UA Connect for UADx plugins), then press Stop and Play.
-            </small>
+            <strong>{tr("g3Plug.guardUnchanged")}</strong>
+            <small>{tr("g3Plug.guardUnchangedText")}</small>
           </div>
           <div {...shownWhen(guard === "allowed")}>
-            <strong>Off for this plugin</strong>
-            <small>
-              This plugin may pass your voice through unchanged. Turn the switch below off if it should always change
-              your voice.
-            </small>
+            <strong>{tr("g3Plug.guardOff")}</strong>
+            <small>{tr("g3Plug.guardOffText")}</small>
           </div>
           <div {...shownWhen(guard === "muted")}>
             <strong className="plugin-guard-title">
-              {retry.refused ? "Still muted" : "Muted: your voice came through unchanged"}
+              {retry.refused ? tr("g3Plug.stillMuted") : tr("g3Plug.muted")}
             </strong>
             <div className="plugin-guard-step">
               <span className="plugin-guard-number" aria-hidden="true">
                 1
               </span>
               <span>
-                <strong>Expected an effect?</strong>
+                <strong>{tr("g3Plug.expected")}</strong>
                 <span className="plugin-guard-stack">
-                  <small {...shownWhen(silenced && retryNote === "ask")}>
-                    It is probably not licensed. Sign in to its vendor&apos;s app (UA Connect for UADx plugins), then
-                    press Retry. Retry checks this running plugin for processing; it does not reload it.
-                  </small>
-                  <small {...shownWhen(silenced && retryNote === "refused")}>
-                    It still passes your voice through. After signing in, deliberately press Stop and Play to reload the
-                    route's plugins. Stop interrupts this route; Retry only checks the running plugin. Your protected
-                    voice stays muted until recovery succeeds.
-                  </small>
+                  <small {...shownWhen(silenced && retryNote === "ask")}>{tr("g3Plug.notLicensed")}</small>
+                  <small {...shownWhen(silenced && retryNote === "refused")}>{tr("g3Plug.stillPasses")}</small>
                   <small {...shownWhen(silenced && retryNote === "error")} role={retry.error ? "alert" : undefined}>
                     {retry.error}
                   </small>
@@ -1074,7 +1044,7 @@ export function PluginNodeInspector({
                 disabled={!silenced || retry.pending || !backend?.resumePlugin || !sessionId}
                 onClick={() => void resume()}
               >
-                {retry.pending ? "Retrying…" : "Retry"}
+                {retry.pending ? tr("g3Plug.retrying2") : tr("g3Plug.retry")}
               </button>
             </div>
           </div>
@@ -1084,9 +1054,9 @@ export function PluginNodeInspector({
             2
           </span>
           <span>
-            <strong>Meant to leave your voice unchanged?</strong>
+            <strong>{tr("g3Plug.meantUnchanged")}</strong>
             <BooleanField
-              label="Allow unchanged audio"
+              label={tr("g3Plug.allowUnchanged")}
               checked={passThroughAllowed}
               disabled={disabled || !onChange}
               onChange={(checked) => {
@@ -1095,49 +1065,51 @@ export function PluginNodeInspector({
                 else onChange?.("passThroughAllowed", false);
               }}
             />
-            <small className="parameter-help">
-              For a meter, an analyser or a plugin set to bypass. The plugin reloads, with a short gap if the route is
-              playing.
-            </small>
+            <small className="parameter-help">{tr("g3Plug.allowHelp")}</small>
           </span>
         </div>
       </section>
       <div
         className={`plugin-worker-health${healthAlert ? " is-alert" : ""}`}
         role={healthAlert ? "alert" : undefined}
-        aria-label="Plugin worker health"
+        aria-label={tr("g3Plug.healthAria")}
       >
-        <span className="eyebrow">Isolated worker health</span>
+        <span className="eyebrow">{tr("g3Plug.healthEyebrow")}</span>
         <strong>
           {!health
-            ? "Not running"
+            ? tr("g3Plug.notRunning")
             : silenced && health.state === "running"
-              ? "Silenced"
-              : (PLUGIN_HEALTH_LABELS[health.state] ?? health.state)}
+              ? tr("g3Plug.silenced")
+              : PLUGIN_HEALTH_LABELS[health.state]
+                ? tr(PLUGIN_HEALTH_LABELS[health.state])
+                : health.state}
         </strong>
         {health && health.failureCount > 0 && (
           <small>
-            {health.failureCount} failure{health.failureCount === 1 ? "" : "s"} recorded
-            {health.state === "quarantined" ? "; requires deliberate retry after review" : ""}.
+            {tr(
+              health.state === "quarantined"
+                ? health.failureCount === 1
+                  ? "g3Plug.failuresQuarantined"
+                  : "g3Plug.failuresQuarantinedOther"
+                : health.failureCount === 1
+                  ? "g3Plug.failures"
+                  : "g3Plug.failuresOther",
+              { n: health.failureCount },
+            )}
           </small>
         )}
-        {health?.failureReason && <small className="plugin-failure-reason">Why: {health.failureReason}</small>}
-        {!health && <small>Health is only observable while the session is running with this worker bound.</small>}
+        {health?.failureReason && (
+          <small className="plugin-failure-reason">{tr("g3Plug.why", { reason: health.failureReason })}</small>
+        )}
+        {!health && <small>{tr("g3Plug.healthOnly")}</small>}
         {health?.outputMisses !== undefined && (
-          <small>
-            Audio continuity: {health.outputMisses} missing output blocks (includes startup), {health.inputDrops ?? 0}{" "}
-            dropped input blocks. These counts are shared by plugins in the same worker.
-          </small>
+          <small>{tr("g3Plug.continuity", { misses: health.outputMisses, drops: health.inputDrops ?? 0 })}</small>
         )}
       </div>
       <button type="button" className="secondary" onClick={onUnload} disabled={disabled}>
-        Remove plugin
+        {tr("g3Plug.removePlugin")}
       </button>
-      <small>
-        This tool runs only this exact plugin file. If the file changes, scan and add it again from Plugin scan.
-        Removing takes it and its connections out of the route; save to keep that. While the route plays, Open plugin
-        window shows the plugin's own window; the sliders above work too.
-      </small>
+      <small>{tr("g3Plug.footnote")}</small>
     </div>
   );
 }

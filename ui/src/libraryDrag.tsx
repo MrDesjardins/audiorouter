@@ -5,6 +5,7 @@
  * pointer before the drop. A small label follows the pointer elsewhere.
  */
 import { useEffect, useSyncExternalStore } from "react";
+import { useMessages } from "./i18n/useMessages";
 import type { PluginScanEntry } from "@audiorouter/contracts";
 
 export const LIBRARY_DROP_MIME = "application/x-audiorouter-library-kind";
@@ -102,6 +103,7 @@ export function readLibraryDropKind(dataTransfer: DataTransfer): string {
 
 /** Floating label that follows the pointer while a tool is dragged outside the canvas. */
 export function LibraryDragOverlay() {
+  const tr = useMessages();
   const drag = useSyncExternalStore(store.subscribe, store.get, store.get);
   useEffect(() => {
     if (!drag) return;
@@ -127,7 +129,7 @@ export function LibraryDragOverlay() {
     >
       <span className="library-drag-chip-plus">+</span>
       {drag.label}
-      <small>Drop on the canvas</small>
+      <small>{tr("g6.libraryDragDrop")}</small>
     </div>
   );
 }

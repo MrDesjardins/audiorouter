@@ -1,3 +1,5 @@
+import { tx } from "./i18n";
+
 /** Local canvas geometry only. No graph identities, routing or parameters change. */
 export type CanvasRect = {
   id: string;
@@ -155,7 +157,7 @@ export function layoutCanvasItems(
   action: LayoutAction,
 ): { items: CanvasRect[]; message: string } {
   const selected = items.filter((item) => selectedIds.includes(item.id));
-  if (selected.length < 2) return { items, message: "Select at least two items." };
+  if (selected.length < 2) return { items, message: tx("g4Canvas.layoutSelectTwo") };
   if (action.startsWith("size-")) {
     const dimension = action.endsWith("width") ? "width" : "height";
     const minimum = dimension === "width" ? "minWidth" : "minHeight";
@@ -170,12 +172,12 @@ export function layoutCanvasItems(
             item[minimum] ?? (item.group ? (dimension === "width" ? 180 : 100) : dimension === "width" ? 218 : 150),
         ),
     );
-    if (target > 10_000) return { items, message: "The requested size exceeds the canvas limit." };
+    if (target > 10_000) return { items, message: tx("g4Canvas.layoutSizeLimit") };
     return {
       items: items.map((item) =>
         selectedIds.includes(item.id) && !item.locked ? { ...item, [dimension]: target } : item,
       ),
-      message: "Sizes updated. Locked groups stayed fixed; tool content minima are preserved.",
+      message: tx("g4Canvas.layoutSizesUpdated"),
     };
   }
   const owners = canvasOwners(items);
@@ -183,7 +185,7 @@ export function layoutCanvasItems(
   const fixed = roots.filter((item) => movementLocked(item.id, items, owners));
   const targets = new Map<string, { x: number; y: number }>();
   if (action.startsWith("distribute-")) {
-    if (roots.length < 3) return { items, message: "Select at least three independent items to distribute." };
+    if (roots.length < 3) return { items, message: tx("g4Canvas.layoutSelectThree") };
     const horizontal = action === "distribute-horizontal";
     const axis = horizontal ? "x" : "y";
     const dimension = horizontal ? "width" : "height";
@@ -200,8 +202,7 @@ export function layoutCanvasItems(
         sorted[start][axis] -
         sorted[start][dimension] -
         inner.reduce((sum, item) => sum + item[dimension], 0);
-      if (available < -0.001)
-        return { items, message: "Not enough room to distribute without overlap. Move the endpoints farther apart." };
+      if (available < -0.001) return { items, message: tx("g4Canvas.layoutNoRoom") };
       const gap = Math.max(0, available) / (end - start);
       let cursor = sorted[start][axis] + sorted[start][dimension] + gap;
       for (const item of inner) {
@@ -237,5 +238,5 @@ export function layoutCanvasItems(
       });
     }
   }
-  return { items: moveCanvasItems(items, targets), message: "Layout updated. Locked groups stayed fixed." };
+  return { items: moveCanvasItems(items, targets), message: tx("g4Canvas.layoutUpdated") };
 }

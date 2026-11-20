@@ -144,8 +144,8 @@ describe("cable draft helpers", () => {
 
 describe("VirtualCablePanel", () => {
   it("shows a pill for every status and while waiting", () => {
-    expect(cableStatusPill(null, true)).toEqual({ label: "Checking", tone: "idle" });
-    expect(cableStatusPill(null, false)).toEqual({ label: "Unavailable", tone: "idle" });
+    expect(cableStatusPill(null, true)).toEqual({ labelKey: "g3Cable.checking", tone: "idle" });
+    expect(cableStatusPill(null, false)).toEqual({ labelKey: "g3Cable.unavailable", tone: "idle" });
     expect(cableStatusPill(status("installed"), true).tone).toBe("ready");
     expect(cableStatusPill(status("notInstalled"), true).tone).toBe("idle");
     for (const state of ["needsRepair", "needsRestart", "incompatible"] as const) {

@@ -3,11 +3,9 @@ import type { DiagnosticsSnapshot, Session } from "@audiorouter/contracts";
 import { invoke } from "@tauri-apps/api/core";
 import { Icon } from "./icons";
 import { currentPeak, MIC_TEST_MS, MIC_VERDICT_TEXT, micVerdict, type MicVerdict } from "./micVerdict";
+import { useMessages } from "./i18n/useMessages";
 
 type Phase = { name: "idle" } | { name: "listening" } | { name: "done"; verdict: MicVerdict; loudest: number };
-
-const formatPeak = (peak: number | null) =>
-  peak === null || !Number.isFinite(peak) || peak < -90 ? "Peak −∞" : `Peak ${peak.toFixed(0)} dB`.replace("-", "−");
 
 /**
  * Listens to the meter of a microphone that is already playing and says what
@@ -25,6 +23,11 @@ export function MicTest({
   running: boolean;
   privacyMuted: boolean;
 }) {
+  const tr = useMessages();
+  const formatPeak = (peak: number | null) =>
+    peak === null || !Number.isFinite(peak) || peak < -90
+      ? tr("micTest.peakSilent")
+      : tr("micTest.peak", { db: peak.toFixed(0).replace("-", "−") });
   const microphones = session.nodes.filter((node) => node.kind === "physicalInput");
   const [chosen, setChosen] = useState<string | null>(null);
   const microphone = microphones.find((node) => node.id === chosen) ?? microphones[0] ?? null;
@@ -68,21 +71,19 @@ export function MicTest({
   };
 
   const blocked = !microphone
-    ? { title: "No mic in this route", detail: "Add an Input device to test it here." }
+    ? { title: tr("micTest.noMicTitle"), detail: tr("micTest.noMicDetail") }
     : !running
-      ? {
-          title: "Press Play to test this mic",
-          detail: "The test listens to a playing route. It starts nothing itself.",
-        }
+      ? { title: tr("micTest.pressPlayTitle"), detail: tr("micTest.pressPlayDetail") }
       : privacyMuted
-        ? { title: "Privacy mute is on", detail: "Turn it off to test this mic. Nothing can be heard while it is on." }
+        ? { title: tr("micTest.privacyTitle"), detail: tr("micTest.privacyDetail") }
         : null;
+  const verdictText = phase.name === "done" ? MIC_VERDICT_TEXT[phase.verdict] : null;
   const text =
     phase.name === "listening"
-      ? { title: "Listening for 5 seconds…", detail: "Say a few words normally." }
-      : phase.name === "done" && !blocked
-        ? MIC_VERDICT_TEXT[phase.verdict]
-        : (blocked ?? { title: "Is your mic working?", detail: "Listens for 5 seconds and says what it found." });
+      ? { title: tr("micTest.listeningTitle"), detail: tr("micTest.listeningDetail") }
+      : verdictText && !blocked
+        ? { title: tr(verdictText.title), detail: tr(verdictText.detail) }
+        : (blocked ?? { title: tr("micTest.idleTitle"), detail: tr("micTest.idleDetail") });
   const verdict = phase.name === "done" && !blocked ? phase.verdict : null;
   // After the listen, show the loudest moment the verdict is about, not the meter now.
   const shownPeak = phase.name === "listening" ? peak : verdict && phase.name === "done" ? phase.loudest : null;
@@ -91,10 +92,10 @@ export function MicTest({
   return (
     <section className="panel mic-test" aria-labelledby="mic-test-heading">
       <div className="mic-test-head">
-        <h3 id="mic-test-heading">Mic test</h3>
+        <h3 id="mic-test-heading">{tr("micTest.heading")}</h3>
         {microphones.length > 1 ? (
           <select
-            aria-label="Mic to test"
+            aria-label={tr("micTest.chooseMic")}
             value={microphone?.id ?? ""}
             onChange={(event) => setChosen(event.target.value)}
             disabled={phase.name === "listening"}
@@ -133,16 +134,16 @@ export function MicTest({
       </div>
       <div className="mic-test-scale">
         <span>{formatPeak(shownPeak)}</span>
-        <span>Voice zone: −18 to −6 dB</span>
+        <span>{tr("micTest.voiceZone")}</span>
       </div>
       <div className="actions mic-test-actions">
         {phase.name === "listening" ? (
           <button type="button" className="secondary" onClick={() => setPhase({ name: "idle" })}>
-            Stop test
+            {tr("micTest.stop")}
           </button>
         ) : (
           <button type="button" className="secondary" disabled={blocked !== null} onClick={start}>
-            {phase.name === "done" ? "Test again" : "Test my mic"}
+            {phase.name === "done" ? tr("micTest.again") : tr("micTest.start")}
           </button>
         )}
         <button
@@ -150,9 +151,9 @@ export function MicTest({
           className="secondary"
           hidden={verdict !== "silent"}
           onClick={openSettings}
-          title={settingsFailed ? "Open Sound settings from the Windows Start menu." : undefined}
+          title={settingsFailed ? tr("micTest.settingsHint") : undefined}
         >
-          Open Windows sound settings
+          {tr("micTest.openSettings")}
         </button>
       </div>
     </section>

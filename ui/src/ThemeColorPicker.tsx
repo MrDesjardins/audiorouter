@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { THEME_COLORS, type CustomTheme, type ThemeColor } from "./customTheme";
+import { themeColorLabel, type CustomTheme, type ThemeColor } from "./customTheme";
 import { SliderInput } from "./Slider";
+import { useMessages } from "./i18n/useMessages";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 import { hexToHsv, hexToRgb, hsvToHex, hsvToRgb, type Hsv } from "./themeColor";
 import {
   contrastForRequirement,
@@ -38,17 +40,17 @@ function worstRequirement(value: string, requirements: ContrastRequirement[]): C
   return worst;
 }
 
-function directionHint(current: Hsv, requirements: ContrastRequirement[]): string {
+function directionHint(current: Hsv, requirements: ContrastRequirement[]): MessageKey {
   const passesAt = (saturation: number, value: number) => {
     const candidate = hsvToHex(current.h, clamp01(saturation), clamp01(value));
     return requirements.every((requirement) => meetsRequirement(candidate, requirement));
   };
   const lighter = passesAt(current.s, current.v + 0.08);
   const darker = passesAt(current.s, current.v - 0.08);
-  if (lighter && darker) return "Either a lighter or a darker shade will pass.";
-  if (lighter) return "Go lighter to pass the line.";
-  if (darker) return "Go darker to pass the line.";
-  return "Change the hue or saturation to find the passing side.";
+  if (lighter && darker) return "g1.pickHintBoth";
+  if (lighter) return "g1.pickHintLighter";
+  if (darker) return "g1.pickHintDarker";
+  return "g1.pickHintHue";
 }
 
 /**
@@ -142,7 +144,8 @@ export function ThemeColorPicker({
   onChange: (hex: string) => void;
   highlighted: boolean;
 }) {
-  const label = THEME_COLORS[colorKey];
+  const tr = useMessages();
+  const label = themeColorLabel(colorKey);
   const inputId = `theme-color-${colorKey}`;
   const popoverId = `theme-color-picker-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const guidanceId = `${popoverId}-guidance`;
@@ -246,17 +249,17 @@ export function ThemeColorPicker({
           type="button"
           className="theme-color-swatch"
           style={{ backgroundColor: value }}
-          aria-label={`Open ${label} color picker`}
+          aria-label={tr("g1.pickOpen", { label })}
           aria-expanded={open}
           aria-controls={open ? popoverId : undefined}
-          title={`Open ${label} color picker`}
+          title={tr("g1.pickOpen", { label })}
           onClick={() => onOpenChange(!open)}
         />
         <input
           id={inputId}
           type="text"
           className={`theme-color-hex${highlighted ? " is-picker-target" : ""}`}
-          aria-label={`${label} color`}
+          aria-label={tr("g1.pickColor", { label })}
           value={draft}
           maxLength={7}
           spellCheck={false}
@@ -288,14 +291,14 @@ export function ThemeColorPicker({
           id={popoverId}
           className="theme-color-popover"
           role="group"
-          aria-label={`${label} color picker`}
+          aria-label={tr("g1.pickPicker", { label })}
         >
           <div
             ref={squareRef}
             className="theme-color-square"
             tabIndex={0}
             role="group"
-            aria-label={`${label} saturation and brightness. Use the arrow keys or the hex field.`}
+            aria-label={tr("g1.pickSquare", { label })}
             aria-describedby={guidanceId}
             onPointerDown={(event) => {
               event.currentTarget.setPointerCapture(event.pointerId);
@@ -324,8 +327,8 @@ export function ThemeColorPicker({
           </div>
           <SliderInput
             className="theme-color-hue"
-            aria-label={`${label} hue`}
-            aria-valuetext={`${Math.round(hue)} degrees`}
+            aria-label={tr("g1.pickHue", { label })}
+            aria-valuetext={tr("g1.pickDegrees", { value: Math.round(hue) })}
             min={0}
             max={359}
             step={1}
@@ -337,25 +340,28 @@ export function ThemeColorPicker({
           />
           <div className="theme-color-guidance" id={guidanceId}>
             {requirements.length === 0 ? (
-              <p>No text is drawn on this color, so it has no contrast line.</p>
+              <p>{tr("g1.pickNoText")}</p>
             ) : (
               <>
                 <p className="theme-color-contrast-key">
                   <i aria-hidden="true" />
-                  Contrast line: the dimmed side misses the guidance.
+                  {tr("g1.pickKey")}
                 </p>
                 <p className="theme-color-contrast-now">
                   {passing || !worst || worstRatio === null
-                    ? "This color meets the guidance."
-                    : `Now ${worstRatio.toFixed(1)}:1, needs ${worst.minimum}:1.`}
+                    ? tr("g1.pickPasses")
+                    : tr("g1.pickNow", { ratio: worstRatio.toFixed(1), minimum: worst.minimum })}
                 </p>
                 <p className="theme-color-contrast-pair">
                   {passing || !worst
-                    ? "All checked pairs pass."
-                    : `${THEME_COLORS[worst.fore]} on ${THEME_COLORS[worst.back].toLowerCase()}`}
+                    ? tr("g1.pickAllPass")
+                    : tr("g1.pickPair", {
+                        fore: themeColorLabel(worst.fore),
+                        back: themeColorLabel(worst.back).toLowerCase(),
+                      })}
                 </p>
                 <p className="theme-color-contrast-hint">
-                  {passing ? "Keep it where the guidance passes." : directionHint(current, requirements)}
+                  {passing ? tr("g1.pickKeep") : tr(directionHint(current, requirements))}
                 </p>
               </>
             )}

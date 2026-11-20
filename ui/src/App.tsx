@@ -149,6 +149,7 @@ import {
 } from "./preferences";
 import { applyLanguage } from "./i18n";
 import { useMessages } from "./i18n/useMessages";
+import { backendText, englishOf, tm } from "./actionText";
 import { SidebarResizer } from "./SidebarResizer";
 import {
   announceDeviceAccessChanged,
@@ -524,21 +525,21 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       poll: obsStatus.poll,
     };
   }, [backend, obsStatus.poll]);
-  const discordAppCheck = useMemo(
-    () =>
-      applicationUsage.loaded
-        ? discordCheck(draft, applicationUsage.applications, devices, applicationUsage.stale)
-        : pendingDiscordCheck(),
-    [applicationUsage.loaded, applicationUsage.applications, applicationUsage.stale, draft, devices],
-  );
-  const deviceUsers = useMemo(
-    () => (draft && applicationUsage.loaded ? nodeDeviceUsers(draft, devices, applicationUsage.applications) : null),
-    [applicationUsage.loaded, applicationUsage.applications, draft, devices],
-  );
-  const obsAppCheck = useMemo(
-    () => obsCheck(draft, obsStatus.status, applicationUsage.applications, devices, obsStatus.stale),
-    [draft, obsStatus.status, obsStatus.stale, applicationUsage.applications, devices],
-  );
+  // The rows are worded when computed, so a language switch recomputes them.
+  const discordAppCheck = useMemo(() => {
+    void language;
+    return applicationUsage.loaded
+      ? discordCheck(draft, applicationUsage.applications, devices, applicationUsage.stale)
+      : pendingDiscordCheck();
+  }, [applicationUsage.loaded, applicationUsage.applications, applicationUsage.stale, draft, devices, language]);
+  const deviceUsers = useMemo(() => {
+    void language;
+    return draft && applicationUsage.loaded ? nodeDeviceUsers(draft, devices, applicationUsage.applications) : null;
+  }, [applicationUsage.loaded, applicationUsage.applications, draft, devices, language]);
+  const obsAppCheck = useMemo(() => {
+    void language;
+    return obsCheck(draft, obsStatus.status, applicationUsage.applications, devices, obsStatus.stale);
+  }, [draft, obsStatus.status, obsStatus.stale, applicationUsage.applications, devices, language]);
   // Shown from the session alone, never because an app started (UI-17):
   // Discord when the session captures it or has a voice cable, OBS when it
   // has a voice cable.
@@ -569,25 +570,25 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     if (!setupTarget || draft.id !== setupTarget.sessionId) return;
     setSetupTarget(null);
     if (!backend.connected) {
-      setActionMessage("Reconnect to AudioRouter before opening this finding.");
+      setActionMessage(tm("g1.appReconnectFinding"));
       return;
     }
     if (setupTarget.nodeId) {
       if (!draft.nodes.some((node) => node.id === setupTarget.nodeId)) {
-        setActionMessage("The affected tool is no longer in this route. Check again for current findings.");
+        setActionMessage(tm("g1.appFindingToolGone"));
         return;
       }
       selectNodeProperties(setupTarget.nodeId);
-      setActionMessage("Opened the affected tool. Setup checks describe saved routes; unsaved edits are not checked.");
+      setActionMessage(tm("g1.appFindingOpened"));
       const needsInputSelector =
         draftRef.current.nodes.find((node) => node.id === setupTarget.nodeId)?.kind === "physicalInput";
       if (needsInputSelector) setInputBindingFocusRequest((current) => current + 1);
       if (needsInputSelector && snapshot?.status.activeSessionIds.includes(setupTarget.sessionId)) {
-        setActionMessage("Opened the affected tool. Stop audio before changing its input device.");
+        setActionMessage(tm("g1.appFindingOpenedStop"));
       }
     } else {
       setWorkbenchTab("session");
-      setActionMessage("Opened the affected route for inspection. Review its connections; no wiring was changed.");
+      setActionMessage(tm("g1.appFindingRoute"));
     }
     const isPhysicalInput = setupTarget.nodeId
       ? draftRef.current.nodes.find((node) => node.id === setupTarget.nodeId)?.kind === "physicalInput"
@@ -691,9 +692,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         setSnapshotState(nextState);
         if (nextState.snapshot && replacedRememberedSession) {
           setSelectedSessionId(nextState.snapshot.session.id);
-          setActionMessage(
-            `The route you last had open is no longer saved, so AudioRouter opened ${nextState.snapshot.session.name}.`,
-          );
+          setActionMessage(tm("g1.appRouteGone", { name: nextState.snapshot.session.name }));
         } else if (nextState.snapshot && !rememberedSessionId)
           setSelectedSessionId((current) => (current === demoSession.id ? nextState.snapshot!.session.id : current));
         if (nextState.snapshot)
@@ -731,7 +730,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   const refreshDevices = ({ announce = true }: { announce?: boolean } = {}) => {
     const generation = ++deviceRefreshGeneration.current;
-    if (announce) setActionMessage("Refreshing audio endpoints...");
+    if (announce) setActionMessage(tm("g1.appRefreshingEndpoints"));
     void backend
       .listDevices()
       .then((items) => {
@@ -742,8 +741,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         if (announce)
           setActionMessage(
             items.length === 0
-              ? "Audio endpoint refresh completed: the backend returned no endpoints."
-              : `Audio endpoint refresh completed: ${items.length} endpoint${items.length === 1 ? "" : "s"} found.`,
+              ? tm("g1.appRefreshNone")
+              : tm(items.length === 1 ? "g1.appRefreshOne" : "g1.appRefreshMany", { count: items.length }),
           );
       })
       .catch((error) => {
@@ -751,7 +750,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         setDevices([]);
         const message = formatUiError(error, "Device inventory unavailable");
         setDevicesError(message);
-        if (announce) setActionMessage(`Audio endpoint refresh failed: ${message}`);
+        if (announce) setActionMessage(tm("g1.appRefreshFailed", { message }));
       });
   };
   const refreshSessions = () => {
@@ -801,16 +800,16 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (keptPath) setLastRecordingPaths((current) => ({ ...current, [nodeId]: keptPath }));
       if (!record && result.state === "failed") {
         // The take stopped saving early; the file is kept up to that point.
-        const text = result.reason ?? "Recording stopped saving early. The file keeps everything up to that point.";
+        const text = result.reason ?? tm("g1.appRecordingEarly");
         setRecordingMessage({ nodeId, text });
         setActionMessage(text);
       } else {
         setRecordingMessage(null);
-        setActionMessage(record ? "Recording started." : "Recording saved.");
+        setActionMessage(record ? tm("g1.appRecordingStarted") : tm("g1.appRecordingSaved"));
       }
       refreshRecordings(session.id);
     } catch (error) {
-      const text = formatUiError(error, record ? "Recording could not start." : "Recording could not stop.");
+      const text = formatUiError(error, record ? tm("g1.appRecordingStartFail") : tm("g1.appRecordingStopFail"));
       setRecordingMessage({ nodeId, text });
       setActionMessage(text);
     } finally {
@@ -852,21 +851,19 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const reconnect = async () => {
     if (reconnecting) return;
     setReconnecting(true);
-    setActionMessage("Reconnecting to the AudioRouter backend...");
+    setActionMessage(tm("g1.appReconnecting"));
     try {
       const nextState = await refresh();
       if (!backend.connected) {
-        setActionMessage("Reconnect failed: the AudioRouter backend is not running. Restart AudioRouter.");
+        setActionMessage(tm("g1.appReconnectNotRunning"));
       } else if (nextState.error) {
-        setActionMessage(
-          `Reconnect failed: ${nextState.error}. Your edits are kept. Reconnect before saving or starting audio.`,
-        );
+        setActionMessage(tm("g1.appReconnectFailedWith", { error: nextState.error }));
       } else {
         setSavedDataDamaged(false);
-        setActionMessage("Reconnected. Sessions, devices and audio status are up to date.");
+        setActionMessage(tm("g1.appReconnected"));
       }
     } catch (error) {
-      setActionMessage(formatUiError(error, "Reconnect failed."));
+      setActionMessage(formatUiError(error, tm("g1.appReconnectFailed")));
     } finally {
       setReconnecting(false);
     }
@@ -1052,9 +1049,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     if (activeSessionWritesRef.current > 0) return false;
     backendActiveSessionRef.current = sessionId;
     if (sessionId !== draftRef.current.id && !sameSessionDraft(draftRef.current, authoritativeSession.current)) {
-      setActionMessage(
-        "Another app selected a different session. Your edits are kept; save or discard them in Session before switching.",
-      );
+      setActionMessage(tm("g1.appOtherAppSession"));
       return false;
     }
     setSelectedSessionId(sessionId);
@@ -1158,9 +1153,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           saved.id,
         );
         rememberDeviceNameBinding(String(node.parameters.endpointId), savedEndpointName, "capture");
-        setActionMessage(
-          `Updated ${node.name} to the one active input named ${candidate.name}. The route remains stopped; press Play when ready.`,
-        );
+        setActionMessage(tm("g1.appInputUpdated", { node: node.name, candidate: candidate.name }));
         await refreshSessions();
         if (currentSessionIdRef.current === saved.id) await refresh();
         recordUiDiagnostic(`Exact-name input binding updated for ${node.id}; revision ${result.revision}`);
@@ -1170,12 +1163,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           attemptedDeviceRebinds.current.delete(attemptKey);
         }
         if (currentSessionIdRef.current === saved.id) {
-          setActionMessage(
-            formatUiError(
-              error,
-              `Could not save the matching input for ${node.name}. Open its Properties to choose it manually.`,
-            ),
-          );
+          setActionMessage(formatUiError(error, tm("g1.appInputSaveFail", { node: node.name })));
         }
       }
     }
@@ -1256,9 +1244,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       recordUiDiagnostic(
         `Graph refresh conflict: kept draft revision ${draftRef.current.revision}; backend revision ${session.revision}`,
       );
-      setActionMessage(
-        "This session changed elsewhere. Your edits are kept. In Session, discard them to load the saved route, or note your edits first.",
-      );
+      setActionMessage(tm("g1.appChangedElsewhere"));
       return;
     }
     setDraft(session);
@@ -1287,15 +1273,15 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       // when this runs in the same commit that adopted the route.
       draftRef.current = session;
       recordDraftChange(restored);
-      setActionMessage(EDITS_RESTORED_MESSAGE);
+      setActionMessage(tm("g1.appEditsRestored"));
     },
     onOlder: (edits) => {
       setOlderEdits(edits);
-      setActionMessage(OLDER_EDITS_MESSAGE);
+      setActionMessage(tm("g1.appOlderEdits"));
     },
     onOtherRoute: (sessionId) => {
       const name = availableSessions.find((item) => item.id === sessionId)?.name ?? "another route";
-      setActionMessage(`You have unsaved edits on ${name}. Open it to get them back; new edits here replace them.`);
+      setActionMessage(tm("g1.appUnsavedOn", { name }));
     },
     onFailure: recordUiDiagnostic,
   });
@@ -1307,7 +1293,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setAcknowledgedWarnings(new Set());
     setPendingOperation(null);
     setPendingGraphPlan(null);
-    setActionMessage("Unsaved edits discarded.");
+    setActionMessage(tm("g1.appEditsDiscarded"));
   };
   useEffect(() => {
     let active = true;
@@ -1359,7 +1345,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     const fingerprint = selectedNode.parameters.fingerprint;
     if (typeof path !== "string" || typeof fingerprint !== "string") {
       setPluginParameters(null);
-      setPluginParameterError("The plugin placeholder is missing its verified path or fingerprint.");
+      setPluginParameterError(tm("g1.appPluginNoPath"));
       return;
     }
     let active = true;
@@ -1373,13 +1359,13 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       .then((result) => {
         if (!active) return;
         if (result.sha256 !== fingerprint) {
-          setPluginParameterError("Plugin identity changed; scan it again before editing parameters.");
+          setPluginParameterError(tm("g1.appPluginChanged"));
           return;
         }
         setPluginParameters(result);
       })
       .catch((error) => {
-        if (active) setPluginParameterError(formatUiError(error, "Plugin parameters unavailable."));
+        if (active) setPluginParameterError(formatUiError(error, tm("g1.appPluginParams")));
       });
     return () => {
       active = false;
@@ -1556,19 +1542,30 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     connected: backend.connected,
     audio: snapshot?.status.audio ?? null,
     activeSessionCount: snapshot?.status.activeSessionCount ?? null,
-    audioReason: snapshot?.status.reason ?? null,
+    audioReason: backendText(snapshot?.status.reason) ?? null,
     storage: snapshot?.status.storage ?? null,
     deviceCount: devices.length,
     applicationCount: applications.length,
     vbCablePairAvailable: findVbCableEndpointPair(devices) !== null,
   });
-  const connectionLabel = backend.connected ? "Backend ready" : "Backend unavailable";
+  const connectionLabel = backend.connected ? tm("g1.appBackendReady") : tm("g1.appBackendUnavailable");
   const nativePumpSummary = formatNativePumpSummary(nativePumpStats, sessionRunning);
   const schedulerTelemetry = snapshot?.diagnostics.schedulerTelemetry;
   const schedulerSummary = schedulerTelemetry
-    ? ` - ${schedulerTelemetry.processedQuanta} quanta / ${schedulerTelemetry.xruns} xruns`
+    ? ` - ${tm("g1.appSchedulerSummary", { quanta: schedulerTelemetry.processedQuanta, xruns: schedulerTelemetry.xruns })}`
     : "";
-  const statusSummary = `${snapshot ? `${snapshot.status.audio} audio (${snapshot.status.reason}) - ${snapshot.status.storage} storage - ${snapshot.status.sessionCount} session${snapshot.status.sessionCount === 1 ? "" : "s"}` : "Waiting for backend snapshot"}${schedulerSummary}${nativePumpSummary ? ` - ${nativePumpSummary}` : ""}${sessionCrudBusyState ? " - Updating session..." : ""}`;
+  const statusSummary = `${
+    snapshot
+      ? tm("g1.appStatusCore", {
+          audio: snapshot.status.audio,
+          reason: backendText(snapshot.status.reason),
+          storage: snapshot.status.storage,
+          sessions: tm(snapshot.status.sessionCount === 1 ? "g1.appSessionsOne" : "g1.appSessionsMany", {
+            count: snapshot.status.sessionCount,
+          }),
+        })
+      : tm("g1.appStatusWaiting")
+  }${schedulerSummary}${nativePumpSummary ? ` - ${nativePumpSummary}` : ""}${sessionCrudBusyState ? ` - ${tm("g1.appUpdatingSession")}` : ""}`;
   const editGroup = useRef<{ key: string; time: number } | null>(null);
   const recordDraftChange = (next: import("@audiorouter/contracts").Session, group?: string) => {
     const previous = draftRef.current;
@@ -1609,7 +1606,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setAcknowledgedWarnings(new Set());
     setPendingOperation(null);
     setPendingGraphPlan(null);
-    setActionMessage(direction === "undo" ? "Undid the last change." : "Redid the change.");
+    setActionMessage(direction === "undo" ? tm("g1.appUndid") : tm("g1.appRedid"));
   };
   const undoDraft = () => restoreDraftHistory("undo");
   const undoDraftSteps = (steps: number) => restoreDraftHistory("undo", steps);
@@ -1653,11 +1650,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     const wasRunning = sessionRunning;
     if (!wasRunning) {
       recordDraftChange(next);
-      setActionMessage("Tool turned on or off. Save the route before pressing Play.");
+      setActionMessage(tm("g1.appToolToggled"));
       return;
     }
     if (!session.nodes.some((node) => node.id === selectedNode.id)) {
-      setActionMessage("This new tool is not playing yet. Save the route to add it before changing its live state.");
+      setActionMessage(tm("g1.appNewToolNotPlaying"));
       return;
     }
     // Commit only this live flag, keeping unsaved names, parameters and wiring
@@ -1670,9 +1667,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       recordDraftChange(setNodeDraftFlag(draftRef.current, selectedNode.id, flag, value));
       await finishGraphSave(submitted, result.revision, result.activation);
     } catch (error) {
-      setActionMessage(
-        formatUiError(error, "The change could not be applied. Audio is still playing with its previous settings."),
-      );
+      setActionMessage(formatUiError(error, tm("g1.appChangeNotApplied")));
     } finally {
       nodeFlagBusy.current = false;
       setGraphBusy(false);
@@ -1682,9 +1677,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     if (!selectedNode) return;
     try {
       recordDraftChange(setNodeDraftName(draft, selectedNode.id, name));
-      setActionMessage("Name changed. Save to keep it.");
+      setActionMessage(tm("g1.appNameChanged"));
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to rename this tool."));
+      setActionMessage(formatUiError(error, tm("g1.appRenameToolFail")));
     }
   };
   const renameCanvasNode = async (nodeId: string) => {
@@ -1693,18 +1688,18 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     const node = current.nodes.find((item) => item.id === nodeId);
     if (!node) return;
     const name = await askText({
-      title: "Rename tool",
-      label: "Tool name",
+      title: tm("g1.appRenameTitle"),
+      label: tm("g1.appToolName"),
       initialValue: node.name,
-      confirmLabel: "Rename",
+      confirmLabel: tm("g1.appRename"),
       maxLength: 120,
     });
     if (!name || draftRef.current.id !== current.id) return;
     try {
       recordDraftChange(setNodeDraftName(draftRef.current, nodeId, name));
-      setActionMessage("Name changed. Save to keep it.");
+      setActionMessage(tm("g1.appNameChanged"));
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to rename this tool."));
+      setActionMessage(formatUiError(error, tm("g1.appRenameToolFail")));
     }
   };
   const changeNodeParameterOn = (nodeId: string, name: string, value: boolean | number | string) => {
@@ -1714,13 +1709,13 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     const error =
       targetNode.kind === "soundboard"
         ? !isSoundboardParameter(name) || (typeof value === "string" && value.length > 255)
-          ? "Invalid Soundboard setting"
+          ? tm("g1.appInvalidSoundboard")
           : null
         : targetNode.kind === "audioFile"
           ? !(name === "mediaId" && typeof value === "string" && value.length <= 128) &&
             !(name === "fileName" && typeof value === "string" && value.length <= 255) &&
             !(name === "loop" && typeof value === "boolean")
-            ? "Invalid audio source setting"
+            ? tm("g1.appInvalidAudioSource")
             : null
           : targetNode.kind === "plugin"
             ? pluginNodeParameterError(name, value, pluginParameters, () =>
@@ -1728,7 +1723,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               )
             : processorParameterError(processors, targetNode.kind, name, value, snapshot?.discovery?.nodeTypes ?? null);
     if (error) {
-      setActionMessage(`Change rejected: ${error}.`);
+      setActionMessage(tm("g1.appChangeRejected", { error }));
       return;
     }
     recordDraftChange(setNodeDraftParameter(draftRef.current, nodeId, name, value), nodeId + ":" + name);
@@ -1742,14 +1737,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const resetNodeParameters = () => {
     if (!selectedNode) return;
     recordDraftChange(resetNodeDraftParameters(draft, selectedNode.id));
-    setActionMessage("Settings reset. Save to keep this.");
+    setActionMessage(tm("g1.appSettingsReset"));
   };
   const changeSessionName = (name: string) => {
     try {
       recordDraftChange(setSessionDraftName(draft, name));
-      setActionMessage("Session name changed. Save to keep it.");
+      setActionMessage(tm("g1.appSessionRenamed"));
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to rename session."));
+      setActionMessage(formatUiError(error, tm("g1.appSessionRenameFail")));
     }
   };
   const finishGraphSave = async (
@@ -1780,12 +1775,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       }
       setActionMessage(
         native?.state === "applied"
-          ? `Saved (revision ${revision}) and applied to the playing audio.`
+          ? tm("g1.appSavedApplied", { revision })
           : native?.state === "restarted"
-            ? `Saved (revision ${revision}). The route changed, so audio restarted automatically with the new connections.`
+            ? tm("g1.appSavedRestarted", { revision })
             : native?.state === "restartRequired"
-              ? `Saved (revision ${revision}), but the playing audio could not take this change: ${native.reason}`
-              : `Route saved (revision ${revision}). Prepare devices before playing.`,
+              ? tm("g1.appSavedNotApplied", { revision, reason: native.reason })
+              : tm("g1.appRouteSaved", { revision }),
       );
     }
     recordUiDiagnostic(
@@ -1803,14 +1798,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       lastAutoSaveDraft.current = JSON.stringify(draft);
     }
     setGraphBusy(true);
-    if (!automatic) setActionMessage("Checking route before saving...");
+    if (!automatic) setActionMessage(tm("g1.appCheckingRoute"));
     try {
       const operation = uiIdempotencyKey("graph-commit");
       const plan = await backend.planGraph(draft);
       if (currentSessionIdRef.current !== draft.id || !sameSessionDraft(draftRef.current, draft)) {
         // An automatic save can race the user's next edit. Stay quiet and let
         // the effect save the latest draft instead of asking for a review.
-        if (!automatic) setActionMessage("Your edits changed during review. Review and save them again.");
+        if (!automatic) setActionMessage(tm("g1.appEditsChangedInReview"));
         return;
       }
       if (plan.baseRevision !== draft.revision)
@@ -1823,9 +1818,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         setPendingGraphPlan({ planId: plan.planId, baseRevision: plan.baseRevision });
         setPendingWarnings(plan.warnings);
         setAcknowledgedWarnings(new Set());
-        setActionMessage(
-          "Review the warnings in Session, then choose Confirm and save route. Nothing has been saved yet.",
-        );
+        setActionMessage(tm("g1.appReviewWarnings"));
       }
     } catch (error) {
       if (isRevisionConflict(error)) {
@@ -1837,8 +1830,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           setSnapshotState(nextState);
           void refreshSessions();
         });
-        setActionMessage(formatUiError(error, "Graph changed elsewhere."));
-      } else setActionMessage(formatUiError(error, "Unable to apply graph changes."));
+        setActionMessage(formatUiError(error, tm("g1.appGraphElsewhere")));
+      } else setActionMessage(formatUiError(error, tm("g1.appGraphApplyFail")));
     } finally {
       setGraphBusy(false);
       if (automatic) autoSaveRunning.current = false;
@@ -1885,7 +1878,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     )
       return;
     setGraphBusy(true);
-    setActionMessage("Saving route...");
+    setActionMessage(tm("g1.appSavingRoute"));
     const submitted = draft;
     try {
       const result =
@@ -1903,8 +1896,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           setSnapshotState(nextState);
           void refreshSessions();
         });
-        setActionMessage(formatUiError(error, "Graph changed elsewhere."));
-      } else setActionMessage(formatUiError(error, "Unable to commit acknowledged changes."));
+        setActionMessage(formatUiError(error, tm("g1.appGraphElsewhere")));
+      } else setActionMessage(formatUiError(error, tm("g1.appGraphCommitFail")));
     } finally {
       setGraphBusy(false);
     }
@@ -1949,14 +1942,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     safetyActionBusy.current = true;
     setSafetyActionBusyState(true);
     const next = !privacyMuted;
-    setActionMessage(next ? "Enabling privacy mute..." : "Disabling privacy mute...");
+    setActionMessage(next ? tm("g1.appMuteEnabling") : tm("g1.appMuteDisabling"));
     try {
       await backend.setPrivacyMute(next, uiIdempotencyKey("privacy-mute"));
       setPrivacyMuted(next);
-      setActionMessage(next ? "Privacy mute enabled." : "Privacy mute disabled.");
+      setActionMessage(next ? tm("g1.appMuteEnabled") : tm("g1.appMuteDisabled"));
     } catch (error) {
       setPrivacyMuted(true);
-      setActionMessage(formatUiError(error, "Unable to change privacy mute."));
+      setActionMessage(formatUiError(error, tm("g1.appMuteFail")));
     } finally {
       safetyActionBusy.current = false;
       setSafetyActionBusyState(false);
@@ -1966,13 +1959,13 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     if (safetyActionBusy.current || !backend.connected) return;
     safetyActionBusy.current = true;
     setSafetyActionBusyState(true);
-    setActionMessage("Clearing recovery safe mode...");
+    setActionMessage(tm("g1.appSafeClearing"));
     try {
       await backend.clearRecoverySafeMode(uiIdempotencyKey("recovery-clear"));
       await refresh();
-      setActionMessage("Recovery safe mode cleared.");
+      setActionMessage(tm("g1.appSafeCleared"));
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to clear recovery safe mode."));
+      setActionMessage(formatUiError(error, tm("g1.appSafeFail")));
     } finally {
       safetyActionBusy.current = false;
       setSafetyActionBusyState(false);
@@ -2022,7 +2015,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     sessionCrudBusy.current = true;
     setSessionCrudBusyState(true);
     const id = `session-copy-${Date.now()}`;
-    const name = `${session.name} (copy)`;
+    const name = tm("g1.appCopyName", { name: session.name });
     try {
       const result = await backend.duplicateSession(session.id, id, name, uiIdempotencyKey("session-duplicate"));
       setCreatedSessions((current) => [...current, result.session]);
@@ -2087,7 +2080,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setDeviceConsent(null);
       void startSessionRef.current();
     } catch (error) {
-      setDeviceConsent({ busy: false, error: formatUiError(error, "AudioRouter could not save your choice.") });
+      setDeviceConsent({ busy: false, error: formatUiError(error, tm("g1.appChoiceNotSaved")) });
     }
   };
   // Native audio stays attached to the session that prepared it, even after
@@ -2128,11 +2121,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   // render those buttons below.
   const actionMessageHasButton =
     !!actionMessage &&
-    ((actionMessage.startsWith("No audio started") && !!firstIssueNode) ||
-      (actionMessage.includes("Troubleshoot") && workbenchTab !== "status") ||
-      (actionMessage.includes("Open Session") && workbenchTab !== "session") ||
-      (actionMessage === EDITS_RESTORED_MESSAGE && routeChanged) ||
-      (actionMessage === OLDER_EDITS_MESSAGE && !!olderEdits));
+    ((englishOf(actionMessage).startsWith("No audio started") && !!firstIssueNode) ||
+      (englishOf(actionMessage).includes("Troubleshoot") && workbenchTab !== "status") ||
+      (englishOf(actionMessage).includes("Open Session") && workbenchTab !== "session") ||
+      (englishOf(actionMessage) === EDITS_RESTORED_MESSAGE && routeChanged) ||
+      (englishOf(actionMessage) === OLDER_EDITS_MESSAGE && !!olderEdits));
   const [actionMessageHeld, setActionMessageHeld] = useState(false);
   const actionMessageLifetime = actionMessageLifetimeMs(actionMessage, actionMessageHasButton);
   useEffect(() => {
@@ -2153,24 +2146,22 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const startSession = async (): Promise<boolean> => {
     if (sessionBusy.current || !backendReady) return false;
     if (graphBusy) {
-      setActionMessage("Wait for the current route check to finish before starting audio.");
+      setActionMessage(tm("g1.appWaitRouteCheck"));
       return false;
     }
     sessionBusy.current = true;
     setSessionActionBusy(true);
-    setActionMessage("Checking audio endpoints...");
+    setActionMessage(tm("g1.appCheckingEndpoints"));
     setNativePumpStats(null);
     try {
       let diagnostics = await backend.refreshDiagnostics();
       if (diagnostics.nativeSessionId && diagnostics.nativeSessionId !== session.id) {
         if (diagnostics.nativeAdapter === "running") {
           const other = availableSessions.find((item) => item.id === diagnostics.nativeSessionId)?.name;
-          setActionMessage(
-            `No audio started. ${other ? `"${other}"` : "Another session"} is playing. Stop it first, then press Play.`,
-          );
+          setActionMessage(other ? tm("g1.appOtherPlayingNamed", { name: other }) : tm("g1.appOtherPlaying"));
           return false;
         }
-        setActionMessage("Releasing the audio devices of the previous session...");
+        setActionMessage(tm("g1.appReleasingDevices"));
         diagnostics = await releaseOtherSessionAudio(diagnostics, session.id);
       }
       // Several independent paths (or several devices on one path) run as one
@@ -2188,35 +2179,27 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             (sameSessionDraft(draftRef.current, session) && unboundDeviceNodes(draftRef.current).length === 0)));
       if (multiPathRoute) {
         if (generatedOnly && unboundDeviceNodes(draftRef.current).length > 0) {
-          flagNodes(unboundDeviceNodes(draftRef.current), "Choose a device");
-          setActionMessage(
-            "No audio started. Choose the speaker or headphones for your output in Properties, then press Play.",
-          );
+          flagNodes(unboundDeviceNodes(draftRef.current), tm("g1.appChooseDevice"));
+          setActionMessage(tm("g1.appNoAudioPickOutput"));
           return false;
         }
         if (!sameSessionDraft(draftRef.current, session)) {
-          setActionMessage(
-            generatedOnly
-              ? "No audio started. Save the route, then press Play: a Test Signal or Audio File route plays its saved version, without any input device."
-              : "No audio started. Save the route, then press Play: a session with several paths plays its saved route.",
-          );
+          setActionMessage(generatedOnly ? tm("g1.appNoAudioSaveGenerated") : tm("g1.appNoAudioSaveMulti"));
           return false;
         }
         const unbound = unboundDeviceNodes(session);
         if (unbound.length > 0) {
-          flagNodes(unbound, "Choose a device");
-          setActionMessage(
-            `No audio started. Choose the device for ${unbound.map((node) => node.name).join(", ")} in Properties, save, then press Play.`,
-          );
+          flagNodes(unbound, tm("g1.appChooseDevice"));
+          setActionMessage(tm("g1.appNoAudioPickDevices", { names: unbound.map((node) => node.name).join(", ") }));
           return false;
         }
         if (!backend.prepareNativePaths) {
-          setActionMessage("No audio started. This backend cannot prepare a session with several paths.");
+          setActionMessage(tm("g1.appNoAudioNoMulti"));
           return false;
         }
         if (diagnostics.nativeSessionId === session.id && backend.detachNativeEndpoint)
           await backend.detachNativeEndpoint(session.id);
-        setActionMessage("Preparing every path of this session...");
+        setActionMessage(tm("g1.appPreparingPaths"));
         await backend.prepareNativePaths(session.id);
         diagnostics = await backend.refreshDiagnostics();
       }
@@ -2238,30 +2221,22 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         const microphones = mixerSources.filter((node) => node.kind === "physicalInput");
         if (unsupported.length > 0) {
           setActionMessage(
-            `No audio started. A Mixer that includes an application can combine applications, Test Signals, audio files, and one input device. Turn off ${unsupported.map((node) => node.name).join(", ")}, save, then press Play.`,
+            tm("g1.appNoAudioMixerUnsupported", { names: unsupported.map((node) => node.name).join(", ") }),
           );
           return false;
         }
         if (microphones.length > 1) {
-          setActionMessage(
-            "No audio started. A Mixer that includes an application can use one input device at a time. Turn off the extra input devices, save, then press Play.",
-          );
+          setActionMessage(tm("g1.appNoAudioOneInput"));
           return false;
         }
         if (!sameSessionDraft(draftRef.current, session)) {
-          setActionMessage(
-            "No audio started. Save the route, then press Play: application capture runs the saved route.",
-          );
+          setActionMessage(tm("g1.appNoAudioSaveApp"));
           return false;
         }
         const endpoints = routeEndpointBinding(draftRef.current, session.id);
         if (!endpoints.renderEndpointId || (microphones.length === 1 && !endpoints.captureEndpointId)) {
-          flagNodes(unboundDeviceNodes(draftRef.current), "Choose a device");
-          setActionMessage(
-            !endpoints.renderEndpointId
-              ? "No audio started. Choose the speaker or headphones for your output in Properties, then press Play."
-              : "No audio started. Choose the device for your input in Properties, then press Play.",
-          );
+          flagNodes(unboundDeviceNodes(draftRef.current), tm("g1.appChooseDevice"));
+          setActionMessage(!endpoints.renderEndpointId ? tm("g1.appNoAudioPickOutput") : tm("g1.appNoAudioPickInput"));
           return false;
         }
         const unbound = mixerSources.find(
@@ -2272,13 +2247,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               typeof node.parameters.executable !== "string"),
         );
         if (unbound) {
-          setActionMessage(
-            `No audio started. Select a specific running application for ${unbound.name} in its Properties, save, then press Play.`,
-          );
+          setActionMessage(tm("g1.appNoAudioPickApp", { name: unbound.name }));
           return false;
         }
         if (!backend.prepareNativeMultiInputs || !backend.prepareNativeOutputs) {
-          setActionMessage("No audio started. This backend cannot prepare a Mixer with application sources.");
+          setActionMessage(tm("g1.appNoAudioNoMixerApp"));
           return false;
         }
         if (!(
@@ -2303,7 +2276,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     mode: "include",
                   },
           );
-          setActionMessage(`Preparing ${bindings.length} Mixer sources...`);
+          setActionMessage(tm("g1.appPreparingMixer", { count: bindings.length }));
           await backend.prepareNativeMultiInputs(session.id, undefined, bindings);
           await backend.prepareNativeOutputs(session.id, undefined, [endpoints.renderEndpointId]);
           diagnostics = await backend.refreshDiagnostics();
@@ -2319,9 +2292,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           .map((node) => node.name)
           .join(", ");
         setActionMessage(
-          others
-            ? `No audio started. Play can capture ${executable} only when it is the route's only enabled source. Turn off or remove the other sources (${others}), or connect them all to a Mixer, save, then press Play.`
-            : `No audio started. Select a specific running ${executable} in the card's Properties, save, then press Play.`,
+          others ? tm("g1.appNoAudioOnlySource", { executable, others }) : tm("g1.appNoAudioPickExe", { executable }),
         );
         recordUiDiagnostic("Session start blocked: application capture mixed with other sources");
         return false;
@@ -2330,24 +2301,20 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         // An application-only route runs on the process-loopback worker, which
         // also reconnects the app after it restarts. It binds the saved node.
         if (!sameSessionDraft(draftRef.current, session)) {
-          setActionMessage(
-            "No audio started. Save the route, then press Play: application capture runs the saved route.",
-          );
+          setActionMessage(tm("g1.appNoAudioSaveApp"));
           return false;
         }
         const outputEndpointId = routeEndpointBinding(draftRef.current, session.id).renderEndpointId;
         if (!outputEndpointId) {
           flagNodes(
             draftRef.current.nodes.filter((node) => node.enabled && node.kind === "physicalOutput"),
-            "Choose a device",
+            tm("g1.appChooseDevice"),
           );
-          setActionMessage(
-            "No audio started. Choose the speaker or headphones for your output in Properties, then press Play.",
-          );
+          setActionMessage(tm("g1.appNoAudioPickOutput"));
           return false;
         }
         if (!backend.prepareNativeApplication) {
-          setActionMessage("No audio started. This backend cannot prepare application capture.");
+          setActionMessage(tm("g1.appNoAudioNoAppCapture"));
           return false;
         }
         if (!(
@@ -2358,7 +2325,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           if (diagnostics.nativeSessionId === session.id && backend.detachNativeEndpoint)
             await backend.detachNativeEndpoint(session.id);
           const executable = String(applicationSource.parameters.executable);
-          setActionMessage(`Preparing ${executable} audio capture...`);
+          setActionMessage(tm("g1.appPreparingCapture", { executable }));
           await backend.prepareNativeApplication({
             sessionId: session.id,
             processId: Number(applicationSource.parameters.processId),
@@ -2388,23 +2355,17 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                 typeof node.parameters.endpointId !== "string" &&
                 node.kind === (binding.renderEndpointId ? "physicalInput" : "physicalOutput"),
             ),
-            "Choose a device",
+            tm("g1.appChooseDevice"),
           );
-          setActionMessage(
-            !binding.renderEndpointId
-              ? "No audio started. Choose the speaker or headphones for your output in Properties, then press Play."
-              : "No audio started. This route also needs an input device: add an Input Device, choose its device in Properties and connect it, or choose one in Advanced → Troubleshooting. Then press Play.",
-          );
+          setActionMessage(!binding.renderEndpointId ? tm("g1.appNoAudioPickOutput") : tm("g1.appNoAudioNeedInput"));
           recordUiDiagnostic("Session start blocked: exact endpoint selection is incomplete");
           return false;
         }
         if (!backend.prepareNativeEndpoint) {
-          setActionMessage(
-            "No audio started. This backend cannot prepare the selected audio devices. See Status → Troubleshoot and recover for details.",
-          );
+          setActionMessage(tm("g1.appNoAudioNoDevices"));
           return false;
         }
-        setActionMessage("Preparing the selected audio devices...");
+        setActionMessage(tm("g1.appPreparingDevices"));
         await backend.prepareNativeEndpoint(session.id, binding.captureEndpointId, binding.renderEndpointId);
         diagnostics = await backend.refreshDiagnostics();
       }
@@ -2421,7 +2382,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         // exact selected pair before activation; never substitute a default.
         const binding = routeEndpointBinding(draftRef.current, session.id);
         if (binding.captureEndpointId && binding.renderEndpointId && backend.rebindNativeEndpoint) {
-          setActionMessage("Refreshing the selected audio devices...");
+          setActionMessage(tm("g1.appRefreshingDevices"));
           await backend.rebindNativeEndpoint(session.id, binding.captureEndpointId, binding.renderEndpointId);
         }
       }
@@ -2429,28 +2390,26 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       // and publishes it only to the in-memory native graph; no graph revision
       // is committed by preview playback.
       if (currentSessionIdRef.current !== session.id || graphBusy) {
-        setActionMessage("The selected route changed while checking audio. Press Play again.");
+        setActionMessage(tm("g1.appRouteChangedChecking"));
         return false;
       }
       const candidate = sameSessionDraft(draftRef.current, session) ? undefined : draftRef.current;
       if (candidate) {
-        setActionMessage("Checking the unsaved route for audio preview...");
+        setActionMessage(tm("g1.appCheckingPreview"));
         const plan = await backend.planGraph(candidate);
         if (currentSessionIdRef.current !== session.id || !sameSessionDraft(draftRef.current, candidate)) {
-          setActionMessage(
-            "The route changed while it was being checked. Press Play again to preview your latest edits.",
-          );
+          setActionMessage(tm("g1.appRouteChangedPreview"));
           return false;
         }
         if (plan.warnings.length > 0) {
           setPendingGraphPlan({ planId: plan.planId, baseRevision: plan.baseRevision });
           setPendingWarnings(plan.warnings);
           setAcknowledgedWarnings(new Set());
-          setActionMessage("No audio started. Review the route warnings in Session before previewing or saving.");
+          setActionMessage(tm("g1.appNoAudioWarnings"));
           return false;
         }
       }
-      setActionMessage(candidate ? "Starting a temporary preview of the unsaved route..." : "Starting session...");
+      setActionMessage(candidate ? tm("g1.appStartingPreview") : tm("g1.appStartingSession"));
       const idempotencyKey = uiIdempotencyKey("session-start");
       const result = candidate
         ? await backend.startSession(session.id, idempotencyKey, candidate)
@@ -2458,9 +2417,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (result.runtime !== "native") {
         await backend.stopSession(session.id, uiIdempotencyKey("simulation-stop"));
         await refresh();
-        setActionMessage(
-          "No audio played. The backend started a preview without a route to a real device, so it was stopped. Check the device chosen in each Input Device and Output Device tool's Properties, then try again.",
-        );
+        setActionMessage(tm("g1.appNoAudioSimulated"));
         recordUiDiagnostic("Session start rejected simulated runtime; stopped it");
         return false;
       }
@@ -2475,8 +2432,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       await refresh();
       setActionMessage(
         candidate
-          ? `Temporary preview is running (generation ${result.generation}); the saved session is unchanged.`
-          : `Audio session is running (generation ${result.generation}).`,
+          ? tm("g1.appPreviewRunning", { generation: result.generation })
+          : tm("g1.appSessionRunning", { generation: result.generation }),
       );
       recordUiDiagnostic(`Native session started: generation ${result.generation}`);
       setNodeIssues(null);
@@ -2485,10 +2442,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setNativePumpStats(null);
       if (isDeviceAccessDenied(error) && backend.setDeviceAccess) {
         setDeviceConsent({ busy: false, error: null });
-        setActionMessage("No audio started. Allow AudioRouter to use your audio devices to play.");
+        setActionMessage(tm("g1.appNoAudioAllow"));
         return false;
       }
-      const message = formatUiError(error, "Unable to start session.");
+      const message = formatUiError(error, tm("g1.appStartFail"));
       setActionMessage(message);
       const refused = notReadyNode(error);
       const refusedNode = refused ? draftRef.current.nodes.find((node) => node.id === refused.nodeId) : undefined;
@@ -2522,7 +2479,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (currentSessionIdRef.current !== session.id) return;
       setTimeShiftStatuses((current) => ({ ...current, [nodeId]: status }));
     } catch (error) {
-      if (action !== "status") setActionMessage(formatUiError(error, "Time Shift is unavailable."));
+      if (action !== "status") setActionMessage(formatUiError(error, tm("g1.appTimeShiftFail")));
     }
   };
   const transportTimeShiftRef = useRef(transportTimeShift);
@@ -2551,9 +2508,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const result = await backend.transportAudioSource(session.id, nodeId, action);
       if (currentSessionIdRef.current !== session.id) return;
       setAudioSourceStates((current) => ({ ...current, [nodeId]: result.state }));
-      setActionMessage(`${draft.nodes.find((node) => node.id === nodeId)?.name ?? "Audio file"} ${result.state}.`);
+      setActionMessage(
+        tm("g1.appAudioFileState", {
+          name: draft.nodes.find((node) => node.id === nodeId)?.name ?? tm("g1.appAudioFile"),
+          state: result.state,
+        }),
+      );
     } catch (error) {
-      setActionMessage(formatUiError(error, "Audio source transport failed."));
+      setActionMessage(formatUiError(error, tm("g1.appTransportFail")));
     }
   };
   const startSessionRef = useRef(startSession);
@@ -2573,7 +2535,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           `${nodeId}:slot${slot}`,
         );
       } catch (error) {
-        setActionMessage(formatUiError(error, "The sound could not be put on the button."));
+        setActionMessage(formatUiError(error, tm("g1.appSoundButtonFail")));
       }
     },
     announce: setActionMessage,
@@ -2582,7 +2544,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     if (sessionBusy.current || !backend.connected) return;
     sessionBusy.current = true;
     setSessionActionBusy(true);
-    setActionMessage("Stopping session...");
+    setActionMessage(tm("g1.appStopping"));
     try {
       await backend.stopSession(session.id, uiIdempotencyKey("session-stop"));
       setNativeGenerations((current) => {
@@ -2593,10 +2555,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setNativePumpStats(null);
       setAudioSourceStates({});
       await refresh();
-      setActionMessage("Session stopped.");
+      setActionMessage(tm("g1.appStopped"));
     } catch (error) {
       setNativePumpStats(null);
-      setActionMessage(formatUiError(error, "Unable to stop session."));
+      setActionMessage(formatUiError(error, tm("g1.appStopFail")));
       if (propagateFailure) throw error;
     } finally {
       sessionBusy.current = false;
@@ -2611,11 +2573,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   ): Promise<{ switched: boolean; stopped: boolean }> => {
     if (id === session.id) return { switched: true, stopped: false };
     if (routeChanged && !deletedCurrentSession) {
-      setActionMessage("Save or discard your edits in Session before switching sessions.");
+      setActionMessage(tm("g1.appSwitchSaveFirst"));
       return { switched: false, stopped: false };
     }
     if (sessionBusy.current) {
-      setActionMessage("Wait for the current audio action to finish before switching sessions.");
+      setActionMessage(tm("g1.appSwitchWait"));
       return { switched: false, stopped: false };
     }
     let running: string[] = [];
@@ -2643,10 +2605,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           const fresh = (await backend.snapshot(id)).status.activeSessionIds;
           if (fresh.length === running.length && fresh.every((value) => running.includes(value))) break;
           running = fresh;
-          setActionMessage("Running sessions changed. Review the current list before switching.");
+          setActionMessage(tm("g1.appSwitchChanged"));
         }
-        if (running.length > 0)
-          setActionMessage("Stopping sessions and finalizing their active recordings before switching...");
+        if (running.length > 0) setActionMessage(tm("g1.appSwitchStopping"));
         for (const runningId of running) {
           await backend.stopSession(runningId, uiIdempotencyKey("session-switch-stop"));
           stoppedNames.push(sessionName(runningId));
@@ -2654,7 +2615,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       }
     } catch (error) {
       setActionMessage(
-        `${stoppedNames.length ? `Stop completed for: ${stoppedNames.join(", ")}. ` : ""}Session was not switched. Other sessions or recordings may have changed; check Status and Recordings before retrying. ${formatUiError(error, "Unable to verify or stop running sessions.")}`,
+        `${stoppedNames.length ? tm("g1.appSwitchStoppedList", { names: stoppedNames.join(", ") }) : ""}${tm("g1.appSwitchNotSwitched", { error: formatUiError(error, tm("g1.appSwitchVerifyFail")) })}`,
       );
       return { switched: false, stopped: stoppedNames.length > 0 };
     } finally {
@@ -2675,15 +2636,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setSelectedSessionId(id);
     if (backend.connected) void snapshotCache.refresh(backend, id).then(setSnapshotState);
     const name = availableSessions.find((item) => item.id === id)?.name ?? "the selected session";
-    if (running.length > 0)
-      setActionMessage(
-        `Stopped: ${stoppedNames.join(", ")}. Check Recordings for finalization results. Press Play to start "${name}".`,
-      );
+    if (running.length > 0) setActionMessage(tm("g1.appSwitchStopped", { names: stoppedNames.join(", "), name }));
     return { switched: true, stopped: running.length > 0 };
   };
   const addLibraryNode = (kind: LibraryNodeKind, _position?: { x: number; y: number }) => {
     if (!backend.connected) {
-      setActionMessage("Reconnect to AudioRouter before editing the route.");
+      setActionMessage(tm("g1.appReconnectEdit"));
       return;
     }
     const next = appendLibraryNode(draft, kind);
@@ -2691,12 +2649,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     recordDraftChange(next);
     setSelectedNodeId(inserted.id);
     setSelectedNodeIds([inserted.id]);
-    setActionMessage(`${inserted.name} added. Save to keep it.`);
+    setActionMessage(tm("g1.appAddedSave", { name: inserted.name }));
     return inserted.id;
   };
   const addEndpointLoopback = (endpointId: string) => {
     if (!backend.connected) {
-      setActionMessage("Reconnect to AudioRouter before editing the route.");
+      setActionMessage(tm("g1.appReconnectEdit"));
       return;
     }
     try {
@@ -2707,14 +2665,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         setSelectedNodeId(inserted.id);
         setSelectedNodeIds([inserted.id]);
       }
-      setActionMessage(`${inserted?.name ?? "Endpoint loopback"} added. Save to keep it.`);
+      setActionMessage(tm("g1.appAddedSave", { name: inserted?.name ?? tm("g1.appEndpointLoopback") }));
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to add endpoint loopback."));
+      setActionMessage(formatUiError(error, tm("g1.appEndpointLoopbackFail")));
     }
   };
   const addVirtualBusNode = (busId: string, direction: "renderSource" | "captureSink") => {
     if (!backend.connected) {
-      setActionMessage("Reconnect to AudioRouter before editing the route.");
+      setActionMessage(tm("g1.appReconnectEdit"));
       return undefined;
     }
     try {
@@ -2725,16 +2683,16 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         setSelectedNodeId(inserted.id);
         setSelectedNodeIds([inserted.id]);
       }
-      setActionMessage(`${inserted?.name ?? "Virtual bus"} added. Save to keep it.`);
+      setActionMessage(tm("g1.appAddedSave", { name: inserted?.name ?? tm("g1.appVirtualBus") }));
       return inserted?.id;
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to add the virtual bus."));
+      setActionMessage(formatUiError(error, tm("g1.appVirtualBusFail")));
       return undefined;
     }
   };
   const addCablePassThrough = () => {
     if (!backend.connected) {
-      setActionMessage("Reconnect to AudioRouter before editing the route.");
+      setActionMessage(tm("g1.appReconnectEdit"));
       return;
     }
     const status = getVirtualCableStatus();
@@ -2743,10 +2701,15 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     try {
       recordDraftChange(appendCablePassThrough(draft, source, sink, status));
       setActionMessage(
-        `Added ${cableName(status, source)} → ${cableName(status, sink)}. Save, then Play; apps playing into ${cableEndpointName(source, "renderSource", status)} are heard on ${cableEndpointName(sink, "captureSink", status)}.`,
+        tm("g1.appPassThroughAdded", {
+          from: cableName(status, source),
+          to: cableName(status, sink),
+          input: cableEndpointName(source, "renderSource", status),
+          output: cableEndpointName(sink, "captureSink", status),
+        }),
       );
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to add the pass-through route."));
+      setActionMessage(formatUiError(error, tm("g1.appPassThroughFail")));
     }
   };
   const openDiscordSetup = () => {
@@ -2759,24 +2722,22 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   /** Adds the Discord route as one undoable draft change; returns an error to show, or null. */
   const addDiscordRoute = (choice: DiscordSetupChoice): string | null => {
-    if (!backend.connected) return "Reconnect to AudioRouter before editing the route.";
+    if (!backend.connected) return tm("g1.appReconnectEdit");
     try {
       const result = appendDiscordRoute(draft, devices, choice);
       recordDraftChange(result.session);
       setDiscordSetup((current) => current && { ...current, added: result.discordMicrophone });
-      setActionMessage(
-        `Added your voice route. Save, then Play, and choose ${result.discordMicrophone.name} as Discord's microphone.`,
-      );
+      setActionMessage(tm("g1.appVoiceRouteAdded", { name: result.discordMicrophone.name }));
       return null;
     } catch (error) {
-      return formatUiError(error, "Unable to add the Discord route.");
+      return formatUiError(error, tm("g1.appDiscordRouteFail"));
     }
   };
   // A plugin dragged from the Plugins list onto the canvas lands where it is
   // dropped, like a built-in tool; it never replaces a pending insertion.
   const addDroppedPlugin = (entry: import("@audiorouter/contracts").PluginScanEntry) => {
     if (!backend.connected) {
-      setActionMessage("Reconnect to AudioRouter before editing the route.");
+      setActionMessage(tm("g1.appReconnectEdit"));
       return undefined;
     }
     try {
@@ -2787,16 +2748,16 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         setSelectedNodeId(inserted.id);
         setSelectedNodeIds([inserted.id]);
       }
-      setActionMessage(`${inserted?.name ?? "Plugin"} added. Connect it, save, then press Play.`);
+      setActionMessage(tm("g1.appPluginAdded", { name: inserted?.name ?? tm("g1.appPlugin") }));
       return inserted?.id;
     } catch (error) {
-      setActionMessage(error instanceof Error ? error.message : "Could not add the plugin.");
+      setActionMessage(error instanceof Error ? error.message : tm("g1.appPluginAddFail"));
       return undefined;
     }
   };
   const addPluginToDraft = (entry: import("@audiorouter/contracts").PluginScanEntry) => {
     if (!backend.connected) {
-      setActionMessage("Reconnect to AudioRouter before editing the route.");
+      setActionMessage(tm("g1.appReconnectEdit"));
       return;
     }
     try {
@@ -2808,9 +2769,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           setSelectedNodeId(inserted.id);
           setSelectedNodeIds([inserted.id]);
         }
-        setActionMessage(
-          `${inserted?.name ?? "Plugin"}: inserted a stopped plugin placeholder into the connection. Bind a worker before activation, then save changes.`,
-        );
+        setActionMessage(tm("g1.appPluginPlaceholder", { name: inserted?.name ?? tm("g1.appPlugin") }));
       } else {
         const next = appendPluginPlaceholderNode(draft, entry);
         const inserted = next.nodes.at(-1);
@@ -2819,11 +2778,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           setSelectedNodeId(inserted.id);
           setSelectedNodeIds([inserted.id]);
         }
-        setActionMessage(`${inserted?.name ?? "Plugin"} added but not loaded yet. Load it in Properties, then save.`);
+        setActionMessage(tm("g1.appPluginNotLoaded", { name: inserted?.name ?? tm("g1.appPlugin") }));
       }
       closePluginPicker();
     } catch (error) {
-      setActionMessage(error instanceof Error ? error.message : "Could not add plugin placeholder.");
+      setActionMessage(error instanceof Error ? error.message : tm("g1.appPluginPlaceholderFail"));
     }
   };
   // A new cable node starts on a present cable (sources Cable A, outputs
@@ -2841,7 +2800,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const next = appendDraftConnection(current, sourceNode, sourcePort, destinationNode, destinationPort);
       const added = next.edges.find((edge) => !current.edges.some((existing) => existing.id === edge.id));
       recordDraftChange(next);
-      setActionMessage("Connection added. Save to keep it.");
+      setActionMessage(tm("g1.appConnectionAdded"));
       return added?.id ?? null;
     } catch (error) {
       const occupied =
@@ -2851,8 +2810,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             )
           : undefined;
       if (occupied) {
-        const destinationName = current.nodes.find((node) => node.id === destinationNode)?.name ?? "This input";
-        const priorName = current.nodes.find((node) => node.id === occupied.sourceNode)?.name ?? "another source";
+        const destinationName =
+          current.nodes.find((node) => node.id === destinationNode)?.name ?? tm("g1.appThisInput");
+        const priorName =
+          current.nodes.find((node) => node.id === occupied.sourceNode)?.name ?? tm("g1.appAnotherSource");
         const destination = current.nodes.find((node) => node.id === destinationNode);
         if (destination?.kind === "plugin" && destinationPort === "sidechain") {
           setSidechainReplacePrompt({
@@ -2882,14 +2843,18 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                 );
                 recordDraftChange(rerouted);
                 setActionMessage(
-                  `Connected ${requestedSource.name} to ${destinationName} and removed the direct ${priorName} branch so the same signal is not heard twice.`,
+                  tm("g1.appConnectedRemoved", {
+                    source: requestedSource.name,
+                    destination: destinationName,
+                    prior: priorName,
+                  }),
                 );
                 setSelectedNodeId(requestedSource.id);
                 setSelectedNodeIds([requestedSource.id]);
                 return newEdge?.id ?? null;
               }
             } catch (mixError) {
-              setActionMessage(formatUiError(mixError, "Unable to route this Mixer to the output."));
+              setActionMessage(formatUiError(mixError, tm("g1.appMixerRouteFail")));
               return null;
             }
           }
@@ -2898,7 +2863,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             const mixer = mixed.nodes.at(-1);
             recordDraftChange(mixed);
             setActionMessage(
-              `Added a Mixer so ${priorName} and ${current.nodes.find((node) => node.id === sourceNode)?.name ?? "the new source"} can share ${destinationName}. Adjust the Mixer, then Save route when ready.`,
+              tm("g1.appMixerShare", {
+                prior: priorName,
+                source: current.nodes.find((node) => node.id === sourceNode)?.name ?? tm("g1.appNewSource"),
+                destination: destinationName,
+              }),
             );
             if (mixer) {
               setSelectedNodeId(mixer.id);
@@ -2906,7 +2875,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             }
             return mixer?.id ?? null;
           } catch (mixError) {
-            setActionMessage(formatUiError(mixError, "Unable to combine these sources."));
+            setActionMessage(formatUiError(mixError, tm("g1.appCombineFail")));
             return null;
           }
         }
@@ -2915,7 +2884,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           const mixer = mixed.nodes.at(-1);
           recordDraftChange(mixed);
           setActionMessage(
-            `Added a Mixer so ${priorName} and ${current.nodes.find((node) => node.id === sourceNode)?.name ?? "the new source"} can both feed ${destinationName}. Adjust the Mixer, then Save route when ready.`,
+            tm("g1.appMixerFeed", {
+              prior: priorName,
+              source: current.nodes.find((node) => node.id === sourceNode)?.name ?? tm("g1.appNewSource"),
+              destination: destinationName,
+            }),
           );
           if (mixer) {
             setSelectedNodeId(mixer.id);
@@ -2923,11 +2896,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           }
           return mixer?.id ?? null;
         } catch (mixError) {
-          setActionMessage(formatUiError(mixError, "Unable to combine these sources."));
+          setActionMessage(formatUiError(mixError, tm("g1.appCombineFail")));
           return null;
         }
       } else {
-        setActionMessage(formatUiError(error, "Unable to add connection."));
+        setActionMessage(formatUiError(error, tm("g1.appConnectionFail")));
       }
       return null;
     }
@@ -2936,7 +2909,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     const pending = sidechainReplacePrompt;
     setSidechainReplacePrompt(null);
     if (!replace || !pending) {
-      setActionMessage("Kept the current sidechain source.");
+      setActionMessage(tm("g1.appSidechainKept"));
       return;
     }
     try {
@@ -2950,23 +2923,23 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         pending.destinationPort,
       );
       recordDraftChange(next);
-      setActionMessage(`Replaced the Sidechain input source with ${pending.sourceName}. Save to keep it.`);
+      setActionMessage(tm("g1.appSidechainReplaced", { name: pending.sourceName }));
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to replace the sidechain source."));
+      setActionMessage(formatUiError(error, tm("g1.appSidechainFail")));
     }
   };
   const addConnection = () => {
     const source = decodePort(connectionSource);
     const destination = decodePort(connectionDestination);
     if (!source || !destination) {
-      setActionMessage("Choose an output and input port first.");
+      setActionMessage(tm("g1.appChoosePorts"));
       return false;
     }
     return tryDraftConnection(source.nodeId, source.portName, destination.nodeId, destination.portName) !== null;
   };
   const insertProcessor = (edgeId: string, kind: InsertableProcessorKind) => {
     if (!backend.connected) {
-      setActionMessage("Reconnect to AudioRouter before editing the route.");
+      setActionMessage(tm("g1.appReconnectEdit"));
       return;
     }
     try {
@@ -2974,14 +2947,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const inserted = next.nodes.at(-1);
       recordDraftChange(next);
       if (inserted) setSelectedNodeId(inserted.id);
-      setActionMessage(`${inserted?.name ?? kind} added. Save to keep it.`);
+      setActionMessage(tm("g1.appAddedSave", { name: inserted?.name ?? kind }));
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to insert processor."));
+      setActionMessage(formatUiError(error, tm("g1.appInsertFail")));
     }
   };
   const appendPreset = (presetId: EqPresetId) => {
     if (!backend.connected) {
-      setActionMessage("Connect the backend before adding a preset.");
+      setActionMessage(tm("g1.appConnectBeforePreset"));
       return;
     }
     try {
@@ -2989,14 +2962,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const inserted = next.nodes.at(-1);
       recordDraftChange(next);
       if (inserted) setSelectedNodeId(inserted.id);
-      setActionMessage(`${inserted?.name ?? "EQ preset"} added. Save to keep it.`);
+      setActionMessage(tm("g1.appAddedSave", { name: inserted?.name ?? tm("g1.appEqPreset") }));
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to add preset."));
+      setActionMessage(formatUiError(error, tm("g1.appPresetFail")));
     }
   };
   const appendVoicePreset = (presetId: VoiceChainPresetId) => {
     if (!backend.connected) {
-      setActionMessage("Connect the backend before adding a preset.");
+      setActionMessage(tm("g1.appConnectBeforePreset"));
       return;
     }
     try {
@@ -3004,9 +2977,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const added = next.nodes.slice(draft.nodes.length);
       recordDraftChange(next);
       if (added[0]) setSelectedNodeId(added[0].id);
-      setActionMessage(`${added.map((node) => node.name).join(", ")} added. Save to keep it.`);
+      setActionMessage(tm("g1.appAddedSave", { name: added.map((node) => node.name).join(", ") }));
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to add voice preset."));
+      setActionMessage(formatUiError(error, tm("g1.appVoicePresetFail")));
     }
   };
   // Canvas and library requests, handled with the latest draft.
@@ -3028,16 +3001,16 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const nodeId = (event as CustomEvent<{ nodeId?: string }>).detail?.nodeId;
       if (!nodeId || !backend.connected) return;
       if (draft.nodes.length <= 1) {
-        setActionMessage("A route must keep at least one tool. Add another before removing this one.");
+        setActionMessage(tm("g1.appKeepOneTool"));
         return;
       }
       try {
         const next = removeDraftNode(draft, nodeId);
         recordDraftChange(next);
         setSelectedNodeId(next.nodes[0]?.id ?? "");
-        setActionMessage("Tool removed. Choose Undo at the top to bring it back, or Save to keep the change.");
+        setActionMessage(tm("g1.appToolRemoved"));
       } catch (error) {
-        setActionMessage(formatUiError(error, "Unable to remove this tool."));
+        setActionMessage(formatUiError(error, tm("g1.appRemoveToolFail")));
       }
     };
     globalThis.addEventListener("audiorouter:remove-node", handleRemoveNode);
@@ -3068,14 +3041,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   const connectCanvas = (connection: Connection, dropPosition?: { x: number; y: number }) => {
     if (!backend.connected) {
-      setActionMessage("Connect the backend before adding a canvas connection.");
+      setActionMessage(tm("g1.appConnectBeforeConnection"));
       return;
     }
     if (connection.source === LIBRARY_DROP_SOURCE && connection.sourceHandle) {
       return addDroppedCanvasNode(connection.sourceHandle, dropPosition);
     }
     if (!connection.source || !connection.sourceHandle || !connection.target || !connection.targetHandle) {
-      setActionMessage("Choose a named output and input port.");
+      setActionMessage(tm("g1.appChooseNamedPorts"));
       return;
     }
     return (
@@ -3205,12 +3178,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (!added) throw new Error("Application capture node was not created");
       recordDraftChange(next);
       setSelectedNodeId(added.id);
-      setActionMessage(
-        "Added an application-capture source; review its identity and save the graph when you are ready.",
-      );
+      setActionMessage(tm("g1.appAppCaptureAdded"));
       closeApplicationPicker();
     } catch (error) {
-      setActionMessage(error instanceof Error ? error.message : "Could not add application capture.");
+      setActionMessage(error instanceof Error ? error.message : tm("g1.appAppCaptureFail"));
     }
   };
   const addApplicationCapturePathFromPicker = (path: string) => {
@@ -3220,12 +3191,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (!added) throw new Error("Application capture node was not created");
       recordDraftChange(next);
       setSelectedNodeId(added.id);
-      setActionMessage(
-        `Added ${String(added.parameters.executable)} as a saved application selector. It captures only after a verified process match is found and the route is started.`,
-      );
+      setActionMessage(tm("g1.appAppSelectorAdded", { executable: String(added.parameters.executable) }));
       closeApplicationPicker();
     } catch (error) {
-      setActionMessage(error instanceof Error ? error.message : "Could not add application capture.");
+      setActionMessage(error instanceof Error ? error.message : tm("g1.appAppCaptureFail"));
     }
   };
   const addApplicationGroupFromPicker = (chosen: ApplicationRow[], executablePaths: string[]): boolean => {
@@ -3237,13 +3206,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         current.nodes.filter((node) => node.kind === "applicationCapture").length;
       recordDraftChange(next);
       setSelectedNodeId(mixerId);
-      setActionMessage(
-        `Added ${addedCount} application sources and a Mixer. Check that none of the selected apps launches another selected app, then save.`,
-      );
+      setActionMessage(tm("g1.appAppGroupAdded", { count: addedCount }));
       closeApplicationPicker();
       return true;
     } catch (error) {
-      setActionMessage(error instanceof Error ? error.message : "Could not create app group.");
+      setActionMessage(error instanceof Error ? error.message : tm("g1.appAppGroupFail"));
       return false;
     }
   };
@@ -3251,15 +3218,15 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     try {
       recordDraftChange(rebindApplicationCaptureNode(draftRef.current, nodeId, application));
       setActionMessage(
-        `Application source changed to ${application.executable} (PID ${application.processId}). Review and save the changes when you are ready.`,
+        tm("g1.appAppSourceChanged", { executable: application.executable, pid: application.processId }),
       );
     } catch (error) {
-      setActionMessage(error instanceof Error ? error.message : "Could not change the application source.");
+      setActionMessage(error instanceof Error ? error.message : tm("g1.appAppSourceFail"));
     }
   };
   const removeConnection = (edgeId: string) => {
     if (!backend.connected) {
-      setActionMessage("Reconnect to AudioRouter before editing the route.");
+      setActionMessage(tm("g1.appReconnectEdit"));
       return;
     }
     const topologyAction = decodeTopologyAction(edgeId);
@@ -3270,62 +3237,62 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       else recordDraftChange(removeDraftConnection(draft, edgeId));
       setActionMessage(
         topologyAction?.kind === "insertMixer"
-          ? "Mixer added. Save to keep it."
+          ? tm("g1.appMixerAdded")
           : topologyAction?.kind === "removeMixer"
-            ? "Mixer removed and its one path reconnected. Save to keep this."
-            : "Connection removed. Save to keep this.",
+            ? tm("g1.appMixerRemoved")
+            : tm("g1.appConnectionRemoved"),
       );
     } catch (error) {
       setActionMessage(
         formatUiError(
           error,
           topologyAction?.kind === "insertMixer"
-            ? "Unable to insert mixer."
+            ? tm("g1.appMixerInsertFail")
             : topologyAction?.kind === "removeMixer"
-              ? "Unable to remove and reconnect mixer."
-              : "Unable to remove connection.",
+              ? tm("g1.appMixerRemoveFail")
+              : tm("g1.appConnectionRemoveFail"),
         ),
       );
     }
   };
   const toggleConnection = (edgeId: string, enabled: boolean) => {
     if (!backend.connected) {
-      setActionMessage("Reconnect to AudioRouter before editing the route.");
+      setActionMessage(tm("g1.appReconnectEdit"));
       return;
     }
     try {
       recordDraftChange(setDraftConnectionEnabled(draft, edgeId, enabled));
-      setActionMessage(`Connection turned ${enabled ? "on" : "off"}. Save to keep this.`);
+      setActionMessage(tm(enabled ? "g1.appConnectionOn" : "g1.appConnectionOff"));
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to change connection state."));
+      setActionMessage(formatUiError(error, tm("g1.appConnectionStateFail")));
     }
   };
   const removeSelectedNode = () => {
     if (!selectedNode) return;
     if (draft.nodes.length <= 1) {
-      setActionMessage("A route must keep at least one tool. Add another before removing this one.");
+      setActionMessage(tm("g1.appKeepOneTool"));
       return;
     }
     try {
       const next = removeDraftNode(draft, selectedNode.id);
       recordDraftChange(next);
       setSelectedNodeId(next.nodes[0]?.id ?? "");
-      setActionMessage("Tool removed. Choose Undo at the top to bring it back, or Save to keep the change.");
+      setActionMessage(tm("g1.appToolRemoved"));
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to remove this tool."));
+      setActionMessage(formatUiError(error, tm("g1.appRemoveToolFail")));
     }
   };
   const unloadPluginNode = async (nodeId: string) => {
     const node = draft.nodes.find((candidate) => candidate.id === nodeId);
     if (!node) return;
     if (draft.nodes.length <= 1) {
-      setActionMessage("A route must keep at least one tool. Add another before removing this one.");
+      setActionMessage(tm("g1.appKeepOneTool"));
       return;
     }
     const confirmed = await askConfirm({
-      title: `Remove “${node.name}”?`,
-      message: "This takes the plugin out of the route. Undo brings it back until you save.",
-      confirmLabel: "Remove plugin",
+      title: tm("g1.appRemoveTitle", { name: node.name }),
+      message: tm("g1.appRemovePluginText"),
+      confirmLabel: tm("g1.appRemovePlugin"),
       destructive: true,
     });
     if (!confirmed) return;
@@ -3337,9 +3304,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         setSelectedNodeId(next.nodes[0]?.id ?? "");
         setSelectedNodeIds(next.nodes[0] ? [next.nodes[0].id] : []);
       }
-      setActionMessage(`${node.name} removed. Save to keep this change.`);
+      setActionMessage(tm("g1.appNodeRemoved", { name: node.name }));
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to unload plugin."));
+      setActionMessage(formatUiError(error, tm("g1.appUnloadFail")));
     }
   };
   const duplicateNode = (nodeId: string) => {
@@ -3350,9 +3317,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       recordDraftChange(next);
       setSelectedNodeId(copy.id);
       setSelectedNodeIds([copy.id]);
-      setActionMessage(`${copy.name} added without connections. Save to keep it.`);
+      setActionMessage(tm("g1.appDuplicated", { name: copy.name }));
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to duplicate this tool."));
+      setActionMessage(formatUiError(error, tm("g1.appDuplicateFail")));
     }
   };
   const duplicateSelectedNode = () => {
@@ -3364,14 +3331,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (!source) throw new Error(`Unknown draft node: ${nodeId}`);
       copiedNodeRef.current = copyDraftNode(draftRef.current, nodeId);
       setHasCopiedNode(true);
-      setActionMessage(`${source.name} copied. Paste it into this or another session.`);
+      setActionMessage(tm("g1.appCopied", { name: source.name }));
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to copy tool."));
+      setActionMessage(formatUiError(error, tm("g1.appCopyFail")));
     }
   };
   const pasteNodeFromClipboard = (_position: { x: number; y: number }) => {
     if (!backend.connected) {
-      setActionMessage("Reconnect to AudioRouter before editing the route.");
+      setActionMessage(tm("g1.appReconnectEdit"));
       return undefined;
     }
     const copied = copiedNodeRef.current;
@@ -3382,10 +3349,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (!inserted) return undefined;
       recordDraftChange(next);
       selectNodeProperties(inserted.id);
-      setActionMessage(`${inserted.name} pasted without connections. Save to keep it.`);
+      setActionMessage(tm("g1.appPasted", { name: inserted.name }));
       return inserted.id;
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to paste tool."));
+      setActionMessage(formatUiError(error, tm("g1.appPasteFail")));
       return undefined;
     }
   };
@@ -3394,33 +3361,33 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       <div className={`app-shell app-startup ${themeClassName}`} style={themeStyle}>
         <main
           className="panel startup-card"
-          aria-label={savedDataDamaged ? "Saved data recovery" : "Loading saved session"}
+          aria-label={savedDataDamaged ? tm("g1.appStartupRecoveryLabel") : tm("g1.appStartupLoadingLabel")}
           aria-busy={!snapshotState.error || reconnecting}
         >
-          <p className="eyebrow">Your audio workspace</p>
+          <p className="eyebrow">{tm("g1.appWorkspace")}</p>
           <h1>AudioRouter</h1>
           <p role="status">
             {reconnecting
-              ? "Reconnecting to the AudioRouter backend…"
+              ? tm("g1.appReconnectingEllipsis")
               : savedDataDamaged
-                ? "Your saved data needs attention."
+                ? tm("g1.appDataAttention")
                 : snapshotState.error
-                  ? `Unable to load your saved session: ${snapshotState.error}`
-                  : "Loading your saved session…"}
+                  ? tm("g1.appLoadFail", { error: snapshotState.error })
+                  : tm("g1.appLoadingSession")}
           </p>
           <p className="muted">
             {savedDataDamaged
-              ? "The audio service stopped instead of replacing data it could not read."
+              ? tm("g1.appServiceStopped")
               : snapshotState.error
-                ? "Reconnect to try again. Your saved session has not been replaced."
-                : "Your route will appear when the backend responds."}
+                ? tm("g1.appReconnectToRetry")
+                : tm("g1.appRouteWillAppear")}
           </p>
           {snapshotState.error && !savedDataDamaged && (
-            <CopyErrorButton message={`Unable to load your saved session: ${snapshotState.error}`} />
+            <CopyErrorButton message={tm("g1.appLoadFail", { error: snapshotState.error })} />
           )}
           {snapshotState.error && !savedDataDamaged && (
             <button type="button" onClick={() => void reconnect()} disabled={reconnecting} aria-busy={reconnecting}>
-              Reconnect
+              {tm("g1.appReconnect")}
             </button>
           )}
           <StartupRecovery
@@ -3451,19 +3418,19 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         type="button"
         className="secondary"
         aria-pressed={canvasKeyboardPanel === "routeList"}
-        title="See the route as a list you can edit from the keyboard"
+        title={m("workspaceAudit.routeListHint")}
         onClick={() => setCanvasKeyboardPanel((current) => (current === "routeList" ? null : "routeList"))}
       >
-        Route list
+        {m("settings.canvasKeyboard.routeList")}
       </button>
       <button
         type="button"
         className="secondary"
         aria-pressed={canvasKeyboardPanel === "connect"}
-        title="Connect two tools without dragging"
+        title={m("workspaceAudit.connectHint")}
         onClick={() => setCanvasKeyboardPanel((current) => (current === "connect" ? null : "connect"))}
       >
-        Connect
+        {m("workspaceAudit.connect")}
       </button>
     </>
   );
@@ -3578,15 +3545,15 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setupCheck={setupCheck}
       onOpenFinding={(finding) => {
         if (!backend.connected) {
-          setActionMessage("Reconnect to AudioRouter before opening this finding.");
+          setActionMessage(tm("g1.appReconnectFinding"));
           return;
         }
         if (!availableSessions.some((item) => item.id === finding.sessionId)) {
-          setActionMessage("The affected session is no longer available. Check again for current findings.");
+          setActionMessage(tm("g1.appFindingSessionGone"));
           return;
         }
         if (finding.sessionId !== draft.id && routeChanged) {
-          setActionMessage("Save or discard your edits in Session before opening a finding in another session.");
+          setActionMessage(tm("g1.appFindingSaveFirst"));
           return;
         }
         if (finding.sessionId === draft.id) {
@@ -3735,9 +3702,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     writeFirstRunDone();
     setCreatedSessions((current) => [...current, result.session]);
     setArrangeSessionId(result.session.id);
-    const choose = result.stillToChoose.length > 0 ? ` Still to choose: ${result.stillToChoose.join(", ")}.` : "";
+    const choose =
+      result.stillToChoose.length > 0
+        ? ` ${tm("g1.appStillToChoose", { names: result.stillToChoose.join(", ") })}`
+        : "";
     void switchSession(result.session.id).then(({ switched }) => {
-      if (switched) setActionMessage(`Made ${result.session.name}. Nothing plays until you press Play.${choose}`);
+      if (switched) setActionMessage(`${tm("g1.appGoalMade", { name: result.session.name })}${choose}`);
     });
     if (firstRun) setTourOpen(true);
   };
@@ -3752,8 +3722,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         id: "play",
         group: "Actions",
         icon: sessionRunning ? "square" : "play",
-        title: sessionRunning ? "Stop" : "Play",
-        detail: sessionRunning ? "Stop this route" : "Start this route",
+        title: sessionRunning ? tm("g1.appPalStop") : tm("g1.appPalPlay"),
+        detail: sessionRunning ? tm("g1.appPalStopRoute") : tm("g1.appPalStartRoute"),
         disabled: !ready,
         run: () => void (sessionRunning ? stopSession() : startSession()),
       },
@@ -3761,8 +3731,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         id: "privacy",
         group: "Actions",
         icon: "mic-off",
-        title: "Privacy mute",
-        detail: privacyMuted ? "Turn off" : "Turn on",
+        title: tm("g1.appPalPrivacy"),
+        detail: privacyMuted ? tm("g1.appPalTurnOff") : tm("g1.appPalTurnOn"),
         keywords: "silence microphone",
         disabled: !ready,
         run: () => void togglePrivacyMute(),
@@ -3771,8 +3741,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         id: "goal",
         group: "Actions",
         icon: "square-dashed",
-        title: "Start from a goal",
-        detail: "New route for what you want to do",
+        title: tm("g1.appPalGoal"),
+        detail: tm("g1.appPalGoalDetail"),
         keywords: "template new session",
         disabled: !ready,
         run: () => setGoalDialogOpen(true),
@@ -3781,8 +3751,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         id: "tour",
         group: "Actions",
         icon: "circle-help",
-        title: "Take the tour",
-        detail: "Three short steps",
+        title: tm("g1.appPalTour"),
+        detail: tm("g1.appPalTourDetail"),
         keywords: "help",
         run: () => setTourOpen(true),
       },
@@ -3790,8 +3760,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         id: "history",
         group: "Actions",
         icon: "undo-2",
-        title: "Change history",
-        detail: "See changes and saved versions",
+        title: tm("g1.appPalHistory"),
+        detail: tm("g1.appPalHistoryDetail"),
         keywords: "versions undo",
         run: () => setWorkbenchTab("session"),
       },
@@ -3803,7 +3773,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         id: `tool-${entry.id}`,
         group: "Tools",
         icon: libraryEntryIcon(entry),
-        title: `Add ${entry.label}`,
+        title: tm("g1.appPalAdd", { name: entry.label }),
         detail: toolDescription(kind) ?? entry.category,
         keywords: `${entry.category} ${entry.note ?? ""}`,
         disabled: !ready,
@@ -3816,7 +3786,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         group: "Settings",
         icon: SETTINGS_PAGE_ICONS[page],
         title: settingsPageTitle(page),
-        detail: "Open in Settings",
+        detail: tm("g1.appPalOpenSettings"),
         keywords: settingsPageKeywords(page),
         run: () => setWorkbenchTab(page),
       });
@@ -3827,7 +3797,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         group: "On this route",
         icon: NODE_KIND_ICONS[node.kind],
         title: node.name,
-        detail: `${humanizeNodeKind(node)}: go to it`,
+        detail: tm("g1.appPalGoTo", { kind: humanizeNodeKind(node) }),
         run: () => {
           selectNodeProperties(node.id);
           setWorkbenchTab("properties");
@@ -3841,7 +3811,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         group: "Sessions",
         icon: "folder",
         title: item.name,
-        detail: "Switch session",
+        detail: tm("g1.appPalSwitch"),
         disabled: !ready,
         run: () => void switchSession(item.id),
       });
@@ -3855,11 +3825,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     plugins: <PluginScanPanel backend={backend} onAddPlaceholder={addPluginToDraft} />,
     help: (
       <section className="panel help-page" aria-labelledby="help-page-heading">
-        <h2 id="help-page-heading">Help</h2>
-        <p className="muted">Press Ctrl+K anywhere to find a tool, setting, card or session.</p>
+        <h2 id="help-page-heading">{tm("g1.appHelp")}</h2>
+        <p className="muted">{m("settingsCopy.helpSearch")}</p>
         <div className="actions">
           <button type="button" className="secondary" onClick={() => setTourOpen(true)}>
-            Take the tour
+            {tm("g1.appPalTour")}
           </button>
           <button
             type="button"
@@ -3867,7 +3837,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             disabled={!backend.connected}
             onClick={() => setGoalDialogOpen(true)}
           >
-            Start from a goal
+            {tm("g1.appPalGoal")}
           </button>
         </div>
       </section>
@@ -4009,12 +3979,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                 role="status"
                 title={
                   routeMicMuted && !staleSnapshot
-                    ? "Privacy mute is on, so your microphone and captured apps are silent. Turn it off in a tool's Properties."
+                    ? tm("g1.appStatusMuted")
                     : staleSnapshot
-                      ? "Connection lost. Showing the last known state and your edits. Reconnect before saving or starting audio."
+                      ? tm("g1.appStatusLost")
                       : routeChanged
-                        ? "You have unsaved edits. Running audio can differ from the canvas. Only saved changes go into an export."
-                        : "The route is saved. Running audio may have source playback stopped; use each source's Play control to start it."
+                        ? tm("g1.appStatusUnsaved")
+                        : tm("g1.appStatusSaved")
                 }
               >
                 <span className="audio-state-dot" aria-hidden="true" />
@@ -4111,13 +4081,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   onBlur={() => setRouteWarningHeld(false)}
                 >
                   <p role="status">
-                    No input reaches {unfedNodes.map((node) => node.name).join(", ")} yet, so they stay silent. Connect
-                    a source to hear them.
+                    {m("workspaceAudit.unfed", { names: unfedNodes.map((node) => node.name).join(", ") })}
                   </p>
                   <button
                     type="button"
                     className="secondary"
-                    aria-label="Dismiss route warning"
+                    aria-label={m("workspaceAudit.dismissWarning")}
                     onClick={() => setDismissedRouteWarning(routeWarningKey)}
                   >
                     <Icon name="x" />
@@ -4128,9 +4097,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               const text = actionMessage
                 ? actionMessage
                 : !backend.connected
-                  ? `Audio unavailable: ${(snapshot?.status.reason ?? "the backend is disconnected").replace(/\.+$/, "")}. Reconnect to edit or play.`
+                  ? tm("g1.appAudioUnavailable", {
+                      reason: (backendText(snapshot?.status.reason) ?? tm("g1.appBackendDisconnected")).replace(
+                        /\.+$/,
+                        "",
+                      ),
+                    })
                   : snapshot?.status.quarantinedSessions?.length
-                    ? "Some saved sessions could not be loaded. Their original data is kept. Open session recovery to export or delete them."
+                    ? tm("g1.appQuarantined")
                     : "";
               const tone = !backend.connected
                 ? "error"
@@ -4170,30 +4144,43 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   {text && tone === "error" && <CopyErrorButton message={text} />}
                   {!actionMessage && backend.connected && Boolean(snapshot?.status.quarantinedSessions?.length) && (
                     <button type="button" className="secondary" onClick={() => setWorkbenchTab("sessionJson")}>
-                      Open session recovery
+                      {tm("g1.appOpenRecovery")}
                     </button>
                   )}
-                  {backend.connected && actionMessage?.startsWith("No audio started") && firstIssueNode && (
-                    <button type="button" className="secondary" onClick={() => selectNodeProperties(firstIssueNode.id)}>
-                      Go to {firstIssueNode.name}
-                    </button>
-                  )}
-                  {backend.connected && actionMessage?.includes("Troubleshoot") && workbenchTab !== "status" && (
-                    <button type="button" className="secondary" onClick={() => setWorkbenchTab("status")}>
-                      Open Status
-                    </button>
-                  )}
-                  {backend.connected && actionMessage?.includes("Open Session") && workbenchTab !== "session" && (
-                    <button type="button" className="secondary" onClick={() => setWorkbenchTab("session")}>
-                      Open Session
-                    </button>
-                  )}
-                  {backend.connected && actionMessage === EDITS_RESTORED_MESSAGE && routeChanged && (
+                  {backend.connected &&
+                    actionMessage &&
+                    englishOf(actionMessage).startsWith("No audio started") &&
+                    firstIssueNode && (
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => selectNodeProperties(firstIssueNode.id)}
+                      >
+                        Go to {firstIssueNode.name}
+                      </button>
+                    )}
+                  {backend.connected &&
+                    actionMessage &&
+                    englishOf(actionMessage).includes("Troubleshoot") &&
+                    workbenchTab !== "status" && (
+                      <button type="button" className="secondary" onClick={() => setWorkbenchTab("status")}>
+                        {tm("g1.appOpenStatus")}
+                      </button>
+                    )}
+                  {backend.connected &&
+                    actionMessage &&
+                    englishOf(actionMessage).includes("Open Session") &&
+                    workbenchTab !== "session" && (
+                      <button type="button" className="secondary" onClick={() => setWorkbenchTab("session")}>
+                        {tm("g1.appOpenSession")}
+                      </button>
+                    )}
+                  {backend.connected && englishOf(actionMessage) === EDITS_RESTORED_MESSAGE && routeChanged && (
                     <button type="button" className="secondary" onClick={discardRouteEdits}>
-                      Discard edits
+                      {tm("g1.appDiscardEdits")}
                     </button>
                   )}
-                  {backend.connected && actionMessage === OLDER_EDITS_MESSAGE && olderEdits && (
+                  {backend.connected && englishOf(actionMessage) === OLDER_EDITS_MESSAGE && olderEdits && (
                     <>
                       <button
                         type="button"
@@ -4201,10 +4188,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                         onClick={() => {
                           recordDraftChange({ ...olderEdits, revision: session.revision });
                           setOlderEdits(null);
-                          setActionMessage("Your older edits are back. Saving replaces the newer saved route.");
+                          setActionMessage(tm("g1.appOlderBack"));
                         }}
                       >
-                        Use my edits
+                        {tm("g1.appUseMyEdits")}
                       </button>
                       <button
                         type="button"
@@ -4217,7 +4204,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                             .catch(() => recordUiDiagnostic("Removing older unsaved edits failed"));
                         }}
                       >
-                        Keep saved route
+                        {tm("g1.appKeepSaved")}
                       </button>
                     </>
                   )}
@@ -4225,8 +4212,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     <button
                       type="button"
                       className="secondary global-action-message-dismiss"
-                      aria-label="Dismiss message"
-                      title="Dismiss message"
+                      aria-label={tm("g1.appDismissMessage")}
+                      title={tm("g1.appDismissMessage")}
                       onClick={() => {
                         setActionMessage(null);
                       }}
@@ -4241,10 +4228,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           {pendingGraphPlan && pendingWarnings.length > 0 && (
             <section
               className="save-warning-review"
-              aria-label="Save warnings"
+              aria-label={tm("g1.appSaveWarnings")}
               style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
             >
-              <strong>Review before saving</strong>
+              <strong>{tm("g1.appReviewBefore")}</strong>
               {pendingWarnings.map((warning) => (
                 <label key={warning}>
                   <input
@@ -4277,7 +4264,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               <section className="workspace-title">
                 <div>
                   <label className="session-name">
-                    Session name
+                    {tm("g1.appSessionName")}
                     <input
                       value={draft.name}
                       maxLength={120}
@@ -4299,7 +4286,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     onClick={() => void duplicateSession()}
                     disabled={!backend.connected}
                   >
-                    Duplicate
+                    {tm("g1.appDuplicate")}
                   </button>
                   <button
                     type="button"
@@ -4307,7 +4294,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     onClick={() => void deleteSession()}
                     disabled={!backend.connected}
                   >
-                    Delete
+                    {tm("g1.appDelete")}
                   </button>
                   <button
                     type="button"
@@ -4315,7 +4302,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     onClick={undoDraft}
                     disabled={!backend.connected || draftHistory.past.length === 0}
                   >
-                    Undo edit
+                    {tm("g1.appUndoEdit")}
                   </button>
                   <button
                     type="button"
@@ -4323,10 +4310,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     onClick={redoDraft}
                     disabled={!backend.connected || draftHistory.future.length === 0}
                   >
-                    Redo edit
+                    {tm("g1.appRedoEdit")}
                   </button>
                   <button type="button" className="secondary" onClick={discardRouteEdits} disabled={!backend.connected}>
-                    Discard edits
+                    {tm("g1.appDiscardEdits")}
                   </button>
                   <button
                     type="button"
@@ -4334,11 +4321,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     onClick={() => void planChanges()}
                     disabled={!backend.connected || graphBusy}
                   >
-                    Save changes
+                    {tm("g1.appSaveChanges")}
                   </button>
                 </div>
               </section>
-              <ErrorBoundary area="Signal flow" onError={recordUiDiagnostic}>
+              <ErrorBoundary area={tm("g1.appAreaFlow")} onError={recordUiDiagnostic}>
                 <LiveTelemetry store={telemetryStore} diagnostics={snapshot?.diagnostics ?? null}>
                   {(liveDiagnostics) => (
                     <SignalFlowPanel
@@ -4383,7 +4370,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   )}
                 </LiveTelemetry>
               </ErrorBoundary>
-              <ErrorBoundary area="Properties" onError={recordUiDiagnostic}>
+              <ErrorBoundary area={tm("g1.appAreaProps")} onError={recordUiDiagnostic}>
                 <LiveTelemetry store={telemetryStore} diagnostics={snapshot?.diagnostics ?? null}>
                   {(liveDiagnostics) => (
                     <PropertiesPanel
@@ -4437,7 +4424,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   )}
                 </LiveTelemetry>
               </ErrorBoundary>
-              <ErrorBoundary area="Side panel" onError={recordUiDiagnostic}>
+              <ErrorBoundary area={tm("g1.appAreaSide")} onError={recordUiDiagnostic}>
                 <Workbench
                   onAddGroup={() => {
                     groupState.addGroup();
@@ -4533,18 +4520,17 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   onOpenMcpSetupPage={(page) =>
                     window.__TAURI_INTERNALS__?.invoke
                       ? window.__TAURI_INTERNALS__.invoke("mcp_open_setup_page", { page }).then(() => undefined)
-                      : Promise.reject(new Error("OpenAI setup pages can only be opened from the AudioRouter app."))
+                      : Promise.reject(new Error(tm("g1.appOpenAiOnlyApp")))
                   }
                   onMcpTunnelConfigure={(tunnelId, runtimeKey) => {
                     const invoke = window.__TAURI_INTERNALS__?.invoke;
                     return invoke
                       ? invoke("mcp_tunnel_configure", { tunnelId, runtimeKey }).then(() => undefined)
-                      : Promise.reject(new Error("ChatGPT tunnel setup is available in the AudioRouter app."));
+                      : Promise.reject(new Error(tm("g1.appTunnelOnlyApp")));
                   }}
                   onMcpTunnelConnect={() => {
                     const invoke = window.__TAURI_INTERNALS__?.invoke;
-                    if (!invoke)
-                      return Promise.reject(new Error("ChatGPT tunnel setup is available in the AudioRouter app."));
+                    if (!invoke) return Promise.reject(new Error(tm("g1.appTunnelOnlyApp")));
                     const clientId = "audiorouter-chatgpt";
                     return backend
                       .listClients()
@@ -4561,25 +4547,25 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     const invoke = window.__TAURI_INTERNALS__?.invoke;
                     return invoke
                       ? invoke("mcp_tunnel_disconnect").then(() => undefined)
-                      : Promise.reject(new Error("ChatGPT tunnel setup is available in the AudioRouter app."));
+                      : Promise.reject(new Error(tm("g1.appTunnelOnlyApp")));
                   }}
                   onExportCoworkPlugin={async () => {
                     const invoke = window.__TAURI_INTERNALS__?.invoke;
-                    if (!invoke) throw new Error("Export the plugin from the AudioRouter desktop app.");
+                    if (!invoke) throw new Error(tm("g1.appExportPluginDesktop"));
                     const clientId = "audiorouter-cowork-local";
                     const clients = await backend.listClients();
                     const current = clients.find((client) => client.clientId === clientId);
                     if (!current || current.revoked)
                       await backend.authorizeClient(clientId, "observer", uiIdempotencyKey(`authorize-${clientId}`));
                     const path = await invoke("mcp_export_cowork_plugin");
-                    if (typeof path !== "string") throw new Error("The app did not return the exported plugin path.");
+                    if (typeof path !== "string") throw new Error(tm("g1.appExportPluginNoPath"));
                     return path;
                   }}
                   onMcpTunnelForget={() => {
                     const invoke = window.__TAURI_INTERNALS__?.invoke;
                     return invoke
                       ? invoke("mcp_tunnel_forget").then(() => undefined)
-                      : Promise.reject(new Error("ChatGPT tunnel setup is available in the AudioRouter app."));
+                      : Promise.reject(new Error(tm("g1.appTunnelOnlyApp")));
                   }}
                   clientsPanel={(initialClientId) => (
                     <ClientsPanel backend={backend} initialClientId={initialClientId} />
@@ -4605,7 +4591,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   recordingContent={recordingWorkbenchContent}
                   settingsContent={settingsWorkbenchContent}
                   savedVersionsContent={
-                    <Suspense fallback={<p role="status">Loading change history...</p>}>
+                    <Suspense fallback={<p role="status">{tm("g1.appLoadingHistory")}</p>}>
                       <ChangeHistory
                         backend={backend}
                         session={session}

@@ -3,6 +3,8 @@
 // Every slot renders at a fixed size so status and counters never move the
 // panel (UI-17).
 import { useEffect, useMemo, useState } from "react";
+import { useMessages } from "./i18n/useMessages";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 import type { DeviceListItem, DiagnosticsSnapshot, VirtualCableStatus } from "@audiorouter/contracts";
 import type { CableManagementRequest } from "./backend";
 import { markErrorMessage } from "./actionMessage";
@@ -23,30 +25,30 @@ export function isCableNameValid(name: string): boolean {
   return length >= 1 && length <= 48 && !/[()\p{Cc}]/u.test(name);
 }
 
-const STATE_LABELS: Record<VirtualCableStatus["state"], string> = {
-  installed: "Installed",
-  notInstalled: "Not installed",
-  needsRepair: "Needs repair",
-  needsRestart: "Restart needed",
-  incompatible: "Update needed",
+const STATE_LABELS: Record<VirtualCableStatus["state"], MessageKey> = {
+  installed: "g3Cable.stInstalled",
+  notInstalled: "g3Cable.stNotInstalled",
+  needsRepair: "g3Cable.stNeedsRepair",
+  needsRestart: "g3Cable.stNeedsRestart",
+  incompatible: "g3Cable.stIncompatible",
 };
 
-const STATE_DETAILS: Record<VirtualCableStatus["state"], string> = {
-  installed: "Apps can play into a cable's Input and record from its Output.",
-  notInstalled: "AudioRouter cables are not installed. You can still route through another virtual cable.",
-  needsRepair: "Some cable files or Windows devices are missing. Reinstall the cables to repair them.",
-  needsRestart: "Restart Windows to finish installing or removing the cables.",
-  incompatible: "The installed cables are too old for this version of AudioRouter.",
+const STATE_DETAILS: Record<VirtualCableStatus["state"], MessageKey> = {
+  installed: "g3Cable.dInstalled",
+  notInstalled: "g3Cable.dNotInstalled",
+  needsRepair: "g3Cable.dNeedsRepair",
+  needsRestart: "g3Cable.dNeedsRestart",
+  incompatible: "g3Cable.dIncompatible",
 };
 
-/** The pill's text and tone for a status (null: still asking, or offline). */
+/** The pill's message key and tone for a status (null: still asking, or offline). */
 export function cableStatusPill(
   status: VirtualCableStatus | null,
   connected: boolean,
-): { label: string; tone: "ready" | "attention" | "idle" } {
-  if (!status) return { label: connected ? "Checking" : "Unavailable", tone: "idle" };
-  if (status.state === "installed") return { label: STATE_LABELS.installed, tone: "ready" };
-  return { label: STATE_LABELS[status.state], tone: status.state === "notInstalled" ? "idle" : "attention" };
+): { labelKey: MessageKey; tone: "ready" | "attention" | "idle" } {
+  if (!status) return { labelKey: connected ? "g3Cable.checking" : "g3Cable.unavailable", tone: "idle" };
+  if (status.state === "installed") return { labelKey: STATE_LABELS.installed, tone: "ready" };
+  return { labelKey: STATE_LABELS[status.state], tone: status.state === "notInstalled" ? "idle" : "attention" };
 }
 
 /** Whether this installation ships the cable driver, remembered for the app
@@ -80,6 +82,7 @@ export function VirtualCablePanel({
   /** Shows an outcome in the workspace notification area. */
   onActionMessage?: (text: string) => void;
 }) {
+  const tr = useMessages();
   const status = useVirtualCableStatus();
   const [packageAvailable, setPackageAvailable] = useState<boolean | null>(
     virtualCableManagementAvailable ? knownManagementAvailable : true,
@@ -119,16 +122,16 @@ export function VirtualCablePanel({
   }, [pendingCount, sessions]);
   const pill = cableStatusPill(status, connected);
   const route = cableRoute ?? null;
-  const counters: [string, number | null][] = [
-    ["Forwarded", route?.forwarded ?? null],
-    ["Silence", route?.silence ?? null],
-    ["Dropped", route?.dropped ?? null],
-    ["Trimmed", route?.trimmed ?? null],
+  const counters: [MessageKey, number | null][] = [
+    ["g3Cable.forwarded", route?.forwarded ?? null],
+    ["g3Cable.silence", route?.silence ?? null],
+    ["g3Cable.dropped", route?.dropped ?? null],
+    ["g3Cable.trimmed", route?.trimmed ?? null],
   ];
   const runManagement = async (request: CableManagementRequest, successText: string) => {
     if (!manageVirtualCable || busy) return;
     setBusy(true);
-    setMessage("Working…");
+    setMessage(tr("g3Cable.working"));
     try {
       await manageVirtualCable(request);
       // The backend caches device inventory for two seconds. Wait out that
@@ -144,8 +147,8 @@ export function VirtualCablePanel({
     } catch (error) {
       const text = markErrorMessage(
         error instanceof Error && error.message
-          ? `Cable operation failed: ${error.message}`
-          : "The cable operation failed.",
+          ? tr("g3Cable.opFailedWith", { message: error.message })
+          : tr("g3Cable.opFailed"),
       );
       if (onActionMessage) {
         setMessage(" ");
@@ -167,60 +170,63 @@ export function VirtualCablePanel({
   return (
     <section className="panel setup-panel virtual-cable-panel" aria-labelledby="setup-cables-heading">
       <div className="virtual-cable-heading">
-        <h3 id="setup-cables-heading">AudioRouter cables</h3>
+        <h3 id="setup-cables-heading">{tr("g3Cable.heading")}</h3>
         <span className={`virtual-cable-pill is-${pill.tone}`} role="status">
-          {pill.label}
+          {tr(pill.labelKey)}
         </span>
       </div>
       <p className="muted virtual-cable-detail">
-        {status
-          ? STATE_DETAILS[status.state]
-          : connected
-            ? "Asking the backend for the cable status."
-            : "Connect to the backend to see the cable status."}
+        {status ? tr(STATE_DETAILS[status.state]) : connected ? tr("g3Cable.asking") : tr("g3Cable.connectToSee")}
       </p>
       {!cablesShipped && (
         <div className="virtual-cable-unavailable" role="note">
-          <strong>AudioRouter cables are not available yet</strong>
+          <strong>{tr("g3Cable.notAvailableYet")}</strong>
           <p>
             {packageAvailable === null && manageVirtualCable !== undefined
-              ? "Checking whether this installation includes the AudioRouter cable driver."
-              : "This version of AudioRouter does not include its own virtual cable driver; it is still being tested and signed. Until it ships, use another virtual cable such as VB-Cable: end a route in an Output Device set to that cable, as described under Use with other apps."}
+              ? tr("g3Cable.checkingDriver")
+              : tr("settingsCopy.cablePreview")}
           </p>
         </div>
       )}
       <p className="muted virtual-cable-version">
         {status?.driverVersion
-          ? `Driver ${status.driverVersion}${status.protocol ? ` · protocol ${status.protocol}` : ""}`
-          : "No AudioRouter driver installed"}
+          ? status.protocol
+            ? tr("g3Cable.driverProto", { version: status.driverVersion, protocol: status.protocol })
+            : tr("g3Cable.driver", { version: status.driverVersion })
+          : tr("g3Cable.noDriver")}
       </p>
-      <ul className="setup-status-list" aria-label="Cables">
+      <ul className="setup-status-list" aria-label={tr("g3Cable.cables")}>
         {status && status.cables.length > 0 ? (
           status.cables.map((cable) => (
             <li key={cable.busId} className={cable.present ? "is-ready" : "is-needs-attention"}>
               <span className="setup-status-dot" aria-hidden="true" />
               <div>
                 <strong>{cable.name}</strong>
-                <small>
-                  {cable.present ? `${cable.name} Input → ${cable.name} Output` : "Missing from Windows sound devices"}
-                </small>
-                <div className="virtual-cable-formats" aria-label={`${cable.name} endpoint formats`}>
+                <small>{cable.present ? tr("g3Cable.inOut", { name: cable.name }) : tr("g3Cable.missing")}</small>
+                <div className="virtual-cable-formats" aria-label={tr("g3Cable.formatsAria", { name: cable.name })}>
                   {[cable.renderEndpointId, cable.captureEndpointId].map((endpointId, index) => {
                     const endpoint = devices.find((device) => device.id === endpointId && device.state === "active");
                     const format = endpoint && "format" in endpoint ? endpoint.format : null;
                     const float32 = format ? (format.isFloat32 ?? format.formatTag === 3) : false;
                     const supported = format?.sampleRateHz === 48_000 && float32;
-                    const label = index === 0 ? "Input" : "Output";
+                    const label = index === 0 ? tr("g3Cable.input") : tr("g3Cable.output");
                     return (
-                      <div key={label} className="virtual-cable-format-line">
+                      <div key={index} className="virtual-cable-format-line">
                         <span>
-                          {label}:{" "}
-                          {format
-                            ? `${format.sampleRateHz.toLocaleString()} Hz, ${format.channels} ch, ${format.bitsPerSample}-bit ${float32 ? "float" : "PCM/other"}`
-                            : "format unavailable"}
+                          {tr("g3Cable.formatLine", {
+                            label,
+                            format: format
+                              ? tr("g3Cable.formatText", {
+                                  rate: format.sampleRateHz.toLocaleString(),
+                                  channels: format.channels,
+                                  bits: format.bitsPerSample,
+                                  type: float32 ? tr("g3Cable.float") : tr("g3Cable.pcmOther"),
+                                })
+                              : tr("g3Cable.formatUnavailable"),
+                          })}
                         </span>
                         <small className="virtual-cable-format-hint" aria-live="polite">
-                          {format && !supported ? "Use 48 kHz float for the best match." : " "}
+                          {format && !supported ? tr("g3Cable.use48") : " "}
                         </small>
                       </div>
                     );
@@ -233,15 +239,15 @@ export function VirtualCablePanel({
           <li>
             <span className="setup-status-dot" aria-hidden="true" />
             <span>
-              <strong>No cables</strong>
-              <small>{status ? "No AudioRouter cable devices were found." : "Waiting for the cable status."}</small>
+              <strong>{tr("g3Cable.noCables")}</strong>
+              <small>{status ? tr("g3Cable.noneFound") : tr("g3Cable.waitingStatus")}</small>
             </span>
           </li>
         )}
       </ul>
       <div
         className={`virtual-cable-management${cablesShipped ? "" : " is-unavailable"}`}
-        aria-label="Cable management"
+        aria-label={tr("g3Cable.management")}
         aria-disabled={!cablesShipped}
       >
         <div className="virtual-cable-actions">
@@ -249,33 +255,33 @@ export function VirtualCablePanel({
             type="button"
             className="secondary"
             disabled={!managementAvailable || !canInstall || busy}
-            onClick={() => void runManagement({ operation: "install" }, "Installation complete.")}
+            onClick={() => void runManagement({ operation: "install" }, tr("g3Cable.installDone"))}
           >
-            Install
+            {tr("g3Cable.install")}
           </button>
           <button
             type="button"
             className="secondary"
             disabled={!managementAvailable || !canUpdate || busy}
-            onClick={() => void runManagement({ operation: "update" }, "Update complete.")}
+            onClick={() => void runManagement({ operation: "update" }, tr("g3Cable.updateDone"))}
           >
-            Update
+            {tr("g3Cable.update")}
           </button>
           <button
             type="button"
             className="secondary"
             disabled={!managementAvailable || !canRepair || busy}
-            onClick={() => void runManagement({ operation: "repair" }, "Repair complete.")}
+            onClick={() => void runManagement({ operation: "repair" }, tr("g3Cable.repairDone"))}
           >
-            Repair
+            {tr("g3Cable.repair")}
           </button>
           <button
             type="button"
             className="secondary"
             disabled={!managementAvailable || !canRemove || busy}
-            onClick={() => void runManagement({ operation: "remove" }, "AudioRouter cables removed.")}
+            onClick={() => void runManagement({ operation: "remove" }, tr("g3Cable.removeDone"))}
           >
-            Remove
+            {tr("g3Cable.remove")}
           </button>
         </div>
         <p className="muted virtual-cable-action-message" aria-live="polite">
@@ -284,9 +290,9 @@ export function VirtualCablePanel({
         {status && (
           <div className="virtual-cable-configuration">
             <label>
-              Number of cables
+              {tr("g3Cable.count")}
               <select
-                aria-label="Number of cables"
+                aria-label={tr("g3Cable.count")}
                 value={countDraft}
                 disabled={!managementAvailable || !canConfigure || busy}
                 onChange={(event) => {
@@ -302,11 +308,15 @@ export function VirtualCablePanel({
               </select>
             </label>
             <BooleanField
-              label="Low latency (128-frame cable blocks)"
-              name="Low latency cable blocks"
+              label={tr("g3Cable.lowLatency")}
+              name={tr("g3Cable.lowLatencyName")}
               checked={status.defaultPeriodFrames === 128}
               stateText={
-                status.defaultPeriodFrames == null ? "Unavailable" : status.defaultPeriodFrames === 128 ? "On" : "Off"
+                status.defaultPeriodFrames == null
+                  ? tr("g3Cable.unavailable")
+                  : status.defaultPeriodFrames === 128
+                    ? tr("g3Cable.on")
+                    : tr("g3Cable.off")
               }
               disabled={
                 !managementAvailable ||
@@ -318,16 +328,17 @@ export function VirtualCablePanel({
               onChange={(checked) =>
                 void runManagement(
                   { operation: checked ? "setLowLatencyOn" : "setLowLatencyOff" },
-                  checked ? "Low-latency cable blocks enabled." : "Default cable block size restored.",
+                  checked ? tr("g3Cable.lowOnDone") : tr("g3Cable.lowOffDone"),
                 )
               }
               help={
                 <small>
-                  Current preferred block:{" "}
-                  {status.defaultPeriodFrames === null || status.defaultPeriodFrames === undefined
-                    ? "unavailable"
-                    : `${status.defaultPeriodFrames} frames`}
-                  . Changing it briefly restarts the cable device.
+                  {tr("g3Cable.currentBlock", {
+                    value:
+                      status.defaultPeriodFrames === null || status.defaultPeriodFrames === undefined
+                        ? tr("g3Cable.blockUnavailable")
+                        : tr("g3Cable.blockFrames", { n: status.defaultPeriodFrames }),
+                  })}
                 </small>
               }
             />
@@ -345,17 +356,17 @@ export function VirtualCablePanel({
               onClick={() => {
                 if (pendingCount !== null && pendingCount < status.cableCount) return;
                 if (pendingCount !== null)
-                  void runManagement({ operation: "setCount", count: pendingCount }, "Cable count updated.");
+                  void runManagement({ operation: "setCount", count: pendingCount }, tr("g3Cable.countDone"));
               }}
             >
-              Apply number of cables
+              {tr("g3Cable.applyCount")}
             </button>
             {pendingCount !== null && pendingCount < status.cableCount && (
-              <div className="virtual-cable-count-confirmation" role="group" aria-label="Confirm cable removal">
+              <div className="virtual-cable-count-confirmation" role="group" aria-label={tr("g3Cable.confirmGroup")}>
                 <p>
-                  Reducing the count removes {status.cableCount - pendingCount} cable
-                  {status.cableCount - pendingCount === 1 ? "" : "s"} from Windows. Saved sessions that use those
-                  cables:
+                  {tr(status.cableCount - pendingCount === 1 ? "g3Cable.reducing" : "g3Cable.reducingOther", {
+                    n: status.cableCount - pendingCount,
+                  })}
                 </p>
                 {affectedSessions.length ? (
                   <ul>
@@ -364,27 +375,27 @@ export function VirtualCablePanel({
                     ))}
                   </ul>
                 ) : (
-                  <p>No saved sessions use those cables.</p>
+                  <p>{tr("g3Cable.noSessions")}</p>
                 )}
                 <button
                   type="button"
                   className="secondary"
                   disabled={!managementAvailable || busy}
                   onClick={() =>
-                    void runManagement({ operation: "setCount", count: pendingCount }, "Cable count updated.")
+                    void runManagement({ operation: "setCount", count: pendingCount }, tr("g3Cable.countDone"))
                   }
                 >
-                  Confirm and remove cables
+                  {tr("g3Cable.confirmRemove")}
                 </button>
               </div>
             )}
-            <ul className="virtual-cable-name-list" aria-label="Cable names">
+            <ul className="virtual-cable-name-list" aria-label={tr("g3Cable.names")}>
               {status.cables.map((cable) => (
                 <li key={cable.busId}>
                   <label>
-                    {cable.name} name
+                    {tr("g3Cable.nameField", { name: cable.name })}
                     <input
-                      aria-label={`${cable.name} name`}
+                      aria-label={tr("g3Cable.nameField", { name: cable.name })}
                       value={nameDrafts[cable.busId] ?? cable.name}
                       maxLength={48}
                       disabled={!managementAvailable || !canConfigure || busy}
@@ -407,20 +418,16 @@ export function VirtualCablePanel({
                       const index = cable.busId.charCodeAt(cable.busId.length - 1) - 96;
                       void runManagement(
                         { operation: "configure", names: [[index, nameDrafts[cable.busId] ?? cable.name]] },
-                        `${cableLabel(cable.busId)} renamed.`,
+                        tr("g3Cable.renamed", { name: cableLabel(cable.busId) }),
                       );
                     }}
                   >
-                    Save name
+                    {tr("g3Cable.saveName")}
                   </button>
                 </li>
               ))}
             </ul>
-            <small className="virtual-cable-name-note">
-              These names are AudioRouter&apos;s labels. Other apps keep seeing &quot;AudioRouter Cable A Input&quot;
-              and so on; to rename a cable there, use Windows Sound settings → Playback or Recording → the cable →
-              Properties.
-            </small>
+            <small className="virtual-cable-name-note">{tr("g3Cable.nameNote")}</small>
           </div>
         )}
       </div>
@@ -432,24 +439,31 @@ export function VirtualCablePanel({
             disabled={!connected || cableUnavailableReason(status) !== null}
             onClick={onAddPassThrough}
           >
-            Add route: {cableName(status, defaultCable(status, "renderSource"))} →{" "}
-            {cableName(status, defaultCable(status, "captureSink"))}
+            {tr("g3Cable.addRoute", {
+              from: cableName(status, defaultCable(status, "renderSource")),
+              to: cableName(status, defaultCable(status, "captureSink")),
+            })}
           </button>
         </div>
       )}
-      <div className="virtual-cable-route" aria-label="Cable route">
+      <div className="virtual-cable-route" aria-label={tr("g3Cable.routeAria")}>
         <p className="virtual-cable-route-title">
-          <strong>Cable route</strong>
+          <strong>{tr("g3Cable.routeTitle")}</strong>
           <span className="muted">
             {route
-              ? `${cableName(status, route.renderBus)} → ${cableName(status, route.captureBus)} · ${route.state} · ${route.blockFrames}-frame blocks`
-              : "Not playing"}
+              ? tr("g3Cable.routeLine", {
+                  from: cableName(status, route.renderBus),
+                  to: cableName(status, route.captureBus),
+                  state: route.state,
+                  frames: route.blockFrames,
+                })
+              : tr("g3Cable.notPlaying")}
           </span>
         </p>
         <dl className="virtual-cable-counters">
           {counters.map(([label, value]) => (
             <div key={label}>
-              <dt>{label}</dt>
+              <dt>{tr(label)}</dt>
               <dd>{value === null ? "—" : value.toLocaleString()}</dd>
             </div>
           ))}

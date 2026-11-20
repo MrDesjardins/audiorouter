@@ -10,6 +10,7 @@ import {
   deleteCustomTheme,
   parseCustomTheme,
   selectedCustomTheme,
+  themeColorLabel,
   uniqueThemeName,
   updateCustomTheme,
   type CustomTheme,
@@ -30,35 +31,36 @@ function ThemeContrastReport({
   theme: CustomTheme;
   onSelectColor: (color: ThemeColor) => void;
 }) {
+  const tr = useMessages();
   const warnings = themeContrastWarnings(theme);
   return (
     <div className={`theme-contrast${warnings.length ? " has-warnings" : ""}`}>
       {warnings.length === 0 ? (
-        <p role="status">Text in this theme is easy to read: every checked pair meets the WCAG contrast guideline.</p>
+        <p role="status">{tr("g1.themeContrastOk")}</p>
       ) : (
         <>
-          <p role="status">Some text may be hard to read. Select a color name to change it:</p>
+          <p role="status">{tr("g1.themeContrastBad")}</p>
           <ul>
             {warnings.map((warning) => (
               <li key={`${warning.fore}-${warning.back}`}>
                 <button
                   type="button"
                   className="theme-contrast-jump"
-                  title={`Go to ${THEME_COLORS[warning.fore]} color`}
+                  title={tr("g1.themeGoTo", { color: themeColorLabel(warning.fore) })}
                   onClick={() => onSelectColor(warning.fore)}
                 >
-                  {THEME_COLORS[warning.fore]}
+                  {themeColorLabel(warning.fore)}
                 </button>
-                {" on "}
+                {tr("g1.themeOn")}
                 <button
                   type="button"
                   className="theme-contrast-jump"
-                  title={`Go to ${THEME_COLORS[warning.back]} color`}
+                  title={tr("g1.themeGoTo", { color: themeColorLabel(warning.back) })}
                   onClick={() => onSelectColor(warning.back)}
                 >
-                  {THEME_COLORS[warning.back].toLowerCase()}
+                  {themeColorLabel(warning.back).toLowerCase()}
                 </button>
-                {`: ${warning.ratio.toFixed(1)}:1, needs ${warning.minimum}:1`}
+                {tr("g1.themeRatio", { ratio: warning.ratio.toFixed(1), minimum: warning.minimum })}
               </li>
             ))}
           </ul>
@@ -149,7 +151,7 @@ export function UiOptionsWorkbench({
         .replace(/^-|-$/g, "") || "audiorouter-theme") + ".json";
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
-    report("Theme exported. The file contains colors and appearance only.");
+    report(tr("g1.themeExported"));
   };
   /** Add a theme and switch to it; false when the library is full. */
   const add = (next: CustomTheme): CustomThemeLibrary | null => {
@@ -160,7 +162,7 @@ export function UiOptionsWorkbench({
       setConfirmDelete(false);
       return library;
     } catch (cause) {
-      report(cause instanceof Error ? cause.message : "Could not add the theme.", true);
+      report(cause instanceof Error ? cause.message : tr("g1.themeCouldNotAdd"), true);
       return null;
     }
   };
@@ -207,7 +209,7 @@ export function UiOptionsWorkbench({
             <option value="high-contrast">{tr("appearance.themeHighContrast")}</option>
             {customThemes.themes.map((entry) => (
               <option key={entry.id} value={CUSTOM_PREFIX + entry.id}>
-                {entry.theme.name} (custom)
+                {tr("g1.themeCustomSuffix", { name: entry.theme.name })}
               </option>
             ))}
           </select>
@@ -218,34 +220,44 @@ export function UiOptionsWorkbench({
           onClick={() => {
             // Start from the theme on screen when it is custom, else the default palette.
             const start = active?.theme ?? DEFAULT_CUSTOM_THEME;
-            if (add({ ...start, name: active ? `${start.name} copy` : DEFAULT_CUSTOM_THEME.name }))
-              report("New theme created. Colors save automatically on this PC.");
+            if (
+              add({
+                ...start,
+                name: active ? tr("g1.themeCopySuffix", { name: start.name }) : DEFAULT_CUSTOM_THEME.name,
+              })
+            )
+              report(tr("g1.themeCreated"));
           }}
         >
-          Create a new theme
+          {tr("g1.themeCreate")}
         </button>
         <label>
-          Import theme file
+          {tr("g1.themeImportFile")}
           <input
             type="file"
             accept=".json,application/json"
-            aria-label="Import theme file"
+            aria-label={tr("g1.themeImportFile")}
             onChange={(event) => {
               const file = event.target.files?.[0];
               event.target.value = "";
               if (!file) return;
               if (file.size > MAX_THEME_BYTES) {
-                report("Theme files must be 32 KB or smaller.", true);
+                report(tr("g1.themeTooBig"), true);
                 return;
               }
               void file
                 .text()
                 .then((text) => {
                   const library = add(parseCustomTheme(text));
-                  if (library) report(`Imported ${selectedCustomTheme(library)?.theme.name ?? "the theme"}.`);
+                  if (library)
+                    report(
+                      tr("g1.themeImported", {
+                        name: selectedCustomTheme(library)?.theme.name ?? tr("g1.themeTheTheme"),
+                      }),
+                    );
                 })
                 .catch((cause: unknown) => {
-                  report(cause instanceof Error ? cause.message : "Could not read the theme file.", true);
+                  report(cause instanceof Error ? cause.message : tr("g1.themeCouldNotRead"), true);
                 });
             }}
           />
@@ -254,20 +266,20 @@ export function UiOptionsWorkbench({
           type="button"
           className="secondary"
           disabled={!active}
-          title={active ? undefined : "Choose a custom theme to export it."}
+          title={active ? undefined : tr("g1.themeChooseCustom")}
           onClick={() => active && exportTheme(active.theme)}
         >
-          Export this theme
+          {tr("g1.themeExport")}
         </button>
         <p className={`theme-file-message${error ? " is-error" : ""}`} role={error ? "alert" : "status"}>
-          {message || "Themes are local appearance settings. Importing a file never changes your audio or session."}
+          {message || tr("g1.themeLocalNote")}
         </p>
         {active && (
           <div className="theme-editor">
             <label>
-              Theme name
+              {tr("g1.themeName")}
               <TextField
-                aria-label="Theme name"
+                aria-label={tr("g1.themeName")}
                 value={active.theme.name}
                 maxLength={80}
                 onValue={(name) => updateActive({ ...active.theme, name })}
@@ -278,18 +290,18 @@ export function UiOptionsWorkbench({
               />
             </label>
             <label>
-              Base appearance
+              {tr("g1.themeBase")}
               <select
-                aria-label="Base appearance"
+                aria-label={tr("g1.themeBase")}
                 value={active.theme.base}
                 onChange={(event) => updateActive({ ...active.theme, base: event.target.value as "dark" | "light" })}
               >
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
+                <option value="dark">{tr("g1.themeDark")}</option>
+                <option value="light">{tr("g1.themeLight")}</option>
               </select>
             </label>
             <div className="theme-preview-block">
-              <p className="theme-preview-heading">Preview</p>
+              <p className="theme-preview-heading">{tr("g1.themePreview")}</p>
               <ThemePreview theme={active.theme} />
             </div>
             <details
@@ -297,7 +309,7 @@ export function UiOptionsWorkbench({
                 if (!event.currentTarget.open) setPickerColor(null);
               }}
             >
-              <summary>Edit palette colors</summary>
+              <summary>{tr("g1.themeEditPalette")}</summary>
               <div className="theme-palette">
                 {(Object.keys(THEME_COLORS) as ThemeColor[]).map((key) => (
                   <ThemeColorPicker
@@ -317,8 +329,8 @@ export function UiOptionsWorkbench({
               <ThemeContrastReport theme={active.theme} onSelectColor={selectColor} />
             </details>
             {confirmDelete ? (
-              <div className="theme-delete-confirmation" role="group" aria-label="Confirm theme deletion">
-                <p>Delete {active.theme.name}? This cannot be undone. Export it first to keep a copy.</p>
+              <div className="theme-delete-confirmation" role="group" aria-label={tr("g1.themeConfirmDelete")}>
+                <p>{tr("g1.themeDeletePrompt", { name: active.theme.name })}</p>
                 <div className="theme-delete-actions">
                   <button
                     type="button"
@@ -329,19 +341,19 @@ export function UiOptionsWorkbench({
                       onCustomThemes(library);
                       if (!selectedCustomTheme(library)) onTheme("dark");
                       setConfirmDelete(false);
-                      report(`Deleted ${name}.`);
+                      report(tr("g1.themeDeleted", { name }));
                     }}
                   >
-                    Delete theme
+                    {tr("g1.themeDeleteButton")}
                   </button>
                   <button type="button" className="secondary" onClick={() => setConfirmDelete(false)}>
-                    Cancel
+                    {tr("g1.themeCancel")}
                   </button>
                 </div>
               </div>
             ) : (
               <button type="button" className="secondary" onClick={() => setConfirmDelete(true)}>
-                Delete this theme…
+                {tr("g1.themeDeleteThis")}
               </button>
             )}
           </div>

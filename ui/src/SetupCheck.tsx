@@ -3,32 +3,38 @@
 // devices panel below it (UI-17), and the last good result survives a failed
 // read.
 import type { SetupCheckResult, SetupFinding } from "@audiorouter/contracts";
+import { tx } from "./i18n";
+import { useMessages } from "./i18n/useMessages";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 import { useSetupCheck, type SetupCheckState } from "./useSetupCheck";
 
-const SEVERITY_LABEL: Record<SetupFinding["severity"], string> = {
-  problem: "Problem",
-  warning: "Warning",
-  tip: "Tip",
+const SEVERITY_LABEL: Record<SetupFinding["severity"], MessageKey> = {
+  problem: "g1.setupProblem",
+  warning: "g1.setupWarning",
+  tip: "g1.setupTip",
 };
 
 /** One line that sums up a result, for the fixed summary slot. */
 export function setupCheckSummary(result: SetupCheckResult | null): string {
-  if (!result) return "Checking your sessions and devices…";
-  if (result.devicesChecked === 0 && result.findings.length === 0)
-    return "No active Windows audio devices were checked.";
+  if (!result) return tx("g1.setupChecking");
+  if (result.devicesChecked === 0 && result.findings.length === 0) return tx("g1.setupNoDevices");
   const count = (severity: SetupFinding["severity"]) =>
     result.findings.filter((finding) => finding.severity === severity).length;
-  const parts = [
-    [count("problem"), "problem", "problems"],
-    [count("warning"), "warning", "warnings"],
-    [count("tip"), "tip", "tips"],
-  ]
-    .filter(([n]) => (n as number) > 0)
-    .map(([n, one, many]) => `${n} ${n === 1 ? one : many}`);
-  const sessions = `${result.sessionsChecked} session${result.sessionsChecked === 1 ? "" : "s"}`;
-  if (parts.length === 0) return `No problems found in ${sessions}.`;
-  const more = result.truncated > 0 ? ` (${result.truncated} more not shown)` : "";
-  return `${parts.join(", ")} in ${sessions}${more}.`;
+  const parts = (
+    [
+      [count("problem"), "g1.setupProblems", "g1.setupProblemsMany"],
+      [count("warning"), "g1.setupWarnings1", "g1.setupWarningsMany"],
+      [count("tip"), "g1.setupTips1", "g1.setupTipsMany"],
+    ] as const
+  )
+    .filter(([n]) => n > 0)
+    .map(([n, one, many]) => tx(n === 1 ? one : many, { count: n }));
+  const sessions = tx(result.sessionsChecked === 1 ? "g1.setupSessions1" : "g1.setupSessionsMany", {
+    count: result.sessionsChecked,
+  });
+  if (parts.length === 0) return tx("g1.setupNoneFound", { sessions });
+  const more = result.truncated > 0 ? tx("g1.setupMore", { count: result.truncated }) : "";
+  return tx("g1.setupFound", { parts: parts.join(", "), sessions, more });
 }
 
 export function SetupCheck({
@@ -54,33 +60,34 @@ export function SetupCheckPanel({
   state: SetupCheckState;
   onOpenFinding?: (finding: SetupFinding) => void;
 }) {
+  const tr = useMessages();
   const { connected, available, result, checking, failure, run } = state;
   if (!available) return null;
   const status = !connected
-    ? "Not connected; the check runs when the service is available."
+    ? tr("g1.setupNotConnected")
     : failure
-      ? `Last check failed: ${failure}`
+      ? tr("g1.setupLastFailed", { failure })
       : checking && result
-        ? "Checking again…"
+        ? tr("g1.setupCheckingAgain")
         : result?.notChecked[0]
-          ? `Not checked: ${result.notChecked.join(" ")}`
+          ? tr("g1.setupNotChecked", { reasons: result.notChecked.join(" ") })
           : "";
   return (
     <section className="panel setup-panel setup-check" aria-labelledby="setup-check-heading">
       <div className="section-heading">
-        <h3 id="setup-check-heading">Setup check</h3>
+        <h3 id="setup-check-heading">{tr("g1.setupHeading")}</h3>
         <button type="button" className="secondary" onClick={() => void run()} disabled={!connected || checking}>
-          Check again
+          {tr("g1.setupCheckAgain")}
         </button>
       </div>
       <p className="setup-check-summary" aria-live="polite">
         {!connected && !result
-          ? "Connect to AudioRouter to check your setup."
+          ? tr("g1.setupConnectToCheck")
           : failure && !result
-            ? "Setup check unavailable."
+            ? tr("g1.setupUnavailable")
             : setupCheckSummary(result)}
       </p>
-      <div className="setup-check-findings" tabIndex={0} aria-label="Setup check findings">
+      <div className="setup-check-findings" tabIndex={0} aria-label={tr("g1.setupFindingsLabel")}>
         {result && result.findings.length > 0 ? (
           <ul className="setup-status-list">
             {result.findings.map((finding, index) => (
@@ -91,11 +98,11 @@ export function SetupCheckPanel({
                 <span className="setup-status-dot" aria-hidden="true" />
                 <span>
                   <span>
-                    <strong>{SEVERITY_LABEL[finding.severity]}:</strong> {finding.message}
+                    <strong>{tr(SEVERITY_LABEL[finding.severity])}:</strong> {finding.message}
                   </span>
                   <small>{finding.fix}</small>
                   <small className="muted">
-                    Session {finding.sessionName}
+                    {tr("g1.setupSession", { name: finding.sessionName })}
                     {finding.nodeName ? ` · ${finding.nodeName}` : ""}
                   </small>
                   {onOpenFinding && (
@@ -105,7 +112,7 @@ export function SetupCheckPanel({
                       disabled={!connected}
                       onClick={() => onOpenFinding(finding)}
                     >
-                      {finding.nodeId ? "Open affected tool" : "Inspect affected route"}
+                      {finding.nodeId ? tr("g1.setupOpenTool") : tr("g1.setupInspectRoute")}
                     </button>
                   )}
                 </span>
@@ -115,20 +122,17 @@ export function SetupCheckPanel({
         ) : (
           <p className="muted">
             {result?.devicesChecked === 0
-              ? "Device checks are incomplete. See the check status below and try Check again."
+              ? tr("g1.setupIncomplete")
               : result
-                ? "No issues found in the device and feedback checks performed."
-                : "Results appear here: devices Play would refuse, feedback loops, missing devices and cable rates."}
+                ? tr("g1.setupNoIssues")
+                : tr("g1.setupResultsHere")}
           </p>
         )}
       </div>
       <p className="muted setup-check-status" title={status}>
         {status}
       </p>
-      <p className="muted">
-        Checks saved routes after connection and relevant setup changes, even outside this tab. Unsaved edits are not
-        included. Play validates the route separately.
-      </p>
+      <p className="muted">{tr("g1.setupFootnote")}</p>
     </section>
   );
 }

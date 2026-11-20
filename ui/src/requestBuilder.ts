@@ -6,17 +6,22 @@
  * generated text; a placeholder is used instead.
  */
 import type { DiscoveryDocument, Session } from "@audiorouter/contracts";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 
 type Node = Session["nodes"][number];
 export type ParameterSpec = DiscoveryDocument["nodeTypes"][number]["parameters"][number];
 
+/** A catalog message that replaces the English `label` or `error` in the UI. */
+export type MessageRef = { key: MessageKey; vars?: Record<string, string> };
+
 /** One setting the builder can change on a node. */
 export type BuilderTarget =
-  | { kind: "flag"; key: "enabled" | "bypass"; label: string }
+  | { kind: "flag"; key: "enabled" | "bypass"; label: string; message?: MessageRef }
   | {
       kind: "parameter";
       key: string;
       label: string;
+      message?: MessageRef;
       spec: ParameterSpec;
       choices?: { value: string; label: string }[];
     };
@@ -46,8 +51,8 @@ export function builderTargets(
   nodeTypes: DiscoveryDocument["nodeTypes"] | null,
 ): BuilderTarget[] {
   const targets: BuilderTarget[] = [
-    { kind: "flag", key: "enabled", label: "Enabled (on/off)" },
-    { kind: "flag", key: "bypass", label: "Bypass" },
+    { kind: "flag", key: "enabled", label: "Enabled (on/off)", message: { key: "g6.apiBuilderFlagEnabled" } },
+    { kind: "flag", key: "bypass", label: "Bypass", message: { key: "g6.apiBuilderFlagBypass" } },
   ];
   const specs = nodeTypes?.find((type) => type.type.split("@")[0] === node.kind)?.parameters ?? [];
   const nameOf = (id: string) => session.nodes.find((candidate) => candidate.id === id)?.name ?? id;
@@ -58,7 +63,13 @@ export function builderTargets(
         ...new Set(session.edges.filter((edge) => edge.destinationNode === node.id).map((edge) => edge.sourceNode)),
       ];
       for (const id of upstream)
-        targets.push({ kind: "parameter", key: `${prefix}${id}`, label: `Input volume: ${nameOf(id)}`, spec });
+        targets.push({
+          kind: "parameter",
+          key: `${prefix}${id}`,
+          label: `Input volume: ${nameOf(id)}`,
+          message: { key: "g6.apiBuilderInputVolume", vars: { name: nameOf(id) } },
+          spec,
+        });
       continue;
     }
     // A numbered family such as a Soundboard's `slot<N>Mode` gives one key per slot.
@@ -75,7 +86,14 @@ export function builderTargets(
       const choices = session.nodes
         .filter((other) => other.id !== node.id)
         .map((other) => ({ value: other.id, label: other.name }));
-      targets.push({ kind: "parameter", key: spec.name, label: `${spec.name} (choose a node)`, spec, choices });
+      targets.push({
+        kind: "parameter",
+        key: spec.name,
+        label: `${spec.name} (choose a node)`,
+        message: { key: "g6.apiBuilderChooseNode", vars: { name: spec.name } },
+        spec,
+        choices,
+      });
       continue;
     }
     targets.push({
@@ -92,24 +110,33 @@ export function builderTargets(
 export function parseValue(
   target: BuilderTarget,
   text: string,
-): { value: boolean | number | string } | { error: string } {
+): { value: boolean | number | string } | { error: string; message: MessageRef } {
   if (target.kind === "flag" || target.spec.type === "boolean") {
     if (text === "true" || text === "false") return { value: text === "true" };
-    return { error: "Choose true or false." };
+    return { error: "Choose true or false.", message: { key: "g6.apiBuilderErrBoolean" } };
   }
   if (target.spec.type === "number") {
     const value = Number(text);
-    if (text.trim() === "" || !Number.isFinite(value)) return { error: "Enter a number." };
+    if (text.trim() === "" || !Number.isFinite(value))
+      return { error: "Enter a number.", message: { key: "g6.apiBuilderErrNumber" } };
     const { minimum, maximum, unit } = target.spec;
     if ((minimum !== undefined && value < minimum) || (maximum !== undefined && value > maximum)) {
-      return { error: `Enter a value from ${minimum ?? "−∞"} to ${maximum ?? "∞"}${unit ? ` ${unit}` : ""}.` };
+      return {
+        error: `Enter a value from ${minimum ?? "−∞"} to ${maximum ?? "∞"}${unit ? ` ${unit}` : ""}.`,
+        message: {
+          key: "g6.apiBuilderErrRange",
+          vars: { min: String(minimum ?? "−∞"), max: String(maximum ?? "∞"), unit: unit ? ` ${unit}` : "" },
+        },
+      };
     }
     return { value };
   }
   const allowed = target.choices?.map((choice) => choice.value) ?? target.spec.enum;
-  if (allowed && !allowed.includes(text))
-    return { error: `Choose one of: ${(target.choices?.map((choice) => choice.label) ?? allowed).join(", ")}.` };
-  if (text === "") return { error: "Enter a value." };
+  if (allowed && !allowed.includes(text)) {
+    const list = (target.choices?.map((choice) => choice.label) ?? allowed).join(", ");
+    return { error: `Choose one of: ${list}.`, message: { key: "g6.apiBuilderErrChoose", vars: { list } } };
+  }
+  if (text === "") return { error: "Enter a value.", message: { key: "g6.apiBuilderErrValue" } };
   return { value: text };
 }
 

@@ -77,7 +77,7 @@ describe("global shortcut capture", () => {
 
   it("allows 100 keybinds and blocks the next one", () => {
     expect(keybindLimitMessage(KEYBIND_MAX - 1)).toBeNull();
-    expect(keybindLimitMessage(KEYBIND_MAX)).toBe("You can add up to 100 global keybinds.");
+    expect(keybindLimitMessage(KEYBIND_MAX)).toBe("g6.kbLimit");
   });
 
   it("paints a dragged selection without changing rows the pointer misses", () => {

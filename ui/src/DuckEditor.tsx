@@ -7,6 +7,9 @@ import { Handle, type HandleSpec } from "./SvgHandle";
 import { SliderField } from "./Slider";
 import { nextFallingLevel, nextPeakHold, suggestGateThreshold, type LevelSample, type PeakHold } from "./dynamics";
 import { useLastStatistics } from "./DynamicsEditor";
+import { useMessages } from "./i18n/useMessages";
+import { tx } from "./i18n";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 
 type ProcessorTelemetry = NonNullable<DiagnosticsSnapshot["nodeTelemetry"][number]["processor"]>;
 type Change = (name: string, value: number | string | boolean) => void;
@@ -14,33 +17,29 @@ type GameRound = NonNullable<DiagnosticsSnapshot["gameRound"]>;
 
 /** Siege phases a round-following Duck can turn this audio down in, in game order, with the engine's defaults. */
 export const ROUND_PHASES = [
-  { name: "duckMenu", label: "Menu and matchmaking", defaultOn: true },
-  { name: "duckPrep", label: "Planning, operator selection and preparation", defaultOn: true },
-  { name: "duckAction", label: "In a round, playing", defaultOn: false },
-  { name: "duckBetweenRounds", label: "Between rounds and results", defaultOn: true },
-] as const;
+  { name: "duckMenu", label: "g5.duckPhaseMenu", defaultOn: true },
+  { name: "duckPrep", label: "g5.duckPhasePrep", defaultOn: true },
+  { name: "duckAction", label: "g5.duckPhaseAction", defaultOn: false },
+  { name: "duckBetweenRounds", label: "g5.duckPhaseBetween", defaultOn: true },
+] as const satisfies readonly { name: string; label: MessageKey; defaultOn: boolean }[];
 const phaseOn = (node: Node, phase: (typeof ROUND_PHASES)[number]) =>
   typeof node.parameters[phase.name] === "boolean" ? node.parameters[phase.name] === true : phase.defaultOn;
-const PHASE_LABELS: Record<GameRound["phase"], string> = {
-  unknown: "unknown",
-  menu: "menu",
-  prep: "preparation",
-  betweenRounds: "between rounds",
-  action: "action",
+const PHASE_LABELS: Record<GameRound["phase"], MessageKey> = {
+  unknown: "g5.duckPhUnknown",
+  menu: "g5.duckPhMenu",
+  prep: "g5.duckPhPrep",
+  betweenRounds: "g5.duckPhBetween",
+  action: "g5.duckPhAction",
 };
 
 /** Plain-language state of the Stats.cc feed for a round-following Duck. */
 export function roundFeedStatus(round: GameRound | null | undefined, running: boolean): string {
-  if (!running)
-    return "Press Play: AudioRouter then connects to Stats.cc on this PC. Keep Stats.cc running while you play.";
-  if (!round || round.state === "off" || round.state === "connecting") return "Connecting to Stats.cc…";
+  if (!running) return tx("g5.duckFeedIdle");
+  if (!round || round.state === "off" || round.state === "connecting") return tx("g5.duckFeedConnecting");
   if (round.state === "unavailable")
-    return round.feedConfigured === false
-      ? "Stats.cc’s game feed is off, so the game stays at full volume. Enable it once with examples\\integrations\\stats-cc-siege (npm run setup:stats), then restart Stats.cc."
-      : "Stats.cc is not running or its feed is unavailable, so the game stays at full volume. AudioRouter keeps retrying.";
-  if (round.state === "waitingForUpdate" || round.phase === "unknown")
-    return "Connected to Stats.cc. Full volume until it reports the next game state.";
-  return `Stats.cc: ${PHASE_LABELS[round.phase]}.`;
+    return round.feedConfigured === false ? tx("g5.duckFeedOff") : tx("g5.duckFeedUnavailable");
+  if (round.state === "waitingForUpdate" || round.phase === "unknown") return tx("g5.duckFeedWaiting");
+  return tx("g5.duckFeedPhase", { phase: tx(PHASE_LABELS[round.phase]) });
 }
 
 const HISTORY_MS = 8000;
@@ -205,6 +204,7 @@ export function DuckEditor({
   onChange: Change;
   gameRound?: GameRound | null;
 }) {
+  const tr = useMessages();
   const settings = duckSettings(node);
   const roundMode = node.parameters.trigger === "siegeRound";
   const choices = duckTriggerChoices(session, node.id);
@@ -236,7 +236,7 @@ export function DuckEditor({
   const gainLine = history.map((item) => `${x(item.at).toFixed(1)},${stripY(item.reductionDb).toFixed(1)}`).join(" ");
   const thresholdHandle: HandleSpec = {
     name: "thresholdDb",
-    label: "Trigger level line",
+    label: tr("g5.duckTriggerLine"),
     value: settings.thresholdDb,
     min: -80,
     max: 0,
@@ -256,94 +256,91 @@ export function DuckEditor({
   const suggestion = statistics ? suggestGateThreshold(statistics) : null;
   const comparing = useComparing(node.id);
   let status: string;
-  let pill: { text: string; tone: "good" | "idle" | "work" } = { text: "Not playing", tone: "idle" };
+  let pill: { text: string; tone: "good" | "idle" | "work" } = { text: tr("g5.duckNotPlaying"), tone: "idle" };
   if (!node.enabled) {
-    status = "Off: the audio passes unchanged.";
-    pill = { text: "Off", tone: "idle" };
+    status = tr("g5.duckOffStatus");
+    pill = { text: tr("g5.duckOff"), tone: "idle" };
   } else if (node.bypass) {
-    status = "Bypassed: the audio passes unchanged.";
-    pill = { text: "Bypassed", tone: "idle" };
+    status = tr("g5.duckBypassStatus");
+    pill = { text: tr("g5.duckBypassed"), tone: "idle" };
   } else if (comparing) {
-    status = "Comparing: this tool is out of the route while you hold.";
-    pill = { text: "Comparing", tone: "idle" };
+    status = tr("g5.duckComparingStatus");
+    pill = { text: tr("g5.duckComparing"), tone: "idle" };
   } else if (roundMode) {
     status = roundFeedStatus(gameRound, running);
-    if (running && reduction > 0.5) pill = { text: `Ducking −${reduction.toFixed(1)} dB`, tone: "work" };
+    if (running && reduction > 0.5)
+      pill = { text: tr("g5.duckDuckingPill", { db: reduction.toFixed(1) }), tone: "work" };
     else if (running)
       pill =
         gameRound?.state === "connected"
-          ? { text: "Full volume", tone: "good" }
-          : { text: gameRound?.state === "unavailable" ? "No Stats.cc" : "Connecting", tone: "idle" };
+          ? { text: tr("g5.duckFullVolume"), tone: "good" }
+          : {
+              text: gameRound?.state === "unavailable" ? tr("g5.duckNoStatsCc") : tr("g5.duckConnecting"),
+              tone: "idle",
+            };
   } else if (!trigger) {
-    status = "Choose which source or tool triggers the ducking, usually your microphone.";
-    pill = { text: "No trigger", tone: "idle" };
-  } else if (!running)
-    status = `Press Play and talk: this audio goes down by ${settings.amountDb} dB while ${trigger.name} is above the trigger level.`;
+    status = tr("g5.duckChooseTriggerStatus");
+    pill = { text: tr("g5.duckNoTrigger"), tone: "idle" };
+  } else if (!running) status = tr("g5.duckPressPlayStatus", { amount: settings.amountDb, name: trigger.name });
   else if (!telemetry?.inputLevelDb?.length) {
-    status = "Playing, but this Duck sends no readings. Save the route if it has unsaved changes.";
-    pill = { text: "No readings", tone: "idle" };
+    status = tr("g5.duckNoReadingsStatus");
+    pill = { text: tr("g5.duckNoReadings"), tone: "idle" };
   } else if (ducking) {
-    status = `${trigger.name} is active: this audio is ${reduction.toFixed(1)} dB down.`;
-    pill = { text: `Ducking −${reduction.toFixed(1)} dB`, tone: "work" };
+    status = tr("g5.duckActiveStatus", { name: trigger.name, db: reduction.toFixed(1) });
+    pill = { text: tr("g5.duckDuckingPill", { db: reduction.toFixed(1) }), tone: "work" };
   } else {
-    status = `Listening to ${trigger.name}. Talk above the orange line to duck this audio.`;
-    pill = { text: "Listening", tone: "good" };
+    status = tr("g5.duckListeningStatus", { name: trigger.name });
+    pill = { text: tr("g5.duckListening"), tone: "good" };
   }
   return (
-    <section className="dynamics-editor duck-editor" aria-label="Duck live view">
+    <section className="dynamics-editor duck-editor" aria-label={tr("g5.duckLiveView")}>
       <div className="dynamics-heading">
         <div>
-          <strong>Ducking</strong>
-          <small>
-            {roundMode
-              ? "Turns this audio down by the Amount during the Siege phases ticked below."
-              : "Turns this audio down while the trigger is loud. Drag the orange line to set the trigger level."}
-          </small>
+          <strong>{tr("g5.duckHeading")}</strong>
+          <small>{roundMode ? tr("g5.duckRoundHelp") : tr("g5.duckLevelHelp")}</small>
         </div>
         <span className={`dynamics-pill is-${pill.tone}`} role="status">
           {pill.text}
         </span>
       </div>
       <label className="duck-trigger-choice">
-        <span>Trigger</span>
+        <span>{tr("g5.duckTrigger")}</span>
         <select
-          aria-label="Duck trigger"
+          aria-label={tr("g5.duckTriggerAria")}
           value={roundMode ? "siegeRound" : "level"}
           disabled={disabled}
           onChange={(event) => onChange("trigger", event.target.value)}
         >
-          <option value="level">Audio level (another source or tool)</option>
-          <option value="siegeRound">Siege round (Stats.cc)</option>
+          <option value="level">{tr("g5.duckByLevel")}</option>
+          <option value="siegeRound">{tr("g5.duckByRound")}</option>
         </select>
       </label>
       {roundMode ? (
         <fieldset className="duck-round-phases">
-          <legend>Turn this audio down during</legend>
+          <legend>{tr("g5.duckTurnDownDuring")}</legend>
           {ROUND_PHASES.map((phase) => (
             <BooleanField
               key={phase.name}
-              label={phase.label}
+              label={tr(phase.label)}
               checked={phaseOn(node, phase)}
               disabled={disabled}
               onChange={(checked) => onChange(phase.name, checked)}
             />
           ))}
-          <small className="muted">
-            Unticked phases play at full volume. If Stats.cc stops or reports nothing, the audio returns to full volume.
-          </small>
+          <small className="muted">{tr("g5.duckUntickedHelp")}</small>
         </fieldset>
       ) : (
         <label className="duck-trigger-choice">
-          <span>Triggered by</span>
+          <span>{tr("g5.duckTriggeredBy")}</span>
           <select
-            aria-label="Triggered by"
+            aria-label={tr("g5.duckTriggeredBy")}
             value={trigger ? settings.keyNodeId : ""}
             disabled={disabled}
             onChange={(event) => onChange("keyNodeId", event.target.value)}
           >
-            <option value="">Choose a source or tool…</option>
+            <option value="">{tr("g5.duckChooseSource")}</option>
             {choices.sources.length > 0 && (
-              <optgroup label="Sources">
+              <optgroup label={tr("g5.duckSources")}>
                 {choices.sources.map((choice) => (
                   <option key={choice.id} value={choice.id}>
                     {choice.name}
@@ -352,7 +349,7 @@ export function DuckEditor({
               </optgroup>
             )}
             {choices.tools.length > 0 && (
-              <optgroup label="Tools">
+              <optgroup label={tr("g5.duckTools")}>
                 {choices.tools.map((choice) => (
                   <option key={choice.id} value={choice.id}>
                     {choice.name}
@@ -366,7 +363,7 @@ export function DuckEditor({
       <div className="duck-bars">
         {!roundMode && (
           <HBar
-            label="Trigger"
+            label={tr("g5.duckTrigger")}
             tone="trigger"
             value={triggerHeld.level}
             peak={triggerHeld.peak}
@@ -377,7 +374,7 @@ export function DuckEditor({
           />
         )}
         <HBar
-          label="Turned down"
+          label={tr("g5.duckTurnedDown")}
           tone="duck"
           value={latest ? reduction : null}
           min={0}
@@ -391,11 +388,7 @@ export function DuckEditor({
         className="dynamics-graph duck-history"
         viewBox={roundMode ? "0 114 380 50" : "0 0 380 164"}
         role="group"
-        aria-label={
-          roundMode
-            ? "Last 8 seconds: how far this audio is turned down"
-            : "Last 8 seconds: trigger level and how far this audio is turned down"
-        }
+        aria-label={roundMode ? tr("g5.duckHistoryRound") : tr("g5.duckHistoryLevel")}
       >
         {!roundMode && (
           <>
@@ -412,11 +405,11 @@ export function DuckEditor({
               <>
                 <line x1={L} x2={R} y1={y(statistics.noiseDb)} y2={y(statistics.noiseDb)} className="dynamics-stat" />
                 <text x={L + 4} y={y(statistics.noiseDb) - 3} className="dynamics-stat-label">
-                  room noise
+                  {tr("g5.duckRoomNoise")}
                 </text>
                 <line x1={L} x2={R} y1={y(statistics.voiceDb)} y2={y(statistics.voiceDb)} className="dynamics-stat" />
                 <text x={L + 4} y={y(statistics.voiceDb) - 3} className="dynamics-stat-label">
-                  voice
+                  {tr("g5.duckVoice")}
                 </text>
               </>
             )}
@@ -455,10 +448,10 @@ export function DuckEditor({
           −8 s
         </text>
         <text x={(L + R) / 2} y={SB + 11} textAnchor="middle" className="dynamics-axis">
-          this audio (dB)
+          {tr("g5.duckThisAudio")}
         </text>
         <text x={R} y={SB + 11} textAnchor="end" className="dynamics-axis">
-          now
+          {tr("g5.duckNow")}
         </text>
         {!roundMode && (
           <Handle
@@ -471,8 +464,8 @@ export function DuckEditor({
       </svg>
       <SliderField
         className="duck-amount"
-        label="Turn down by"
-        name="Duck amount"
+        label={tr("g5.duckTurnDownBy")}
+        name={tr("g5.duckAmount")}
         valueText={`−${settings.amountDb} dB`}
         value={settings.amountDb}
         min={0}
@@ -488,13 +481,16 @@ export function DuckEditor({
           {/* Always rendered at a reserved size so the panel never jumps when a measurement arrives or lapses. */}
           {suggestion !== null && statistics ? (
             <span>
-              Last 8 s of {trigger?.name ?? "the trigger"}: room noise ≈ {db(statistics.noiseDb)} dB, voice ≈{" "}
-              {db(statistics.voiceDb)} dB. Suggested trigger level {db(suggestion)} dB.
+              {tr("g5.duckSuggestMeasured", {
+                name: trigger?.name ?? tr("g5.duckTheTrigger"),
+                noise: db(statistics.noiseDb),
+                voice: db(statistics.voiceDb),
+                level: db(suggestion),
+              })}
             </span>
           ) : (
             <span className="muted">
-              Suggested trigger level: press Play and talk normally for a few seconds, with short pauses, to measure{" "}
-              {trigger?.name ?? "the trigger"}.
+              {tr("g5.duckSuggestIdle", { name: trigger?.name ?? tr("g5.duckTheTrigger") })}
             </span>
           )}
           <button
@@ -503,18 +499,22 @@ export function DuckEditor({
             disabled={disabled || suggestion === null || Math.abs(suggestion - settings.thresholdDb) < 0.5}
             onClick={() => suggestion !== null && onChange("thresholdDb", suggestion)}
           >
-            {suggestion !== null ? `Use ${db(suggestion)} dB` : "Use suggestion"}
+            {suggestion !== null ? tr("g5.duckUseDb", { db: db(suggestion) }) : tr("g5.duckUseSuggestion")}
           </button>
         </div>
       )}
       <p className="muted dynamics-status">{status}</p>
       {!roundMode && (
-        <PropertySection kind="duck" title="How one sentence is ducked">
+        <PropertySection kind="duck" title={tr("g5.duckSentence")}>
           <svg
             className="dynamics-graph dynamics-sketch"
             viewBox="0 0 380 100"
             role="img"
-            aria-label={`Attack ${settings.attackMs} ms, hold ${settings.holdMs} ms, release ${settings.releaseMs} ms`}
+            aria-label={tr("g5.duckSketchAria", {
+              attack: settings.attackMs,
+              hold: settings.holdMs,
+              release: settings.releaseMs,
+            })}
           >
             <rect x={L} y={20} width={R - L} height={52} className="dynamics-plot" />
             <rect
@@ -530,7 +530,7 @@ export function DuckEditor({
               textAnchor="middle"
               className="dynamics-axis"
             >
-              you talk
+              {tr("g5.duckYouTalk")}
             </text>
             <text x={L - 4} y={23} textAnchor="end" className="dynamics-axis">
               0
@@ -545,15 +545,13 @@ export function DuckEditor({
               className="duck-gain-line"
             />
             <text x={sx(sketch.talkStart) + 3} y={86} className="dynamics-axis">
-              ↑ attack {settings.attackMs} ms
+              {tr("g5.duckSketchAttack", { ms: settings.attackMs })}
             </text>
             <text x={sx(sketch.talkEnd) + 3} y={86} className="dynamics-axis">
-              ↑ hold {settings.holdMs} ms · release {settings.releaseMs} ms
+              {tr("g5.duckSketchHold", { hold: settings.holdMs, release: settings.releaseMs })}
             </text>
           </svg>
-          <small className="muted">
-            The line shows this audio's level change: 0 is unchanged, the bottom is fully ducked.
-          </small>
+          <small className="muted">{tr("g5.duckSketchHelp")}</small>
         </PropertySection>
       )}
     </section>

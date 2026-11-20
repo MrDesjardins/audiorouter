@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { useMessages } from "./i18n/useMessages";
 import { customThemeStyle, type CustomTheme } from "./customTheme";
 
 /**
@@ -8,6 +9,7 @@ import { customThemeStyle, type CustomTheme } from "./customTheme";
  * action, so every palette colour has something real to colour.
  */
 export function ThemePreview({ theme }: { theme: CustomTheme }) {
+  const tr = useMessages();
   const gradientId = "theme-preview-flow-" + useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const firstPath = gradientId + "-a";
   const secondPath = gradientId + "-b";
@@ -16,20 +18,20 @@ export function ThemePreview({ theme }: { theme: CustomTheme }) {
       className={`theme-preview theme-${theme.base} theme-custom`}
       style={customThemeStyle(theme)}
       role="img"
-      aria-label="Theme preview: a workspace with a running route, two flowing connections, a silent connection and a paused connection, plus a tool panel."
+      aria-label={tr("g1.previewAria")}
     >
       <div className="theme-preview-topbar">
         <span className="theme-preview-brand">AudioRouter</span>
         <span className="theme-preview-status">
           <span className="theme-preview-status-dot" />
-          Running
+          {tr("g1.previewRunning")}
         </span>
       </div>
       <div className="theme-preview-body">
         <div className="theme-preview-rail">
-          <span className="is-current">Route</span>
-          <span>Tools</span>
-          <span>Settings</span>
+          <span className="is-current">{tr("g1.previewRoute")}</span>
+          <span>{tr("g1.previewTools")}</span>
+          <span>{tr("g1.previewSettings")}</span>
         </div>
         <div className="theme-preview-stage">
           <div className="theme-preview-canvas">
@@ -67,61 +69,61 @@ export function ThemePreview({ theme }: { theme: CustomTheme }) {
               </circle>
             </svg>
             <div className="theme-preview-node theme-preview-mic">
-              <span className="theme-preview-kind">Input</span>
-              <strong>Microphone</strong>
+              <span className="theme-preview-kind">{tr("g1.previewInput")}</span>
+              <strong>{tr("g1.previewMicrophone")}</strong>
               <span className="theme-preview-port is-output" />
             </div>
             <div className="theme-preview-node theme-preview-gain">
-              <span className="theme-preview-kind">Tool</span>
-              <strong>Gain</strong>
+              <span className="theme-preview-kind">{tr("g1.previewTool")}</span>
+              <strong>{tr("g1.previewGain")}</strong>
               <span className="theme-preview-port is-input" />
               <span className="theme-preview-port is-output" />
             </div>
             <div className="theme-preview-node theme-preview-recorder">
-              <span className="theme-preview-kind">Tool</span>
-              <strong>Recorder</strong>
+              <span className="theme-preview-kind">{tr("g1.previewTool")}</span>
+              <strong>{tr("g1.previewRecorder")}</strong>
               <span className="theme-preview-port is-input" />
             </div>
             <div className="theme-preview-node theme-preview-plugin is-plugin">
-              <span className="theme-preview-kind">Plug-in</span>
-              <strong>Voice FX</strong>
+              <span className="theme-preview-kind">{tr("g1.previewPlugin")}</span>
+              <strong>{tr("g1.previewVoiceFx")}</strong>
               <span className="theme-preview-port is-output" />
             </div>
             <div className="theme-preview-node theme-preview-speakers is-selected">
-              <span className="theme-preview-kind">Output</span>
-              <strong>Speakers</strong>
+              <span className="theme-preview-kind">{tr("g1.previewOutput")}</span>
+              <strong>{tr("g1.previewSpeakers")}</strong>
               <span className="theme-preview-port is-input" />
             </div>
           </div>
           <ul className="theme-preview-legend">
             <li>
               <i className="is-active" />
-              Flowing
+              {tr("g1.previewFlowing")}
             </li>
             <li>
               <i className="is-silent" />
-              Silent
+              {tr("g1.previewSilent")}
             </li>
             <li>
               <i className="is-paused" />
-              Paused
+              {tr("g1.previewPaused")}
             </li>
           </ul>
         </div>
         <div className="theme-preview-inspector">
-          <span className="theme-preview-panel-title">Gain</span>
-          <span className="theme-preview-kind">Tool</span>
+          <span className="theme-preview-panel-title">{tr("g1.previewGain")}</span>
+          <span className="theme-preview-kind">{tr("g1.previewTool")}</span>
           <span className="theme-preview-field">&minus;6.0 dB</span>
           <span className="theme-preview-slider" />
           <span className="theme-preview-chips">
-            <span className="is-good">Stable</span>
+            <span className="is-good">{tr("g1.previewStable")}</span>
             <span className="is-plugin">VST3</span>
-            <span className="is-danger">Clip</span>
+            <span className="is-danger">{tr("g1.previewClip")}</span>
           </span>
-          <span className="theme-preview-button">Apply</span>
+          <span className="theme-preview-button">{tr("g1.previewApply")}</span>
         </div>
       </div>
-      <p className="theme-preview-caption">Colors update here as you choose them.</p>
+      <p className="theme-preview-caption">{tr("g1.previewCaption")}</p>
     </div>
   );
 }

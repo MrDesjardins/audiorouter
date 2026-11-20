@@ -189,8 +189,8 @@ export function PropertiesPanel({
       aria-labelledby="workbench-tab-properties"
       tabIndex={0}
     >
-      <h2 id="inspector-heading">No tool selected</h2>
-      <p className="muted">This route is empty. Open the Tools tab and add a tool, such as your microphone.</p>
+      <h2 id="inspector-heading">{tr("g4Panel.noToolSelected")}</h2>
+      <p className="muted">{tr("g4Panel.emptyRoute")}</p>
     </section>
   ) : (
     <>
@@ -262,7 +262,7 @@ export function PropertiesPanel({
                     : n,
                 ),
               });
-              setActionMessage("Meter output added. Connect it to the next tool and Save to keep it.");
+              setActionMessage(tr("g4Panel.meterAdded"));
             }}
           />
         ) : selectedNode.kind === "duck" ? (
@@ -328,9 +328,9 @@ export function PropertiesPanel({
                   setVirtualBusDraftCable(draft, selectedNode.id, busId, cableStatus),
                   selectedNode.id + ":busId",
                 );
-                setActionMessage("Cable changed. Save to keep it.");
+                setActionMessage(tr("g4Panel.cableChanged"));
               } catch (error) {
-                setActionMessage(error instanceof Error ? error.message : "Unable to change the cable.");
+                setActionMessage(error instanceof Error ? error.message : tr("g4Panel.cableChangeFailed"));
               }
             }}
           />
@@ -360,7 +360,7 @@ export function PropertiesPanel({
                   },
                   `${selectedNode.id}:endpointBinding`,
                 );
-                setActionMessage("Input device changed. Save to confirm this binding.");
+                setActionMessage(tr("g4Panel.inputDeviceChanged"));
               }
             }}
           />
@@ -382,13 +382,14 @@ export function PropertiesPanel({
         {selectedNode.kind === "physicalInput" && (
           <PropertySection
             kind={selectedNode.kind}
-            title="Spatial audio"
+            title={tr("g4Panel.spatialAudio")}
+            sectionId="Spatial audio"
             summary={
               selectedNode.parameters.spatialMode === "headphones"
-                ? "Headphones"
+                ? tr("g4Panel.spatialHeadphones")
                 : selectedNode.parameters.spatialMode === "speakers"
-                  ? "Speakers"
-                  : "Off"
+                  ? tr("g4Panel.spatialSpeakers")
+                  : tr("g4Panel.spatialOff")
             }
           >
             <SpatialAudioField
@@ -651,7 +652,7 @@ export function PropertiesPanel({
             />
             {/* The plugin's own settings come right after its window button: adjusting it is
                 why the user selected it (owner, 2026-11-12). */}
-            <div aria-label="Plugin settings">
+            <div aria-label={tr("g4Panel.pluginSettings")}>
               <ProcessorParameterEditor
                 node={selectedNode}
                 processors={processors}
@@ -671,7 +672,7 @@ export function PropertiesPanel({
               sidechainBlockedReason={
                 JSON.stringify(session.nodes.find((node) => node.id === selectedNode.id)) !==
                 JSON.stringify(selectedNode)
-                  ? "Save or discard changes to this tool before adding a sidechain input."
+                  ? tr("g4Panel.sidechainBlocked")
                   : undefined
               }
               onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
@@ -679,7 +680,12 @@ export function PropertiesPanel({
                 recordDraftChange(removeNodeDraftParameters(draft, selectedNode.id, names), `${selectedNode.id}:remove`)
               }
             />
-            <PropertySection kind={selectedNode.kind} title="After a plugin update" summary="Use the new version">
+            <PropertySection
+              kind={selectedNode.kind}
+              title={tr("g4Panel.afterUpdate")}
+              sectionId="After a plugin update"
+              summary={tr("g4Panel.afterUpdateSummary")}
+            >
               <PluginRecoveryControls
                 node={selectedNode}
                 backend={backend}
@@ -688,7 +694,7 @@ export function PropertiesPanel({
                 disabledReason={
                   JSON.stringify(session.nodes.find((node) => node.id === selectedNode.id)?.parameters) !==
                   JSON.stringify(selectedNode.parameters)
-                    ? "Save or discard changes to this tool before preparing recovery."
+                    ? tr("g4Panel.recoveryBlocked")
                     : undefined
                 }
                 onPrepared={(original, parameters) => {
@@ -858,6 +864,7 @@ const DEVICE_APP_ROWS = 3;
 
 /** "Apps using this device" for a Physical Input or Output node (D1). */
 function DeviceAppsSection({ users }: { users: NodeDeviceUsers | null | "unavailable" }) {
+  const tr = useMessages();
   const details = typeof users === "object" && users ? users : null;
   // A warning wraps over two rows, so its device names stay readable.
   const room = DEVICE_APP_ROWS - (details?.warning ? 2 : 0);
@@ -868,20 +875,21 @@ function DeviceAppsSection({ users }: { users: NodeDeviceUsers | null | "unavail
   }));
   if (rows.length > room) {
     const hidden = rows.length - room + 1;
-    rows.splice(room - 1, rows.length, { key: "more", text: `and ${hidden} more` });
+    rows.splice(room - 1, rows.length, { key: "more", text: tr("g4Panel.devAppsMore", { count: hidden }) });
   }
-  if (details?.warning) rows.unshift({ key: "warning", text: `Check: ${details.warning}`, warning: true });
+  if (details?.warning)
+    rows.unshift({ key: "warning", text: tr("g4Panel.devAppsCheck", { warning: details.warning }), warning: true });
   const empty =
     users === "unavailable"
-      ? "Apps not checked: connect to AudioRouter."
+      ? tr("g4Panel.devAppsNotChecked")
       : details === null
-        ? "Checking apps…"
+        ? tr("g4Panel.devAppsChecking")
         : rows.length === 0
-          ? "No app is using it right now."
+          ? tr("g4Panel.devAppsNone")
           : null;
   return (
     <section className="device-apps" aria-labelledby="device-apps-heading">
-      <h4 id="device-apps-heading">Apps using this device</h4>
+      <h4 id="device-apps-heading">{tr("g4Panel.devAppsHeading")}</h4>
       <ul className="device-apps-list" aria-live="polite">
         {empty ? (
           <li className="muted">{empty}</li>

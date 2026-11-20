@@ -1,3 +1,5 @@
+import { tx } from "./i18n";
+
 /** Dashed lines shown while a card is dragged, when its edges or centre line up with another card. */
 export type GuideRect = { id: string; name: string; x: number; y: number; width: number; height: number };
 export type GuideLine = { axis: "x" | "y"; at: number; from: number; to: number };
@@ -48,6 +50,7 @@ export function guideLabel(names: readonly string[]): string {
   if (names.length === 0) return "";
   const shown = names.slice(0, NAMES_SHOWN);
   const rest = names.length - shown.length;
-  if (rest > 0) return `Lined up with ${shown.join(", ")} and ${rest} more`;
-  return `Lined up with ${shown.join(" and ")}`;
+  if (rest > 0)
+    return tx("g4Canvas.guideLinedUpMore", { names: shown.join(tx("g4Canvas.guideListComma")), count: rest });
+  return tx("g4Canvas.guideLinedUp", { names: shown.join(tx("g4Canvas.guideListAnd")) });
 }

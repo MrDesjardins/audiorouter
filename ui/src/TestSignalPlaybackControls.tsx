@@ -1,4 +1,5 @@
 import type { MouseEvent } from "react";
+import { useMessages } from "./i18n/useMessages";
 
 type TestSignalPlaybackControlsProps = {
   durationMs: number;
@@ -26,6 +27,7 @@ export function TestSignalPlaybackControls({
   onStart,
   onStop,
 }: TestSignalPlaybackControlsProps) {
+  const tr = useMessages();
   const finiteDurationMs = Number.isFinite(durationMs) ? Math.max(1, durationMs) : 1_000;
   const durationSeconds = finiteDurationMs / 1000;
   // Play may prepare a stopped route first; Stop only silences this source.
@@ -44,42 +46,45 @@ export function TestSignalPlaybackControls({
         <button
           type="button"
           className="primary"
-          aria-label="Play tone"
-          title="Plays this tone through the canvas route"
+          aria-label={tr("g1.toneAriaPlay")}
+          title={tr("g1.toneTitlePlay")}
           disabled={!canStart || playing || actionBusy}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={startClick}
         >
-          {actionBusy && !playing ? "Starting…" : "Play tone"}
+          {actionBusy && !playing ? tr("g1.toneStarting") : tr("g1.tonePlay")}
         </button>
         <button
           type="button"
           className="secondary"
-          aria-label="Stop tone"
-          title="Stops this tone; the canvas route keeps running"
+          aria-label={tr("g1.toneAriaStop")}
+          title={tr("g1.toneTitleStop")}
           disabled={!onStop || !playing || actionBusy}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={stopClick}
         >
-          {actionBusy && playing ? "Stopping…" : "Stop tone"}
+          {actionBusy && playing ? tr("g1.toneStopping") : tr("g1.toneStop")}
         </button>
       </div>
       {sessionRunning && routed && nodeEnabled ? (
         // The route runs either way; say only what this tone is doing (owner, 2026-11-07).
         <small className="node-test-signal-help">
-          {playing ? "Tone playing" : "Tone off"} · {durationSeconds.toFixed(durationSeconds < 10 ? 1 : 0)} s
+          {tr("g1.toneLine", {
+            state: playing ? tr("g1.tonePlaying") : tr("g1.toneOff"),
+            seconds: durationSeconds.toFixed(durationSeconds < 10 ? 1 : 0),
+          })}
         </small>
       ) : (
         <small className="node-test-signal-help" role="status">
           {!routed
-            ? "Connect to an enabled physical output."
+            ? tr("g1.toneNotRouted")
             : !nodeEnabled
-              ? "Enable this source."
+              ? tr("g1.toneEnable")
               : !playbackReady
-                ? "Press Play to preview this unsaved route."
+                ? tr("g1.tonePreview")
                 : !endpointPrepared
-                  ? "Play checks audio setup. Prepare endpoints in Devices."
-                  : `Ready · ${durationSeconds.toFixed(durationSeconds < 10 ? 1 : 0)} s`}
+                  ? tr("g1.tonePrepare")
+                  : tr("g1.toneReady", { seconds: durationSeconds.toFixed(durationSeconds < 10 ? 1 : 0) })}
         </small>
       )}
     </div>

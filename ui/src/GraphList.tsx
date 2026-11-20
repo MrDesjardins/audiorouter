@@ -1,9 +1,10 @@
 import { useContext } from "react";
 import type { Session } from "@audiorouter/contracts";
 import { BackendConnectionContext } from "./backendConnectionContext";
-import { insertMixerActionId, PROCESSOR_ACTIONS, removeMixerActionId } from "./DraftConnectionList";
+import { insertMixerActionId, PROCESSOR_ACTIONS, processorLabel, removeMixerActionId } from "./DraftConnectionList";
 import { humanizeNodeKind } from "./canvasNodeKinds";
-import { nodePortLabels, nodeStateLabel } from "./graphView";
+import { nodePortLabelsText, nodeStateText } from "./graphView";
+import { useMessages } from "./i18n/useMessages";
 
 export function GraphList({
   session,
@@ -22,6 +23,7 @@ export function GraphList({
   onInsertProcessor?: (edgeId: string, kind: (typeof PROCESSOR_ACTIONS)[number]["kind"]) => void;
   onOpenPluginPicker?: (edgeId: string) => void;
 }) {
+  const tr = useMessages();
   const connected = useContext(BackendConnectionContext);
   const names = new Map(session.nodes.map((node) => [node.id, node.name]));
   const mixers = session.nodes.filter((node) => node.kind === "mixer");
@@ -30,8 +32,8 @@ export function GraphList({
     else globalThis.dispatchEvent(new CustomEvent("audiorouter:insert-processor", { detail: { edgeId, kind } }));
   };
   return (
-    <div className="graph-list" aria-label="Tools and connections">
-      <ol aria-label="Tools">
+    <div className="graph-list" aria-label={tr("g4Panel.toolsAndConnections")}>
+      <ol aria-label={tr("g4Panel.toolsList")}>
         {session.nodes.map((node) => (
           <li key={node.id}>
             <button
@@ -42,24 +44,24 @@ export function GraphList({
             >
               {node.name}{" "}
               <small>
-                {humanizeNodeKind(node)}, {nodeStateLabel(node)}
+                {humanizeNodeKind(node)}, {nodeStateText(node)}
               </small>
-              <span className="list-port-summary">{nodePortLabels(node).join(" · ")}</span>
+              <span className="list-port-summary">{nodePortLabelsText(node).join(" · ")}</span>
             </button>
           </li>
         ))}
       </ol>
-      <h3>Connections</h3>
+      <h3>{tr("g4Panel.connections")}</h3>
       {session.edges.length === 0 ? (
-        <p className="muted">No committed connections.</p>
+        <p className="muted">{tr("g4Panel.noCommitted")}</p>
       ) : (
-        <ul aria-label="Connections">
+        <ul aria-label={tr("g4Panel.connections")}>
           {session.edges.map((edge) => (
             <li key={edge.id}>
               <span>
                 {names.get(edge.sourceNode) ?? edge.sourceNode}:{edge.sourcePort} →{" "}
                 {names.get(edge.destinationNode) ?? edge.destinationNode}:{edge.destinationPort}{" "}
-                <small>{edge.enabled ? "enabled" : "disabled"}</small>
+                <small>{tr(edge.enabled ? "g4Panel.connEnabled" : "g4Panel.connDisabled")}</small>
               </span>
               <button
                 type="button"
@@ -67,7 +69,7 @@ export function GraphList({
                 disabled={!connected}
                 onClick={() => onToggleConnection(edge.id, !edge.enabled)}
               >
-                {edge.enabled ? "Disable" : "Enable"}
+                {tr(edge.enabled ? "g4Panel.disable" : "g4Panel.enable")}
               </button>
               <button
                 type="button"
@@ -75,16 +77,19 @@ export function GraphList({
                 disabled={!connected}
                 onClick={() => onRemoveConnection(edge.id)}
               >
-                Remove
+                {tr("g4Panel.remove")}
               </button>
               <button
                 type="button"
                 className="secondary"
                 disabled={!connected}
-                aria-label={`Insert mixer on ${names.get(edge.sourceNode) ?? edge.sourceNode} to ${names.get(edge.destinationNode) ?? edge.destinationNode}`}
+                aria-label={tr("g4Panel.insertMixerAria", {
+                  source: names.get(edge.sourceNode) ?? edge.sourceNode,
+                  destination: names.get(edge.destinationNode) ?? edge.destinationNode,
+                })}
                 onClick={() => onRemoveConnection(insertMixerActionId(edge.id))}
               >
-                Insert mixer
+                {tr("g4Panel.insertMixer")}
               </button>
               {PROCESSOR_ACTIONS.map((processor) => (
                 <button
@@ -94,7 +99,7 @@ export function GraphList({
                   disabled={!connected}
                   onClick={() => insertProcessor(edge.id, processor.kind)}
                 >
-                  Insert {processor.label}
+                  {tr("g4Panel.insertProcessor", { name: processorLabel(processor.kind) })}
                 </button>
               ))}
               {onOpenPluginPicker && (
@@ -104,7 +109,7 @@ export function GraphList({
                   disabled={!connected}
                   onClick={() => onOpenPluginPicker(edge.id)}
                 >
-                  Insert VST plugin
+                  {tr("g4Panel.insertVst")}
                 </button>
               )}
             </li>
@@ -112,7 +117,7 @@ export function GraphList({
         </ul>
       )}
       {mixers.length > 0 && (
-        <div className="mixer-topology-actions" aria-label="Mixer topology actions">
+        <div className="mixer-topology-actions" aria-label={tr("g4Panel.mixerTopology")}>
           {mixers.map((mixer) => (
             <div key={mixer.id}>
               <span>{mixer.name}</span>
@@ -120,10 +125,10 @@ export function GraphList({
                 type="button"
                 className="secondary"
                 disabled={!connected}
-                aria-label={`Remove and reconnect ${mixer.name}`}
+                aria-label={tr("g4Panel.removeReconnectAria", { name: mixer.name })}
                 onClick={() => onRemoveConnection(removeMixerActionId(mixer.id))}
               >
-                Remove and reconnect
+                {tr("g4Panel.removeReconnect")}
               </button>
             </div>
           ))}

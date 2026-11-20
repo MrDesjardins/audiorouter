@@ -9,12 +9,14 @@ import {
   type AppCheckState,
 } from "./appUsage";
 import { Icon, type IconName } from "./icons";
+import { useMessages } from "./i18n/useMessages";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 
-const STATE_WORD: Record<AppCheckState, string> = {
-  ready: "Ready",
-  check: "Check",
-  notRunning: "Not running",
-  unknown: "Waiting",
+const STATE_WORD: Record<AppCheckState, MessageKey> = {
+  ready: "g1.appsReady",
+  check: "g1.appsCheck",
+  notRunning: "g1.appsNotRunning",
+  unknown: "g1.appsWaiting",
 };
 const STATE_ICON: Record<AppCheckState, IconName> = {
   ready: "check",
@@ -25,20 +27,22 @@ const STATE_ICON: Record<AppCheckState, IconName> = {
 const ROW_ICON: Record<AppCheckRow["state"], IconName> = { ready: "check", check: "triangle-alert", info: "info" };
 
 /** The Discord menu path for each row, used by "Show me how". */
-const DISCORD_STEPS: Record<AppCheckRow["id"], string> = {
-  microphone: "In Discord, open User Settings › Voice & Video and set Input Device to",
-  speaker: "In Discord, open User Settings › Voice & Video and set Output Device to",
+const DISCORD_STEPS: Record<AppCheckRow["id"], MessageKey> = {
+  microphone: "g1.appsStepMic",
+  speaker: "g1.appsStepSpeaker",
 };
 
 export function AppStateBadge({ state }: { state: AppCheckState }) {
+  const tr = useMessages();
   return (
     <span className={`app-state-badge is-${state}`}>
-      <Icon name={STATE_ICON[state]} size={14} /> {STATE_WORD[state]}
+      <Icon name={STATE_ICON[state]} size={14} /> {tr(STATE_WORD[state])}
     </span>
   );
 }
 
 export function CopyName({ name }: { name: string }) {
+  const tr = useMessages();
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!copied) return;
@@ -58,10 +62,10 @@ export function CopyName({ name }: { name: string }) {
     >
       {/* Both labels share one grid cell, so the button keeps its width (UI-17). */}
       <span className={copied ? "app-label-hidden" : undefined} aria-hidden={copied}>
-        Copy device name
+        {tr("g1.appsCopyName")}
       </span>
       <span className={copied ? undefined : "app-label-hidden"} aria-hidden={!copied}>
-        Copied
+        {tr("g1.appsCopied")}
       </span>
     </button>
   );
@@ -76,6 +80,7 @@ function CheckRow({
   onOpenVirtualCables?: () => void;
   onSetUp?: () => void;
 }) {
+  const tr = useMessages();
   const [open, setOpen] = useState(false);
   const fix = row.state === "check" ? (row.expectedName ?? null) : null;
   // "Set up for Discord" builds the missing route; without it, the cable tab helps.
@@ -90,7 +95,7 @@ function CheckRow({
         <span className="app-check-line">
           <strong>{row.label}</strong>
           <span className="app-check-device" title={row.deviceName ?? undefined}>
-            {row.deviceName ?? "Not in use"}
+            {row.deviceName ?? tr("g1.appsNotInUse")}
           </span>
         </span>
         <small>{row.message}</small>
@@ -98,11 +103,11 @@ function CheckRow({
             ready to check does not grow (UI-17); only opening the steps does. */}
         {setUp ? (
           <button type="button" className="app-link-button" onClick={setUp}>
-            Set up for Discord
+            {tr("g1.appsSetUpDiscord")}
           </button>
         ) : openCables ? (
           <button type="button" className="app-link-button" onClick={openCables}>
-            Set up a virtual cable
+            {tr("g1.appsSetUpCable")}
           </button>
         ) : (
           <button
@@ -113,13 +118,13 @@ function CheckRow({
             disabled={!fix}
             onClick={() => setOpen((value) => !value)}
           >
-            Show me how
+            {tr("g1.appsShowHow")}
           </button>
         )}
         {fix && open && (
           <span className="app-check-steps">
             <span>
-              {DISCORD_STEPS[row.id]} <strong>{fix}</strong>.
+              {tr(DISCORD_STEPS[row.id])} <strong>{fix}</strong>.
             </span>
             <CopyName name={fix} />
           </span>
@@ -138,6 +143,7 @@ function DiscordCard({
   onOpenVirtualCables?: () => void;
   onSetUp?: () => void;
 }) {
+  const tr = useMessages();
   return (
     <section className="panel app-card" aria-labelledby="app-card-discord" data-app="discord">
       <header className="app-card-heading">
@@ -154,8 +160,8 @@ function DiscordCard({
         ))}
       </ul>
       <details className="app-recommended">
-        <summary>Recommended Discord settings</summary>
-        <p className="muted">In Discord, open User Settings › Voice & Video:</p>
+        <summary>{tr("g1.appsRecommended")}</summary>
+        <p className="muted">{tr("g1.appsRecommendedIntro")}</p>
         <ul>
           {DISCORD_RECOMMENDED_SETTINGS.map((item) => (
             <li key={item.setting}>
@@ -172,6 +178,7 @@ function DiscordCard({
 }
 
 function OtherApps({ applications, devices }: { applications: ApplicationInfo[]; devices: DeviceListItem[] }) {
+  const tr = useMessages();
   const usage = deviceUsage(applications);
   const rows = devices
     .filter((device) => device.state === "active")
@@ -184,10 +191,10 @@ function OtherApps({ applications, devices }: { applications: ApplicationInfo[];
   return (
     <section className="panel app-card" aria-labelledby="app-card-others">
       <header className="app-card-heading">
-        <h3 id="app-card-others">Other apps using audio</h3>
+        <h3 id="app-card-others">{tr("g1.appsOthersHeading")}</h3>
       </header>
       {rows.length === 0 ? (
-        <p className="muted">No other app is using an audio device right now.</p>
+        <p className="muted">{tr("g1.appsOthersNone")}</p>
       ) : (
         <ul className="app-usage-list">
           {rows.map(({ device, uses }) => (
@@ -195,9 +202,8 @@ function OtherApps({ applications, devices }: { applications: ApplicationInfo[];
               <strong title={device.name}>{device.name}</strong>
               <small>
                 {uses
-                  .map(
-                    (use) =>
-                      `${use.label} ${use.direction === "capture" ? "records from it" : "plays to it or records it"}`,
+                  .map((use) =>
+                    tr(use.direction === "capture" ? "g1.appsUseCapture" : "g1.appsUseRender", { label: use.label }),
                   )
                   .join(" · ")}
               </small>
@@ -236,18 +242,15 @@ export function AppsPanel({
   /** The OBS card, built by the caller from `obs.status`. */
   obs?: ReactNode;
 }) {
+  const tr = useMessages();
   return (
     <>
       <div className="apps-toolbar">
         <p className="muted" role="status">
-          {!connected
-            ? "Connect to AudioRouter to check your apps."
-            : stale
-              ? "Could not refresh; showing the last check."
-              : "Checked when you switch back to AudioRouter."}
+          {!connected ? tr("g1.appsNotConnected") : stale ? tr("g1.appsStale") : tr("g1.appsCheckedOnReturn")}
         </p>
         <button type="button" className="secondary" onClick={onRefresh} disabled={!connected}>
-          Check now
+          {tr("g1.appsCheckNow")}
         </button>
       </div>
       {discordSetup}

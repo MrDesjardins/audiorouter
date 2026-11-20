@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef } from "react";
+import { useMessages } from "./i18n/useMessages";
 
 export function KeyboardHelp({ onClose }: { onClose: () => void }) {
+  const tr = useMessages();
   const heading = useId();
   const close = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDListElement>(null);
@@ -12,20 +14,20 @@ export function KeyboardHelp({ onClose }: { onClose: () => void }) {
     };
   }, []);
   const entries = [
-    ["Ctrl+S", "Save your edits"],
-    ["Ctrl+K", "Find a tool, setting, card or session"],
-    ["Ctrl+Z / Ctrl+Y", "Undo / redo the latest edit"],
-    ["Ctrl+A", "Select all tools and groups on the canvas"],
-    ["Ctrl+D", "Duplicate one selected tool"],
-    ["F2", "Rename one selected tool"],
-    ["Ctrl+C / Ctrl+V", "Copy / paste a tool without connections"],
-    ["Ctrl+plus / Ctrl+minus", "Zoom the canvas in / out"],
-    ["Ctrl+0", "Fit the route in view"],
-    ["Arrow keys", "Move a focused card one grid step"],
-    ["Delete", "Remove selected tools or connections"],
-    ["Esc (while dragging)", "Cancel the drag: a card goes back, a connection is not made"],
-    ["Shift+F10", "Open a focused card's menu"],
-    ["F1 / ?", "Show this reference"],
+    ["Ctrl+S", tr("g1.kbSave")],
+    ["Ctrl+K", tr("g1.kbFind")],
+    ["Ctrl+Z / Ctrl+Y", tr("g1.kbUndo")],
+    ["Ctrl+A", tr("g1.kbSelectAll")],
+    ["Ctrl+D", tr("g1.kbDuplicate")],
+    ["F2", tr("g1.kbRename")],
+    ["Ctrl+C / Ctrl+V", tr("g1.kbCopyPaste")],
+    ["Ctrl+plus / Ctrl+minus", tr("g1.kbZoom")],
+    ["Ctrl+0", tr("g1.kbFit")],
+    [tr("g1.kbArrowKey"), tr("g1.kbArrow")],
+    ["Delete", tr("g1.kbDelete")],
+    [tr("g1.kbEscKey"), tr("g1.kbEsc")],
+    ["Shift+F10", tr("g1.kbMenu")],
+    ["F1 / ?", tr("g1.kbHelp")],
   ];
   return (
     <div className="dialog-backdrop app-dialog-backdrop" role="presentation">
@@ -50,12 +52,9 @@ export function KeyboardHelp({ onClose }: { onClose: () => void }) {
           }
         }}
       >
-        <h2 id={heading}>Keyboard shortcuts</h2>
-        <p>
-          Canvas commands work while the canvas has focus. Shortcuts leave text editing alone. Tab starts with links to
-          skip between regions. Windows-wide keybinds are in Settings → Keyboard shortcuts.
-        </p>
-        <dl ref={list} tabIndex={0} aria-label="Shortcut reference">
+        <h2 id={heading}>{tr("g1.kbHeading")}</h2>
+        <p>{tr("g1.kbIntro")}</p>
+        <dl ref={list} tabIndex={0} aria-label={tr("g1.kbRefLabel")}>
           {entries.map(([key, action]) => (
             <div key={action}>
               <dt>{key}</dt>
@@ -64,7 +63,7 @@ export function KeyboardHelp({ onClose }: { onClose: () => void }) {
           ))}
         </dl>
         <button ref={close} type="button" className="secondary" onClick={onClose}>
-          Close
+          {tr("g1.kbClose")}
         </button>
       </section>
     </div>

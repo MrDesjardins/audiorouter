@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useMessages } from "./i18n/useMessages";
 
 export function SidechainReplaceDialog({
   pluginName,
@@ -11,6 +12,7 @@ export function SidechainReplaceDialog({
   nextSourceName: string;
   onDecision: (replace: boolean) => void;
 }) {
+  const tr = useMessages();
   const keep = useRef<HTMLButtonElement>(null);
   const replace = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -39,18 +41,16 @@ export function SidechainReplaceDialog({
           }
         }}
       >
-        <h2 id="sidechain-replace-heading">Replace this sidechain source?</h2>
+        <h2 id="sidechain-replace-heading">{tr("g4Panel.sidechainHeading")}</h2>
         <p id="sidechain-replace-description">
-          The Sidechain input on {pluginName} already receives {currentSourceName}. Replace it with {nextSourceName}?
-          The key goes to the plugin&apos;s auxiliary input; AudioRouter will not add a Mixer or combine it with the
-          main signal.
+          {tr("g4Panel.sidechainDescription", { plugin: pluginName, current: currentSourceName, next: nextSourceName })}
         </p>
         <div className="actions">
           <button ref={keep} type="button" className="secondary" onClick={() => onDecision(false)}>
-            Keep current source
+            {tr("g4Panel.sidechainKeep")}
           </button>
           <button ref={replace} type="button" className="primary" onClick={() => onDecision(true)}>
-            Replace sidechain source
+            {tr("g4Panel.sidechainReplace")}
           </button>
         </div>
       </section>

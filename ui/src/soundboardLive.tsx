@@ -3,6 +3,7 @@
 // the Properties editor that show it subscribe.
 import { createContext, useContext, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from "react";
 import type { Session } from "@audiorouter/contracts";
+import { tm } from "./actionText";
 import { formatUiError, type UiBackend } from "./backend";
 import { importSoundFile, type ImportedSound } from "./soundImport";
 
@@ -64,7 +65,7 @@ const idleController: SoundboardController = {
   trigger: () => {},
   stop: () => {},
   importing: false,
-  importFile: async () => ({ ok: false, message: "Sounds cannot be imported here." }),
+  importFile: async () => ({ ok: false, message: tm("h1.importUnavailable") }),
   announce: () => {},
   assign: () => {},
 };
@@ -116,8 +117,7 @@ export function useSoundboardController({
   // The ref closes the gap between a second drop and the re-render that disables it.
   const importBusy = useRef(false);
   const importFile = async (nodeId: string, slot: number, file: File, keepCaption: boolean) => {
-    if (importBusy.current)
-      return { ok: false, message: "Another sound is still being imported. Try again when it is done." };
+    if (importBusy.current) return { ok: false, message: tm("h1.importBusy") };
     importBusy.current = true;
     setImporting(true);
     try {
@@ -125,10 +125,14 @@ export function useSoundboardController({
       assign(nodeId, slot, sound, keepCaption);
       return {
         ok: true,
-        message: `${sound.fileName} is on button ${slot} (${Math.round(sound.durationMs / 1000)} s). Save the change, then press Play.`,
+        message: tm("h1.importDone", {
+          file: sound.fileName,
+          slot,
+          seconds: Math.round(sound.durationMs / 1000),
+        }),
       };
     } catch (error) {
-      return { ok: false, message: formatUiError(error, "The sound could not be imported.") };
+      return { ok: false, message: formatUiError(error, tm("h1.importFailed")) };
     } finally {
       importBusy.current = false;
       setImporting(false);
@@ -166,7 +170,7 @@ export function useSoundboardController({
         })
         .catch(() => {
           // A board that is not prepared yet is normal right after Start; report a real outage once.
-          if (!failing) reportFailure("Soundboard status is unavailable.");
+          if (!failing) reportFailure(tm("h1.statusUnavailable"));
           failing = true;
         })
         .finally(() => {
@@ -198,7 +202,7 @@ export function useSoundboardController({
         await send.call(backend, sessionId, nodeId, slot, action);
         if (press?.released) await send.call(backend, sessionId, nodeId, slot, "release");
       } catch {
-        report("The sound could not be played. Check that the session is running.");
+        report(tm("h1.playFailed"));
       } finally {
         if (press && pendingPresses.current.get(key) === press) pendingPresses.current.delete(key);
       }
@@ -207,7 +211,7 @@ export function useSoundboardController({
   const stop = (nodeId: string, slot?: number) => {
     const send = backend.soundboardStop;
     if (!send || !backend.connected || !sessionRunning) return;
-    void send.call(backend, sessionId, nodeId, slot).catch(() => report("The sounds could not be stopped."));
+    void send.call(backend, sessionId, nodeId, slot).catch(() => report(tm("h1.stopFailed")));
   };
   return { store, ready: backend.connected && sessionRunning, trigger, stop, importing, importFile, announce, assign };
 }

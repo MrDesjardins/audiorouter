@@ -1,4 +1,5 @@
 import type { ApplicationInfo, DeviceListItem, Node, Session } from "@audiorouter/contracts";
+import { tx } from "./i18n";
 
 /**
  * Which apps use which audio devices, from the backend's read-only session
@@ -153,7 +154,14 @@ export function sixteenChannelTwin(device: DeviceListItem, devices: readonly Dev
 /** "CABLE-A Output (VB-Audio Virtual Cable A)" as "CABLE-A Output". */
 const shortName = (name: string) => name.replace(VB_CABLE, "").trim();
 
-const names = (uses: readonly DeviceUse[]) => uses.map((use) => use.label).join(" and ");
+const joined = (items: readonly string[], key: "h1.joinAnd" | "h1.joinOr") =>
+  items.reduce((all, item) => (all === "" ? item : tx(key, { a: all, b: item })), "");
+
+const names = (uses: readonly DeviceUse[]) =>
+  joined(
+    uses.map((use) => use.label),
+    "h1.joinAnd",
+  );
 
 /** One app on a device node's device, or on the other end of its cable. */
 export interface NodeAppUse {
@@ -206,20 +214,20 @@ export function nodeDeviceUsers(
     const endpointId = endpointOf(session, node.id);
     const device = endpointId ? devices.find((item) => item.id === endpointId) : undefined;
     if (!endpointId) {
-      result.set(node.id, { summary: "No device chosen", uses: [], warning: null });
+      result.set(node.id, { summary: tx("h1.noDeviceChosen"), uses: [], warning: null });
       continue;
     }
     const output = node.kind === "physicalOutput";
-    const deviceName = device?.name ?? "this device";
+    const deviceName = device?.name ?? tx("h1.thisDevice");
     const uses: NodeAppUse[] = (output ? active(endpointId, "render") : active(endpointId, "capture")).map((use) => ({
       label: use.label,
       appId: use.appId,
       // Windows reports a loopback recorder like a player (spec CAP), and a
       // call app's speaker is a player: neither hears what this node sends.
-      role: output ? "plays here too, e.g. as its speaker" : "records this device too",
+      role: output ? tx("h1.rolePlaysHere") : tx("h1.roleRecordsThis"),
       detail: output
-        ? `plays to ${deviceName} too (for example as its speaker), or records what plays there`
-        : `records ${deviceName} too`,
+        ? tx("h1.detailPlaysTo", { device: deviceName })
+        : tx("h1.detailRecordsDevice", { device: deviceName }),
       relation: "shared",
     }));
     const partner = device ? cablePartner(device, devices) : null;
@@ -231,17 +239,26 @@ export function nodeDeviceUsers(
         uses.push({
           label: use.label,
           appId: use.appId,
-          role: output ? `hears it on ${shortName(partner.name)}` : `plays into ${shortName(partner.name)}`,
+          role: output
+            ? tx("h1.roleHears", { cable: shortName(partner.name) })
+            : tx("h1.rolePlaysInto", { cable: shortName(partner.name) }),
           detail: output
-            ? `records ${partner.name}, so it hears what this node sends`
-            : `plays into ${partner.name}, so this node receives its sound`,
+            ? tx("h1.detailHears", { name: partner.name })
+            : tx("h1.detailPlaysInto", { name: partner.name }),
           relation: output ? "heard" : "source",
         });
       const twin = output ? sixteenChannelTwin(partner, devices) : null;
       const astray = twin ? active(twin.id, "capture").filter((use) => use.appId !== null) : [];
       if (twin && astray.length > 0) {
-        warning = `${names(astray)} ${astray.length === 1 ? "records" : "record"} from ${twin.name}, not ${partner.name}`;
-        alert = `${names(astray)} ${astray.length === 1 ? "is" : "are"} on ${shortName(twin.name)}`;
+        warning = tx(astray.length === 1 ? "h1.warnTwinOne" : "h1.warnTwinMany", {
+          apps: names(astray),
+          twin: twin.name,
+          partner: partner.name,
+        });
+        alert = tx(astray.length === 1 ? "h1.alertTwinOne" : "h1.alertTwinMany", {
+          apps: names(astray),
+          twin: shortName(twin.name),
+        });
       }
     }
     // Discord or OBS on the raw microphone skips the processing this session
@@ -249,8 +266,14 @@ export function nodeDeviceUsers(
     if (!output && microphones.includes(node.id) && voiceCables.length > 0) {
       const raw = active(endpointId, "capture").filter((use) => use.appId !== null);
       if (raw.length > 0) {
-        warning = `${names(raw)} ${raw.length === 1 ? "records" : "record"} this microphone without your processing; choose ${voiceCables.map((cable) => cable.name).join(" or ")} instead`;
-        alert = `${names(raw)} ${raw.length === 1 ? "skips" : "skip"} your processing`;
+        warning = tx(raw.length === 1 ? "h1.warnRawMicOne" : "h1.warnRawMicMany", {
+          apps: names(raw),
+          cables: joined(
+            voiceCables.map((cable) => cable.name),
+            "h1.joinOr",
+          ),
+        });
+        alert = tx(raw.length === 1 ? "h1.alertRawMicOne" : "h1.alertRawMicMany", { apps: names(raw) });
       }
     }
     // Say how each app relates, not just "used by": Discord playing its call
@@ -258,12 +281,15 @@ export function nodeDeviceUsers(
     const labelsOf = (relation: NodeAppUse["relation"]) =>
       [...new Set(uses.filter((use) => use.relation === relation).map((use) => use.label))].join(", ");
     const parts = [
-      labelsOf("heard") && `Heard by ${labelsOf("heard")}`,
-      labelsOf("source") && `Sound from ${labelsOf("source")}`,
-      labelsOf("shared") && (output ? `Shared with ${labelsOf("shared")}` : `Also recorded by ${labelsOf("shared")}`),
+      labelsOf("heard") && tx("h1.heardBy", { apps: labelsOf("heard") }),
+      labelsOf("source") && tx("h1.soundFrom", { apps: labelsOf("source") }),
+      labelsOf("shared") &&
+        (output
+          ? tx("h1.sharedWith", { apps: labelsOf("shared") })
+          : tx("h1.alsoRecordedBy", { apps: labelsOf("shared") })),
     ].filter(Boolean);
     result.set(node.id, {
-      summary: alert ?? (parts.length > 0 ? parts.join(" · ") : "No app using it"),
+      summary: alert ?? (parts.length > 0 ? parts.join(" · ") : tx("h1.noAppUsing")),
       uses,
       warning,
     });
@@ -447,7 +473,7 @@ export function discordCheck(
 ): AppCheck {
   if (stale) {
     const previous = discordCheck(session, applications, devices);
-    return { ...previous, state: "unknown", summary: "Could not refresh Discord; showing the last check." };
+    return { ...previous, state: "unknown", summary: tx("h1.discordStale") };
   }
   const use = appDevices(applications, "discord");
   // Always two rows, so the card keeps its size as Discord starts and stops (UI-17).
@@ -455,16 +481,22 @@ export function discordCheck(
     return {
       appId: "discord",
       state: "notRunning",
-      summary: "Discord is not running. Start it to check its devices.",
+      summary: tx("h1.discordNotRunning"),
       rows: [
         {
           id: "microphone",
-          label: "Microphone",
+          label: tx("h1.microphone"),
           deviceName: null,
           state: "info",
-          message: "Checked when Discord runs.",
+          message: tx("h1.checkedWhenRuns"),
         },
-        { id: "speaker", label: "Speaker", deviceName: null, state: "info", message: "Checked when Discord runs." },
+        {
+          id: "speaker",
+          label: tx("h1.speaker"),
+          deviceName: null,
+          state: "info",
+          message: tx("h1.checkedWhenRuns"),
+        },
       ],
     };
   const rows: AppCheckRow[] = [];
@@ -490,26 +522,26 @@ export function discordCheck(
   if (microphone === null && lastMicrophone !== null) {
     rows.push({
       id: "microphone",
-      label: "Microphone",
+      label: tx("h1.microphone"),
       deviceName: nameOf(devices, lastMicrophone),
       state: "ready",
-      message: `Carries your processed voice. ${LAST_CALL}`,
+      message: `${tx("h1.micCarries")} ${tx("h1.lastCall")}`,
     });
   } else if (microphone === null) {
     rows.push({
       id: "microphone",
-      label: "Microphone",
+      label: tx("h1.microphone"),
       deviceName: null,
       state: "info",
-      message: "Checked when you join a voice channel in Discord.",
+      message: tx("h1.checkedWhenJoin"),
     });
   } else if (voice.some((device) => device.id === microphone)) {
     rows.push({
       id: "microphone",
-      label: "Microphone",
+      label: tx("h1.microphone"),
       deviceName: microphoneName,
       state: "ready",
-      message: "Carries your processed voice.",
+      message: tx("h1.micCarries"),
     });
   } else if (voice.length > 0) {
     const expected = voice[0];
@@ -517,27 +549,31 @@ export function discordCheck(
     const usesRawMic = sessionInputs.includes(microphone);
     rows.push({
       id: "microphone",
-      label: "Microphone",
+      label: tx("h1.microphone"),
       deviceName: microphoneName,
       state: "check",
       message:
         twin?.id === microphone
-          ? `This is the 16-channel side of the same cable. Choose ${expected.name} instead.`
+          ? tx("h1.mic16ch", { name: expected.name })
           : usesRawMic
-            ? `This is your microphone without AudioRouter's effects. Choose ${expected.name} to send your processed voice.`
+            ? tx("h1.micRaw", { name: expected.name })
             : voice.length > 1
-              ? `AudioRouter sends your processed voice to ${voice.map((device) => device.name).join(" and ")}. Choose one of them.`
-              : `AudioRouter sends your processed voice to ${expected.name}.`,
+              ? tx("h1.micSendsMany", {
+                  names: joined(
+                    voice.map((device) => device.name),
+                    "h1.joinAnd",
+                  ),
+                })
+              : tx("h1.micSendsOne", { name: expected.name }),
       expectedName: expected.name,
     });
   } else {
     rows.push({
       id: "microphone",
-      label: "Microphone",
+      label: tx("h1.microphone"),
       deviceName: microphoneName,
       state: "info",
-      message:
-        "This session does not send your voice to a virtual cable yet. Send it to a cable, then choose that cable as Discord's microphone.",
+      message: tx("h1.micNoCable"),
       action: "virtualCables",
     });
   }
@@ -559,7 +595,7 @@ export function discordCheck(
           .find((device) => device && sixteenChannelTwin(device, devices)?.id === speaker)
       : undefined;
     const speakerPartner = speakerDevice ? cablePartner(speakerDevice, devices) : null;
-    const base = { id: "speaker", label: "Speaker", deviceName: speakerName } as const;
+    const base = { id: "speaker", label: tx("h1.speaker"), deviceName: speakerName } as const;
     if (
       speakerPartner !== null &&
       (speakerPartner.id === (microphone ?? lastMicrophone) || voice.some((device) => device.id === speakerPartner.id))
@@ -568,14 +604,13 @@ export function discordCheck(
       return {
         ...base,
         state: "check",
-        message:
-          "Discord plays into the cable that carries your voice, so people in your call hear themselves. Choose another output for Discord.",
+        message: tx("h1.spkFeedback"),
       };
     if (busyTwin)
       return {
         ...base,
         state: "check",
-        message: `This is the 16-channel side of ${busyTwin.name}, which AudioRouter plays to. Windows lets only one of them be used, so choose ${busyTwin.name}.`,
+        message: tx("h1.spkTwin", { name: busyTwin.name }),
         expectedName: busyTwin.name,
       };
     if (captureNodes.length > 0 && discordOutputs.includes(speaker)) {
@@ -586,7 +621,7 @@ export function discordCheck(
         // Name the user's own node and Discord's own setting, so the cause
         // is visible (owner: the generic sentence was not clear).
         const nodes = session ? outputNodeNamesReaching(session, captureNodes, speaker) : [];
-        const node = nodes.length > 0 ? `your "${nodes[0]}" node` : "your route";
+        const node = nodes.length > 0 ? tx("h1.spkYourNode", { name: nodes[0] }) : tx("h1.spkYourRoute");
         // You do not hear this cable, so copies could only matter to a
         // recorder. Judge it only when Windows shows one recording the other
         // end; a loopback recorder of this side looks like a player.
@@ -601,23 +636,22 @@ export function discordCheck(
           ? {
               ...base,
               state: "check",
-              message: `${recorders.join(" and ")} records this cable, and gets Discord twice: Discord plays here itself (its Output Device), and ${node} also sends Discord here. Keep one: take Discord out of ${node}, or set Discord's Output Device to another device.`,
+              message: tx("h1.spkTwice", { apps: joined(recorders, "h1.joinAnd"), node }),
             }
           : // Nothing records it: the owner's clips of this cable had Discord
             // once (2026-10-24), so a note about copies would only confuse.
-            { ...base, state: "ready", message: "Discord plays here." };
+            { ...base, state: "ready", message: tx("h1.spkPlaysHere") };
       }
       return {
         ...base,
         state: "check",
-        message:
-          "AudioRouter already sends Discord here, and Discord also plays here itself, so you hear it twice. Choose a virtual cable as Discord's output.",
+        message: tx("h1.spkTwiceHeard"),
       };
     }
     return {
       ...base,
       state: "ready",
-      message: captureNodes.length > 0 ? "AudioRouter captures Discord from the app itself." : "Discord plays here.",
+      message: captureNodes.length > 0 ? tx("h1.spkCaptured") : tx("h1.spkPlaysHere"),
     };
   };
   if (use.render.length > 0) rows.push(judgeSpeaker(use.render[0]));
@@ -627,13 +661,13 @@ export function discordCheck(
     const last = use.idleRender.length === 1 ? judgeSpeaker(use.idleRender[0]) : null;
     rows.push(
       last?.state === "ready"
-        ? { ...last, message: `${last.message} ${LAST_CALL}` }
+        ? { ...last, message: `${last.message} ${tx("h1.lastCall")}` }
         : {
             id: "speaker",
-            label: "Speaker",
+            label: tx("h1.speaker"),
             deviceName: null,
             state: "info",
-            message: "Checked when you join a voice channel in Discord.",
+            message: tx("h1.checkedWhenJoin"),
           },
     );
   }
@@ -648,45 +682,67 @@ export function discordCheck(
     state: problems > 0 ? "check" : confirmed ? "ready" : "unknown",
     summary:
       problems > 0
-        ? `${problems} setting${problems === 1 ? "" : "s"} to check`
+        ? tx(problems === 1 ? "h1.settingsToCheckOne" : "h1.settingsToCheckMany", { count: problems })
         : confirmed
           ? inCall
-            ? "Ready"
-            : "Ready, from Discord's last call. Join a voice channel to check again."
+            ? tx("h1.ready")
+            : tx("h1.readyLastCall")
           : inCall
-            ? "Waiting for your voice to reach a virtual cable"
-            : "Waiting for you to join a voice channel in Discord",
+            ? tx("h1.waitingCable")
+            : tx("h1.waitingJoin"),
     rows,
   };
 }
-
-/** Added to a row judged from an idle session, outside a call. */
-const LAST_CALL = "Seen in Discord's last call.";
 
 /** The check shown before the first answer arrives: the same two rows, so nothing moves. */
 export function pendingDiscordCheck(): AppCheck {
   return {
     appId: "discord",
     state: "unknown",
-    summary: "Checking which apps use your devices…",
+    summary: tx("h1.checkingUsage"),
     rows: [
-      { id: "microphone", label: "Microphone", deviceName: null, state: "info", message: "Checking…" },
-      { id: "speaker", label: "Speaker", deviceName: null, state: "info", message: "Checking…" },
+      { id: "microphone", label: tx("h1.microphone"), deviceName: null, state: "info", message: tx("h1.checking") },
+      { id: "speaker", label: tx("h1.speaker"), deviceName: null, state: "info", message: tx("h1.checking") },
     ],
   };
 }
 
-/** Settings AudioRouter's own tools replace; shown as advice, never read. */
-export const DISCORD_RECOMMENDED_SETTINGS = [
-  { setting: "Noise suppression", value: "None if using Denoise", why: "Avoid cleaning the same microphone twice." },
+/**
+ * Settings AudioRouter's own tools replace; shown as advice, never read. The
+ * fields are getters, so they follow the language chosen when they are read.
+ */
+export const DISCORD_RECOMMENDED_SETTINGS: readonly { setting: string; value: string; why: string }[] = [
   {
-    setting: "Automatic gain control",
-    value: "Off if using Compressor",
-    why: "Two level controls can fight each other.",
+    get setting() {
+      return tx("h1.recNoiseSetting");
+    },
+    get value() {
+      return tx("h1.recNoiseValue");
+    },
+    get why() {
+      return tx("h1.recNoiseWhy");
+    },
   },
   {
-    setting: "Echo cancellation",
-    value: "Off with headphones",
-    why: "Keep echo cancellation if your speakers can feed back into the microphone.",
+    get setting() {
+      return tx("h1.recAgcSetting");
+    },
+    get value() {
+      return tx("h1.recAgcValue");
+    },
+    get why() {
+      return tx("h1.recAgcWhy");
+    },
   },
-] as const;
+  {
+    get setting() {
+      return tx("h1.recEchoSetting");
+    },
+    get value() {
+      return tx("h1.recEchoValue");
+    },
+    get why() {
+      return tx("h1.recEchoWhy");
+    },
+  },
+];

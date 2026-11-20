@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useMessages } from "./i18n/useMessages";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 import type { SessionFromGoalResult, SessionGoal } from "@audiorouter/contracts";
 import { formatUiError, type ApplicationRow, type UiBackend } from "./backend";
 
@@ -14,6 +16,40 @@ const GOAL_ICONS: Record<string, IconName> = {
   "mix-minus": "users",
 };
 
+/** The backend sends goal text in English; known texts map to the catalog and
+ * anything else (a newer backend) is shown as received. */
+const GOAL_TEXT_KEYS: Record<string, MessageKey> = {
+  "Clean up my mic": "h2.goalTitleCleanMic",
+  "Game and voice for Discord": "h2.goalTitleGameDiscord",
+  "Record a podcast": "h2.goalTitlePodcast",
+  "Start empty": "h2.goalTitleEmpty",
+  "Record one app": "h2.goalTitleRecordApp",
+  "Talk to a guest without echo": "h2.goalTitleMixMinus",
+  "A clearer voice for calls and games.": "h2.goalSumCleanMic",
+  "Your voice goes to Discord, and the game stays out of it.": "h2.goalSumGameDiscord",
+  "Your mic and a guest's app, saved to a file.": "h2.goalSumPodcast",
+  "An empty canvas. Add tools yourself.": "h2.goalSumEmpty",
+  "One app's sound saved to a file, and nothing else.": "h2.goalSumRecordApp",
+  "Your guest hears you but not themselves. You hear your guest.": "h2.goalSumMixMinus",
+  "Which game should play in your headphones?": "h2.goalPromptGame",
+  "Which app is your guest's voice in?": "h2.goalPromptGuest",
+  "Which app do you want to record?": "h2.goalPromptRecord",
+  "Input device": "h2.goalAddInput",
+  "Output device": "h2.goalAddOutput",
+  "Application source": "h2.goalAddApp",
+  "voice cleanup": "h2.goalAddCleanup",
+  Mixer: "h2.goalAddMixer",
+  Recorder: "h2.goalAddRecorder",
+  "Speech Denoise": "h2.goalAddDenoise",
+  Gate: "h2.goalAddGate",
+  Compressor: "h2.goalAddCompressor",
+};
+type Translate = (key: MessageKey, options?: Record<string, unknown>) => string;
+function goalText(tr: Translate, english: string): string {
+  const key = GOAL_TEXT_KEYS[english];
+  return key ? tr(key) : english;
+}
+
 /** Running apps, each executable once, in name order. */
 function appChoices(rows: readonly ApplicationRow[]) {
   const seen = new Map<string, ApplicationRow>();
@@ -22,18 +58,25 @@ function appChoices(rows: readonly ApplicationRow[]) {
 }
 
 function GoalCard({ goal, onChoose, busy }: { goal: SessionGoal; onChoose: () => void; busy: boolean }) {
+  const tr = useMessages();
   return (
     <section className="goal-card" aria-labelledby={`goal-${goal.id}`}>
       <h3 id={`goal-${goal.id}`}>
         <Icon name={GOAL_ICONS[goal.id] ?? "circle-dot"} size={20} />
-        {goal.title}
+        {goalText(tr, goal.title)}
       </h3>
-      <p>{goal.summary}</p>
+      <p>{goalText(tr, goal.summary)}</p>
       <p className="goal-card-adds">
-        <strong>Adds:</strong> {goal.adds.length > 0 ? goal.adds.join(", ") : "Nothing"}
+        <strong>{tr("g4Panel.goalAdds")}</strong>{" "}
+        {goal.adds.length > 0 ? goal.adds.map((item) => goalText(tr, item)).join(", ") : tr("g4Panel.goalNothing")}
       </p>
-      <button type="button" disabled={busy} onClick={onChoose} aria-label={`Use this: ${goal.title}`}>
-        Use this
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onChoose}
+        aria-label={tr("g4Panel.goalUseThisAria", { title: goalText(tr, goal.title) })}
+      >
+        {tr("g4Panel.goalUseThis")}
       </button>
     </section>
   );
@@ -52,6 +95,8 @@ export function GoalDialog({
   onCreated: (result: SessionFromGoalResult) => void;
   onClose: () => void;
 }) {
+  const tr = useMessages();
+  const goalsUnavailableText = useEffectEvent(() => tr("g4Panel.goalsUnavailable"));
   const [goals, setGoals] = useState<SessionGoal[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -76,7 +121,7 @@ export function GoalDialog({
         if (live) setGoals(result.goals);
       })
       .catch((error) => {
-        if (live) setMessage(formatUiError(error, "The starting routes are unavailable."));
+        if (live) setMessage(formatUiError(error, goalsUnavailableText()));
       });
     return () => {
       live = false;
@@ -111,7 +156,7 @@ export function GoalDialog({
       });
       onCreated(result);
     } catch (error) {
-      setMessage(formatUiError(error, "Unable to make this route."));
+      setMessage(formatUiError(error, tr("g4Panel.goalMakeFailed")));
       setBusy(false);
     }
   };
@@ -149,29 +194,31 @@ export function GoalDialog({
         }}
       >
         <div className="goal-dialog-head">
-          <h2 id="goal-dialog-heading">{asking ? asking.title : "What do you want to do?"}</h2>
+          <h2 id="goal-dialog-heading">{asking ? goalText(tr, asking.title) : tr("g4Panel.goalHeading")}</h2>
           <button type="button" className="secondary" onClick={onClose}>
-            Not now
+            {tr("g4Panel.goalNotNow")}
           </button>
         </div>
         {asking ? (
           <div className="goal-app-step">
             <label className="goal-app-field">
-              <span>Find an app</span>
+              <span>{tr("g4Panel.goalFindApp")}</span>
               <input
                 type="search"
                 value={appFilter}
-                placeholder="Type part of its name"
+                placeholder={tr("g4Panel.goalTypePart")}
                 autoComplete="off"
                 spellCheck={false}
                 onChange={(event) => setAppFilter(event.target.value)}
               />
             </label>
             <label className="goal-app-field">
-              <span>{asking.applicationPrompt}</span>
+              <span>{goalText(tr, asking.applicationPrompt ?? "")}</span>
               <select value={app} onChange={(event) => setApp(event.target.value)}>
                 <option value="">
-                  {filteredApps.length === 0 && appFilter.trim() ? "No running app matches" : "Choose a running app"}
+                  {filteredApps.length === 0 && appFilter.trim()
+                    ? tr("g4Panel.goalNoMatch")
+                    : tr("g4Panel.goalChooseRunning")}
                 </option>
                 {filteredApps.map((row) => (
                   <option key={row.executable} value={row.executable}>
@@ -180,15 +227,13 @@ export function GoalDialog({
                 ))}
               </select>
             </label>
-            <p className="muted goal-app-note">
-              Not running yet? Choose later: the route is made without it, and you add it from Tools.
-            </p>
+            <p className="muted goal-app-note">{tr("g4Panel.goalNotRunning")}</p>
             <div className="actions">
               <button type="button" className="secondary" disabled={busy} onClick={() => setAsking(null)}>
-                Back
+                {tr("g4Panel.goalBack")}
               </button>
               <button type="button" className="secondary" disabled={busy} onClick={() => void create(asking, null)}>
-                Choose later
+                {tr("g4Panel.goalChooseLater")}
               </button>
               <button
                 type="button"
@@ -196,15 +241,14 @@ export function GoalDialog({
                 disabled={busy || !app}
                 onClick={() => void create(asking, apps.find((row) => row.executable === app) ?? null)}
               >
-                Make this route
+                {tr("g4Panel.goalMakeRoute")}
               </button>
             </div>
           </div>
         ) : (
           <>
             <p id="goal-dialog-description" className="muted">
-              Pick one to get a starting route you can change. Nothing plays until you press Play. Your mic stays out of
-              your headphones, and recording stays off.
+              {tr("g4Panel.goalPick")}
             </p>
             <div className="goal-grid" aria-busy={goals === null && message === null}>
               {goals === null
@@ -215,7 +259,7 @@ export function GoalDialog({
             </div>
             {more.length > 0 && (
               <div className="goal-more">
-                <span className="muted">Also:</span>
+                <span className="muted">{tr("g4Panel.goalAlso")}</span>
                 {more.map((goal) => (
                   <button
                     key={goal.id}

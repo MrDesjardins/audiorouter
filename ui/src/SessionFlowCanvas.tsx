@@ -1,5 +1,5 @@
 import { optionalLocalStorage, readPresentationJson, writePresentationJson } from "./presentationStorage";
-import { FLOW_GROUPS, FLOW_GROUP_LABELS, humanizeNodeKind, nodeFlowGroup } from "./canvasNodeKinds";
+import { FLOW_GROUPS, humanizeNodeKind, nodeFlowGroup } from "./canvasNodeKinds";
 import { CanvasConnectorMeasurements } from "./CanvasConnectorMeasurements";
 import { CanvasContextMenu } from "./CanvasContextMenu";
 import { smartLayout } from "./smartLayout";
@@ -71,8 +71,8 @@ import {
   restoreCanvasHistory,
   type CanvasSnapshot,
 } from "./canvasHistory";
-import { nodePortLabels } from "./graphView";
-import { applyCableAvailability, libraryEntries, type LibraryEntry } from "./library";
+import { nodePortLabelsText } from "./graphView";
+import { applyCableAvailability, libraryEntries, toolLabel, type LibraryEntry } from "./library";
 import { cableName, useVirtualCableStatus } from "./virtualCableStatus";
 import {
   DEFAULT_NETWORK_AUDIO_PORT,
@@ -83,7 +83,7 @@ import {
   type LibraryNodeKind,
 } from "./draft";
 import { networkTelemetryText } from "./NetworkNodeEditor";
-import { PROCESSOR_ACTIONS } from "./DraftConnectionList";
+import { PROCESSOR_ACTIONS, processorLabel } from "./DraftConnectionList";
 import { TestSignalPlaybackControls } from "./TestSignalPlaybackControls";
 import type { RecorderStatus } from "./backend";
 import { hasLearnedNoise } from "./SpectralGateEditor";
@@ -92,7 +92,7 @@ import { FlowActiveLayers, FlowArrow, FlowComets, FlowMotionProvider } from "./f
 import type { FlowAnimationMode } from "./preferences";
 import { RecordButton } from "./RecorderControls";
 import { appendLibraryNode as appendPreviewNode, appendPluginPlaceholderNode, unfedRouteNodes } from "./draft";
-import { nodeAttention, PRIVACY_MUTED_KINDS } from "./nodeAttention";
+import { nodeAttention, PRIVACY_MUTED_KINDS, type NodeAttention } from "./nodeAttention";
 import {
   draggedLibraryKind,
   draggedPluginEntry,
@@ -383,6 +383,7 @@ function AudioEdgeActions({
   style: edgeStyle,
   selected,
 }: EdgeProps) {
+  const tr = useMessages();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const edgeActionsRef = useRef<HTMLDivElement>(null);
@@ -480,10 +481,10 @@ function AudioEdgeActions({
         <span
           className="sr-only"
           role="img"
-          aria-label={`Connection ${id}: ${edgeData?.signalLabel ?? "configured"}`}
+          aria-label={tr("g4Canvas.edgeLabel", { id, state: edgeData?.signalLabel ?? tr("g4Canvas.signalConfigured") })}
           style={{ position: "absolute", transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
         >
-          Connection {id}: {edgeData?.signalLabel ?? "configured"}
+          {tr("g4Canvas.edgeLabel", { id, state: edgeData?.signalLabel ?? tr("g4Canvas.signalConfigured") })}
         </span>
         <div
           ref={edgeActionsRef}
@@ -502,12 +503,8 @@ function AudioEdgeActions({
             type="button"
             className="edge-action-icon"
             disabled={!edgeData?.canEdit}
-            aria-label={edgeData?.enabled ? `Pause connection ${id}` : `Resume connection ${id}`}
-            title={
-              edgeData?.enabled
-                ? "Pause this connection. The link stays in the route; Undo restores it."
-                : "Resume audio through this connection."
-            }
+            aria-label={tr(edgeData?.enabled ? "g4Canvas.pauseConnection" : "g4Canvas.resumeConnection", { id })}
+            title={tr(edgeData?.enabled ? "g4Canvas.pauseHint" : "g4Canvas.resumeHint")}
             onClick={() => edgeData?.onToggle?.(id, !edgeData.enabled)}
           >
             <Icon name={edgeData?.enabled ? "pause" : "play"} />
@@ -516,8 +513,8 @@ function AudioEdgeActions({
             type="button"
             className="edge-action-icon edge-action-remove"
             disabled={!edgeData?.canEdit}
-            aria-label={`Remove connection ${id}`}
-            title="Remove this connection from the route. Use Undo in Session to restore it."
+            aria-label={tr("g4Canvas.removeConnection", { id })}
+            title={tr("g4Canvas.removeHint")}
             onClick={() => edgeData?.onRemove?.(id)}
           >
             <Icon name="x" />
@@ -526,11 +523,11 @@ function AudioEdgeActions({
             type="button"
             className="edge-action-icon"
             disabled={!edgeData?.canEdit}
-            aria-label={`Add processor to connection ${id}`}
+            aria-label={tr("g4Canvas.addProcessorTo", { id })}
             ref={menuTriggerRef}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
-            title="Add a tool between these two."
+            title={tr("g4Canvas.addToolHint")}
             onClick={() => setMenuOpen((open) => !open)}
           >
             <Icon name="plus" />
@@ -539,7 +536,7 @@ function AudioEdgeActions({
             <div
               className="edge-insert-menu"
               role="menu"
-              aria-label={`Configure connection ${id}`}
+              aria-label={tr("g4Canvas.configureConnection", { id })}
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
                   event.preventDefault();
@@ -569,7 +566,7 @@ function AudioEdgeActions({
               }}
             >
               <div className="edge-side-picker">
-                <strong>Source side</strong>
+                <strong>{tr("g4Canvas.sourceSide")}</strong>
                 {EDGE_SIDES.map((side) => (
                   <button
                     key={`source-${side}`}
@@ -581,12 +578,12 @@ function AudioEdgeActions({
                     aria-current={sourceSide === side ? true : undefined}
                     onClick={() => edgeData?.onSetSide?.(id, "source", side)}
                   >
-                    {side}
+                    {sideLabel(side)}
                   </button>
                 ))}
               </div>
               <div className="edge-side-picker">
-                <strong>Target side</strong>
+                <strong>{tr("g4Canvas.targetSide")}</strong>
                 {EDGE_SIDES.map((side) => (
                   <button
                     key={`target-${side}`}
@@ -597,12 +594,12 @@ function AudioEdgeActions({
                     aria-current={targetSide === side ? true : undefined}
                     onClick={() => edgeData?.onSetSide?.(id, "target", side)}
                   >
-                    {side}
+                    {sideLabel(side)}
                   </button>
                 ))}
               </div>
               <div className="edge-processor-picker">
-                <strong>Add processor</strong>
+                <strong>{tr("g4Canvas.addProcessor")}</strong>
                 {PROCESSOR_ACTIONS.map((processor) => (
                   <button
                     key={processor.kind}
@@ -614,7 +611,7 @@ function AudioEdgeActions({
                       setMenuOpen(false);
                     }}
                   >
-                    {processor.label}
+                    {processorLabel(processor.kind)}
                   </button>
                 ))}
                 <button
@@ -626,7 +623,7 @@ function AudioEdgeActions({
                     setMenuOpen(false);
                   }}
                 >
-                  VST plugin…
+                  {tr("g4Canvas.vstPluginMenu")}
                 </button>
               </div>
             </div>
@@ -677,6 +674,7 @@ function DuckTriggerEdge({ id, source, target, sourceX, sourceY, targetX, target
               dip - 4,
             ] as const;
           })();
+  const tr = useMessages();
   const trigger = data as { duck: Node; running: boolean } | undefined;
   const live = useContext(LiveCanvasContext);
   const ducking = Boolean(
@@ -685,12 +683,12 @@ function DuckTriggerEdge({ id, source, target, sourceX, sourceY, targetX, target
   return (
     <g
       className={`duck-trigger-edge${ducking ? " is-ducking" : ""}`}
-      aria-label={`Trigger for ${id.replace(/^trigger-/, "")}`}
+      aria-label={tr("g4Canvas.triggerFor", { name: id.replace(/^trigger-/, "") })}
     >
       <path d={path} className="duck-trigger-path" />
       <FlowArrow at={to} side={entry} className="duck-trigger-arrow" />
       <text x={(from.x + to.x) / 2 + 8} y={labelY} textAnchor="start" className="duck-trigger-label">
-        {ducking ? "ducking" : "trigger"}
+        {tr(ducking ? "g4Canvas.ducking" : "g4Canvas.trigger")}
       </text>
     </g>
   );
@@ -814,18 +812,29 @@ function DeviceUsersLine({
   unbound: boolean;
 }) {
   // null: the first check has not answered yet.
+  const tr = useMessages();
   const users = typeof state === "object" ? state : null;
   // The header already says "no device". Keep this slot's height without repeating it.
-  const text = unbound ? "" : state === "unavailable" ? "Apps not checked" : (users?.summary ?? "Checking apps…");
+  const text = unbound
+    ? ""
+    : state === "unavailable"
+      ? tr("g4Canvas.usersNotChecked")
+      : (users?.summary ?? tr("g4Canvas.usersChecking"));
   const detail = [
     ...(users?.uses.map((use) => `${use.label} ${use.detail}`) ?? []),
-    ...(users?.warning ? [`Check: ${users.warning}`] : []),
+    ...(users?.warning ? [tr("g4Canvas.usersCheck", { warning: users.warning })] : []),
   ].join("\n");
   return (
     <small
       className={`node-used-by${users?.warning ? " is-warning" : ""}${users?.uses.length ? "" : " is-empty"}`}
       title={unbound ? undefined : detail || undefined}
-      aria-label={unbound ? undefined : users?.warning ? `${text}. Check: ${users.warning}` : text}
+      aria-label={
+        unbound
+          ? undefined
+          : users?.warning
+            ? `${text}. ${tr("g4Canvas.usersCheck", { warning: users.warning })}`
+            : text
+      }
     >
       {!unbound && users?.warning ? "! " : ""}
       {text}
@@ -834,6 +843,7 @@ function DeviceUsersLine({
 }
 
 function MiniMeter({ telemetry }: { telemetry: ReturnType<typeof nodeTelemetryFor> }) {
+  const tr = useMessages();
   const peak = telemetry?.meter?.currentPeakDb ?? telemetry?.meter?.peakDb ?? -60;
   const rms = telemetry?.meter?.rmsDb ?? -60;
   const active = peak > -60;
@@ -843,15 +853,15 @@ function MiniMeter({ telemetry }: { telemetry: ReturnType<typeof nodeTelemetryFo
   return (
     <div
       className={`node-meter ${active ? "is-active" : "is-silent"}`}
-      aria-label={`Peak ${formatDb(peak)}, RMS ${formatDb(rms)}`}
+      aria-label={tr("g4Canvas.meterAria", { peak: formatDb(peak), rms: formatDb(rms) })}
     >
       <div className="node-meter-track">
         <span className="node-meter-rms" style={{ transform: `scaleY(${dbPercent(rms) / 100})` }} />
         <span className="node-meter-peak" style={{ transform: `scaleY(${dbPercent(hold.current.db) / 100})` }} />
       </div>
       <div className="node-meter-readout">
-        <span>RMS {formatDb(rms)}</span>
-        <span>PK {formatDb(peak)}</span>
+        <span>{tr("g4Canvas.meterRms", { value: formatDb(rms) })}</span>
+        <span>{tr("g4Canvas.meterPeak", { value: formatDb(peak) })}</span>
       </div>
     </div>
   );
@@ -930,6 +940,21 @@ export function testSignalHasPhysicalOutputPath(session: Session, nodeId: string
   return false;
 }
 
+const SIGNAL_STATE_KEYS = {
+  active: "g4Canvas.signalActive",
+  silent: "g4Canvas.signalSilent",
+  unmetered: "g4Canvas.signalUnmetered",
+  stopped: "g4Canvas.signalStopped",
+  muted: "g4Canvas.signalMuted",
+  disabled: "g4Canvas.signalDisabled",
+  stale: "g4Canvas.signalStale",
+  unavailable: "g4Canvas.signalUnavailable",
+  faulted: "g4Canvas.signalFaulted",
+} as const satisfies Record<
+  "active" | "silent" | "unmetered" | "stopped" | "muted" | "disabled" | "stale" | "unavailable" | "faulted",
+  MessageKey
+>;
+
 type EdgeSignalState = {
   active: boolean;
   levelDb: number | null;
@@ -1007,7 +1032,7 @@ function applicationCaptureStateForPath(
           sessionId: session.id,
           nodeId: id,
           state: "failed",
-          detail: "Application capture has no live backend status.",
+          detail: tx("g4Canvas.appNoStatus"),
         }
       );
     }
@@ -1034,7 +1059,8 @@ export function edgeSignalForConnection(
     active: state === "active",
     levelDb,
     state,
-    label: state === "active" ? `active, ${levelDb?.toFixed(1)} dB RMS` : state,
+    label:
+      state === "active" ? tx("g4Canvas.signalActive", { level: levelDb?.toFixed(1) }) : tx(SIGNAL_STATE_KEYS[state]),
   });
   if (!edge.enabled || pathNodes.some((node) => !node.enabled)) return result("disabled");
   if (faulted) return result("faulted");
@@ -1063,6 +1089,7 @@ function MiniEq({
   node: Node;
   onSetNodeParameter?: SessionFlowCanvasProps["onSetNodeParameter"];
 }) {
+  const tr = useMessages();
   const bands = eqBandsFor(node);
   const [dragBandIndex, setDragBandIndex] = useState<number | null>(null);
   const updateBand = (band: EqBand, event: PointerEvent<SVGSVGElement>) => {
@@ -1082,13 +1109,13 @@ function MiniEq({
   return (
     <div
       className={`node-eq nodrag nopan ${node.kind === "graphicEq" ? "node-eq-graphic" : "node-eq-parametric"}`}
-      aria-label={`${node.kind === "graphicEq" ? "Graphic" : "Parametric"} equalizer response preview`}
+      aria-label={tr(node.kind === "graphicEq" ? "g4Canvas.eqPreviewGraphic" : "g4Canvas.eqPreviewParametric")}
     >
       <svg
         className="nodrag nopan"
         viewBox="0 0 200 88"
         role="group"
-        aria-label="Parametric EQ curve"
+        aria-label={tr("g4Canvas.eqCurve")}
         onPointerMove={(event) => {
           if (dragBandIndex !== null && bands[dragBandIndex]) updateBand(bands[dragBandIndex], event);
         }}
@@ -1124,7 +1151,7 @@ function MiniEq({
             aria-valuemin={-12}
             aria-valuemax={12}
             aria-valuenow={band.gainDb}
-            aria-label={`Band ${band.index + 1}, ${band.frequencyHz} Hz, ${band.gainDb} dB`}
+            aria-label={tr("g4Canvas.eqBand", { n: band.index + 1, frequency: band.frequencyHz, gain: band.gainDb })}
             onKeyDown={(event) => {
               if (!onSetNodeParameter) return;
               const gainStep = event.key === "ArrowUp" ? 0.5 : event.key === "ArrowDown" ? -0.5 : 0;
@@ -1270,19 +1297,20 @@ function MiniFader({
 /** Gain-reduction meter for dynamics processors (compressor/limiter), driven
  * by the backend's per-channel gainReductionDb telemetry when available. */
 function GainReductionMeter({ telemetry, detail }: { telemetry: ReturnType<typeof nodeTelemetryFor>; detail: string }) {
+  const tr = useMessages();
   const values = telemetry?.processor?.gainReductionDb ?? null;
   const grDb = values && values.length > 0 ? Math.max(...values) : null;
   const percent = grDb === null ? 0 : clamp((grDb / 24) * 100, 0, 100);
   return (
     <div
       className="node-gr-meter"
-      aria-label={grDb === null ? "Gain reduction not available" : `Gain reduction ${grDb.toFixed(1)} dB`}
+      aria-label={grDb === null ? tr("g4Canvas.grNone") : tr("g4Canvas.grValue", { value: grDb.toFixed(1) })}
     >
       <div className="node-gr-track">
         <span className="node-gr-fill" style={{ height: `${percent}%` }} />
       </div>
       <div className="node-gr-readout">
-        <span>GR</span>
+        <span>{tr("g4Canvas.grShort")}</span>
         <strong>{grDb === null ? "—" : `${grDb.toFixed(1)} dB`}</strong>
       </div>
       <small className="node-gr-detail">{detail}</small>
@@ -1303,21 +1331,22 @@ function DuckVisual({
   triggerName: string | null;
   onSetNodeParameter?: SessionFlowCanvasProps["onSetNodeParameter"];
 }) {
+  const tr = useMessages();
   const amount = Number(node.parameters.amountDb ?? 6);
   const ducking = telemetry?.processor?.gateOpen.some(Boolean) ?? false;
   const reduction = Math.max(0, ...(telemetry?.processor?.gainReductionDb ?? [0]));
   const roundMode = node.parameters.trigger === "siegeRound";
   const status = ducking
-    ? `Ducking −${reduction.toFixed(1)} dB`
+    ? tr("g4Canvas.duckStatusActive", { value: reduction.toFixed(1) })
     : roundMode
-      ? "Siege round · full volume"
+      ? tr("g4Canvas.duckRound")
       : !triggerName
-        ? "Choose a trigger in Properties"
-        : `Listening to ${triggerName}`;
+        ? tr("g4Canvas.duckChoose")
+        : tr("g4Canvas.duckListening", { name: triggerName });
   const title = roundMode
-    ? "Follows the Siege round (Stats.cc)"
+    ? tr("g4Canvas.duckTitleRound")
     : triggerName
-      ? `Triggered by ${triggerName}`
+      ? tr("g4Canvas.duckTitleTrigger", { name: triggerName })
       : undefined;
   return (
     <div className="node-fader-stack nodrag nopan">
@@ -1334,7 +1363,7 @@ function DuckVisual({
         <span style={{ transform: `scaleX(${amount > 0 ? clamp(reduction / amount, 0, 1) : 0})` }} />
       </div>
       <MiniFader
-        label="Amount"
+        label={tr("g4Canvas.amount")}
         value={amount}
         min={0}
         max={40}
@@ -1343,7 +1372,7 @@ function DuckVisual({
         onChange={
           onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "amountDb", Math.round(value)) : undefined
         }
-        ariaLabel={`${node.name} duck amount`}
+        ariaLabel={tr("g4Canvas.duckAmountAria", { name: node.name })}
       />
     </div>
   );
@@ -1378,16 +1407,19 @@ function GateVisual({
   telemetry: ReturnType<typeof nodeTelemetryFor>;
   thresholdDb: number;
 }) {
+  const tr = useMessages();
   const states = telemetry?.processor?.gateOpen ?? null;
   const open = states && states.length > 0 ? states.some(Boolean) : null;
   return (
     <div
       className={`node-gate ${open === true ? "is-open" : open === false ? "is-closed" : "is-unknown"}`}
-      aria-label={open === null ? "Gate state not available" : open ? "Gate open" : "Gate closed"}
+      aria-label={
+        open === null ? tr("g4Canvas.gateNA") : open ? tr("g4Canvas.gateOpenAria") : tr("g4Canvas.gateClosedAria")
+      }
     >
       <span className="node-gate-dot" />
-      <strong>{open === null ? "Gate" : open ? "Open" : "Closed"}</strong>
-      <small>Threshold {thresholdDb} dB</small>
+      <strong>{open === null ? tr("g4Canvas.gate") : open ? tr("g4Canvas.open") : tr("g4Canvas.closed")}</strong>
+      <small>{tr("g4Canvas.gateThreshold", { value: thresholdDb })}</small>
     </div>
   );
 }
@@ -1401,6 +1433,7 @@ function MuteToggle({
   node: Node;
   onSetNodeParameter?: SessionFlowCanvasProps["onSetNodeParameter"];
 }) {
+  const tr = useMessages();
   const muted = Boolean(node.parameters.muted);
   return (
     <button
@@ -1408,14 +1441,14 @@ function MuteToggle({
       className={`node-mute-toggle nodrag nopan ${muted ? "is-muted" : "is-live"}`}
       disabled={!onSetNodeParameter}
       aria-pressed={muted}
-      aria-label={muted ? `${node.name}, muted, click to unmute` : `${node.name}, live, click to mute`}
+      aria-label={tr(muted ? "g4Canvas.muteAriaMuted" : "g4Canvas.muteAriaLive", { name: node.name })}
       onClick={(event) => {
         event.stopPropagation();
         onSetNodeParameter?.(node.id, "muted", !muted);
       }}
     >
       <span className="node-mute-dot" />
-      {muted ? "Muted" : "Live"}
+      {tr(muted ? "g4Canvas.muted" : "g4Canvas.live")}
     </button>
   );
 }
@@ -1433,23 +1466,18 @@ function MixerVisual({
   telemetry: ReturnType<typeof nodeTelemetryFor>;
   onSetNodeParameter?: SessionFlowCanvasProps["onSetNodeParameter"];
 }) {
+  const tr = useMessages();
   const inputCount = inputs.length;
   return (
     <div className="node-mixer-wrap">
       <div
         className="node-mixer"
-        aria-label={
-          inputCount === 0
-            ? "Mixer has no connected inputs yet"
-            : `Mixer sums ${inputCount} connected input${inputCount === 1 ? "" : "s"}`
-        }
+        aria-label={inputCount === 0 ? tr("g4Canvas.mixerNone") : tr("g4Canvas.mixerSums", { count: inputCount })}
       >
         <span className="node-mixer-icon" aria-hidden="true">
           <Icon name={NODE_KIND_ICONS.mixer} />
         </span>
-        <span>
-          {inputCount === 0 ? "No inputs connected" : `Summing ${inputCount} input${inputCount === 1 ? "" : "s"}`}
-        </span>
+        <span>{inputCount === 0 ? tr("g4Canvas.noInputs") : tr("g4Canvas.summing", { count: inputCount })}</span>
       </div>
       {inputs.length > 0 && (
         <div className="node-mixer-inputs nodrag nopan">
@@ -1461,13 +1489,15 @@ function MixerVisual({
               min={0}
               max={100}
               step={1}
-              formatValue={(value) => (input.enabled ? `${Math.round(value)} %` : `${Math.round(value)} % · off`)}
+              formatValue={(value) =>
+                input.enabled ? `${Math.round(value)} %` : tr("g4Canvas.mixerInputOff", { value: Math.round(value) })
+              }
               onChange={
                 onSetNodeParameter
                   ? (value) => onSetNodeParameter(mixer.id, mixerInputVolumeKey(input.upstream.id), Math.round(value))
                   : undefined
               }
-              ariaLabel={`${mixer.name} input volume for ${input.upstream.name}`}
+              ariaLabel={tr("g4Canvas.mixerInputAria", { mixer: mixer.name, input: input.upstream.name })}
             />
           ))}
         </div>
@@ -1527,15 +1557,15 @@ function TestSignalVisual({
   );
 }
 
-const RECORDER_STATE_LABEL: Record<RecorderStatus["state"], string> = {
-  idle: "Idle",
-  armed: "Armed",
-  recording: "Recording",
-  paused: "Paused",
-  stopping: "Stopping",
-  completed: "Completed",
-  failed: "Failed",
-};
+const RECORDER_STATE_KEYS = {
+  idle: "g4Canvas.recStateIdle",
+  armed: "g4Canvas.recStateArmed",
+  recording: "g4Canvas.recStateRecording",
+  paused: "g4Canvas.recStatePaused",
+  stopping: "g4Canvas.recStateStopping",
+  completed: "g4Canvas.recStateCompleted",
+  failed: "g4Canvas.recStateFailed",
+} as const satisfies Record<RecorderStatus["state"], MessageKey>;
 
 /** A Recorder node's most important fact is whether it is actually recording
  * right now, which a generic pass-through meter never showed. */
@@ -1554,6 +1584,7 @@ function RecorderVisual({
   onToggleRecording?: (nodeId: string, record: boolean) => void;
   busy: boolean;
 }) {
+  const tr = useMessages();
   const state = status?.state ?? null;
   return (
     <div className="node-recorder">
@@ -1570,10 +1601,10 @@ function RecorderVisual({
       )}
       <div
         className={`node-recorder-state ${state ? `is-${state}` : "is-unknown"}`}
-        aria-label={state ? `Recorder ${RECORDER_STATE_LABEL[state]}` : "No recorder session for this node yet"}
+        aria-label={state ? tr("g4Canvas.recAria", { state: tr(RECORDER_STATE_KEYS[state]) }) : tr("g4Canvas.recNone")}
       >
         <span className="node-recorder-dot" />
-        <strong>{state ? RECORDER_STATE_LABEL[state] : "No session"}</strong>
+        <strong>{state ? tr(RECORDER_STATE_KEYS[state]) : tr("g4Canvas.noSession")}</strong>
       </div>
       <MiniMeter telemetry={telemetry} />
     </div>
@@ -1587,6 +1618,12 @@ function basename(path: string) {
   return parts[parts.length - 1] || path;
 }
 
+const ATTENTION_HEADER_KEYS = {
+  "no device": "g4Canvas.hdrNoDevice",
+  "no input": "g4Canvas.hdrNoInput",
+  muted: "g4Canvas.hdrMuted",
+} as const satisfies Record<NodeAttention, MessageKey>;
+
 /** A captured application's identity is the whole point of this node; a
  * generic Ready chip gave no way to tell captures apart at a glance. */
 /**
@@ -1599,35 +1636,48 @@ export function nodeHeaderState(
   applicationCaptureState: DiagnosticsSnapshot["applicationCaptureStates"][number] | null,
   context: { unfed: boolean; privacyMuted: boolean } = { unfed: false, privacyMuted: false },
 ): { label: string; tone: "ready" | "bypassed" | "disabled" | "attention" } {
-  if (node.bypass) return { label: "bypass", tone: "bypassed" };
-  if (!node.enabled) return { label: "off", tone: "disabled" };
-  const attention = nodeAttention(node, context);
+  if (node.bypass) return { label: tx("g4Canvas.hdrBypass"), tone: "bypassed" };
+  if (!node.enabled) return { label: tx("g4Canvas.hdrOff"), tone: "disabled" };
+  const found = nodeAttention(node, context);
+  const attention = found ? tx(ATTENTION_HEADER_KEYS[found]) : null;
   if (node.kind !== "applicationCapture") {
-    return attention ? { label: attention, tone: "attention" } : { label: "ready", tone: "ready" };
+    return attention ? { label: attention, tone: "attention" } : { label: tx("g4Canvas.hdrReady"), tone: "ready" };
   }
   switch (applicationCaptureState?.state) {
     case "connected":
-      return attention ? { label: attention, tone: "attention" } : { label: "live", tone: "ready" };
+      return attention ? { label: attention, tone: "attention" } : { label: tx("g4Canvas.hdrLive"), tone: "ready" };
     case "reconnecting":
-      return { label: "reconnecting", tone: "bypassed" };
+      return { label: tx("g4Canvas.hdrReconnecting"), tone: "bypassed" };
     case "configured-stopped":
-      return { label: "stopped", tone: "disabled" };
+      return { label: tx("g4Canvas.hdrStopped"), tone: "disabled" };
     case "app-closed":
-      return { label: "app closed", tone: "attention" };
+      return { label: tx("g4Canvas.hdrAppClosed"), tone: "attention" };
     case "ambiguous":
-      return { label: "pick instance", tone: "attention" };
+      return { label: tx("g4Canvas.hdrPickInstance"), tone: "attention" };
     case "output-unavailable":
-      return { label: "no output", tone: "attention" };
+      return { label: tx("g4Canvas.hdrNoOutput"), tone: "attention" };
     case "unsupported":
-      return { label: "pick app", tone: "attention" };
+      return { label: tx("g4Canvas.hdrPickApp"), tone: "attention" };
     case "failed":
-      return { label: "retrying", tone: "attention" };
+      return { label: tx("g4Canvas.hdrRetrying"), tone: "attention" };
     // Before Play nothing is prepared yet; that is normal, not a fault to fix in Properties
     // (first-time-user walk-through). A failed Play reports its own plain reason.
     default:
-      return attention ? { label: attention, tone: "attention" } : { label: "waiting for Play", tone: "ready" };
+      return attention ? { label: attention, tone: "attention" } : { label: tx("g4Canvas.hdrWaiting"), tone: "ready" };
   }
 }
+
+const APP_STATE_KEYS = {
+  connected: "g4Canvas.appStateConnected",
+  "configured-stopped": "g4Canvas.appStateConfiguredStopped",
+  "app-closed": "g4Canvas.appStateAppClosed",
+  reconnecting: "g4Canvas.appStateReconnecting",
+  ambiguous: "g4Canvas.appStateAmbiguous",
+  "output-unavailable": "g4Canvas.appStateOutputUnavailable",
+  unsupported: "g4Canvas.appStateUnsupported",
+  failed: "g4Canvas.appStateFailed",
+  "not-prepared": "g4Canvas.appStateNotPrepared",
+} as const satisfies Record<string, MessageKey>;
 
 function ApplicationCaptureVisual({
   node,
@@ -1638,28 +1688,13 @@ function ApplicationCaptureVisual({
   telemetry: ReturnType<typeof nodeTelemetryFor>;
   state: DiagnosticsSnapshot["applicationCaptureStates"][number] | null;
 }) {
-  const executable = String(node.parameters.executable ?? "Unknown application");
-  const policy =
-    node.parameters.processPolicy === "selectedInstance" ? "This running instance" : "Any matching instance";
+  const tr = useMessages();
+  const executable = String(node.parameters.executable ?? tr("g4Canvas.unknownApp"));
+  const policy = tr(
+    node.parameters.processPolicy === "selectedInstance" ? "g4Canvas.policySelected" : "g4Canvas.policyAny",
+  );
   const status = state?.state ?? "not-prepared";
-  const label =
-    status === "connected"
-      ? "Connected"
-      : status === "configured-stopped"
-        ? "Route stopped"
-        : status === "app-closed"
-          ? "App closed · reconnecting"
-          : status === "reconnecting"
-            ? "Reconnecting"
-            : status === "ambiguous"
-              ? "Choose instance"
-              : status === "output-unavailable"
-                ? "Output unavailable"
-                : status === "unsupported"
-                  ? "Choose again"
-                  : status === "failed"
-                    ? "Retrying"
-                    : "Waiting for Play";
+  const label = tr(APP_STATE_KEYS[status as keyof typeof APP_STATE_KEYS] ?? "g4Canvas.appStateNotPrepared");
   return (
     <div className="node-app-capture-wrap">
       <div className="node-app-capture" title={executable}>
@@ -1669,7 +1704,7 @@ function ApplicationCaptureVisual({
       <span
         className={`node-app-capture-state is-${status}`}
         role="status"
-        aria-label={`${label}. ${state?.detail ?? "Prepare this source to monitor its application state."}`}
+        aria-label={`${label}. ${state?.detail ?? tr("g4Canvas.appPrepare")}`}
         title={state?.detail}
       >
         {label}
@@ -1681,9 +1716,12 @@ function ApplicationCaptureVisual({
 
 /** Shows which exact render endpoint this loopback source is bound to. */
 function EndpointLoopbackVisual({ node, telemetry }: { node: Node; telemetry: ReturnType<typeof nodeTelemetryFor> }) {
+  const tr = useMessages();
   const endpointId = String(node.parameters.endpointId ?? "");
   const shortId =
-    endpointId.length > 22 ? `${endpointId.slice(0, 10)}…${endpointId.slice(-8)}` : endpointId || "No endpoint bound";
+    endpointId.length > 22
+      ? `${endpointId.slice(0, 10)}…${endpointId.slice(-8)}`
+      : endpointId || tr("g4Canvas.noEndpoint");
   return (
     <div className="node-endpoint-loopback-wrap">
       <div className="node-endpoint-loopback" title={endpointId}>
@@ -1717,8 +1755,9 @@ function VirtualBusVisual({ node, telemetry }: { node: Node; telemetry: ReturnTy
 /** A plugin node's format and binary identity matter more than a generic
  * Ready chip once a session has more than one third-party plugin. */
 function PluginVisual({ node, telemetry }: { node: Node; telemetry: ReturnType<typeof nodeTelemetryFor> }) {
+  const tr = useMessages();
   const format = node.parameters.format;
-  const formatLabel = format === "vst3" ? "VST3" : format === "vst2" ? "VST2" : "Plugin";
+  const formatLabel = format === "vst3" ? "VST3" : format === "vst2" ? "VST2" : tr("g4Canvas.pluginGeneric");
   const fileName = basename(String(node.parameters.path ?? ""));
   const health = telemetry?.plugin ?? null;
   const healthAlert = health?.state === "failed" || health?.state === "quarantined";
@@ -1727,7 +1766,11 @@ function PluginVisual({ node, telemetry }: { node: Node; telemetry: ReturnType<t
       <div className="node-plugin-header">
         <span className="node-plugin-format">{formatLabel}</span>
         <span className={`node-state ${node.bypass ? "is-bypassed" : node.enabled ? "is-ready" : "is-disabled"}`}>
-          {node.bypass ? "bypass" : node.enabled ? "active" : "stopped"}
+          {node.bypass
+            ? tr("g4Canvas.pluginBypass")
+            : node.enabled
+              ? tr("g4Canvas.pluginActive")
+              : tr("g4Canvas.pluginStopped")}
         </span>
       </div>
       <div className="node-plugin-file" title={fileName}>
@@ -1735,7 +1778,9 @@ function PluginVisual({ node, telemetry }: { node: Node; telemetry: ReturnType<t
       </div>
       {healthAlert && (
         <div className="node-plugin-health-alert" role="alert">
-          {health.state === "quarantined" ? `Quarantined (${health.failureCount} failures)` : "Worker failed"}
+          {health.state === "quarantined"
+            ? tr("g4Canvas.quarantined", { count: health.failureCount })
+            : tr("g4Canvas.workerFailed")}
         </div>
       )}
       {telemetry?.meter && <MiniMeter telemetry={telemetry} />}
@@ -1752,37 +1797,44 @@ export function AudioFileNodeControls({
   state?: "playing" | "paused" | "stopped";
   onTransport?: (nodeId: string, action: "play" | "pause" | "stop") => void;
 }) {
+  const tr = useMessages();
   return (
     <div className="audio-file-node">
       <span className="audio-file-node-name" title={String(node.parameters.fileName ?? "")}>
-        {String(node.parameters.fileName ?? "Choose audio in properties")}
+        {String(node.parameters.fileName ?? tr("g4Canvas.chooseAudio"))}
       </span>
       <div className="audio-file-node-controls">
         <button
           type="button"
           disabled={!node.enabled || !node.parameters.mediaId || state === "playing"}
-          aria-label={`Play ${node.name}`}
+          aria-label={tr("g4Canvas.playNode", { name: node.name })}
           onClick={(event) => {
             event.stopPropagation();
             onTransport?.(node.id, "play");
           }}
         >
-          Play
+          {tr("g4Canvas.play")}
         </button>
         <button
           type="button"
           disabled={!node.enabled || !node.parameters.mediaId || state === "stopped"}
-          aria-label={`Stop ${node.name}`}
+          aria-label={tr("g4Canvas.stopNode", { name: node.name })}
           onClick={(event) => {
             event.stopPropagation();
             onTransport?.(node.id, "stop");
           }}
         >
-          Stop
+          {tr("g4Canvas.stop")}
         </button>
       </div>
       <span className="audio-file-node-state" role="status">
-        {state}
+        {tr(
+          state === "playing"
+            ? "g4Canvas.audioStatePlaying"
+            : state === "paused"
+              ? "g4Canvas.audioStatePaused"
+              : "g4Canvas.audioStateStopped",
+        )}
       </span>
     </div>
   );
@@ -1852,6 +1904,7 @@ function NodeVisual({
   onTimeShiftTransport?: SessionFlowCanvasProps["onTimeShiftTransport"];
   timeShiftStatuses?: SessionFlowCanvasProps["timeShiftStatuses"];
 }) {
+  const tr = useMessages();
   if (node.kind === "parametricEq" || node.kind === "graphicEq")
     return <MiniEq node={node} onSetNodeParameter={onSetNodeParameter} />;
   if (node.kind === "networkSend" || node.kind === "networkReceive") {
@@ -1859,9 +1912,12 @@ function NodeVisual({
     const address = sending ? node.parameters.host : node.parameters.sender;
     const target =
       typeof address === "string"
-        ? `${sending ? "To" : "From"} ${address}:${String(node.parameters.port ?? DEFAULT_NETWORK_AUDIO_PORT)}`
-        : "Set the IP address in Properties";
-    const status = networkTelemetryText(telemetry?.network);
+        ? tr(sending ? "g4Canvas.netTo" : "g4Canvas.netFrom", {
+            address,
+            port: String(node.parameters.port ?? DEFAULT_NETWORK_AUDIO_PORT),
+          })
+        : tr("g4Canvas.netSetIp");
+    const status = networkTelemetryText(telemetry?.network, tr);
     return (
       <div className="node-fader-stack">
         <span className="node-denoise-status" title={target}>
@@ -1878,7 +1934,7 @@ function NodeVisual({
   if (node.kind === "gain")
     return (
       <MiniFader
-        label="Gain"
+        label={tr("g4Canvas.labelGain")}
         value={Number(node.parameters.gainDb ?? 0)}
         min={GAIN_MIN_DB}
         max={GAIN_MAX_DB}
@@ -1887,13 +1943,13 @@ function NodeVisual({
         onChange={
           onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "gainDb", Number(value.toFixed(1))) : undefined
         }
-        ariaLabel={`${node.name} gain`}
+        ariaLabel={tr("g4Canvas.gainAria", { name: node.name })}
       />
     );
   if (node.kind === "pitch")
     return (
       <MiniFader
-        label="Pitch"
+        label={tr("g4Canvas.labelPitch")}
         value={Number(node.parameters.semitones ?? 0)}
         min={-24}
         max={24}
@@ -1902,36 +1958,36 @@ function NodeVisual({
         onChange={
           onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "semitones", Number(value.toFixed(1))) : undefined
         }
-        ariaLabel={`${node.name} pitch shift`}
+        ariaLabel={tr("g4Canvas.pitchAria", { name: node.name })}
       />
     );
   if (node.kind === "volume")
     return (
       <MiniFader
-        label="Volume"
+        label={tr("g4Canvas.labelVolume")}
         value={Number(node.parameters.percent ?? 100)}
         min={0}
         max={200}
         step={1}
         formatValue={(value) => `${Math.round(value)} %`}
         onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "percent", Math.round(value)) : undefined}
-        ariaLabel={`${node.name} volume percent`}
+        ariaLabel={tr("g4Canvas.volumeAria", { name: node.name })}
       />
     );
   if (node.kind === "denoise") {
     const status =
       node.parameters.learning === true
-        ? "Learning noise…"
+        ? tr("g4Canvas.noiseLearning")
         : typeof node.parameters.noiseProfile === "string"
-          ? "Noise profile learned"
-          : "No noise profile yet";
+          ? tr("g4Canvas.noiseLearned")
+          : tr("g4Canvas.noiseNone");
     return (
       <div className="node-fader-stack nodrag nopan">
         <span className={`node-denoise-status${node.parameters.learning === true ? " is-learning" : ""}`} role="status">
           {status}
         </span>
         <MiniFader
-          label="Reduction"
+          label={tr("g4Canvas.labelReduction")}
           value={Number(node.parameters.reductionPercent ?? 70)}
           min={0}
           max={100}
@@ -1942,7 +1998,7 @@ function NodeVisual({
               ? (value) => onSetNodeParameter(node.id, "reductionPercent", Math.round(value))
               : undefined
           }
-          ariaLabel={`${node.name} noise reduction`}
+          ariaLabel={tr("g4Canvas.reductionAria", { name: node.name })}
         />
       </div>
     );
@@ -1950,17 +2006,17 @@ function NodeVisual({
   if (node.kind === "spectralGate") {
     const status =
       node.parameters.learning === true
-        ? "Learning noise…"
+        ? tr("g4Canvas.noiseLearning")
         : hasLearnedNoise(node.parameters.noiseProfile)
-          ? "Blocking learned noise"
-          : "Learn the noise in Properties";
+          ? tr("g4Canvas.noiseBlocking")
+          : tr("g4Canvas.noiseLearnHint");
     return (
       <div className="node-fader-stack nodrag nopan">
         <span className={`node-denoise-status${node.parameters.learning === true ? " is-learning" : ""}`} role="status">
           {status}
         </span>
         <MiniFader
-          label="Threshold"
+          label={tr("g4Canvas.labelThreshold")}
           value={Number(node.parameters.thresholdDb ?? 3)}
           min={-20}
           max={20}
@@ -1971,7 +2027,7 @@ function NodeVisual({
               ? (value) => onSetNodeParameter(node.id, "thresholdDb", Math.round(value * 2) / 2)
               : undefined
           }
-          ariaLabel={`${node.name} threshold above noise`}
+          ariaLabel={tr("g4Canvas.thresholdAboveNoiseAria", { name: node.name })}
         />
       </div>
     );
@@ -1980,14 +2036,14 @@ function NodeVisual({
     const status = timeShiftStatuses?.[node.id];
     const paused = status?.state === "paused";
     const label = !sessionRunning
-      ? "Plays live when the route runs"
+      ? tr("g4Canvas.tsLive")
       : !status
-        ? "Live"
+        ? tr("g4Canvas.live")
         : status.state === "live"
-          ? "Live"
+          ? tr("g4Canvas.live")
           : status.state === "paused"
-            ? `Paused · ${status.delaySeconds.toFixed(0)} s behind`
-            : `${status.delaySeconds.toFixed(0)} s behind live`;
+            ? tr("g4Canvas.tsPaused", { seconds: status.delaySeconds.toFixed(0) })
+            : tr("g4Canvas.tsBehind", { seconds: status.delaySeconds.toFixed(0) });
     const act = (action: "pause" | "resume" | "back" | "forward" | "live") => onTimeShiftTransport?.(node.id, action);
     const disabled = !sessionRunning || !onTimeShiftTransport;
     return (
@@ -1995,12 +2051,16 @@ function NodeVisual({
         <span className={`node-denoise-status${status && status.state !== "live" ? " is-learning" : ""}`} role="status">
           {label}
         </span>
-        <div className="node-time-shift-buttons" role="group" aria-label={`${node.name} transport`}>
+        <div
+          className="node-time-shift-buttons"
+          role="group"
+          aria-label={tr("g4Canvas.tsTransport", { name: node.name })}
+        >
           <button
             type="button"
             disabled={disabled}
-            aria-label="Jump back 10 seconds"
-            title="Jump back 10 s"
+            aria-label={tr("g4Canvas.jumpBack")}
+            title={tr("g4Canvas.jumpBackTitle")}
             onClick={() => act("back")}
           >
             «10
@@ -2008,8 +2068,8 @@ function NodeVisual({
           <button
             type="button"
             disabled={disabled}
-            aria-label={paused ? "Resume" : "Pause"}
-            title={paused ? "Resume" : "Pause"}
+            aria-label={tr(paused ? "g4Canvas.resume" : "g4Canvas.pause")}
+            title={tr(paused ? "g4Canvas.resume" : "g4Canvas.pause")}
             onClick={() => act(paused ? "resume" : "pause")}
           >
             <Icon name={paused ? "play" : "pause"} />
@@ -2017,8 +2077,8 @@ function NodeVisual({
           <button
             type="button"
             disabled={disabled || status?.state === "live" || !status}
-            aria-label="Jump forward 10 seconds"
-            title="Jump forward 10 s"
+            aria-label={tr("g4Canvas.jumpForward")}
+            title={tr("g4Canvas.jumpForwardTitle")}
             onClick={() => act("forward")}
           >
             10»
@@ -2026,11 +2086,11 @@ function NodeVisual({
           <button
             type="button"
             disabled={disabled || status?.state === "live" || !status}
-            aria-label="Jump to live"
-            title="Jump to live"
+            aria-label={tr("g4Canvas.jumpLive")}
+            title={tr("g4Canvas.jumpLive")}
             onClick={() => act("live")}
           >
-            Live
+            {tr("g4Canvas.live")}
           </button>
         </div>
       </div>
@@ -2040,28 +2100,26 @@ function NodeVisual({
     return (
       <div className="node-fader-stack nodrag nopan">
         <span className="node-denoise-status" title={String(node.parameters.fileName ?? "")}>
-          {typeof node.parameters.fileName === "string"
-            ? node.parameters.fileName
-            : "Choose an impulse response in Properties"}
+          {typeof node.parameters.fileName === "string" ? node.parameters.fileName : tr("g4Canvas.chooseIr")}
         </span>
         <MiniFader
-          label="Mix"
+          label={tr("g4Canvas.labelMix")}
           value={Number(node.parameters.wetPercent ?? 100)}
           min={0}
           max={100}
           step={1}
-          formatValue={(value) => `${Math.round(value)} % wet`}
+          formatValue={(value) => tr("g4Canvas.wetValue", { value: Math.round(value) })}
           onChange={
             onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "wetPercent", Math.round(value)) : undefined
           }
-          ariaLabel={`${node.name} wet mix`}
+          ariaLabel={tr("g4Canvas.wetMixAria", { name: node.name })}
         />
       </div>
     );
   if (node.kind === "speechDenoise")
     return (
       <MiniFader
-        label="Strength"
+        label={tr("g4Canvas.labelStrength")}
         value={Number(node.parameters.strengthPercent ?? 70)}
         min={0}
         max={100}
@@ -2070,13 +2128,17 @@ function NodeVisual({
         onChange={
           onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "strengthPercent", Math.round(value)) : undefined
         }
-        ariaLabel={`${node.name} speech denoise strength`}
+        ariaLabel={tr("g4Canvas.strengthAria", { name: node.name })}
       />
     );
   if (node.kind === "inputSwitch") {
     const selected = node.parameters.selected === "b" ? "b" : "a";
     return (
-      <div className="node-input-switch nodrag nopan" role="group" aria-label={`${node.name} input selection`}>
+      <div
+        className="node-input-switch nodrag nopan"
+        role="group"
+        aria-label={tr("g4Canvas.inputSelection", { name: node.name })}
+      >
         {(["a", "b"] as const).map((side) => (
           <button
             key={side}
@@ -2084,7 +2146,7 @@ function NodeVisual({
             className={selected === side ? "is-selected" : ""}
             aria-pressed={selected === side}
             disabled={!onSetNodeParameter}
-            title={`Pass input ${side.toUpperCase()}. Shift-click for a slow 2 s crossfade.`}
+            title={tr("g4Canvas.passInput", { side: side.toUpperCase() })}
             onClick={(event) => {
               if (!onSetNodeParameter || selected === side) return;
               onSetNodeParameter(node.id, "fade", event.shiftKey ? "slow" : "normal");
@@ -2092,7 +2154,9 @@ function NodeVisual({
             }}
           >
             <b>{side.toUpperCase()}</b>
-            <small title={switchSourceNames?.[side] ?? undefined}>{switchSourceNames?.[side] ?? "not connected"}</small>
+            <small title={switchSourceNames?.[side] ?? undefined}>
+              {switchSourceNames?.[side] ?? tr("g4Canvas.notConnected")}
+            </small>
           </button>
         ))}
       </div>
@@ -2101,7 +2165,11 @@ function NodeVisual({
   if (node.kind === "outputSwitch") {
     const selected = node.parameters.selected === "b" ? "b" : "a";
     return (
-      <div className="node-input-switch nodrag nopan" role="group" aria-label={`${node.name} output selection`}>
+      <div
+        className="node-input-switch nodrag nopan"
+        role="group"
+        aria-label={tr("g4Canvas.outputSelection", { name: node.name })}
+      >
         {(["a", "b"] as const).map((side) => (
           <button
             key={side}
@@ -2109,14 +2177,14 @@ function NodeVisual({
             className={selected === side ? "is-selected" : ""}
             aria-pressed={selected === side}
             disabled={!onSetNodeParameter}
-            title={`Send audio to output ${side.toUpperCase()}.`}
+            title={tr("g4Canvas.sendOutput", { side: side.toUpperCase() })}
             onClick={() => {
               if (onSetNodeParameter && selected !== side) onSetNodeParameter(node.id, "selected", side);
             }}
           >
             <b>{side.toUpperCase()}</b>
             <small title={switchDestinationNames?.[side] ?? undefined}>
-              {switchDestinationNames?.[side] ?? "not connected"}
+              {switchDestinationNames?.[side] ?? tr("g4Canvas.notConnected")}
             </small>
           </button>
         ))}
@@ -2129,7 +2197,7 @@ function NodeVisual({
         {(["bassDb", "trebleDb"] as const).map((name) => (
           <MiniFader
             key={name}
-            label={name === "bassDb" ? "Bass" : "Treble"}
+            label={tr(name === "bassDb" ? "g4Canvas.labelBass" : "g4Canvas.labelTreble")}
             value={Number(node.parameters[name] ?? 0)}
             min={-12}
             max={12}
@@ -2138,7 +2206,7 @@ function NodeVisual({
             onChange={
               onSetNodeParameter ? (value) => onSetNodeParameter(node.id, name, Number(value.toFixed(1))) : undefined
             }
-            ariaLabel={`${node.name} ${name === "bassDb" ? "bass" : "treble"}`}
+            ariaLabel={tr(name === "bassDb" ? "g4Canvas.bassAria" : "g4Canvas.trebleAria", { name: node.name })}
           />
         ))}
       </div>
@@ -2146,7 +2214,7 @@ function NodeVisual({
   if (node.kind === "dehum")
     return (
       <MiniFader
-        label={`Hum ${Math.round(Number(node.parameters.frequencyHz ?? 60))} Hz`}
+        label={tr("g4Canvas.labelHum", { value: Math.round(Number(node.parameters.frequencyHz ?? 60)) })}
         value={Number(node.parameters.amountPercent ?? 50)}
         min={0}
         max={100}
@@ -2155,13 +2223,13 @@ function NodeVisual({
         onChange={
           onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "amountPercent", Math.round(value)) : undefined
         }
-        ariaLabel={`${node.name} dehum amount`}
+        ariaLabel={tr("g4Canvas.dehumAria", { name: node.name })}
       />
     );
   if (node.kind === "declick")
     return (
       <MiniFader
-        label="Threshold"
+        label={tr("g4Canvas.labelThreshold")}
         value={Number(node.parameters.thresholdPercent ?? 50)}
         min={0}
         max={100}
@@ -2170,20 +2238,20 @@ function NodeVisual({
         onChange={
           onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "thresholdPercent", Math.round(value)) : undefined
         }
-        ariaLabel={`${node.name} declick threshold`}
+        ariaLabel={tr("g4Canvas.declickAria", { name: node.name })}
       />
     );
   if (node.kind === "delay")
     return (
       <MiniFader
-        label="Sync"
+        label={tr("g4Canvas.labelSync")}
         value={Number(node.parameters.delayMs ?? 0)}
         min={0}
         max={1000}
         step={10}
         formatValue={(value) => `${Math.round(value)} ms`}
         onChange={onSetNodeParameter ? (value) => onSetNodeParameter(node.id, "delayMs", Math.round(value)) : undefined}
-        ariaLabel={`${node.name} delay time`}
+        ariaLabel={tr("g4Canvas.delayAria", { name: node.name })}
       />
     );
   if (node.kind === "mute") return <MuteToggle node={node} onSetNodeParameter={onSetNodeParameter} />;
@@ -2191,11 +2259,19 @@ function NodeVisual({
     return (
       <GainReductionMeter
         telemetry={telemetry}
-        detail={`Threshold ${node.parameters.thresholdDb} dB · Ratio ${node.parameters.ratio}:1`}
+        detail={tr("g4Canvas.compDetail", {
+          threshold: node.parameters.thresholdDb,
+          ratio: node.parameters.ratio,
+        })}
       />
     );
   if (node.kind === "limiter")
-    return <GainReductionMeter telemetry={telemetry} detail={`Ceiling ${node.parameters.ceilingDb} dB`} />;
+    return (
+      <GainReductionMeter
+        telemetry={telemetry}
+        detail={tr("g4Canvas.limiterDetail", { ceiling: node.parameters.ceilingDb })}
+      />
+    );
   if (node.kind === "gate")
     return <GateVisual telemetry={telemetry} thresholdDb={Number(node.parameters.thresholdDb ?? 0)} />;
   if (node.kind === "duck")
@@ -2256,9 +2332,12 @@ function NodeVisual({
   if (telemetry?.meter || ["physicalInput", "physicalOutput", "meter"].includes(node.kind))
     return <MiniMeter telemetry={telemetry} />;
   return (
-    <div className="node-activity" aria-label={node.enabled && !node.bypass ? "Processor ready" : "Processor inactive"}>
+    <div
+      className="node-activity"
+      aria-label={tr(node.enabled && !node.bypass ? "g4Canvas.procReady" : "g4Canvas.procInactive")}
+    >
       <span className="activity-dot" />
-      {node.bypass ? "Bypassed" : node.enabled ? "Ready" : "Disabled"}
+      {node.bypass ? tr("g4Canvas.bypassed") : node.enabled ? tr("g4Canvas.ready") : tr("g4Canvas.disabled")}
     </div>
   );
 }
@@ -2531,7 +2610,7 @@ export function SessionFlowCanvas({
   const restoreLayout = (direction: "undo" | "redo") => {
     const result = restoreCanvasHistory(layoutHistory, captureLayout(), direction);
     if (result.status === "locked") {
-      onLayoutMessage?.("Unlock the affected groups before restoring this layout.");
+      onLayoutMessage?.(tr("g4Canvas.unlockGroups"));
       return;
     }
     if (result.status !== "restored") return;
@@ -2875,7 +2954,7 @@ export function SessionFlowCanvas({
         type="button"
         key={`drag-${entry.id}`}
         className="canvas-library-item"
-        aria-label={entry.label}
+        aria-label={toolLabel(entry)}
         draggable={canEdit && !unavailable}
         disabled={!canEdit || unavailable}
         title={entry.unavailableReason ?? entry.note}
@@ -2899,7 +2978,7 @@ export function SessionFlowCanvas({
         <span className="canvas-library-item-icon" aria-hidden="true">
           <Icon name={libraryEntryIcon(entry)} size={14} />
         </span>
-        <span>{entry.label}</span>
+        <span>{toolLabel(entry)}</span>
       </button>
     );
   };
@@ -2987,14 +3066,14 @@ export function SessionFlowCanvas({
           <div
             className={`flow-node-content node-kind-${node.kind}`}
             data-save-state={pendingNodeIds?.has(node.id) ? nodeSaveState : undefined}
-            aria-label={`${node.name}, ${node.kind}`}
+            aria-label={tr("h2.nodeCardAria", { name: node.name, kind: humanizeNodeKind(node) })}
             onMouseDownCapture={captureConnectionHandle}
             onPointerDownCapture={captureConnectionHandle}
           >
             {/* Over the card's top edge, so marking it never resizes it (UI-17). */}
             {nodeIssues?.[node.id] && (
               <span className="node-issue-tag" role="alert" title={nodeIssues[node.id]}>
-                {nodeIssues[node.id].length <= 24 ? `! ${nodeIssues[node.id]}` : "! Cannot play"}
+                {nodeIssues[node.id].length <= 24 ? `! ${nodeIssues[node.id]}` : `! ${tr("g4Canvas.cannotPlay")}`}
               </span>
             )}
             {node.ports
@@ -3013,8 +3092,12 @@ export function SessionFlowCanvas({
                       role="img"
                       aria-label={
                         side === "left"
-                          ? `${node.name} ${port.name} input`
-                          : `${node.name} ${port.name} input ${side} connector`
+                          ? tr("g4Canvas.portInputAria", { name: node.name, port: port.name })
+                          : tr("g4Canvas.portInputSideAria", {
+                              name: node.name,
+                              port: port.name,
+                              side: sideLabel(side),
+                            })
                       }
                       data-debug-side={side}
                       data-debug-direction="target"
@@ -3051,23 +3134,23 @@ export function SessionFlowCanvas({
                 });
               })}
             {node.ports.some((port) => port.name === "sidechain" && port.direction === "input") ? (
-              <span className="flow-node-sidechain-label">Sidechain input</span>
+              <span className="flow-node-sidechain-label">{tr("g4Canvas.sidechainInput")}</span>
             ) : null}
             {pendingNodeIds?.has(node.id) && (
               <span
                 className="node-save-indicator"
-                title={
-                  nodeSaveState === "needs-save"
-                    ? "Use Save in the header to keep these changes"
-                    : "Waiting for the backend to save these changes"
-                }
+                title={nodeSaveState === "needs-save" ? tr("g4Canvas.saveNeedsHint") : tr("g4Canvas.saveWaitingHint")}
               >
-                {nodeSaveState === "needs-save" ? "Unsaved" : nodeSaveState === "autosave" ? "Autosaving…" : "Saving…"}
+                {nodeSaveState === "needs-save"
+                  ? tr("g4Canvas.unsaved")
+                  : nodeSaveState === "autosave"
+                    ? tr("g4Canvas.autosaving")
+                    : tr("g4Canvas.saving")}
               </span>
             )}
             <div className="flow-node-kicker">
               {/* Port detail stays one hover away: it is not something to act on. */}
-              <span className="node-kind" title={nodePortLabels(node).join(" · ")}>
+              <span className="node-kind" title={nodePortLabelsText(node).join(" · ")}>
                 <Icon name={NODE_KIND_ICONS[node.kind]} size={14} className="node-kind-icon" />
                 {humanizeNodeKind(node)}
               </span>
@@ -3081,8 +3164,8 @@ export function SessionFlowCanvas({
                 <button
                   type="button"
                   className="flow-node-delete"
-                  aria-label={`Delete ${node.name}`}
-                  title={`Delete ${node.name}`}
+                  aria-label={tr("g4Canvas.deleteNode", { name: node.name })}
+                  title={tr("g4Canvas.deleteNode", { name: node.name })}
                   onClick={(event) => {
                     event.stopPropagation();
                     if (onRemoveNode) onRemoveNode(node.id);
@@ -3148,8 +3231,12 @@ export function SessionFlowCanvas({
                       role="img"
                       aria-label={
                         side === "right"
-                          ? `${node.name} ${port.name} output`
-                          : `${node.name} ${port.name} output ${side} connector`
+                          ? tr("g4Canvas.portOutputAria", { name: node.name, port: port.name })
+                          : tr("g4Canvas.portOutputSideAria", {
+                              name: node.name,
+                              port: port.name,
+                              side: sideLabel(side),
+                            })
                       }
                       data-debug-side={side}
                       data-debug-direction="source"
@@ -3406,8 +3493,8 @@ export function SessionFlowCanvas({
             }
           }}
         >
-          <div className="canvas-library" aria-label="Drag processors to canvas">
-            <strong>Drag or select to add</strong>
+          <div className="canvas-library" aria-label={tr("g4Canvas.libraryAria")}>
+            <strong>{tr("g4Canvas.dragOrSelect")}</strong>
             {FLOW_GROUPS.map((group) => {
               const entries = applyCableAvailability(libraryEntries, cableStatus)
                 .filter(
@@ -3417,7 +3504,7 @@ export function SessionFlowCanvas({
               if (entries.length === 0) return null;
               return (
                 <div key={group} className={`canvas-library-group canvas-library-group-${group}`}>
-                  <span className="canvas-library-group-label">{FLOW_GROUP_LABELS[group]}</span>
+                  <span className="canvas-library-group-label">{tr(FLOW_GROUP_KEYS[group])}</span>
                   {entries.map((entry) => libraryButton(entry))}
                   {group === "input" && (
                     <button
@@ -3429,7 +3516,7 @@ export function SessionFlowCanvas({
                       <span className="canvas-library-item-icon" aria-hidden="true">
                         <Icon name={NODE_KIND_ICONS.applicationCapture} size={14} />
                       </span>
-                      <span>Application</span>
+                      <span>{tr("g4Canvas.applicationItem")}</span>
                     </button>
                   )}
                   {group === "tool" && (
@@ -3442,7 +3529,7 @@ export function SessionFlowCanvas({
                       <span className="canvas-library-item-icon" aria-hidden="true">
                         <Icon name={NODE_KIND_ICONS.plugin} size={14} />
                       </span>
-                      <span>Plugin (VST2/VST3)</span>
+                      <span>{tr("g4Canvas.pluginItem")}</span>
                     </button>
                   )}
                 </div>
@@ -3687,9 +3774,11 @@ export function SessionFlowCanvas({
                 connectionState.fromHandle.type === connectionState.toHandle.type
               ) {
                 onConnectionRejected?.(
-                  connectionState.fromHandle.type === "target"
-                    ? "That drag started and ended on a receiving connector; start from a sending connector (blue) instead."
-                    : "That drag started and ended on a sending connector; release on a receiving connector (orange) instead.",
+                  tr(
+                    connectionState.fromHandle.type === "target"
+                      ? "g4Canvas.rejectFromTarget"
+                      : "g4Canvas.rejectFromSource",
+                  ),
                 );
               }
               pendingConnectionRef.current = null;
@@ -3823,7 +3912,7 @@ export function SessionFlowCanvas({
               <>
                 <MiniMap
                   position="top-right"
-                  ariaLabel="Map of the route"
+                  ariaLabel={tr("g4Canvas.mapAria")}
                   pannable
                   zoomable
                   className="canvas-minimap"
@@ -3849,8 +3938,8 @@ export function SessionFlowCanvas({
                   <button
                     type="button"
                     className="canvas-minimap-close"
-                    aria-label="Close the map"
-                    title="Close the map"
+                    aria-label={tr("g4Canvas.closeMap")}
+                    title={tr("g4Canvas.closeMap")}
                     onClick={() => toggleMinimap(false)}
                   >
                     <Icon name="x" size={14} />
@@ -3881,7 +3970,7 @@ export function SessionFlowCanvas({
             <CanvasContextMenu
               x={contextMenu.x}
               y={contextMenu.y}
-              label={contextMenu.kind === "node" ? "Tool actions" : "Canvas actions"}
+              label={tr(contextMenu.kind === "node" ? "g4Canvas.toolActions" : "g4Canvas.canvasActions")}
               onClose={closeContextMenu}
             >
               {contextMenu.kind === "node" ? (
@@ -3894,7 +3983,7 @@ export function SessionFlowCanvas({
                     closeContextMenu();
                   }}
                 >
-                  Copy tool
+                  {tr("g4Canvas.copyTool")}
                 </button>
               ) : (
                 <button
@@ -3904,7 +3993,7 @@ export function SessionFlowCanvas({
                   disabled={!canEdit || !canPasteNode}
                   onClick={() => pasteNode(contextMenu.flowPosition, contextMenu)}
                 >
-                  Paste tool
+                  {tr("g4Canvas.pasteTool")}
                 </button>
               )}
             </CanvasContextMenu>
@@ -3915,3 +4004,22 @@ export function SessionFlowCanvas({
   );
 }
 import { useMessages } from "./i18n/useMessages";
+import { tx } from "./i18n";
+import type { MessageKey } from "./i18n/generated/messageKeys";
+
+const FLOW_GROUP_KEYS = {
+  input: "g4Canvas.flowInputs",
+  tool: "g4Canvas.flowTools",
+  output: "g4Canvas.flowOutputs",
+} as const satisfies Record<(typeof FLOW_GROUPS)[number], MessageKey>;
+
+const SIDE_KEYS = {
+  left: "g4Canvas.sideLeft",
+  right: "g4Canvas.sideRight",
+  top: "g4Canvas.sideTop",
+  bottom: "g4Canvas.sideBottom",
+} as const satisfies Record<EdgeSide, MessageKey>;
+
+function sideLabel(side: EdgeSide): string {
+  return tx(SIDE_KEYS[side]);
+}

@@ -1,4 +1,5 @@
 import type { DiscoveryDocument, PluginParametersResult } from "@audiorouter/contracts";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 
 export type ProcessorDescriptor = DiscoveryDocument["processors"][number];
 
@@ -64,18 +65,22 @@ export function processorParameterError(
   return null;
 }
 
-export function processorAvailabilityText(processor: ProcessorDescriptor): string {
-  return processor.availability.status === "available"
-    ? "available"
-    : `unavailable: ${processor.availability.reason ?? "capability unavailable"}`;
+/** Component translator (`useMessages()`); without one the English text is returned. */
+export type ProcessorTranslator = (key: MessageKey, options?: Record<string, unknown>) => string;
+
+export function processorAvailabilityText(processor: ProcessorDescriptor, tr?: ProcessorTranslator): string {
+  if (processor.availability.status === "available") return tr ? tr("g3Adv.procAvailable") : "available";
+  const reason = processor.availability.reason ?? (tr ? tr("g3Adv.procNoCapability") : "capability unavailable");
+  return tr ? tr("g3Adv.procUnavailableReason", { reason }) : `unavailable: ${reason}`;
 }
 
-export function processorLatencyText(processor: ProcessorDescriptor): string {
-  return processor.latencySamples === 0 ? "no declared latency" : `${processor.latencySamples} samples latency`;
+export function processorLatencyText(processor: ProcessorDescriptor, tr?: ProcessorTranslator): string {
+  if (processor.latencySamples === 0) return tr ? tr("g3Adv.procNoLatency") : "no declared latency";
+  return tr ? tr("g3Adv.procLatency", { n: processor.latencySamples }) : `${processor.latencySamples} samples latency`;
 }
 
-export function processorParametersText(processor: ProcessorDescriptor): string {
-  if (processor.parameters.length === 0) return "no parameters";
+export function processorParametersText(processor: ProcessorDescriptor, tr?: ProcessorTranslator): string {
+  if (processor.parameters.length === 0) return tr ? tr("g3Adv.procNoParams") : "no parameters";
   return processor.parameters
     .map((parameter) => {
       const range =

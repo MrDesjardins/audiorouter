@@ -1,17 +1,27 @@
 // Soundboard slot helpers shared by the canvas card, the Properties editor and the picker.
 import type { Node, Session } from "@audiorouter/contracts";
 import { removeNodeDraftParameters, setNodeDraftParameter } from "./draft";
+import { tx } from "./i18n";
 
 export const SOUNDBOARD_SLOTS = 9;
 /** Longest caption the backend accepts (bytes); kept in characters here, which is stricter for ASCII only. */
 export const MAX_CAPTION_LENGTH = 64;
 export const SOUNDBOARD_MODES = ["once", "loop", "toggle", "hold"] as const;
 export type SoundboardMode = (typeof SOUNDBOARD_MODES)[number];
+/** Getters, so each label follows the language chosen when it is read. */
 export const SOUNDBOARD_MODE_LABELS: Record<SoundboardMode, string> = {
-  once: "Play once",
-  loop: "Loop until pressed again",
-  toggle: "Toggle on/off",
-  hold: "Play while held",
+  get once() {
+    return tx("h1.modeOnce");
+  },
+  get loop() {
+    return tx("h1.modeLoop");
+  },
+  get toggle() {
+    return tx("h1.modeToggle");
+  },
+  get hold() {
+    return tx("h1.modeHold");
+  },
 };
 /** Library references are stored as `lib:<id>` instead of copying the sound into the media store. */
 export const SOUND_LIBRARY_PREFIX = "lib:";
@@ -76,7 +86,7 @@ export function soundboardSlots(node: Node): SoundboardSlot[] {
       label:
         typeof caption === "string" && caption !== ""
           ? caption
-          : stripExtension(name) || (set === null ? `Sound ${slot}` : setLabel(set)),
+          : stripExtension(name) || (set === null ? tx("h1.soundN", { slot }) : setLabel(set)),
       gainDb: typeof gain === "number" ? gain : 0,
       mode: SOUNDBOARD_MODES.find((candidate) => candidate === mode) ?? "once",
       set,
@@ -94,7 +104,7 @@ export function firstFreeSlot(node: Node): number | null {
 
 /** What a random set is called when its slot has no caption or file name. */
 export function setLabel(set: string | readonly string[]): string {
-  return typeof set === "string" ? `Random: ${set}` : `Random: ${set.length} sounds`;
+  return typeof set === "string" ? tx("h1.randomSet", { set }) : tx("h1.randomCount", { count: set.length });
 }
 
 /**

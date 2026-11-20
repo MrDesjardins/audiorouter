@@ -19,6 +19,9 @@ import { scrollBehavior } from "./reducedMotion";
 import { useHiddenDevices, visibleDevices } from "./hiddenDevices";
 import type { VirtualCableStatus } from "@audiorouter/contracts";
 import { cableEndpointName, cableUnavailableReason } from "./virtualCableStatus";
+import { useMessages } from "./i18n/useMessages";
+import { tx } from "./i18n";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 
 /**
  * Whether the catalog's settings of a kind are edited by the generic list
@@ -108,19 +111,19 @@ export function ProcessorParameterEditor({
     if (pluginParameterError)
       return (
         <p className="muted" role="status">
-          Plugin parameters unavailable: {pluginParameterError}
+          {tr("g5.pluginParamsError", { error: pluginParameterError })}
         </p>
       );
     if (!pluginParameters)
       return (
         <p className="muted" role="status">
-          Loading bounded parameters from the exact scanned plugin...
+          {tr("g5.pluginParamsLoading")}
         </p>
       );
     if (pluginParameters.parameters.length === 0)
       return (
         <p className="muted" role="status">
-          This plugin exposes no automatable parameters.
+          {tr("g5.pluginParamsNone")}
         </p>
       );
     return (
@@ -136,14 +139,18 @@ export function ProcessorParameterEditor({
               key={name}
               label={parameter.title}
               name={parameter.title}
-              sliderName={`${parameter.title} slider`}
+              sliderName={tr("g5.pluginParamSlider", { name: parameter.title })}
               value={value}
               min={parameter.minimum}
               max={parameter.maximum}
               step={0.001}
               defaultValue={parameter.defaultValue}
               disabled={!connected}
-              help={<small className="parameter-help">Normalized parameter {parameter.parameterId}</small>}
+              help={
+                <small className="parameter-help">
+                  {tr("g5.pluginParamNormalized", { id: parameter.parameterId })}
+                </small>
+              }
               onChange={(next) => onChange(name, next)}
             />
           );
@@ -258,7 +265,7 @@ export function ProcessorParameterEditor({
             </span>
             {helpText}
             <NumberField
-              aria-label={`${label} precise value`}
+              aria-label={tr("g5.preciseValue", { name: label })}
               value={numericValue}
               min={parameter.minimum}
               max={parameter.maximum}
@@ -272,6 +279,19 @@ export function ProcessorParameterEditor({
     </>
   );
 }
+
+/** Plain words for an application capture's connection state, keyed by the backend's state value. */
+const APP_CAPTURE_STATE_TEXT: Record<string, MessageKey | undefined> = {
+  connected: "g4Canvas.appStateConnected",
+  "configured-stopped": "g4Canvas.appStateConfiguredStopped",
+  "app-closed": "g4Canvas.appStateAppClosed",
+  reconnecting: "g4Canvas.appStateReconnecting",
+  ambiguous: "g4Canvas.appStateAmbiguous",
+  "output-unavailable": "g4Canvas.appStateOutputUnavailable",
+  unsupported: "g4Canvas.appStateUnsupported",
+  failed: "g4Canvas.appStateFailed",
+  "not-prepared": "g4Canvas.appStateNotPrepared",
+};
 
 export function NodeTelemetryPanel({
   node,
@@ -296,39 +316,43 @@ export function NodeTelemetryPanel({
     if (meter) {
       const current = meter.currentPeakDb ?? meter.peakDb;
       tiles.push({
-        label: "Level",
-        value: current <= -120 ? "Silent" : `${current.toFixed(1)} dB`,
-        detail: current <= -120 ? "no sound right now" : `peak · RMS ${meter.rmsDb.toFixed(1)} dB`,
+        label: tr("g5.tileLevel"),
+        value: current <= -120 ? tr("g5.tileSilent") : `${current.toFixed(1)} dB`,
+        detail: current <= -120 ? tr("g5.tileNoSound") : tr("g5.tilePeakRms", { db: meter.rmsDb.toFixed(1) }),
       });
       tiles.push({
-        label: "Clipping",
+        label: tr("g5.tileClipping"),
         value: String(meter.clippedSamples),
-        detail: "samples over 0 dB",
+        detail: tr("g5.tileOver0"),
         tone: meter.clippedSamples > 0 ? "warn" : "good",
       });
     }
     if (observation.processor) {
       const reduction = Math.max(0, ...observation.processor.gainReductionDb);
       if (observation.processor.gainReductionDb.length > 0)
-        tiles.push({ label: "Gain reduction", value: `${reduction.toFixed(1)} dB` });
+        tiles.push({ label: tr("g5.tileGainReduction"), value: `${reduction.toFixed(1)} dB` });
       if (observation.processor.gateOpen.length > 0) {
         const open = observation.processor.gateOpen.some(Boolean);
-        tiles.push({ label: "Gate", value: open ? "Open" : "Closed", tone: open ? "good" : undefined });
+        tiles.push({
+          label: tr("g5.tileGate"),
+          value: open ? tr("g5.tileOpen") : tr("g5.tileClosed"),
+          tone: open ? "good" : undefined,
+        });
       }
     }
     if (observation.timing) {
       tiles.push({
-        label: "Delay",
+        label: tr("g5.tileDelay"),
         value: `${observation.timing.delayMs.toFixed(1)} ms`,
-        detail: "added at this step",
+        detail: tr("g5.tileAddedHere"),
       });
       if (typeof observation.timing.processingUsAvg === "number")
         tiles.push({
-          label: "CPU per block",
+          label: tr("g5.tileCpu"),
           value: `${Math.round(observation.timing.processingUsAvg)} µs`,
           detail:
             typeof observation.timing.processingUsMax === "number"
-              ? `max ${Math.round(observation.timing.processingUsMax)} µs`
+              ? tr("g5.tileMax", { us: Math.round(observation.timing.processingUsMax) })
               : undefined,
         });
     }
@@ -336,23 +360,23 @@ export function NodeTelemetryPanel({
       const plugin = observation.plugin;
       const healthy = plugin.state === "running";
       tiles.push({
-        label: "Plugin",
-        value: healthy ? "Running" : plugin.state === "failed" ? "Failed" : plugin.state,
+        label: tr("g5.tilePlugin"),
+        value: healthy ? tr("g5.tileRunning") : plugin.state === "failed" ? tr("g5.tileFailed") : plugin.state,
         tone: healthy ? "good" : "bad",
-        detail: plugin.failureCount > 0 ? `${plugin.failureCount} failures` : undefined,
+        detail: plugin.failureCount > 0 ? tr("g5.tileFailures", { count: plugin.failureCount }) : undefined,
       });
     }
     if (observation.network) {
-      const text = networkTelemetryText(observation.network);
+      const text = networkTelemetryText(observation.network, tr);
       if (text)
         tiles.push({
-          label: "Network",
+          label: tr("g5.tileNetwork"),
           value:
             observation.network.direction === "send"
-              ? "Sending"
+              ? tr("g5.tileSending")
               : (observation.network.receivedPackets ?? 0) > 0
-                ? "Receiving"
-                : "Waiting",
+                ? tr("g5.tileReceiving")
+                : tr("g5.tileWaiting"),
           detail: text.split(" · ").slice(1).join(" · ") || undefined,
         });
     }
@@ -395,7 +419,9 @@ export function NodeTelemetryPanel({
                     ? tr("workflowUi.liveStatus")
                     : status === "No readings"
                       ? tr("workflowUi.noReadings")
-                      : status}
+                      : APP_CAPTURE_STATE_TEXT[status]
+                        ? tr(APP_CAPTURE_STATE_TEXT[status])
+                        : status}
         </span>
       </div>
       {note && <p className="node-telemetry-note">{note}</p>}
@@ -423,6 +449,7 @@ export function NodeTelemetryPanel({
 export const EQ_RESPONSE_FREQUENCIES = Array.from({ length: 48 }, (_, index) => 20 * Math.pow(1000, index / 47));
 
 export function EqResponsePreview({ node, backend }: { node: Node; backend: UiBackend }) {
+  const tr = useMessages();
   const [response, setResponse] = useState<import("./backend").ProcessorResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -458,7 +485,7 @@ export function EqResponsePreview({ node, backend }: { node: Node; backend: UiBa
       .catch((reason) => {
         if (active) {
           setResponse(null);
-          setError(formatUiError(reason, "EQ response unavailable."));
+          setError(formatUiError(reason, tx("g5.eqResponseUnavailable")));
         }
       });
     return () => {
@@ -477,15 +504,15 @@ export function EqResponsePreview({ node, backend }: { node: Node; backend: UiBa
     .join(" ");
   return (
     <section className="eq-response" aria-labelledby="eq-response-heading">
-      <h3 id="eq-response-heading">EQ response</h3>
+      <h3 id="eq-response-heading">{tr("g5.eqResponseHeading")}</h3>
       {error ? (
         <p className="muted" role="status">
           {error}
         </p>
       ) : !response ? (
-        <p className="muted">Loading the authoritative response...</p>
+        <p className="muted">{tr("g5.eqResponseLoading")}</p>
       ) : (
-        <svg viewBox="0 0 300 64" role="img" aria-label="Parametric EQ magnitude response">
+        <svg viewBox="0 0 300 64" role="img" aria-label={tr("g5.eqResponseAria")}>
           <line x1="8" y1="32" x2="292" y2="32" stroke="currentColor" opacity="0.35" />
           <polyline points={points} fill="none" stroke="currentColor" strokeWidth="1.5" />
         </svg>
@@ -505,6 +532,7 @@ export function FirFilterEditor({
   disabled: boolean;
   onChange: (changes: Array<[string, boolean | number | string]>) => void;
 }) {
+  const tr = useMessages();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const choose = async (file?: File) => {
@@ -522,24 +550,26 @@ export function FirFilterEditor({
         ["fileName", media.fileName],
       ]);
       setMessage(
-        `${media.fileName} · ${(media.durationMs / 1000).toFixed(2)} s${media.durationMs > 2000 ? " (only the first 2 s are used)" : ""}. Save the route to apply it.`,
+        tr("g5.firLoaded", {
+          file: media.fileName,
+          seconds: (media.durationMs / 1000).toFixed(2),
+          note: media.durationMs > 2000 ? tr("g5.firOnly2s") : "",
+        }),
       );
     } catch (error) {
-      setMessage(formatUiError(error, "Impulse response import failed."));
+      setMessage(formatUiError(error, tr("g5.firFailed")));
     } finally {
       setBusy(false);
     }
   };
   return (
-    <div className="node-binding-editor" aria-label="FIR impulse response">
+    <div className="node-binding-editor" aria-label={tr("g5.firAria")}>
       <div>
-        <p className="eyebrow">Impulse response</p>
-        <strong>
-          {typeof node.parameters.fileName === "string" ? node.parameters.fileName : "No impulse response selected"}
-        </strong>
+        <p className="eyebrow">{tr("g5.firEyebrow")}</p>
+        <strong>{typeof node.parameters.fileName === "string" ? node.parameters.fileName : tr("g5.firNone")}</strong>
       </div>
       <label className="secondary file-picker">
-        Choose WAV or MP3
+        {tr("g5.firChoose")}
         <input
           type="file"
           accept=".wav,.mp3,audio/wav,audio/mpeg"
@@ -550,10 +580,7 @@ export function FirFilterEditor({
           }}
         />
       </label>
-      <small>
-        {message ??
-          "The response is normalized to unit energy. Wet mix blends it with the original (dry) sound; Output gain sets the level. Until a file is chosen, audio passes unchanged."}
-      </small>
+      <small>{message ?? tr("g5.firHelp")}</small>
     </div>
   );
 }
@@ -571,18 +598,15 @@ export function DenoiseLearnEditor({
   disabled: boolean;
   onChange: (changes: Array<[string, boolean | number | string]>) => void;
 }) {
+  const tr = useMessages();
   const learning = node.parameters.learning === true;
   const hasProfile = typeof node.parameters.noiseProfile === "string";
   return (
-    <div className="node-binding-editor" aria-label="Denoise noise profile">
+    <div className="node-binding-editor" aria-label={tr("g5.denoiseAria")}>
       <div>
-        <p className="eyebrow">Noise profile</p>
+        <p className="eyebrow">{tr("g5.denoiseEyebrow")}</p>
         <strong>
-          {learning
-            ? "Learning the noise now"
-            : hasProfile
-              ? "A noise profile is stored"
-              : "Teach this tool the noise to remove"}
+          {learning ? tr("g5.denoiseLearning") : hasProfile ? tr("g5.denoiseStored") : tr("g5.denoiseTeach")}
         </strong>
       </div>
       {!learning ? (
@@ -592,7 +616,7 @@ export function DenoiseLearnEditor({
           disabled={disabled || !running || !node.enabled || node.bypass}
           onClick={() => onChange([["learning", true]])}
         >
-          {hasProfile ? "Learn again" : "Learn noise"}
+          {hasProfile ? tr("g5.denoiseAgain") : tr("g5.denoiseLearn")}
         </button>
       ) : (
         <button
@@ -607,21 +631,21 @@ export function DenoiseLearnEditor({
             ])
           }
         >
-          Stop learning and keep profile
+          {tr("g5.denoiseStop")}
         </button>
       )}
       <small>
         {!node.enabled
-          ? "Off: enable this tool before learning noise."
+          ? tr("g5.denoiseOffHelp")
           : node.bypass
-            ? "Bypass: turn Bypass off before learning noise."
+            ? tr("g5.denoiseBypassHelp")
             : !running
-              ? "Start the route first. Then play only the unwanted noise (for example room tone or fan hiss) for a few seconds while learning."
+              ? tr("g5.denoiseStartHelp")
               : learning
                 ? liveProfile
-                  ? "Keep only the noise playing for 3–5 seconds, then stop learning. Audio passes unchanged while learning."
-                  : "Waiting for the first noise measurement…"
-                : "Reduction sets how aggressively the profile is removed; the remaining floor keeps some noise to avoid unnatural silence."}
+                  ? tr("g5.denoiseKeepHelp")
+                  : tr("g5.denoiseWaiting")
+                : tr("g5.denoiseReductionHelp")}
       </small>
     </div>
   );
@@ -638,21 +662,22 @@ export function MixerInputsEditor({
   disabled: boolean;
   onChange: (name: string, value: number) => void;
 }) {
+  const tr = useMessages();
   const inputs = mixerInputs(session, mixer.id);
   return (
-    <div className="node-binding-editor mixer-inputs-editor" aria-label="Mixer input volumes">
+    <div className="node-binding-editor mixer-inputs-editor" aria-label={tr("g5.mixerAria")}>
       <div>
-        <p className="eyebrow">Mixer inputs</p>
-        <strong>Volume per source</strong>
+        <p className="eyebrow">{tr("g5.mixerEyebrow")}</p>
+        <strong>{tr("g5.mixerPerSource")}</strong>
       </div>
       {inputs.length === 0 ? (
-        <small>Connect sources to this Mixer to set their volumes.</small>
+        <small>{tr("g5.mixerConnect")}</small>
       ) : (
         inputs.map((input) => (
           <SliderField
             key={input.edgeId}
-            label={`${input.upstream.name}${input.enabled ? "" : " (off)"}`}
-            name={`Volume for ${input.upstream.name}`}
+            label={`${input.upstream.name}${input.enabled ? "" : tr("g5.mixerOffSuffix")}`}
+            name={tr("g5.mixerVolumeFor", { name: input.upstream.name })}
             value={input.percent}
             min={0}
             max={100}
@@ -665,7 +690,7 @@ export function MixerInputsEditor({
           />
         ))
       )}
-      <small>0–100 % per input. For a boost above 100 %, put a Volume tool between the source and the Mixer.</small>
+      <small>{tr("g5.mixerRangeHelp")}</small>
     </div>
   );
 }
@@ -675,11 +700,12 @@ export function applicationChoiceLabel(application: ApplicationRow): string {
 }
 
 export function ApplicationChoiceOptions({ applications }: { applications: ApplicationRow[] }) {
+  const tr = useMessages();
   const { withAudio, other } = applicationCaptureChoices(applications);
   return (
     <>
       {withAudio.length > 0 && (
-        <optgroup label="Using audio now">
+        <optgroup label={tr("g5.appUsingAudio")}>
           {withAudio.map((application) => (
             <option key={applicationChoiceKey(application)} value={applicationChoiceKey(application)}>
               {applicationChoiceLabel(application)}
@@ -688,7 +714,7 @@ export function ApplicationChoiceOptions({ applications }: { applications: Appli
         </optgroup>
       )}
       {other.length > 0 && (
-        <optgroup label="Other running applications">
+        <optgroup label={tr("g5.appOther")}>
           {other.map((application) => (
             <option key={applicationChoiceKey(application)} value={applicationChoiceKey(application)}>
               {applicationChoiceLabel(application)}
@@ -715,22 +741,24 @@ export function ApplicationCaptureBinding({
   onRefresh: () => void;
   onSelect: (application: ApplicationRow) => void;
 }) {
+  const tr = useMessages();
   const processId = typeof node.parameters.processId === "number" ? node.parameters.processId : null;
   const creationTime = typeof node.parameters.creationTime100ns === "string" ? node.parameters.creationTime100ns : null;
-  const executable = typeof node.parameters.executable === "string" ? node.parameters.executable : "application";
+  const executable =
+    typeof node.parameters.executable === "string" ? node.parameters.executable : tr("g5.appDefaultName");
   const current =
     applications.find(
       (application) => application.processId === processId && application.creationTime100ns === creationTime,
     ) ?? null;
   const currentKey = current ? applicationChoiceKey(current) : "";
   return (
-    <div className="node-binding-editor" aria-label="Application capture binding">
+    <div className="node-binding-editor" aria-label={tr("g5.appAria")}>
       <div>
-        <p className="eyebrow">Application source</p>
-        <strong>Choose the running application to capture</strong>
+        <p className="eyebrow">{tr("g5.appEyebrow")}</p>
+        <strong>{tr("g5.appChoose")}</strong>
       </div>
       <select
-        aria-label="Application to capture"
+        aria-label={tr("g5.appSelectAria")}
         value={currentKey}
         disabled={disabled || applications.length === 0}
         onChange={(event) => {
@@ -741,35 +769,28 @@ export function ApplicationCaptureBinding({
         {!current && (
           <option value="">
             {processId === null
-              ? `${executable} (any verified instance)`
-              : `${executable} - PID ${processId} (not running)`}
+              ? tr("g5.appAnyInstance", { name: executable })
+              : tr("g5.appNotRunning", { name: executable, pid: processId })}
           </option>
         )}
         <ApplicationChoiceOptions applications={applications} />
       </select>
       <small>
-        {error
-          ? `Application inventory unavailable: ${error}`
-          : disabled
-            ? "Stop the session to change the application."
-            : "Changing the application keeps this node and its connections. Save changes to apply it."}
+        {error ? tr("g5.appInventoryError", { error }) : disabled ? tr("g5.appStopSession") : tr("g5.appChangeHelp")}
       </small>
       <button type="button" className="secondary" onClick={onRefresh} disabled={disabled}>
-        Refresh applications
+        {tr("g5.appRefresh")}
       </button>
     </div>
   );
 }
-
-const ALL_HIDDEN_TEXT =
-  "Every available device is hidden on this PC. Show one again in Status, under Audio devices on this PC.";
 
 /** A disabled last line saying how many devices this PC hides (UI-22). */
 function HiddenDevicesOption({ count }: { count: number }) {
   if (count === 0) return null;
   return (
     <option value="hidden-devices-note" disabled>
-      {count === 1 ? "1 device hidden" : `${count} devices hidden`} — show in Status › Audio devices on this PC
+      {count === 1 ? tx("g5.hiddenOne") : tx("g5.hiddenMany", { count })}
     </option>
   );
 }
@@ -835,14 +856,14 @@ export function PhysicalInputBinding({
     return () => window.clearTimeout(timeout);
   }, [focusRequest]);
   return (
-    <div ref={bindingRef} className="node-binding-editor" aria-label="Input device binding" tabIndex={-1}>
+    <div ref={bindingRef} className="node-binding-editor" aria-label={tx("workspaceAudit.inputBinding")} tabIndex={-1}>
       <div>
-        <p className="eyebrow">Capture source</p>
-        <strong>Choose a microphone, input, or virtual capture bus</strong>
+        <p className="eyebrow">{tx("workspaceAudit.capture")}</p>
+        <strong>{tx("workspaceAudit.chooseCapture")}</strong>
       </div>
       <select
         ref={selectRef}
-        aria-label="Input device endpoint"
+        aria-label={tx("workspaceAudit.inputEndpoint")}
         value={value}
         disabled={disabled || activeCapture.length === 0}
         onChange={(event) => {
@@ -852,16 +873,16 @@ export function PhysicalInputBinding({
           if (device) onChange(device.id, device.name);
         }}
       >
-        <option value="">Choose an input device</option>
+        <option value="">{tx("workspaceAudit.chooseInput")}</option>
         {value &&
           !activeCapture.some((device) => device.id === value) &&
           !surroundPlayback.some((device) => device.id === value) && (
             <option value={value} disabled>
-              Previously selected input is unavailable — choose an active device
+              {tx("workspaceAudit.oldInput")}
             </option>
           )}
         {surroundPlayback.length > 0 ? (
-          <optgroup label="Recording devices">
+          <optgroup label={tx("workspaceAudit.recordingDevices")}>
             {activeCapture.map((device) => (
               <option key={device.id} value={device.id}>
                 {deviceChoiceLabel(device)}
@@ -876,10 +897,10 @@ export function PhysicalInputBinding({
           ))
         )}
         {surroundPlayback.length > 0 && (
-          <optgroup label="Surround playback devices (loopback)">
+          <optgroup label={tx("workspaceAudit.loopbackDevices")}>
             {surroundPlayback.map((device) => (
               <option key={device.id} value={device.id}>
-                {"Loopback · " + deviceChoiceLabel(device)}
+                {tx("g5.loopbackPrefix", { name: deviceChoiceLabel(device) })}
               </option>
             ))}
           </optgroup>
@@ -889,11 +910,11 @@ export function PhysicalInputBinding({
       <small className={!value && activeCapture.length > 0 ? "node-binding-missing" : undefined}>
         {activeCapture.length === 0
           ? hiddenCount > 0
-            ? ALL_HIDDEN_TEXT
-            : "No active capture endpoints are available. Refresh the device list; a reboot is not normally required."
+            ? tx("g5.hiddenAll")
+            : tx("workspaceAudit.noCapture")
           : !value
-            ? "No device is chosen for this node yet. Choose one, then Save."
-            : "Voicemeeter Out B1 receives system sound only while the Voicemeeter mixer runs with B1 enabled. For an app-independent virtual cable, send Windows sound to CABLE Input and select CABLE Output here."}
+            ? tx("workspaceAudit.notChosen")
+            : tx("workspaceAudit.voicemeeter")}
       </small>
       <button type="button" className="secondary" onClick={onRefresh} disabled={disabled}>
         {tx("workflowUi.refreshInputs")}
@@ -926,18 +947,18 @@ export function PhysicalOutputBinding({
     value,
   );
   return (
-    <div className="node-binding-editor" aria-label="Output device binding">
+    <div className="node-binding-editor" aria-label={tx("workspaceAudit.outputBinding")}>
       <div>
-        <p className="eyebrow">Render destination</p>
-        <strong>Choose the headphones, speakers, or virtual output</strong>
+        <p className="eyebrow">{tx("workspaceAudit.render")}</p>
+        <strong>{tx("workspaceAudit.chooseRender")}</strong>
       </div>
       <select
-        aria-label="Output device endpoint"
+        aria-label={tx("workspaceAudit.outputEndpoint")}
         value={value}
         disabled={disabled || activeRender.length === 0}
         onChange={(event) => onChange(event.target.value)}
       >
-        <option value="">Choose an output device</option>
+        <option value="">{tx("workspaceAudit.chooseOutput")}</option>
         {activeRender.map((device) => (
           <option key={device.id} value={device.id}>
             {deviceChoiceLabel(device)}
@@ -948,14 +969,14 @@ export function PhysicalOutputBinding({
       <small className={!value && activeRender.length > 0 ? "node-binding-missing" : undefined}>
         {activeRender.length === 0
           ? hiddenCount > 0
-            ? ALL_HIDDEN_TEXT
-            : "No active render endpoints are available. Refresh the device list; a reboot is not normally required."
+            ? tx("g5.hiddenAll")
+            : tx("workspaceAudit.noRender")
           : !value
-            ? "No device is chosen for this node yet. Choose one, then Save."
-            : "This route plays through this device when you press Play."}
+            ? tx("workspaceAudit.notChosen")
+            : tx("workspaceAudit.playsThrough")}
       </small>
       <button type="button" className="secondary" onClick={onRefresh} disabled={disabled}>
-        Refresh available outputs
+        {tx("workspaceAudit.refreshOutputs")}
       </button>
     </div>
   );
@@ -976,39 +997,44 @@ export function CableBinding({
   disabled: boolean;
   onChange: (busId: string) => void;
 }) {
+  const tr = useMessages();
   const cables = status?.cables ?? [];
   const listed = cables.some((cable) => cable.busId === value);
   const unavailable = cableUnavailableReason(status);
   return (
-    <div className="node-binding-editor" aria-label="Cable binding">
+    <div className="node-binding-editor" aria-label={tr("g5.cableAria")}>
       <div>
-        <p className="eyebrow">{direction === "renderSource" ? "Cable source" : "Cable destination"}</p>
-        <strong>
-          {direction === "renderSource" ? "Choose the cable an app plays into" : "Choose the cable an app records from"}
-        </strong>
+        <p className="eyebrow">
+          {direction === "renderSource" ? tr("g5.cableSourceEyebrow") : tr("g5.cableDestEyebrow")}
+        </p>
+        <strong>{direction === "renderSource" ? tr("g5.cableChooseIn") : tr("g5.cableChooseOut")}</strong>
       </div>
       <select
-        aria-label="Cable"
+        aria-label={tr("g5.cableSelectAria")}
         value={value}
         disabled={disabled || cables.length === 0}
         onChange={(event) => onChange(event.target.value)}
       >
-        {!listed && <option value={value}>{cableEndpointName(value, direction, status)} (not installed)</option>}
-        {cables.map((cable) => (
-          <option key={cable.busId} value={cable.busId} disabled={!cable.present && cable.busId !== value}>
-            {cableEndpointName(cable.busId, direction, status)}
-            {cable.present ? "" : " (missing)"}
+        {!listed && (
+          <option value={value}>
+            {tr("g5.cableNotInstalled", { name: cableEndpointName(value, direction, status) })}
           </option>
-        ))}
+        )}
+        {cables.map((cable) => {
+          const name = cableEndpointName(cable.busId, direction, status);
+          return (
+            <option key={cable.busId} value={cable.busId} disabled={!cable.present && cable.busId !== value}>
+              {cable.present ? name : tr("g5.cableMissing", { name })}
+            </option>
+          );
+        })}
       </select>
       <p className="muted">
         {unavailable ??
-          (direction === "renderSource"
-            ? `In the app, choose ${cableEndpointName(value, direction, status)} as its speaker.`
-            : `In the app, choose ${cableEndpointName(value, direction, status)} as its microphone.`)}
+          tr(direction === "renderSource" ? "g5.cableSpeaker" : "g5.cableMic", {
+            name: cableEndpointName(value, direction, status),
+          })}
       </p>
     </div>
   );
 }
-import { useMessages } from "./i18n/useMessages";
-import { tx } from "./i18n";

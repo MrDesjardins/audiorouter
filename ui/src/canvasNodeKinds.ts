@@ -1,6 +1,8 @@
 // Canvas kind labels and signal-flow families (moved from SessionFlowCanvas).
 import type { Node, NodeKind } from "@audiorouter/contracts";
 import type { LibraryFlowGroup } from "./library";
+import { tx } from "./i18n";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 
 const NODE_FLOW_GROUPS: Record<NodeKind, LibraryFlowGroup> = {
   physicalInput: "input",
@@ -50,19 +52,25 @@ export function nodeFlowGroup(kind: NodeKind): LibraryFlowGroup {
 }
 
 export const FLOW_GROUPS: LibraryFlowGroup[] = ["input", "tool", "output"];
-export const FLOW_GROUP_LABELS: Record<LibraryFlowGroup, string> = {
-  input: "Inputs",
-  tool: "Tools",
-  output: "Outputs",
-};
+const FLOW_GROUP_LABEL_KEYS = {
+  input: "g4Canvas.flowInputs",
+  tool: "g4Canvas.flowTools",
+  output: "g4Canvas.flowOutputs",
+} as const satisfies Record<LibraryFlowGroup, MessageKey>;
+export function flowGroupLabel(group: LibraryFlowGroup): string {
+  return tx(FLOW_GROUP_LABEL_KEYS[group]);
+}
 
 type NodeKindFamily = "input" | "native" | "vst" | "output";
-export const NODE_KIND_FAMILY_LABELS: Record<NodeKindFamily, string> = {
-  input: "Input",
-  native: "Native",
-  vst: "VST",
-  output: "Output",
-};
+const NODE_KIND_FAMILY_LABEL_KEYS = {
+  input: "g4Canvas.familyInput",
+  native: "g4Canvas.familyNative",
+  vst: "g4Canvas.familyVst",
+  output: "g4Canvas.familyOutput",
+} as const satisfies Record<NodeKindFamily, MessageKey>;
+export function nodeKindFamilyLabel(family: NodeKindFamily): string {
+  return tx(NODE_KIND_FAMILY_LABEL_KEYS[family]);
+}
 
 /** Beyond input/tool/output signal-flow position, a "tool" is either a
  * built-in native processor or an isolated-worker VST plugin; those are
@@ -76,32 +84,46 @@ export function nodeKindFamily(kind: NodeKind): NodeKindFamily {
   return kind === "plugin" ? "vst" : "native";
 }
 
-const NODE_KIND_LABELS: Partial<Record<NodeKind, string>> = {
-  physicalInput: "Input Device",
-  physicalOutput: "Output Device",
-  applicationCapture: "App Capture",
-  endpointLoopback: "Endpoint Loopback",
-  virtualRenderSource: "Cable Input",
-  virtualCaptureSink: "Cable Output",
-  testSignal: "Test Signal",
-  audioFile: "Audio File",
-  soundboard: "Soundboard",
-  instrument: "Instrument",
-  parametricEq: "Advanced EQ",
-  graphicEq: "Graphic EQ",
-  delay: "Sync",
-  bassTreble: "Bass & Treble",
-  inputSwitch: "Input Switch",
-  outputSwitch: "Output Switch",
-  duck: "Duck",
-  speechDenoise: "Speech Denoise",
-  spectralGate: "Spectral Gate",
-  funVoiceChanger: "Fun Voice Changer",
-  firFilter: "FIR Filter",
-  timeShift: "Time Shift",
-  networkSend: "Network Send",
-  networkReceive: "Network Receive",
-};
+const NODE_KIND_LABEL_KEYS = {
+  physicalInput: "g4Canvas.kindPhysicalInput",
+  physicalOutput: "g4Canvas.kindPhysicalOutput",
+  applicationCapture: "g4Canvas.kindApplicationCapture",
+  endpointLoopback: "g4Canvas.kindEndpointLoopback",
+  virtualRenderSource: "g4Canvas.kindVirtualRenderSource",
+  virtualCaptureSink: "g4Canvas.kindVirtualCaptureSink",
+  testSignal: "g4Canvas.kindTestSignal",
+  audioFile: "g4Canvas.kindAudioFile",
+  soundboard: "g4Canvas.kindSoundboard",
+  instrument: "g4Canvas.kindInstrument",
+  parametricEq: "g4Canvas.kindParametricEq",
+  graphicEq: "g4Canvas.kindGraphicEq",
+  delay: "g4Canvas.kindDelay",
+  bassTreble: "g4Canvas.kindBassTreble",
+  inputSwitch: "g4Canvas.kindInputSwitch",
+  outputSwitch: "g4Canvas.kindOutputSwitch",
+  duck: "g4Canvas.kindDuck",
+  speechDenoise: "g4Canvas.kindSpeechDenoise",
+  spectralGate: "g4Canvas.kindSpectralGate",
+  funVoiceChanger: "g4Canvas.kindFunVoiceChanger",
+  firFilter: "g4Canvas.kindFirFilter",
+  timeShift: "g4Canvas.kindTimeShift",
+  networkSend: "g4Canvas.kindNetworkSend",
+  networkReceive: "g4Canvas.kindNetworkReceive",
+  mixer: "g4Canvas.kindMixer",
+  gain: "g4Canvas.kindGain",
+  volume: "g4Canvas.kindVolume",
+  dehum: "g4Canvas.kindDehum",
+  declick: "g4Canvas.kindDeclick",
+  denoise: "g4Canvas.kindDenoise",
+  mute: "g4Canvas.kindMute",
+  meter: "g4Canvas.kindMeter",
+  compressor: "g4Canvas.kindCompressor",
+  gate: "g4Canvas.kindGate",
+  limiter: "g4Canvas.kindLimiter",
+  pitch: "g4Canvas.kindPitch",
+  recorder: "g4Canvas.kindRecorder",
+  plugin: "g4Canvas.kindPlugin",
+} as const satisfies Record<NodeKind, MessageKey>;
 
 /** A readable node-kind label for the canvas card. A plugin's label names
  * its exact loaded format (VST2/VST3) instead of the generic "Plugin", since
@@ -109,9 +131,9 @@ const NODE_KIND_LABELS: Partial<Record<NodeKind, string>> = {
 export function humanizeNodeKind(node: Node): string {
   if (node.kind === "plugin") {
     const format = node.parameters.format;
-    return format === "vst3" ? "VST3 Plugin" : format === "vst2" ? "VST2 Plugin" : "VST Plugin";
+    return tx(format === "vst3" ? "g4Canvas.kindVst3" : format === "vst2" ? "g4Canvas.kindVst2" : "g4Canvas.kindVst");
   }
-  const known = NODE_KIND_LABELS[node.kind];
-  if (known) return known;
+  const key = NODE_KIND_LABEL_KEYS[node.kind];
+  if (key) return tx(key);
   return node.kind.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/^./, (char) => char.toUpperCase());
 }

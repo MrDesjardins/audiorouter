@@ -1,3 +1,5 @@
+import type { MessageKey } from "./i18n/generated/messageKeys";
+
 /** What a five-second listen found. It only knows the level at this input (UI-21's voice zone). */
 export type MicVerdict = "good" | "quiet" | "loud" | "silent";
 
@@ -15,23 +17,11 @@ export function micVerdict(loudestPeakDb: number): MicVerdict {
   return "loud";
 }
 
-export const MIC_VERDICT_TEXT: Record<MicVerdict, { title: string; detail: string }> = {
-  good: {
-    title: "Good: we hear you, in the voice zone",
-    detail: "This checks the level at this input only. It cannot tell what other apps hear.",
-  },
-  quiet: {
-    title: "We hear you, but quietly",
-    detail: "Move closer or raise the input level, then test again. This checks this input only.",
-  },
-  loud: {
-    title: "We hear you, but it is loud",
-    detail: "Lower the input level so words stay under −6 dB, then test again. This checks this input only.",
-  },
-  silent: {
-    title: "No sound from this mic",
-    detail: "It may be muted in Windows or on the mic itself. Check, then test again.",
-  },
+export const MIC_VERDICT_TEXT: Record<MicVerdict, { title: MessageKey; detail: MessageKey }> = {
+  good: { title: "micTest.good", detail: "micTest.goodDetail" },
+  quiet: { title: "micTest.quiet", detail: "micTest.quietDetail" },
+  loud: { title: "micTest.loud", detail: "micTest.loudDetail" },
+  silent: { title: "micTest.silent", detail: "micTest.silentDetail" },
 };
 
 /** The loudest current peak across channels, or null when the input reports nothing. */

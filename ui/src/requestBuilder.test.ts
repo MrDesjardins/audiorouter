@@ -114,7 +114,7 @@ describe("request builder", () => {
     ] as unknown as DiscoveryDocument["nodeTypes"];
     const keys = builderTargets(session, soundboard, types).map((target) => target.key);
     expect(keys).toEqual(["enabled", "bypass", ...Array.from({ length: 9 }, (_, index) => `slot${index + 1}GainDb`)]);
-    expect(parseValue(find(builderTargets(session, soundboard, types), "slot9GainDb"), "7")).toEqual({
+    expect(parseValue(find(builderTargets(session, soundboard, types), "slot9GainDb"), "7")).toMatchObject({
       error: "Enter a value from -24 to 6 dB.",
     });
   });
@@ -125,17 +125,19 @@ describe("request builder", () => {
     expect(key.kind === "parameter" && key.choices?.map((choice) => choice.label)).toContain("Microphone");
     expect(key.kind === "parameter" && key.choices?.some((choice) => choice.value === "duck")).toBe(false);
     expect(parseValue(key, "mic")).toEqual({ value: "mic" });
-    expect(parseValue(key, "nobody")).toEqual({ error: expect.stringContaining("Microphone") });
+    expect(parseValue(key, "nobody")).toMatchObject({ error: expect.stringContaining("Microphone") });
   });
 
   it("validates values against the catalog", () => {
     const targets = builderTargets(session, session.nodes[4], nodeTypes);
     expect(parseValue(find(targets, "amountDb"), "12")).toEqual({ value: 12 });
-    expect(parseValue(find(targets, "amountDb"), "41")).toEqual({ error: "Enter a value from 0 to 40 dB." });
+    expect(parseValue(find(targets, "amountDb"), "41")).toMatchObject({ error: "Enter a value from 0 to 40 dB." });
     expect(parseValue(find(targets, "trigger"), "siegeRound")).toEqual({ value: "siegeRound" });
-    expect(parseValue(find(targets, "trigger"), "always")).toEqual({ error: "Choose one of: level, siegeRound." });
+    expect(parseValue(find(targets, "trigger"), "always")).toMatchObject({
+      error: "Choose one of: level, siegeRound.",
+    });
     expect(parseValue(find(targets, "duckMenu"), "false")).toEqual({ value: false });
-    expect(parseValue(find(targets, "bypass"), "yes")).toEqual({ error: "Choose true or false." });
+    expect(parseValue(find(targets, "bypass"), "yes")).toMatchObject({ error: "Choose true or false." });
   });
 
   it("builds a nodes.set request that follows the active session or pins one, without the token", () => {

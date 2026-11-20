@@ -3,6 +3,7 @@ import type { Node, Session, ToolPreset } from "@audiorouter/contracts";
 import { formatUiError, type UiBackend } from "./backend";
 
 import { Icon } from "./icons";
+import { useMessages } from "./i18n/useMessages";
 import { uiIdempotencyKey } from "./idempotency";
 import { canCompare, chainOf } from "./compareRules";
 import { setComparing } from "./compareHold";
@@ -23,6 +24,7 @@ export function ToolCompare({
   node: Node;
   running: boolean;
 }) {
+  const tr = useMessages();
   const [held, setHeld] = useState<"tool" | "chain" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const holding = useRef(false);
@@ -32,7 +34,9 @@ export function ToolCompare({
   const expiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chain = chainOf(session, node.id);
   const chainNames = chain.map((id) =>
-    id === node.id ? `${node.name} (this tool)` : (session.nodes.find((item) => item.id === id)?.name ?? id),
+    id === node.id
+      ? tr("g1.cmpThisTool", { name: node.name })
+      : (session.nodes.find((item) => item.id === id)?.name ?? id),
   );
 
   const enqueue = <T,>(send: () => Promise<T>): Promise<T> => {
@@ -64,7 +68,7 @@ export function ToolCompare({
         idempotencyKey: uiIdempotencyKey("compare-release"),
       }),
     ).catch((error) => {
-      if (holdSequence.current === sequence) setMessage(formatUiError(error, "Could not end the comparison."));
+      if (holdSequence.current === sequence) setMessage(formatUiError(error, tr("g1.cmpEndFail")));
     });
   };
   const releaseFromEffect = useEffectEvent(release);
@@ -110,7 +114,7 @@ export function ToolCompare({
         holding.current = false;
         setHeld(null);
         setComparing([]);
-        setMessage(formatUiError(error, "This route could not be compared."));
+        setMessage(formatUiError(error, tr("g1.cmpFail")));
       });
   };
   const handlers = (which: "tool" | "chain") => ({
@@ -136,7 +140,7 @@ export function ToolCompare({
   if (!canCompare(node)) return null;
   return (
     <section className="tool-compare" aria-labelledby="tool-compare-heading">
-      <h3 id="tool-compare-heading">Compare by ear</h3>
+      <h3 id="tool-compare-heading">{tr("g1.cmpHeading")}</h3>
       <div className="tool-compare-buttons">
         <button
           type="button"
@@ -146,7 +150,7 @@ export function ToolCompare({
           {...handlers("tool")}
         >
           <Icon name="ear" size={15} />
-          Hold: without this tool
+          {tr("g1.cmpHoldTool")}
         </button>
         <button
           type="button"
@@ -156,24 +160,17 @@ export function ToolCompare({
           {...handlers("chain")}
         >
           <Icon name="ear" size={15} />
-          {chain.length < 2 ? "Hold: without the whole line" : `Hold: without all ${chain.length} tools in this line`}
+          {chain.length < 2 ? tr("g1.cmpHoldWhole") : tr("g1.cmpHoldAll", { count: chain.length })}
         </button>
       </div>
       {/* Says which tools the second button leaves out: those before and after this one (owner, 2026-11-12).
           One reserved line, so the panel never moves (UI-17). */}
       <p className="tool-compare-line muted" title={chainNames.join(" → ")}>
-        {chain.length < 2
-          ? "No other tools are connected in a line with this one."
-          : `Leaves out, in order: ${chainNames.join(" → ")}`}
+        {chain.length < 2 ? tr("g1.cmpNoLine") : tr("g1.cmpLeavesOut", { names: chainNames.join(" → ") })}
       </p>
       <p className="tool-compare-note" role="status">
         <Icon name={running && !message ? "triangle-alert" : "info"} size={15} />
-        <span>
-          {message ??
-            (running
-              ? "This is live. While you hold, anyone hearing this route, on Discord or a stream, hears it too."
-              : "Press Play to compare. Nothing here changes your saved settings.")}
-        </span>
+        <span>{message ?? (running ? tr("g1.cmpLive") : tr("g1.cmpPressPlay"))}</span>
       </p>
     </section>
   );
@@ -191,6 +188,7 @@ export function ToolPresetPicker({
   disabled: boolean;
   onApply: (parameters: ToolPreset["parameters"], name: string) => void;
 }) {
+  const tr = useMessages();
   const [presets, setPresets] = useState<ToolPreset[] | null>(null);
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
@@ -225,10 +223,10 @@ export function ToolPresetPicker({
       setSelected(result.preset.id);
       setNaming(false);
       setName("");
-      setMessage(`Saved “${result.preset.name}”.`);
+      setMessage(tr("g1.presetSaved", { name: result.preset.name }));
       refresh();
     } catch (error) {
-      setMessage(formatUiError(error, "Unable to save this preset."));
+      setMessage(formatUiError(error, tr("g1.presetSaveFail")));
     }
   };
   const remove = async () => {
@@ -236,16 +234,16 @@ export function ToolPresetPicker({
     try {
       await backend.deleteToolPreset({ id: selected, idempotencyKey: uiIdempotencyKey("tool-preset-delete") });
       setSelected("");
-      setMessage("Preset deleted.");
+      setMessage(tr("g1.presetDeleted"));
       refresh();
     } catch (error) {
-      setMessage(formatUiError(error, "Unable to delete this preset."));
+      setMessage(formatUiError(error, tr("g1.presetDeleteFail")));
     }
   };
 
   return (
     <section className="tool-presets" aria-labelledby="tool-presets-heading">
-      <h3 id="tool-presets-heading">My presets</h3>
+      <h3 id="tool-presets-heading">{tr("g1.presetHeading")}</h3>
       {naming ? (
         <form
           className="tool-presets-row"
@@ -255,27 +253,27 @@ export function ToolPresetPicker({
           }}
         >
           <input
-            aria-label="Preset name"
+            aria-label={tr("g1.presetNameLabel")}
             value={name}
             maxLength={64}
             autoFocus
-            placeholder="Name"
+            placeholder={tr("g1.presetNamePlaceholder")}
             onChange={(event) => setName(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Escape") setNaming(false);
             }}
           />
           <button type="submit" disabled={!name.trim()}>
-            Save
+            {tr("g1.presetSave")}
           </button>
           <button type="button" className="secondary" onClick={() => setNaming(false)}>
-            Cancel
+            {tr("g1.presetCancel")}
           </button>
         </form>
       ) : (
         <div className="tool-presets-row">
           <select
-            aria-label="Preset"
+            aria-label={tr("g1.presetLabel")}
             value={selected}
             disabled={disabled || !presets?.length}
             onChange={(event) => {
@@ -283,11 +281,11 @@ export function ToolPresetPicker({
               setSelected(event.target.value);
               if (preset) {
                 onApply(preset.parameters, preset.name);
-                setMessage(`Applied “${preset.name}”. Save to keep it on this route.`);
+                setMessage(tr("g1.presetApplied", { name: preset.name }));
               }
             }}
           >
-            <option value="">{presets?.length ? "Choose a preset" : "None saved yet"}</option>
+            <option value="">{presets?.length ? tr("g1.presetChoose") : tr("g1.presetNone")}</option>
             {presets?.map((preset) => (
               <option key={preset.id} value={preset.id}>
                 {preset.name}
@@ -295,10 +293,10 @@ export function ToolPresetPicker({
             ))}
           </select>
           <button type="button" className="secondary" disabled={disabled} onClick={() => setNaming(true)}>
-            Save as…
+            {tr("g1.presetSaveAs")}
           </button>
           <button type="button" className="secondary" disabled={!selected} onClick={() => void remove()}>
-            Delete
+            {tr("g1.presetDelete")}
           </button>
         </div>
       )}

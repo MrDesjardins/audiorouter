@@ -1,6 +1,8 @@
 import { returnToPropertiesTab } from "./workbenchPanel";
 import type { CanvasRect, LayoutAction } from "./canvasGeometry";
 import type { CanvasGroup } from "./CanvasGroups";
+import { useMessages } from "./i18n/useMessages";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 
 const iconPaths: Record<LayoutAction, string> = {
   "align-left": "M4 3v18M8 5h12v5H8zM8 14h8v5H8z",
@@ -26,6 +28,7 @@ function GroupOption({
   values: boolean[];
   onChange: (value: boolean) => void;
 }) {
+  const tr = useMessages();
   const all = values.every(Boolean);
   const mixed = !all && values.some(Boolean);
   return (
@@ -40,7 +43,9 @@ function GroupOption({
         }}
         onChange={(event) => onChange(event.target.checked)}
       />
-      <small className="group-option-state">{mixed ? "Mixed" : all ? "On for all" : "Off for all"}</small>
+      <small className="group-option-state">
+        {mixed ? tr("g4Panel.groupMixed") : all ? tr("g4Panel.groupOnAll") : tr("g4Panel.groupOffAll")}
+      </small>
     </label>
   );
 }
@@ -56,8 +61,9 @@ export function CanvasLayoutInspector({
   groups?: CanvasGroup[];
   onGroupOptionsChange?: (patch: Partial<Pick<CanvasGroup, "locked" | "moveContents">>) => void;
 }) {
+  const tr = useMessages();
   const allLocked = items.every((item) => item.locked);
-  const buttons = (entries: [LayoutAction, string][], disabled = false) =>
+  const buttons = (entries: [LayoutAction, MessageKey][], disabled = false) =>
     entries.map(([action, label]) => (
       <button
         key={action}
@@ -69,7 +75,7 @@ export function CanvasLayoutInspector({
         <svg className="canvas-layout-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <path d={iconPaths[action]} />
         </svg>
-        <span>{label}</span>
+        <span>{tr(label)}</span>
       </button>
     ));
   return (
@@ -81,67 +87,64 @@ export function CanvasLayoutInspector({
       aria-labelledby="workbench-tab-properties"
       tabIndex={0}
     >
-      <p className="eyebrow">Canvas selection</p>
-      <h2>{items.length} items selected</h2>
-      <p className="muted">
-        Arrange the selected tools and groups. Locked groups stay fixed. Select more items with Ctrl-click or
-        Shift-drag.
-      </p>
+      <p className="eyebrow">{tr("g4Panel.layoutEyebrow")}</p>
+      <h2>{tr("canvasUi.selected", { count: items.length })}</h2>
+      <p className="muted">{tr("g4Panel.layoutIntro")}</p>
       {groups.length > 0 && onGroupOptionsChange && (
         <fieldset>
-          <legend>Selected groups ({groups.length})</legend>
+          <legend>{tr("g4Panel.selectedGroups", { count: groups.length })}</legend>
           <div className="group-position-options">
             <GroupOption
-              label="Lock position and size"
+              label={tr("g4Panel.lockPositionSize")}
               values={groups.map((group) => group.locked === true)}
               onChange={(locked) => onGroupOptionsChange({ locked })}
             />
             <GroupOption
-              label="Move contents with group"
+              label={tr("g4Panel.moveContents")}
               values={groups.map((group) => group.moveContents === true)}
               onChange={(moveContents) => onGroupOptionsChange({ moveContents })}
             />
           </div>
-          <small>Applies only to the selected groups. Tools keep their own settings.</small>
+          <small>{tr("g4Panel.groupsApplyNote")}</small>
         </fieldset>
       )}
       <fieldset>
-        <legend>Align</legend>
+        <legend>{tr("g4Panel.legendAlign")}</legend>
         <div className="canvas-layout-grid">
           {buttons([
-            ["align-left", "Align left"],
-            ["align-center", "Align center"],
-            ["align-right", "Align right"],
-            ["align-top", "Align top"],
-            ["align-middle", "Align middle"],
-            ["align-bottom", "Align bottom"],
+            ["align-left", "g4Panel.alignLeft"],
+            ["align-center", "g4Panel.alignCenter"],
+            ["align-right", "g4Panel.alignRight"],
+            ["align-top", "g4Panel.alignTop"],
+            ["align-middle", "g4Panel.alignMiddle"],
+            ["align-bottom", "g4Panel.alignBottom"],
           ])}
         </div>
       </fieldset>
       <fieldset>
-        <legend>Match size</legend>
+        <legend>{tr("g4Panel.legendMatchSize")}</legend>
         <div className="canvas-layout-grid">
           {buttons([
-            ["size-min-width", "Smallest width"],
-            ["size-max-width", "Largest width"],
-            ["size-min-height", "Smallest height"],
-            ["size-max-height", "Largest height"],
+            ["size-min-width", "g4Panel.sizeMinWidth"],
+            ["size-max-width", "g4Panel.sizeMaxWidth"],
+            ["size-min-height", "g4Panel.sizeMinHeight"],
+            ["size-max-height", "g4Panel.sizeMaxHeight"],
           ])}
         </div>
-        <small>Tool content keeps its minimum usable size. Group contents are not scaled.</small>
+        <small>{tr("g4Panel.matchSizeNote")}</small>
       </fieldset>
       <fieldset>
-        <legend>Equal spacing</legend>
+        <legend>{tr("g4Panel.legendSpacing")}</legend>
         <div className="canvas-layout-grid">
           {buttons(
             [
-              ["distribute-horizontal", "Space horizontally"],
-              ["distribute-vertical", "Space vertically"],
+              ["distribute-horizontal", "g4Panel.spaceHorizontal"],
+              ["distribute-vertical", "g4Panel.spaceVertical"],
             ],
             items.length < 3,
           )}
         </div>
-        <small>Keeps the endpoints and locked anchors fixed, then equalizes the gaps between edges.</small>
+        <small>{tr("g4Panel.spacingNote")}</small>
       </fieldset>
     </section>
   );

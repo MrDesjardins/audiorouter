@@ -1,6 +1,7 @@
 // Keyboard connection form of the Advanced tab (moved from App.tsx).
 import type { Dispatch, SetStateAction } from "react";
 import type { UiBackend } from "./backend";
+import { useMessages } from "./i18n/useMessages";
 
 export function ConnectionForm({
   backend,
@@ -23,44 +24,43 @@ export function ConnectionForm({
   inputPorts: { nodeId: string; nodeName: string; portName: string; channels: number }[];
   addConnection: () => boolean;
 }) {
+  const tr = useMessages();
   return (
     <fieldset className="connection-editor workbench-connection-editor" disabled={!backend.connected}>
-      <legend>Add connections</legend>
-      <p className="muted">
-        Choose an output and input for each link. These connections are reviewed when you plan the graph.
-      </p>
+      <legend>{tr("g2.connAdd")}</legend>
+      <p className="muted">{tr("g2.connHelp")}</p>
       <label>
-        Output
+        {tr("g2.connOutput")}
         <select
-          aria-label="Source output port"
+          aria-label={tr("g2.connSourceAria")}
           value={connectionSource}
           onChange={(event) => setConnectionSource(event.target.value)}
         >
-          <option value="">Choose source</option>
+          <option value="">{tr("g2.connChooseSource")}</option>
           {outputPorts.map((port) => (
             <option key={encodePort(port.nodeId, port.portName)} value={encodePort(port.nodeId, port.portName)}>
-              {port.nodeName} · {port.portName} · {port.channels}ch
+              {port.nodeName} · {port.portName} · {tr("g2.connChannels", { n: port.channels })}
             </option>
           ))}
         </select>
       </label>
       <label>
-        Input
+        {tr("g2.connInput")}
         <select
-          aria-label="Destination input port"
+          aria-label={tr("g2.connDestAria")}
           value={connectionDestination}
           onChange={(event) => setConnectionDestination(event.target.value)}
         >
-          <option value="">Choose destination</option>
+          <option value="">{tr("g2.connChooseDest")}</option>
           {inputPorts.map((port) => (
             <option key={encodePort(port.nodeId, port.portName)} value={encodePort(port.nodeId, port.portName)}>
-              {port.nodeName} · {port.portName} · {port.channels}ch
+              {port.nodeName} · {port.portName} · {tr("g2.connChannels", { n: port.channels })}
             </option>
           ))}
         </select>
       </label>
       <button type="button" className="primary" onClick={addConnection}>
-        Add connection
+        {tr("g2.connAddButton")}
       </button>
     </fieldset>
   );

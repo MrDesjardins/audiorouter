@@ -1,5 +1,6 @@
 // Dropping a sound file on a Soundboard slot, on the card or in Properties (SND-19).
 import { useContext, useState, type DragEvent } from "react";
+import { tm } from "./actionText";
 import { droppedSoundFile, isFileDrag } from "./soundImport";
 import { SoundboardContext } from "./soundboardLive";
 
@@ -54,7 +55,7 @@ export function useSoundDrop({
         setActive(false);
         const report = onMessage ?? controller.announce;
         if (target === null) {
-          report("All nine buttons have a sound. Drop the file on a button to replace its sound.");
+          report(tm("h1.dropFull"));
           return;
         }
         const dropped = droppedSoundFile(event.dataTransfer);

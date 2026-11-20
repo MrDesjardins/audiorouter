@@ -145,7 +145,7 @@ function QuestionDialog({ question }: { question: Pending }) {
               </label>
               {/* Reserved so the buttons do not move when the hint appears (UI-17). */}
               <small className="app-dialog-hint" role="status">
-                {refused && !text.trim() ? "Enter a name first." : ""}
+                {refused && !text.trim() ? tr("g1.dialogEnterName") : ""}
               </small>
             </div>
           )}

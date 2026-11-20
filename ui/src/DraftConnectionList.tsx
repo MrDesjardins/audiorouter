@@ -2,6 +2,9 @@ import { useContext } from "react";
 import type { Session } from "@audiorouter/contracts";
 import { BackendConnectionContext } from "./backendConnectionContext";
 import type { InsertableProcessorKind } from "./draft";
+import { useMessages } from "./i18n/useMessages";
+import { tx } from "./i18n";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 
 const INSERT_MIXER_ACTION = "__audiorouter_insert_mixer__";
 const REMOVE_MIXER_ACTION = "__audiorouter_remove_mixer__";
@@ -28,6 +31,13 @@ export const PROCESSOR_ACTIONS: Array<{ kind: InsertableProcessorKind; label: st
   { kind: "delay", label: "Sync (delay)" },
   { kind: "pitch", label: "Pitch" },
 ];
+
+/** The tool's name in the current language, as the tool catalog spells it. */
+export function processorLabel(kind: InsertableProcessorKind): string {
+  if (kind === "pitch") return tx("g4Panel.processorPitch");
+  const id = kind.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+  return tx(`toolCatalog.${id}.name` as MessageKey);
+}
 
 export function insertMixerActionId(edgeId: string): string {
   return `${INSERT_MIXER_ACTION}${edgeId}`;
@@ -56,6 +66,7 @@ export function DraftConnectionList({
   onToggle: (id: string, enabled: boolean) => void;
   onInsertProcessor?: (edgeId: string, kind: InsertableProcessorKind) => void;
 }) {
+  const tr = useMessages();
   const connected = useContext(BackendConnectionContext);
   const names = new Map(session.nodes.map((node) => [node.id, node.name]));
   const mixers = session.nodes.filter((node) => node.kind === "mixer");
@@ -65,37 +76,38 @@ export function DraftConnectionList({
   };
   return (
     <section className="draft-connections" aria-labelledby="draft-connections-heading">
-      <h3 id="draft-connections-heading">Connections in this route</h3>
+      <h3 id="draft-connections-heading">{tr("g4Panel.draftHeading")}</h3>
       <p className="muted draft-connections-help">
-        These are the audio links you are editing locally. They are not active until you click{" "}
-        <strong>Save changes</strong> and confirm any warnings. You can keep VoiceMeeter Banana open while exploring;
-        close it only when it owns the exact endpoint AudioRouter needs to claim.
+        {tr("g4Panel.draftHelpBefore")} <strong>{tr("g4Panel.draftHelpSave")}</strong> {tr("g4Panel.draftHelpAfter")}
       </p>
       {session.edges.length === 0 ? (
-        <p className="muted">No connections yet.</p>
+        <p className="muted">{tr("g4Panel.noConnectionsYet")}</p>
       ) : (
-        <ul aria-label="Route connections">
+        <ul aria-label={tr("g4Panel.routeConnections")}>
           {session.edges.map((edge) => (
             <li key={edge.id}>
               <span>
                 {names.get(edge.sourceNode) ?? edge.sourceNode}:{edge.sourcePort} →{" "}
                 {names.get(edge.destinationNode) ?? edge.destinationNode}:{edge.destinationPort}{" "}
-                <small>{edge.enabled ? "enabled" : "disabled"}</small>
+                <small>{tr(edge.enabled ? "g4Panel.connEnabled" : "g4Panel.connDisabled")}</small>
               </span>
               <button type="button" className="secondary" onClick={() => onToggle(edge.id, !edge.enabled)}>
-                {edge.enabled ? "Disable" : "Enable"}
+                {tr(edge.enabled ? "g4Panel.disable" : "g4Panel.enable")}
               </button>
               <button type="button" className="secondary" onClick={() => onRemove(edge.id)}>
-                Remove
+                {tr("g4Panel.remove")}
               </button>
               <button
                 type="button"
                 className="secondary"
                 disabled={!connected}
-                aria-label={`Insert mixer on ${names.get(edge.sourceNode) ?? edge.sourceNode} to ${names.get(edge.destinationNode) ?? edge.destinationNode}`}
+                aria-label={tr("g4Panel.insertMixerAria", {
+                  source: names.get(edge.sourceNode) ?? edge.sourceNode,
+                  destination: names.get(edge.destinationNode) ?? edge.destinationNode,
+                })}
                 onClick={() => onRemove(insertMixerActionId(edge.id))}
               >
-                Insert mixer
+                {tr("g4Panel.insertMixer")}
               </button>
               {PROCESSOR_ACTIONS.map((processor) => (
                 <button
@@ -105,7 +117,7 @@ export function DraftConnectionList({
                   disabled={!connected}
                   onClick={() => requestInsertProcessor(edge.id, processor.kind)}
                 >
-                  Insert {processor.label}
+                  {tr("g4Panel.insertProcessor", { name: processorLabel(processor.kind) })}
                 </button>
               ))}
             </li>
@@ -113,7 +125,7 @@ export function DraftConnectionList({
         </ul>
       )}
       {mixers.length > 0 && (
-        <div className="mixer-topology-actions" aria-label="Mixer topology actions">
+        <div className="mixer-topology-actions" aria-label={tr("g4Panel.mixerTopology")}>
           {mixers.map((mixer) => (
             <div key={mixer.id}>
               <span>{mixer.name}</span>
@@ -121,10 +133,10 @@ export function DraftConnectionList({
                 type="button"
                 className="secondary"
                 disabled={!connected}
-                aria-label={`Remove and reconnect ${mixer.name}`}
+                aria-label={tr("g4Panel.removeReconnectAria", { name: mixer.name })}
                 onClick={() => onRemove(removeMixerActionId(mixer.id))}
               >
-                Remove and reconnect
+                {tr("g4Panel.removeReconnect")}
               </button>
             </div>
           ))}

@@ -68,8 +68,7 @@ const INPUT_DEVICE_NOTE =
 const OUTPUT_DEVICE_NOTE =
   "Send sound to speakers, headphones, or a virtual cable (for example CABLE Input) that another app uses as its input. Choose the device in Properties.";
 
-const CABLES_NOT_INSTALLED =
-  "Install AudioRouter cables in Virtual Cables, or use Input device with a virtual cable such as CABLE Output.";
+const cablesNotInstalled = () => tx("h3.libCablesReason");
 
 export const libraryEntries: LibraryEntry[] = [
   {
@@ -102,7 +101,9 @@ export const libraryEntries: LibraryEntry[] = [
     label: "Endpoint loopback",
     category: "Source",
     flow: "input",
-    unavailableReason: "Select an exact active render endpoint in Endpoint binding",
+    get unavailableReason() {
+      return tx("h3.libLoopbackReason");
+    },
   },
   {
     id: "virtual-render-source",
@@ -111,7 +112,9 @@ export const libraryEntries: LibraryEntry[] = [
     flow: "input",
     note: "Sound that another app plays into an AudioRouter cable (for example a game set to output to Cable A Input). Choose the cable in Properties.",
     // Until the cable status says otherwise (applyCableAvailability).
-    unavailableReason: CABLES_NOT_INSTALLED,
+    get unavailableReason() {
+      return cablesNotInstalled();
+    },
     virtualKind: "virtualRenderSource",
   },
   {
@@ -144,7 +147,9 @@ export const libraryEntries: LibraryEntry[] = [
     category: "AudioRouter cable",
     flow: "output",
     note: "Send sound into an AudioRouter cable that another app records from (for example Discord's microphone set to Cable B Output). Choose the cable in Properties.",
-    unavailableReason: CABLES_NOT_INSTALLED,
+    get unavailableReason() {
+      return cablesNotInstalled();
+    },
     virtualKind: "virtualCaptureSink",
   },
   {
@@ -312,9 +317,11 @@ export function toolHelp(entry: LibraryEntry): string {
 }
 
 export function libraryEntryAccessibleLabel(entry: LibraryEntry): string {
-  if (entry.unavailableReason) return `${entry.label}, ${entry.category}, unavailable: ${entry.unavailableReason}`;
-  if (entry.note) return `${entry.label}, ${entry.category}, ${entry.note}`;
-  return `${entry.label}, ${entry.category}`;
+  const label = toolLabel(entry);
+  if (entry.unavailableReason)
+    return `${label}, ${entry.category}, ${tx("h1.libUnavailable")}: ${entry.unavailableReason}`;
+  if (entry.note) return `${label}, ${entry.category}, ${toolHelp(entry)}`;
+  return `${label}, ${entry.category}`;
 }
 
 /** Short explanation of each tool, shown in Tools and at the top of Properties. */

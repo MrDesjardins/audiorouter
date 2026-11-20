@@ -9,6 +9,7 @@ import {
   type BuilderTarget,
 } from "./requestBuilder";
 import { formatUiError } from "./backend";
+import { useMessages } from "./i18n/useMessages";
 
 type Format = "json" | "curl" | "powershell";
 
@@ -38,6 +39,7 @@ export function RequestBuilder({
   connected: boolean;
   onSend?: (params: MethodParams["nodes.set"]) => Promise<MethodResult["nodes.set"]>;
 }) {
+  const tr = useMessages();
   const [follow, setFollow] = useState(true);
   const [pinnedId, setPinnedId] = useState(activeSessionId);
   const session = sessions.find((item) => item.id === (follow ? activeSessionId : pinnedId)) ?? sessions[0] ?? null;
@@ -102,9 +104,9 @@ export function RequestBuilder({
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(text);
-      setStatus("Copied. Replace the token placeholder with your API token.");
+      setStatus(tr("g6.apiBuilderCopied"));
     } catch {
-      setStatus("Select the text and copy it manually.");
+      setStatus(tr("g6.apiBuilderCopyManual"));
     }
   };
   const send = async () => {
@@ -113,10 +115,10 @@ export function RequestBuilder({
     setStatus(null);
     try {
       const result = await onSend(request.body as MethodParams["nodes.set"]);
-      setStatus(`Sent. Saved as revision ${result.revision ?? "—"}; the app updates from the backend.`);
+      setStatus(tr("g6.apiBuilderSent", { revision: result.revision ?? "—" }));
       setKey(exampleIdempotencyKey());
     } catch (error) {
-      setStatus(formatUiError(error, "The backend refused the request."));
+      setStatus(formatUiError(error, tr("g6.apiBuilderRefused")));
     } finally {
       setSending(false);
     }
@@ -124,33 +126,30 @@ export function RequestBuilder({
 
   if (!session)
     return (
-      <section className="request-builder" aria-label="Request builder">
-        <h3>Build a request</h3>
-        <p className="muted">Save a session first; requests change saved sessions.</p>
+      <section className="request-builder" aria-label={tr("g6.apiBuilderTitle")}>
+        <h3>{tr("g6.apiBuilderBuild")}</h3>
+        <p className="muted">{tr("g6.apiBuilderSaveFirst")}</p>
       </section>
     );
   return (
-    <section className="request-builder" aria-label="Request builder">
-      <h3>Build a request</h3>
-      <p className="muted">
-        Pick a tool and a setting to get the exact request another app (a game integration, StreamDeck, a script) can
-        send. Choosing does not change anything; only Send does.
-      </p>
+    <section className="request-builder" aria-label={tr("g6.apiBuilderTitle")}>
+      <h3>{tr("g6.apiBuilderBuild")}</h3>
+      <p className="muted">{tr("g6.apiBuilderIntro")}</p>
       <fieldset className="request-builder-session">
-        <legend>Session</legend>
+        <legend>{tr("g6.apiBuilderSession")}</legend>
         <label className="request-builder-radio">
           <input type="radio" name="request-session" checked={follow} onChange={() => setFollow(true)} />
-          Follow the session selected in AudioRouter
+          {tr("g6.apiBuilderFollow")}
         </label>
         <label className="request-builder-radio">
           <input type="radio" name="request-session" checked={!follow} onChange={() => setFollow(false)} />
-          Always this session
+          {tr("g6.apiBuilderAlways")}
         </label>
         {!follow && (
           <label>
-            Pinned session
+            {tr("g6.apiBuilderPinned")}
             <select
-              aria-label="Pinned session"
+              aria-label={tr("g6.apiBuilderPinned")}
               value={session.id}
               onChange={(event) => setPinnedId(event.target.value)}
             >
@@ -164,8 +163,12 @@ export function RequestBuilder({
         )}
       </fieldset>
       <label>
-        Tool
-        <select aria-label="Request tool" value={nodeId} onChange={(event) => setNodeId(event.target.value)}>
+        {tr("g6.apiBuilderTool")}
+        <select
+          aria-label={tr("g6.apiBuilderToolAria")}
+          value={nodeId}
+          onChange={(event) => setNodeId(event.target.value)}
+        >
           {nodes.map((item) => (
             <option key={item.id} value={item.id}>
               {item.label}
@@ -174,25 +177,37 @@ export function RequestBuilder({
         </select>
       </label>
       <label>
-        Setting
-        <select aria-label="Request setting" value={targetKey} onChange={(event) => setTargetKey(event.target.value)}>
+        {tr("g6.apiBuilderSetting")}
+        <select
+          aria-label={tr("g6.apiBuilderSettingAria")}
+          value={targetKey}
+          onChange={(event) => setTargetKey(event.target.value)}
+        >
           {targets.map((item) => (
             <option key={item.key} value={item.key}>
-              {item.label}
+              {item.message ? tr(item.message.key, item.message.vars) : item.label}
             </option>
           ))}
         </select>
       </label>
       {target && (
         <label>
-          Value
+          {tr("g6.apiBuilderValue")}
           {booleanTarget ? (
-            <select aria-label="Request value" value={valueText} onChange={(event) => setValueText(event.target.value)}>
+            <select
+              aria-label={tr("g6.apiBuilderValueAria")}
+              value={valueText}
+              onChange={(event) => setValueText(event.target.value)}
+            >
               <option value="true">true</option>
               <option value="false">false</option>
             </select>
           ) : choices ? (
-            <select aria-label="Request value" value={valueText} onChange={(event) => setValueText(event.target.value)}>
+            <select
+              aria-label={tr("g6.apiBuilderValueAria")}
+              value={valueText}
+              onChange={(event) => setValueText(event.target.value)}
+            >
               {choices.map((choice) => (
                 <option key={choice.value} value={choice.value}>
                   {choice.label}
@@ -201,7 +216,7 @@ export function RequestBuilder({
             </select>
           ) : (
             <input
-              aria-label="Request value"
+              aria-label={tr("g6.apiBuilderValueAria")}
               inputMode="decimal"
               value={valueText}
               onChange={(event) => setValueText(event.target.value)}
@@ -211,22 +226,25 @@ export function RequestBuilder({
       )}
       {target?.kind === "parameter" && target.spec.type === "number" && (
         <small className="muted">
-          From {target.spec.minimum ?? "−∞"} to {target.spec.maximum ?? "∞"}
-          {target.spec.unit ? ` ${target.spec.unit}` : ""}.
+          {tr("g6.apiBuilderRange", {
+            min: target.spec.minimum ?? "−∞",
+            max: target.spec.maximum ?? "∞",
+            unit: target.spec.unit ? ` ${target.spec.unit}` : "",
+          })}
         </small>
       )}
       {parsed && "error" in parsed && (
         <p className="request-builder-error" role="alert">
-          {parsed.error}
+          {parsed.message ? tr(parsed.message.key, parsed.message.vars) : parsed.error}
         </p>
       )}
       {request && (
         <>
           <label>
-            Request
-            <input aria-label="Request URL" readOnly value={`POST ${request.url}`} />
+            {tr("g6.apiBuilderRequest")}
+            <input aria-label={tr("g6.apiBuilderUrlAria")} readOnly value={`POST ${request.url}`} />
           </label>
-          <div className="request-builder-formats" role="group" aria-label="Request format">
+          <div className="request-builder-formats" role="group" aria-label={tr("g6.apiBuilderFormatAria")}>
             {(["json", "curl", "powershell"] as const).map((item) => (
               <button
                 key={item}
@@ -235,30 +253,27 @@ export function RequestBuilder({
                 aria-pressed={format === item}
                 onClick={() => setFormat(item)}
               >
-                {item === "json" ? "JSON body" : item === "curl" ? "curl" : "PowerShell"}
+                {item === "json" ? tr("g6.apiBuilderJsonBody") : item === "curl" ? "curl" : "PowerShell"}
               </button>
             ))}
           </div>
           <label>
-            {format === "json" ? "Body (send with an Authorization: Bearer header)" : "Command"}
+            {format === "json" ? tr("g6.apiBuilderBodyLabel") : tr("g6.apiBuilderCommand")}
             <textarea
-              aria-label="Generated request"
+              aria-label={tr("g6.apiBuilderGenerated")}
               readOnly
               rows={format === "json" ? 7 : 4}
               value={text}
               onFocus={(event) => event.currentTarget.select()}
             />
           </label>
-          <small className="muted">
-            Use a new idempotencyKey for each event; a retry of the same event reuses its key so it applies once. The
-            token is a placeholder; copy yours from above.
-          </small>
+          <small className="muted">{tr("g6.apiBuilderKeyHelp")}</small>
           <div className="actions">
             <button type="button" className="secondary" onClick={() => void copy()}>
-              Copy
+              {tr("g6.apiBuilderCopy")}
             </button>
             <button type="button" onClick={() => void send()} disabled={!connected || !onSend || sending}>
-              {sending ? "Sending…" : "Send now"}
+              {sending ? tr("g6.apiBuilderSending") : tr("g6.apiBuilderSend")}
             </button>
           </div>
         </>
