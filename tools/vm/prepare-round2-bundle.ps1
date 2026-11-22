@@ -19,7 +19,7 @@
 param(
     [string] $BaseBundle = 'C:\VMs\ar-share\rc-0.2.5',
     [string] $Rc3Package = 'C:\VMs\ar-share\rc-0.2.4-base\driver',
-    [string] $Destination = 'C:\VMs\ar-share\rc-0.2.5-r2'
+    [string] $Destination = 'C:\VMs\ar-share\rc-0.2.5-r3'
 )
 $ErrorActionPreference = 'Stop'
 $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
