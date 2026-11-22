@@ -67,8 +67,9 @@ param(
     [ValidateRange(5, 120)][int] $PoolMinutes = 60,
     [ValidateRange(1, 60)][int] $EightMinutes = 30,
     # round2 only
-    [ValidatePattern('^(ab|pause|live|pool|verifier|control)(,(ab|pause|live|pool|verifier|control))*$')][string] $Blocks = 'ab,pool,verifier,live',
+    [ValidatePattern('^(ab|pause|live|pool|verifier|control|repro)(,(ab|pause|live|pool|verifier|control|repro))*$')][string] $Blocks = 'ab,pool,verifier,live',
     [ValidateRange(2, 8)][int] $AbPhases = 6,
+    [ValidateRange(1, 12)][int] $ReproBoots = 5,
     [switch] $WithHostPause,
     # round2: sign in by itself after every planned restart (asks for the guest
     # password once; stored in the Winlogon key for this run, removed at the end).
@@ -143,7 +144,7 @@ function Copy-CrashDumps([string] $Label) {
 # The logon task stays registered for the whole run, so any restart resumes.
 function Register-Resume {
     # Every option is repeated: a resumed run must behave like the one that started.
-    $extra = "-SettleSeconds $SettleSeconds -FuzzSeconds $FuzzSeconds -PoolMinutes $PoolMinutes -EightMinutes $EightMinutes -Blocks $Blocks -AbPhases $AbPhases"
+    $extra = "-SettleSeconds $SettleSeconds -FuzzSeconds $FuzzSeconds -PoolMinutes $PoolMinutes -EightMinutes $EightMinutes -Blocks $Blocks -AbPhases $AbPhases -ReproBoots $ReproBoots"
     if ($WithHostPause) { $extra += ' -WithHostPause' }
     $action = New-ScheduledTaskAction -Execute $powershell `
         -Argument "-NoProfile -ExecutionPolicy Bypass -NoExit -File `"$PSCommandPath`" -Session $Session -Resume $extra" `
@@ -1287,6 +1288,44 @@ function Block-Verifier {
     Step-NoBugcheck $P
     Step-Remove $P
 }
+function Block-Repro {
+    # Does the Verifier freeze (2026-10-30, 2026-11-11, 2026-11-22) reproduce? Verifier stays on for
+    # audioroutervirtual.sys; each boot runs one short fuzz, then restarts. A frozen guest is reset by the operator
+    # (the logon task resumes the step) and counted as a freeze in the notes.
+    $P = 'repro: '
+    Step-Setup $P
+    Step-DriverIdentity $P
+    Step "${P}Driver Verifier on" {
+        $run = Invoke-VmCheck 'verifier-on'
+        if ($run.Code -ne 0) { throw 'verifier-on failed' }
+        Add-Result "${P}Driver Verifier on" 'PASS' 'standard checks for audioroutervirtual.sys'
+        Complete-AndRestart "${P}Driver Verifier on" 'Driver Verifier needs a restart.'
+    }
+    foreach ($boot in 1..$ReproBoots) {
+        $name = "${P}boot $boot fuzz $([int]($FuzzSeconds / 60)) min under Verifier"
+        Step $name {
+            $settings = (Invoke-Native 'verifier.exe' @('/querysettings')).Text
+            if ($settings -notmatch 'audioroutervirtual.sys') { throw 'Driver Verifier is not watching audioroutervirtual.sys' }
+            if (-not (Test-DriverGate $name)) { return }
+            $run = Invoke-VmCheck 'fuzz' @('-FuzzSeconds', [string]$FuzzSeconds)
+            Add-Result $name $(if ($run.Code -eq 0) { 'PASS' } else { 'FAIL' }) (($run.Checks | ForEach-Object { "$($_.check): $($_.passed)" }) -join '; ')
+        }
+        Step "${P}boot $boot guest stall watch" { Invoke-StallWatch "${P}boot $boot guest stall watch" 2 }
+        if ($boot -lt $ReproBoots) {
+            Step "${P}boot $boot restart" {
+                Add-Result "${P}boot $boot restart" 'PASS' 'restarting on purpose for the next boot'
+                Complete-AndRestart "${P}boot $boot restart" 'Planned restart between repro boots.'
+            }
+        }
+    }
+    Step "${P}Driver Verifier off" -AlwaysRun {
+        $run = Invoke-VmCheck 'verifier-off'
+        Add-Result "${P}Driver Verifier off" $(if ($run.Code -eq 0) { 'PASS' } else { 'FAIL' }) 'verifier /reset'
+        Complete-AndRestart "${P}Driver Verifier off" 'Turning Driver Verifier off needs a restart.'
+    }
+    Step-NoBugcheck $P
+    Step-Remove $P
+}
 function Block-Control {
     # Control runs for the Verifier freezes (2026-10-30, 2026-11-11, 2026-11-22). The fuzz is identical in both
     # parts; only Driver Verifier changes. A: Verifier off. B: Verifier on Microsoft's ks.sys and portcls.sys,
@@ -1333,7 +1372,7 @@ function Session-Round2([string] $P) {
         $selected = @($selected | Where-Object { $_ -ne 'pause' })
     }
     if ($WithHostPause -and $selected -notcontains 'pause') { $selected = @('pause') + $selected }
-    foreach ($block in @('ab', 'pause', 'pool', 'verifier', 'control', 'live')) {
+    foreach ($block in @('ab', 'pause', 'pool', 'verifier', 'control', 'repro', 'live')) {
         if ($selected -notcontains $block) { continue }
         switch ($block) {
             'ab' { Block-Ab }
@@ -1342,6 +1381,7 @@ function Session-Round2([string] $P) {
             'pool' { Block-Pool }
             'verifier' { Block-Verifier }
             'control' { Block-Control }
+            'repro' { Block-Repro }
         }
     }
 }
