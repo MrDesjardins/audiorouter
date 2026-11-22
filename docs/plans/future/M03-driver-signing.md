@@ -1,5 +1,19 @@
 # M03 driver and signing track (AudioRouter virtual cable)
 
+**Update (2026-11-21, user): the one investment goes to the driver.** SignPath
+Foundation declined on 2026-11-16 (reputation requirement; its program does not
+cover driver signing at all). The owner is in the USA and chose that any spend
+should target the audio driver. The EV certificate bought for driver attestation
+also signs the app and installer, so it replaces the separate app-signing
+purchase (see [release signing](../active/release-signing-and-publication.md)).
+Microsoft Artifact Signing cannot sign the driver. The purchase gate is
+unchanged: no certificate until the pre-purchase assurance plan and Stage A on the
+current driver package pass in the isolated VM (see
+[virtual-cable.md](../active/virtual-cable.md)); the app-only release stays the
+supported path meanwhile. Open before buying: whether a sole-proprietor EV
+certificate gives Hardware Dev Center access in the owner's name, and which cloud
+signer lets CI sign the app without exporting the key. Recheck all prices.
+
 **Status (2026-10-05): reopened by the user (DEC-18).** Goal: ship
 AudioRouter's own signed virtual cable with the app so users do not need to
 install VB-Cable. Lowest-cost signing (see "Lowest-cost strategy" below).

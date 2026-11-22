@@ -54,6 +54,21 @@ reconciling the later handoff against older open-work summaries first.
    VirtualBox guest-control stalls out of any CI claim until a repeatable
    timeout/recovery path is qualified. Runner and usage:
    [release qualification](../../operations/release-qualification.md).
+   The [2026-11-19 execution plan](release-qualification.md) reconciles the
+   completed timeout/recording runs and identifies the remaining interactive,
+   WebView2 diagnostic, first-run and exact-candidate acceptance work. Use it
+   before the older summary above. Execution found that v0.0.31 is already
+   published and is the frozen candidate. **Status 2026-11-21:** a new fresh
+   guest with a standard user exists; RQ-02 (timeout, three consecutive wrapper
+   passes) and RQ-03 (real-guest refusals) pass, RQ-04 (full lifecycle on v0.0.31)
+   passes with a recorded Defender-exclusion deviation, and RQ-05 is partial
+   (guest interactive pass and an isolated real-endpoint audio run pass; the
+   downloaded-file trust prompt and offline operation are still open). Defender
+   quarantines the unsigned v0.0.31 installer in a fresh guest
+   (`Trojan:Win32/Wacatac.H!ml`); a Microsoft false-positive submission is
+   pending and signing is decided in
+   [release signing](release-signing-and-publication.md)
+   ([record](evidence/2026-11-19-release-qualification-v0.0.31.md)).
 2. **Full VST2/VST3 compatibility (PLUG-01…07, GRAPH-14, M06/M07).** Remaining
    phases P2 (programs/shell/preset import), P3 (units/programs/multi-class
    qualification), P5 (sidechain graph execution), P6 (editor qualification)

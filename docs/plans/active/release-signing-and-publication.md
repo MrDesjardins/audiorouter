@@ -1,6 +1,54 @@
 # Plan: sign the Windows release and publish it on GitHub
 
-**Decision (2026-10-03, user): parked.** Keep publishing unsigned
+**Decision (2026-11-21, user): invest once, aim at the audio driver.**
+SignPath Foundation declined by email on 2026-11-16: it cannot waive its
+reputation requirement (a "not yet", not a technical or licence problem), and
+its program does not cover Microsoft's driver signing or certification. Its
+advice was to keep developing publicly, gather independent references and
+sponsors, and keep as much as possible in user mode. The owner is in the USA,
+so Microsoft Artifact Signing is available to an individual (about $9.99/month;
+confirm on Microsoft's official eligibility page before enrolling).
+The owner's decision: if money is spent, spend it on the driver path. The EV
+certificate that the driver needs is also an Authenticode certificate, so the
+same purchase can sign the app, the companion executables and the NSIS installer
+(see [driver signing, cost detail](../future/M03-driver-signing.md)). Consequences
+for this plan:
+
+- **Primary route: the EV certificate**, bought under the driver track's
+  pre-purchase gate (Stage A on the current driver package and the assurance
+  plan in [virtual-cable.md](virtual-cable.md)). Nothing is purchased or
+  enrolled by this decision. When it exists, add `-Sign` to the release tooling
+  with the key in a cloud signer or token that CI can use (SSL.com eSigner,
+  Certum cloud or a token on a trusted runner: choose with the certificate, since
+  the key cannot be exported). Sign companions before packaging, sign the NSIS
+  installer and uninstaller, verify every signature, regenerate checksums from
+  the signed bytes, and keep tasks 3-9 below.
+- **Individual identity:** EV normally needs a registered organization. SSL.com's
+  Sole Proprietor EV validates an individual; confirm it gives Hardware Dev
+  Center access before buying (open question in the driver plan).
+- **Interim route if the driver timeline is long: Artifact Signing** for the app
+  and installer only. It does not sign kernel drivers (Microsoft is the only
+  kernel-mode signer; attestation signing needs an EV certificate, and a 2026-04
+  Microsoft Q&A answer says Trusted Signing cannot stand in for it: community
+  answer, confirm with Microsoft support). Take it only if unsigned releases
+  stay blocked by Defender for long; it would be dropped once the EV certificate
+  signs everything.
+- **SignPath:** closed for now. Reapply only after independent references and
+  more public use; it never covers the driver.
+- **Meanwhile:** releases stay unsigned and disclose it. The v0.0.31 installer was
+  quarantined by Defender in a fresh Windows 11 guest as
+  `Trojan:Win32/Wacatac.H!ml`; a false-positive submission is pending at
+  Microsoft (ID `eb70e424-324e-430b-a096-6e05574d16bb`, filed under the PUA
+  category by form error). Evidence:
+  [v0.0.31 qualification](evidence/2026-11-19-release-qualification-v0.0.31.md).
+  After a verdict, rerun the lifecycle without the guest's Defender exclusion.
+- **Next action:** wait for Microsoft's verdict; keep the driver assurance work
+  moving; decide the identity route (sole-proprietor EV or a registered
+  business) when the pre-purchase gate passes. Enrollment, purchase and any
+  submission of identity documents need the owner.
+
+**Decision (2026-10-03, user): parked (superseded by the 2026-11-21 decision
+above).** Keep publishing unsigned
 prereleases while the project builds the public track record SignPath
 Foundation expects, then apply. No purchase or enrollment now.
 

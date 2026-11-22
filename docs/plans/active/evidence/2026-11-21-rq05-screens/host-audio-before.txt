@@ -1,0 +1,21 @@
+﻿capture active: Analogue 1 + 2 (Focusrite USB Audio) | vol 1.000 mute=False
+capture active: CABLE Output (VB-Audio Virtual Cable) | vol 1.000 mute=False
+capture active: CABLE-A Output (VB-Audio Virtual Cable A) | vol 1.000 mute=False
+capture active: CABLE-B Output (VB-Audio Virtual Cable B) | vol 1.000 mute=False
+capture active: Digital Audio Interface (USB Digital Audio) | vol 1.000 mute=False
+capture active: Microphone (PD200X Podcast Microphone) | vol 1.000 mute=False
+default capture communications: CABLE-A Output (VB-Audio Virtual Cable A)
+default capture console: CABLE-A Output (VB-Audio Virtual Cable A)
+default capture multimedia: CABLE-A Output (VB-Audio Virtual Cable A)
+default render communications: Speakers (Focusrite USB Audio)
+default render console: Speakers (Focusrite USB Audio)
+default render multimedia: Speakers (Focusrite USB Audio)
+render active: CABLE Input (VB-Audio Virtual Cable) | vol 1.000 mute=False
+render active: CABLE-A Input (VB-Audio Virtual Cable A) | vol 1.000 mute=False
+render active: CABLE-B Input (VB-Audio Virtual Cable B) | vol 1.000 mute=False
+render active: DELL U3223QE (NVIDIA High Definition Audio) | vol 1.000 mute=False
+render active: MPG321UX OLED (NVIDIA High Definition Audio) | vol 1.000 mute=False
+render active: P32p-30 (NVIDIA High Definition Audio) | vol 1.000 mute=False
+render active: Realtek Digital Output (Realtek High Definition Audio) | vol 1.000 mute=False
+render active: Speakers (Focusrite USB Audio) | vol 1.000 mute=False
+render active: Speakers (PD200X Podcast Microphone) | vol 1.000 mute=False
