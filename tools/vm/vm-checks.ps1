@@ -44,7 +44,9 @@ param(
     [string] $Step,
     [int] $FuzzSeconds = 1800,
     [ValidateRange(1, 3600)][int] $ToneSeconds = 600,
-    [switch] $TraceScheduling
+    [switch] $TraceScheduling,
+    # Package folder under the bundle for preflight/install (round 2 installs RC3 as 'driver-rc3').
+    [ValidateSet('driver', 'driver-rc3')][string] $PackageName = 'driver'
 )
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
@@ -63,7 +65,7 @@ if ($TraceScheduling -and ($Step -ne 'tone' -or $ToneSeconds -notin @(30,300))) 
     throw 'Scheduling trace requires the tone step for 30 or 300 seconds.'
 }
 
-$package = Join-Path $root 'driver'
+$package = Join-Path $root $PackageName
 # A13: the same source built as version N+1 (prepare-vm-share.ps1 -NextVersion).
 $nextPackage = Join-Path $root 'driver-next'
 $formatTool = Join-Path $root 'tools\m03_cable_format.exe'
