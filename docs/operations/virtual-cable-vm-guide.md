@@ -476,6 +476,8 @@ run, and restoring the checkpoint removes it too. Without it you must log back
 in after every restart and the night stalls. Add `-WithHostPause` only if the
 watcher is running.
 
+**Run VM sessions only on an idle host** (owner rule, 2026-11-22: a game on the host starved the VM, which then froze or stalled for minutes with no driver installed). Close games, run `wsl --shutdown`, check at least 10 GB of available memory, and start `toolsmhost-load.ps1` (detached, writes `C:VMshost-load.csv`) so a freeze can be matched to host load. A freeze is a driver candidate only if the host stayed under 20 % CPU with 6 GB or more available.
+
 **Keep the PC awake overnight** (Settings, System, Power: screen and sleep set
 to Never, or PowerToys Awake). If the host sleeps, the VM stops with it and the
 run resumes in the morning with meaningless timings; a stalled night is not

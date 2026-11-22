@@ -77,3 +77,38 @@ Next (not run): repeat the original configuration (Verifier on `audioroutervirtu
 a fresh restore, with a short fuzz (5 min) per boot, to see whether the freeze reproduces and how soon after the
 fuzz starts. A reproducible freeze at the same point is a driver or driver-plus-Verifier defect and must be fixed
 before signing; no freeze in, say, five boots keeps the VM explanation alive but unproven.
+
+## Repro attempt (2026-11-22, evening): aborted, host starvation confounds every VM result
+
+Bundle `rc-0.2.5-r5` (source `229277959`), `-Blocks repro -FuzzSeconds 300 -ReproBoots 5`: Verifier on
+`audioroutervirtual.sys`, then up to five boots, each a 5 min fuzz. Raw files: `C:\VMs\ar-share\rc-0.2.5-r5\repro-aborted\`
+(`round2-state.json`, `frozen-screen.png`, `host-load.csv`, `VBox.log`).
+
+What happened:
+
+- Boot 1's fuzz started about 22:08 UTC. At 22:20 (12 min into a 5 min step) the state file had not moved and two
+  screenshots 30 s apart were identical: the guest was frozen again. I aborted instead of waiting.
+- **The host was starved.** A host-side sampler (every 20 s, `host-load.csv`) shows CPU 80-91 %, available memory
+  down to 332 MB (minimum 332 MB at 22:07, ~1 GB at 22:19) and bursts of 70-90 k pages/s. `RainbowSix.exe` (3.4 GB),
+  `Memory Compression` (2.2 GB), WSL (`vmmemWSL`), Discord and others were running; the VM's working set had been
+  squeezed from 8.4 GB to 5.7 GB. The VM has 8 GB and 4 vCPUs.
+- **A second, earlier stall had no driver at all.** Before the run started, a fresh restore of `02-test-signing-ready`
+  (no AudioRouter driver installed, no Verifier) froze at the desktop for about 5 minutes (VBox.log: heartbeat gaps up to 97 s;
+  the guest clock jumped from 1:50 to 1:58 PM) with the host at the same pressure, then recovered by itself. Sign-in
+  screens also wedged twice in the same conditions.
+
+Reading:
+
+- The guest stalls for minutes, or freezes, when the host is under memory and CPU pressure, with no AudioRouter
+  driver and no Verifier involved. So a Verifier-time freeze on a busy host proves nothing about the driver, and the
+  2026-11-21 freeze (23:47 host time, host load not recorded) cannot be called a driver defect either. Equally, the
+  clean control runs cannot be taken as proof the driver is fine: they ran while the host was quieter.
+- I do not know what the host was doing at 23:47 on 2026-11-21; nothing was sampling it. Every VM run from now on
+  needs the host sampler (`C:\VMs\host-load.ps1`, a detached PowerShell writing `host-load.csv`) so that a freeze can
+  be matched to host load.
+- The VM competes with the owner's use of the PC (gaming), both ways. It should run only when the host is quiet:
+  no game, WSL stopped (`wsl --shutdown`), at least ~10 GB of available memory.
+
+Next action: run the repro block (`-Blocks repro -FuzzSeconds 300 -ReproBoots 5`) when the owner confirms the host is
+idle, with the sampler running; keep the VM memory at 8 GB. Treat a freeze with the host at <20 % CPU and >6 GB
+available as a candidate driver or Verifier defect; treat anything else as host starvation.
