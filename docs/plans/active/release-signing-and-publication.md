@@ -42,6 +42,12 @@ for this plan:
   category by form error). Evidence:
   [v0.0.31 qualification](evidence/2026-11-19-release-qualification-v0.0.31.md).
   After a verdict, rerun the lifecycle without the guest's Defender exclusion.
+- **Purchase plan (research 2026-11-21):** prices, identity route, key storage and
+  the recommended gated order are in
+  [driver signing, purchase plan](../future/M03-driver-signing.md#purchase-plan-cheapest-route-to-a-signed-driver-research-2026-11-21).
+  Short form: SSL.com Sole Proprietor EV, 1 year (about $359), eSigner only in its
+  free 30 days for the driver; decide app-signing key storage (token about $379
+  once, or eSigner $900/yr) after the driver is signed. Nothing bought.
 - **Next action:** wait for Microsoft's verdict; keep the driver assurance work
   moving; decide the identity route (sole-proprietor EV or a registered
   business) when the pre-purchase gate passes. Enrollment, purchase and any
