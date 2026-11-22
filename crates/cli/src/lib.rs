@@ -6595,8 +6595,10 @@ mod tests {
             serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
                 .unwrap();
         plane.insert_session(session).unwrap();
+        // Operator: create_session also opens the new session, which needs
+        // the session-control scope an Editor does not have.
         let grant =
-            audiorouter_control::ClientGrant::for_role(audiorouter_control::ClientRole::Editor);
+            audiorouter_control::ClientGrant::for_role(audiorouter_control::ClientRole::Operator);
         let mut call = |name: &str, arguments: Value| {
             mcp_tool_call(
                 &mut plane,
