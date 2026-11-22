@@ -684,6 +684,4 @@ live VM, RC3-after-0.2.5 binding in one guest session (checked in the helper sou
 through the parser (none on disk with a driver line), a real route output through the route-state check.
 The older bundle `rc-0.2.5-r2` is stale: do not use it.
 
-Next action: the owner starts the round2 night (task 3; commands in the VM guide). Then grade
-the results against the rules in the gap analysis (sections 4 and 5), record them in an evidence file,
-and decide task 4.
+Round 2 ran on 2026-11-21 (see [results](evidence/2026-11-22-virtual-cable-stage-a-0.2.5-round2-results.md)): A/B FAIL by the pre-registered rule (confounded), pool PASS, Verifier fuzz froze the guest (core saved), live not run. Next action: analyse the core, run `-Blocks live` alone, and the owner decides task 4.
