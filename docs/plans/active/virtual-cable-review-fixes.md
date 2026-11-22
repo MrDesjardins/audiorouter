@@ -675,6 +675,15 @@ the A/B is the best host-side-first design, not proof. Block 4 can still end in
 a new RC, and the pre-purchase decision gate (task 5 of
 [virtual-cable.md](virtual-cable.md)) stays closed until then.
 
+Round-2 bundle (2026-11-21): `C:\VMs\ar-share\rc-0.2.5-r3`, 89 files, built from commit
+`9027b730c` on branch `docs/virtual-cable-stage-a-0.2.5` (later commits are documentation only),
+`MANIFEST.txt` SHA-256 `43ef52377e5dbfc95482e6242cd856a5f75bf068e8aa9992d0fb24f7e7ada876`. Host test
+`tools/vm/round2-support.tests.ps1` ends "All round-2 host checks passed." (run 2026-11-21 on the development PC).
+**Not run:** any guest execution of the round-2 scripts, auto-logon in the guest, the host pause watcher against a
+live VM, RC3-after-0.2.5 binding in one guest session (checked in the helper source only), a real RC3 tone report
+through the parser (none on disk with a driver line), a real route output through the route-state check.
+The older bundle `rc-0.2.5-r2` is stale: do not use it.
+
 Next action: the owner starts the round2 night (task 3; commands in the VM guide). Then grade
 the results against the rules in the gap analysis (sections 4 and 5), record them in an evidence file,
 and decide task 4.
