@@ -634,7 +634,9 @@ fn session_create_and_delete_protect_running_resources() {
     );
     assert!(matches!(
         plane.delete_session(&created.id),
-        Err(ControlError::InvalidRequest(message)) if message == "session not found"
+        Err(ControlError::Store(
+            audiorouter_domain::StoreError::SessionNotFound
+        ))
     ));
 
     let mut running = session();

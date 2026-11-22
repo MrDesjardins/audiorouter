@@ -182,7 +182,7 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "obs.apply" => "Make the changes of a confirmed preview in OBS, skipping any source changed in OBS since the preview.",
         "obs.restore" => "Put back the OBS values the last apply replaced.",
         "nodes.types" => "List supported node types and their availability.",
-        "routes.inspect" => "Inspect upstream route provenance for a destination node.",
+        "routes.inspect" => "Trace every source and tool upstream of a destination node (an ID or exact name), in the open session by default.",
         "graph.history" => "List bounded committed graph revisions for a session.",
         "graph.undoPlan" => "Prepare an inverse graph plan from retained history.",
         "events.subscribe" => "Replay retained state events from an optional cursor.",
@@ -190,8 +190,8 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "presets.list" => "List explainable built-in processing presets.",
         "processors.list" => "List built-in DSP processor metadata and availability.",
         "processors.response" => "Evaluate a bounded parametric-EQ magnitude response using the DSP coefficient path.",
-        "sessions.get" => "Return one session resource by opaque identifier.",
-        "sessions.export" => "Export one canonical session document without changing state; raw=true returns the original stored text for recovery, including quarantined sessions, without validating or executing it.",
+        "sessions.get" => "Return one session resource (default: the open session).",
+        "sessions.export" => "Export one canonical session document (default: the open session) without changing state; raw=true returns the original stored text for recovery, including quarantined sessions, without validating or executing it.",
         "sessions.exportFile" => "Export to the exact local destination approved by the desktop Save dialog in the last five minutes; consumes that approval. Desktop only.",
         "sessions.approveExport" => "Approve one local export destination and optional replacement after the native Save dialog. Desktop only; not available to HTTP or MCP clients.",
         "sessions.importFile" => "Import a .audiorouter session file as a new stopped session.",
@@ -214,10 +214,10 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "graph.plan" => "Validate and preview a graph candidate without mutation.",
         "graph.commit" => "Commit an unexpired graph plan with idempotent mutation. Optional requireStoppedSessionId rejects if its saved session or native worker is running or attached.",
         "session.start" | "sessions.start" => {
-            "Start an already-prepared committed route. For a saved multi-path audio session, call nativePaths.prepare (HTTP POST /api/v1/nativePaths/prepare) with sessionId first; preparation requires deviceAdministration and does not start playback. Desktop Play performs preparation first. Alternatively temporarily preview a validated candidate graph without saving a new session revision; candidate preview requires both sessionControl and graphWrite grants plus a prepared single-endpoint native route."
+            "Start an already-prepared committed route (default: the open session). For a saved multi-path audio session, call nativePaths.prepare (HTTP POST /api/v1/nativePaths/prepare) with sessionId first; preparation requires deviceAdministration and does not start playback. Desktop Play performs preparation first. Alternatively temporarily preview a validated candidate graph without saving a new session revision; candidate preview requires both sessionControl and graphWrite grants plus a prepared single-endpoint native route."
         }
         "session.stop" | "sessions.stop" => {
-            "Stop a session runtime and publish its lifecycle result."
+            "Stop a session's audio (default: the open session) and publish its lifecycle result."
         }
         "sessions.play" => "Play a saved session (default: the active session): prepares every device chosen on its nodes and starts, like the Play button. Needs the device administration grant.",
         "sessions.togglePlay" => "Play the session if it is stopped, stop it if it is playing (one StreamDeck key). Needs the device administration grant.",
@@ -907,13 +907,13 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
             &["recordingId"],
         ),
         "sessions.get" => object_schema(
-            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }),
-            &["sessionId"],
+            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the session open in AudioRouter." } }),
+            &[],
         ),
         "sessions.export" => object_schema(
             json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "raw": { "type": "boolean", "description": "Export the original stored text for recovery, including quarantined sessions; never executes it." } }),
-            &["sessionId"],
+            &[],
         ),
         "sessions.approveExport" => object_schema(
             json!({ "path": { "type": "string", "minLength": 1, "maxLength": 1024 }, "replace": { "type": "boolean" } }),
@@ -954,14 +954,14 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES },
                 "candidate": session_item_schema()
             }),
-            &["sessionId", "idempotencyKey"],
+            &["idempotencyKey"],
         ),
         "session.stop" | "sessions.stop" => object_schema(
             json!({
-                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the session open in AudioRouter." },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
             }),
-            &["sessionId", "idempotencyKey"],
+            &["idempotencyKey"],
         ),
         "sessions.list" => object_schema(
             json!({
@@ -1053,9 +1053,9 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
         "routes.inspect" => object_schema(
             json!({
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
-                "destinationNode": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
+                "destinationNode": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Node ID or exact name." }
             }),
-            &["sessionId", "destinationNode"],
+            &["destinationNode"],
         ),
         "graph.history" => object_schema(
             json!({

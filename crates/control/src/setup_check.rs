@@ -609,7 +609,9 @@ impl ControlPlane {
         }
         if let Some(filter) = &filter {
             if !by_id.contains_key(filter.as_str()) {
-                return Err(ControlError::InvalidRequest("session not found".into()));
+                return Err(ControlError::Store(
+                    audiorouter_domain::StoreError::SessionNotFound,
+                ));
             }
         }
         // Reading the devices takes about 10 ms (more on the first call in a

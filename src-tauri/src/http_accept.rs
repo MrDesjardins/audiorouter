@@ -192,12 +192,30 @@ fn reject_busy(stream: &mut TcpStream) -> std::io::Result<()> {
         503,
         "application/json",
         "Retry-After: 1\r\n",
-        json!({"error": {"message": "AudioRouter API is busy; retry in a second"}})
-            .to_string()
-            .as_bytes(),
+        &adapter_error_body(503, "AudioRouter API is busy; retry in a second"),
     )?;
     close_gracefully(stream, BUSY_LINGER, BUSY_LINGER, BUSY_DISCARD);
     Ok(())
+}
+
+/// The body of an error the adapter answers itself, before or instead of
+/// the backend. It carries a stable `data.code` like backend errors do, so a
+/// script can branch on `error.data.code` for every non-2xx response.
+pub fn adapter_error_body(status: u16, message: &str) -> Vec<u8> {
+    let code = match status {
+        401 => "unauthorized",
+        403 => "permissionDenied",
+        404 => "notFound",
+        405 => "methodNotAllowed",
+        413 => "payloadTooLarge",
+        429 => "rateLimited",
+        500 => "internalError",
+        503 => "unavailable",
+        _ => "invalidRequest",
+    };
+    json!({ "error": { "message": message, "data": { "code": code } } })
+        .to_string()
+        .into_bytes()
 }
 
 /// Writes a complete `Connection: close` response. `extra` holds zero or
@@ -209,7 +227,7 @@ pub fn reply_with(
     extra: &str,
     body: &[u8],
 ) -> std::io::Result<()> {
-    write!(stream, "HTTP/1.1 {status} {}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\n{extra}Connection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nContent-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n\r\n", match status { 200 => "OK", 400 => "Bad Request", 401 => "Unauthorized", 403 => "Forbidden", 404 => "Not Found", 405 => "Method Not Allowed", 409 => "Conflict", 413 => "Payload Too Large", 429 => "Too Many Requests", _ => "Service Unavailable" }, body.len())?;
+    write!(stream, "HTTP/1.1 {status} {}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\n{extra}Connection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nContent-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n\r\n", match status { 200 => "OK", 400 => "Bad Request", 401 => "Unauthorized", 403 => "Forbidden", 404 => "Not Found", 405 => "Method Not Allowed", 409 => "Conflict", 413 => "Payload Too Large", 429 => "Too Many Requests", 500 => "Internal Server Error", _ => "Service Unavailable" }, body.len())?;
     stream.write_all(body)
 }
 

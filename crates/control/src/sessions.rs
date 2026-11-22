@@ -439,9 +439,11 @@ impl ControlPlane {
     }
 
     pub fn get_session(&self, id: &EntityId) -> Result<&Session, ControlError> {
-        self.store
-            .session(id)
-            .ok_or(ControlError::InvalidRequest("session not found".into()))
+        // A real notFound code (REST answers 404), not a generic invalid
+        // request whose only signal was its text.
+        self.store.session(id).ok_or(ControlError::Store(
+            audiorouter_domain::StoreError::SessionNotFound,
+        ))
     }
 
     pub fn sessions_list(&self, limit: usize) -> Result<Value, ControlError> {
@@ -1082,9 +1084,7 @@ impl ControlPlane {
         &mut self,
         params: Option<Value>,
     ) -> Result<Value, ControlError> {
-        let params = params.ok_or_else(|| {
-            ControlError::InvalidRequest("sessionId and idempotencyKey are required".into())
-        })?;
+        let params = self.with_open_session(params)?;
         let id = session_id_from_params(Some(params.clone()))?;
         let idempotency_key = params
             .get("idempotencyKey")
@@ -1120,11 +1120,37 @@ impl ControlPlane {
         Ok(result)
     }
 
+    /// Task-method rule for session-targeted reads and Play/Stop: an omitted
+    /// (or null) `sessionId` means the open session. Resolved here in the
+    /// backend so REST, MCP and the CLI behave alike; the resolved ID is
+    /// written into the parameters, so idempotency hashes and later reads
+    /// see one exact session.
+    pub(crate) fn with_open_session(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let mut params = params.unwrap_or_else(|| json!({}));
+        if !params.is_object() {
+            return Err(ControlError::InvalidRequest(
+                "parameters must be an object".into(),
+            ));
+        }
+        // Same rule and wording as `simple_session_id`: missing, null or
+        // empty means the open session.
+        if params
+            .get("sessionId")
+            .is_none_or(|id| id.is_null() || id.as_str() == Some(""))
+        {
+            let open = self.active_session_id.clone().ok_or_else(|| {
+                ControlError::InvalidRequest("sessionId is required: no session is active".into())
+            })?;
+            params["sessionId"] = json!(open);
+        }
+        Ok(params)
+    }
+
     pub(crate) fn dispatch_session_get(
         &mut self,
         params: Option<Value>,
     ) -> Result<Value, ControlError> {
-        let id = session_id_from_params(params)?;
+        let id = session_id_from_params(Some(self.with_open_session(params)?))?;
         self.ensure_session_loaded(&id)?;
         serde_json::to_value(self.get_session(&id)?)
             .map_err(|error| ControlError::Json(error.to_string()))
@@ -1139,7 +1165,7 @@ impl ControlPlane {
             .and_then(|params| params.get("raw"))
             .and_then(Value::as_bool)
             .unwrap_or(false);
-        let id = session_id_from_params(params)?;
+        let id = session_id_from_params(Some(self.with_open_session(params)?))?;
         if raw {
             let document = self
                 .storage
@@ -1149,7 +1175,9 @@ impl ControlPlane {
                 })?
                 .export_raw_session(&id)
                 .map_err(storage_error)?
-                .ok_or_else(|| ControlError::InvalidRequest("session not found".into()))?;
+                .ok_or(ControlError::Store(
+                    audiorouter_domain::StoreError::SessionNotFound,
+                ))?;
             return Ok(json!({"sessionId": id, "document": document}));
         }
         self.ensure_session_loaded(&id)?;
@@ -1634,9 +1662,7 @@ impl ControlPlane {
         &mut self,
         params: Option<Value>,
     ) -> Result<Value, ControlError> {
-        let params = params.ok_or_else(|| {
-            ControlError::InvalidRequest("sessionId and idempotencyKey are required".into())
-        })?;
+        let params = self.with_open_session(params)?;
         let id = session_id_from_params(Some(params.clone()))?;
         // A comparison belongs to this run; it must not carry over to the next Play.
         self.clear_comparison(&id);
