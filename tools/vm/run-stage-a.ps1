@@ -67,7 +67,7 @@ param(
     [ValidateRange(5, 120)][int] $PoolMinutes = 60,
     [ValidateRange(1, 60)][int] $EightMinutes = 30,
     # round2 only
-    [ValidatePattern('^(ab|pause|live|pool|verifier)(,(ab|pause|live|pool|verifier))*$')][string] $Blocks = 'ab,pool,verifier,live',
+    [ValidatePattern('^(ab|pause|live|pool|verifier|control)(,(ab|pause|live|pool|verifier|control))*$')][string] $Blocks = 'ab,pool,verifier,live',
     [ValidateRange(2, 8)][int] $AbPhases = 6,
     [switch] $WithHostPause,
     # round2: sign in by itself after every planned restart (asks for the guest
@@ -1287,6 +1287,45 @@ function Block-Verifier {
     Step-NoBugcheck $P
     Step-Remove $P
 }
+function Block-Control {
+    # Control runs for the Verifier freezes (2026-10-30, 2026-11-11, 2026-11-22). The fuzz is identical in both
+    # parts; only Driver Verifier changes. A: Verifier off. B: Verifier on Microsoft's ks.sys and portcls.sys,
+    # AudioRouter's driver loaded but not verified. A freeze here points at the VM, not at our driver.
+    $P = 'control: '
+    Step-Setup $P
+    Step-DriverIdentity $P
+    Step "${P}A Verifier off: fuzz" {
+        if (-not (Test-DriverGate "${P}A Verifier off: fuzz")) { return }
+        $run = Invoke-VmCheck 'fuzz-plain' @('-FuzzSeconds', [string]$FuzzSeconds)
+        Add-Result "${P}A Verifier off: fuzz" $(if ($run.Code -eq 0) { 'PASS' } else { 'FAIL' }) (($run.Checks | ForEach-Object { "$($_.check): $($_.passed)" }) -join '; ')
+    }
+    Step "${P}A guest stall watch" { Invoke-StallWatch "${P}A guest stall watch" 10 }
+    Step "${P}B Verifier on ks.sys and portcls.sys" {
+        $run = Invoke-VmCheck 'verifier-ms-on'
+        if ($run.Code -ne 0) { throw 'verifier-ms-on failed' }
+        Add-Result "${P}B Verifier on ks.sys and portcls.sys" 'PASS' 'standard checks for the Microsoft audio stack only'
+        Complete-AndRestart "${P}B Verifier on ks.sys and portcls.sys" 'Driver Verifier needs a restart.'
+    }
+    Step "${P}B Verifier active on Microsoft drivers only" {
+        $settings = (Invoke-Native 'verifier.exe' @('/querysettings')).Text
+        if ($settings -notmatch 'portcls.sys') { throw 'Driver Verifier is not watching portcls.sys' }
+        if ($settings -match 'audioroutervirtual.sys') { throw 'Driver Verifier is watching audioroutervirtual.sys: not a control run' }
+        Add-Result "${P}B Verifier active on Microsoft drivers only" 'PASS' 'ks.sys and portcls.sys verified, audioroutervirtual.sys not'
+    }
+    Step "${P}B Verifier on Microsoft drivers: fuzz" {
+        if (-not (Test-DriverGate "${P}B Verifier on Microsoft drivers: fuzz")) { return }
+        $run = Invoke-VmCheck 'fuzz-plain' @('-FuzzSeconds', [string]$FuzzSeconds)
+        Add-Result "${P}B Verifier on Microsoft drivers: fuzz" $(if ($run.Code -eq 0) { 'PASS' } else { 'FAIL' }) (($run.Checks | ForEach-Object { "$($_.check): $($_.passed)" }) -join '; ')
+    }
+    Step "${P}B guest stall watch" { Invoke-StallWatch "${P}B guest stall watch" 10 }
+    Step "${P}Driver Verifier off" -AlwaysRun {
+        $run = Invoke-VmCheck 'verifier-off'
+        Add-Result "${P}Driver Verifier off" $(if ($run.Code -eq 0) { 'PASS' } else { 'FAIL' }) 'verifier /reset'
+        Complete-AndRestart "${P}Driver Verifier off" 'Turning Driver Verifier off needs a restart.'
+    }
+    Step-NoBugcheck $P
+    Step-Remove $P
+}
 function Session-Round2([string] $P) {
     $selected = @($Blocks -split ',')
     if ($selected -contains 'pause' -and -not $WithHostPause) {
@@ -1294,7 +1333,7 @@ function Session-Round2([string] $P) {
         $selected = @($selected | Where-Object { $_ -ne 'pause' })
     }
     if ($WithHostPause -and $selected -notcontains 'pause') { $selected = @('pause') + $selected }
-    foreach ($block in @('ab', 'pause', 'pool', 'verifier', 'live')) {
+    foreach ($block in @('ab', 'pause', 'pool', 'verifier', 'control', 'live')) {
         if ($selected -notcontains $block) { continue }
         switch ($block) {
             'ab' { Block-Ab }
@@ -1302,6 +1341,7 @@ function Session-Round2([string] $P) {
             'live' { Block-Live }
             'pool' { Block-Pool }
             'verifier' { Block-Verifier }
+            'control' { Block-Control }
         }
     }
 }
