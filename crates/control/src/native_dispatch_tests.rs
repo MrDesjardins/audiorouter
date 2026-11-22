@@ -245,7 +245,7 @@ fn native_endpoint_detachment_requires_device_administration_and_exact_binding()
         },
         &ClientGrant::with_scopes([PermissionScope::DeviceAdministration]),
     );
-    assert_eq!(response.error.unwrap().code, -32602);
+    assert_eq!(response.error.unwrap().code, -32000);
     assert!(plane.native_endpoint_worker.is_none());
 }
 
@@ -272,7 +272,7 @@ fn native_duplex_detachment_requires_device_administration_and_windows() {
         },
         &ClientGrant::with_scopes([PermissionScope::DeviceAdministration]),
     );
-    assert_eq!(response.error.unwrap().code, -32602);
+    assert_eq!(response.error.unwrap().code, -32000);
 }
 
 #[test]

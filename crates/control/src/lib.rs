@@ -1476,10 +1476,10 @@ mod tests {
         let stored: audiorouter_domain::Session = serde_json::from_value(json!({
             "id": "shared", "name": "Shared", "schemaVersion": 1, "revision": 0,
             "nodes": [{
-                "id": "tone", "kind": "testSignal", "typeVersion": 1, "name": "Tone",
+                "id": "tone", "kind": "plugin", "typeVersion": 1, "name": "Tone",
                 "enabled": true, "bypass": false,
-                "parameters": { "presetPath": r"\\nas\presets\warm.fxp" },
-                "ports": [{ "name": "out", "direction": "output", "channels": 2 }]
+                "parameters": { "path": r"\\nas\presets\warm.fxp" },
+                "ports": [{ "name": "out", "direction": "output", "channels": 1 }]
             }],
             "edges": []
         }))
@@ -1489,11 +1489,11 @@ mod tests {
         let unchanged =
             json!({ "sessionId": "shared", "baseRevision": 0, "candidate": candidate.clone() });
         assert_eq!(plane.new_network_location(&unchanged), None);
-        candidate["nodes"][0]["parameters"]["presetPath"] = json!(r"\\attacker\share\x.fxp");
+        candidate["nodes"][0]["parameters"]["path"] = json!(r"\\attacker\share\x.fxp");
         let changed = json!({ "sessionId": "shared", "baseRevision": 0, "candidate": candidate });
         assert_eq!(
             plane.new_network_location(&changed).as_deref(),
-            Some("/candidate/nodes/0/parameters/presetPath")
+            Some("/candidate/nodes/0/parameters/path")
         );
         // Outside a candidate the saved location is no pass: an assistant
         // must not open (inspect, load a preset from) the session's share.

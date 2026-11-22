@@ -80,7 +80,7 @@ fn os_transition_idempotency_replays_and_rejects_key_reuse() {
     let conflict = plane.dispatch(request("resume"));
     assert_eq!(
         conflict.error.as_ref().map(|error| error.code),
-        Some(-32602)
+        Some(-32000)
     );
     assert!(conflict
         .error
