@@ -33,7 +33,7 @@ second backend.
   a JSON-RPC envelope. Read aliases: `GET /api/v1/capabilities`,
   `GET /api/v1/sessions`, `GET /api/v1/status`. Graph plan/commit retain
   baseRevision/idempotencyKey. Errors preserve backend code/message/data and
-  use HTTP 400/403/409/429/503. Durable-save activation failures remain explicit
+  use HTTP 400/401/403/404/409/413/429/500/503. Durable-save activation failures remain explicit
   in successful commit results.
 - **HTTP-07 — Session inventory and selection.** `GET /api/v1/sessions` and
   `GET /api/v1/sessions/active` expose every session and the UI's selected

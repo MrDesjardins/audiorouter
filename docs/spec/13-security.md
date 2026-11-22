@@ -88,6 +88,24 @@ fresh install):
   the HTTP adapter, which forwards with the window's grant, applies the same
   rule itself. Local device paths (`\\.\pipe\…`, the bridge device, verbatim
   `\\?\C:\…`) are not network locations.
+- **Client enrollment (2026-11-22):** the HTTP adapter shares the window's
+  device-administration grant after consent, so it refuses `clients.authorize`
+  and `clients.revoke` (403); enrolling or removing an assistant is the
+  window's decision. The backend also refuses a client revoking its own
+  identity, so the window cannot be locked out of its own backend.
+- **Decision (2026-11-22, owner: "Option b"): stored reads are Read.**
+  Evidence: [second API/MCP review](../plans/active/api-mcp-quality.md#r2-1-high-13-default-mcp-tools-can-never-succeed).
+  `recordings.list`, `recordings.get`, `recorders.list`, `plugins.list` and
+  `plugins.inventory` only return data AudioRouter already stored (recording
+  metadata, live recorder status, the remembered plugin scan). They need `read`
+  instead of `record` or `pluginScan`, so every enrolled assistant can use
+  `list_recordings`, `get_recording`, `list_live_recorders` and `list_plugins`.
+  Nothing else changes: starting or stopping a recording, editing or
+  renaming one, and `plugins.buses`, `plugins.programs` and
+  `plugins.prepareUpdate` (which run plugin code) still need `record` or
+  `pluginScan`, which no MCP role holds. Those assistant tools are removed
+  from the default list and say so. Rollback: restore the five permissions in
+  `API_METHODS`.
 - **Unchanged:** driver installation still needs Windows elevation.
 
 Show the concrete action and affected resources: for example, “Allow this client to edit Gaming and record under D:\\Recordings.” Do not ask for a universal “AI access” grant. Existing grants may persist until revoked, with last-used time and scope visible. Driver install uses Windows elevation; granting API device administration alone cannot bypass the OS prompt.

@@ -1,5 +1,5 @@
 {
-  "backendMethods": 134,
+  "backendMethods": 132,
   "operations": [
     {
       "method": "POST",
@@ -164,20 +164,6 @@
     },
     {
       "method": "POST",
-      "path": "/api/v1/clients/authorize",
-      "operation": "clients.authorize",
-      "permission": "DeviceAdministration",
-      "effect": "Mutating"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/clients/revoke",
-      "operation": "clients.revoke",
-      "permission": "DeviceAdministration",
-      "effect": "Mutating"
-    },
-    {
-      "method": "POST",
       "path": "/api/v1/operations/get",
       "operation": "operations.get",
       "permission": "Read",
@@ -194,7 +180,7 @@
       "method": "POST",
       "path": "/api/v1/recordings/list",
       "operation": "recordings.list",
-      "permission": "Record",
+      "permission": "Read",
       "effect": "ReadOnly"
     },
     {
@@ -299,7 +285,7 @@
       "method": "POST",
       "path": "/api/v1/recorders/list",
       "operation": "recorders.list",
-      "permission": "Record",
+      "permission": "Read",
       "effect": "ReadOnly"
     },
     {
@@ -383,7 +369,7 @@
       "method": "POST",
       "path": "/api/v1/recordings/get",
       "operation": "recordings.get",
-      "permission": "Record",
+      "permission": "Read",
       "effect": "ReadOnly"
     },
     {
@@ -565,14 +551,14 @@
       "method": "POST",
       "path": "/api/v1/plugins/list",
       "operation": "plugins.list",
-      "permission": "PluginScan",
+      "permission": "Read",
       "effect": "ReadOnly"
     },
     {
       "method": "POST",
       "path": "/api/v1/plugins/inventory",
       "operation": "plugins.inventory",
-      "permission": "PluginScan",
+      "permission": "Read",
       "effect": "ReadOnly"
     },
     {

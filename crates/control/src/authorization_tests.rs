@@ -193,6 +193,94 @@ fn client_enrollment_api_lists_authorizes_and_revokes() {
     assert!(plane.revoke_client(&oversized).is_err());
 }
 
+/// Owner decision 2026-11-22 (option b): data AudioRouter already stored is
+/// readable by every enrolled role; changing recordings and running plugin
+/// code still need the scopes no MCP role holds.
+#[test]
+fn stored_recording_and_plugin_reads_need_only_read_and_writes_keep_their_scope() {
+    let scope = |method: &str| {
+        audiorouter_domain::API_METHODS
+            .iter()
+            .find(|spec| spec.name == method)
+            .unwrap_or_else(|| panic!("{method} is a public method"))
+            .permission
+    };
+    for method in [
+        "recordings.list",
+        "recordings.get",
+        "recorders.list",
+        "plugins.list",
+        "plugins.inventory",
+    ] {
+        assert_eq!(scope(method), PermissionScope::Read, "{method}");
+    }
+    for role in [
+        ClientRole::Observer,
+        ClientRole::Editor,
+        ClientRole::Operator,
+    ] {
+        let grant = ClientGrant::for_role(role);
+        for method in ["recordings.list", "recorders.list", "plugins.inventory"] {
+            assert!(grant.allows(scope(method)), "{role:?} reads {method}");
+        }
+    }
+    for method in [
+        "recorders.startRecording",
+        "recorders.stopRecording",
+        "recordings.setMetadata",
+        "recordings.rename",
+    ] {
+        assert_eq!(scope(method), PermissionScope::Record, "{method}");
+    }
+    for method in ["plugins.buses", "plugins.programs", "plugins.prepareUpdate"] {
+        assert_eq!(scope(method), PermissionScope::PluginScan, "{method}");
+    }
+    // Through the dispatcher, an Observer gets a real answer, not a refusal.
+    let mut plane = ControlPlane::default();
+    for method in ["recordings.list", "recorders.list", "plugins.inventory"] {
+        let response = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: Some(json!({})),
+            },
+            &ClientGrant::for_role(ClientRole::Observer),
+        );
+        let refused = response
+            .error
+            .as_ref()
+            .and_then(|error| error.data.as_ref())
+            .is_some_and(|data| data["code"] == "permissionDenied");
+        assert!(!refused, "{method}: {:?}", response.error);
+    }
+}
+
+#[test]
+fn a_client_cannot_revoke_its_own_access_but_can_revoke_another() {
+    let mut plane = ControlPlane::default();
+    let grant = ClientGrant::with_scopes([PermissionScope::DeviceAdministration]);
+    plane.enroll_client("window", ClientRole::Operator).unwrap();
+    plane.enroll_client("helper", ClientRole::Observer).unwrap();
+    let revoke = |plane: &mut ControlPlane, target: &str, key: &str| {
+        plane.dispatch_authorized_for_client(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "clients.revoke".into(),
+                params: Some(json!({ "clientId": target, "idempotencyKey": key })),
+            },
+            "window",
+            &grant,
+        )
+    };
+    let own = revoke(&mut plane, "window", "revoke-own");
+    assert_eq!(own.error.unwrap().data.unwrap()["code"], "permissionDenied");
+    assert!(plane.grant_for_client("window").unwrap().is_some());
+    let other = revoke(&mut plane, "helper", "revoke-helper");
+    assert_eq!(other.result.unwrap()["changed"], true);
+}
+
 #[test]
 fn authorized_idempotency_keys_are_scoped_to_client_and_method() {
     let mut plane =

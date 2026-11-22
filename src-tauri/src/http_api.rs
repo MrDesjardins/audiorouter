@@ -152,6 +152,8 @@ const DESKTOP_ONLY_METHODS: &[&str] = &[
     "obs.preview",
     "obs.apply",
     "obs.restore",
+    "clients.authorize",
+    "clients.revoke",
 ];
 
 enum HttpAccess {
@@ -173,6 +175,12 @@ fn http_access(method: &str) -> HttpAccess {
         }
         "devices.setAccess" => {
             HttpAccess::DesktopOnly("Allow audio device access in the AudioRouter window")
+        }
+        "clients.authorize" => {
+            HttpAccess::DesktopOnly("Enroll an assistant or app in the AudioRouter window")
+        }
+        "clients.revoke" => {
+            HttpAccess::DesktopOnly("Remove an assistant or app in the AudioRouter window")
         }
         "obs.connect" => HttpAccess::DesktopOnly("Connect to OBS in the AudioRouter window"),
         "obs.disconnect" => {

@@ -57,7 +57,7 @@ See [network privacy and permissions](privacy-permissions.md#audio-privacy-bound
 | `clients.revoke` | `deviceAdministration` | mutating; requires an idempotency key |
 | `operations.get` | `read` | read-only |
 | `operations.cancel` | `sessionControl` | mutating; requires an idempotency key |
-| `recordings.list` | `record` | read-only |
+| `recordings.list` | `read` | read-only |
 | `audioMedia.beginUpload` | `graphWrite` | mutating; starts one bounded WAV/MP3 upload |
 | `audioMedia.uploadChunk` | `graphWrite` | mutating; appends the next ordered bounded upload chunk |
 | `audioMedia.finishUpload` | `graphWrite` | mutating; validates, decodes, and stores opaque media |
@@ -65,7 +65,7 @@ See [network privacy and permissions](privacy-permissions.md#audio-privacy-bound
 | `audioMedia.delete` | `graphWrite` | mutating; deletes media only when no session references it |
 | `audioSources.transport` | `sessionControl` | mutating; plays/stops a prepared Test Signal or plays/pauses/stops a prepared Audio File in a running session; `status` reads source state; `sessionId` optional (active session), `nodeId` an ID or exact name |
 | `timeShift.transport` | `sessionControl` | mutating; pauses, resumes, jumps back/forward 10 s, or returns to live on a running Time Shift node; `status` reads its delay and buffer; `sessionId` optional, `nodeId` an ID or exact name |
-| `recorders.list` | `record` | read-only |
+| `recorders.list` | `read` | read-only |
 | `recorders.create` | `record` | mutating; requires an idempotency key |
 | `recorders.arm` | `record` | mutating; requires an idempotency key |
 | `recorders.start` | `record` | mutating; requires an idempotency key |
@@ -79,7 +79,7 @@ See [network privacy and permissions](privacy-permissions.md#audio-privacy-bound
 | `devices.setAccess` | `session.control` | mutating; gives or withdraws that consent; desktop window grant only (refused for CLI/MCP grants and with 403 by the localhost HTTP adapter) |
 | `recordings.getRoot` | `record` | read-only; the approved recording folder (`null` until chosen) and a suggested folder |
 | `recordings.setRoot` | `record` | mutating; approves a local folder (`create: true` creates it); desktop window only, refused with 403 by the localhost HTTP adapter and not offered over MCP |
-| `recordings.get` | `record` | read-only |
+| `recordings.get` | `read` | read-only |
 | `recordings.recovery` | `record` | read-only |
 | `recordings.reveal` | `record` | external operation |
 | `recordings.preview` | `record` | read-only |
@@ -142,8 +142,8 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `nativeMultiInputs.pump` | `sessionControl` | external operation; drains bounded work from several exact capture workers into their prepared generation-bound feeder |
 | `nativeMultiInputs.bindBranches` | `sessionControl` | external operation; binds ordered validated output nodes to branch-local virtual, recording, and tool observers |
 | `plugins.scan` | `pluginScan` | reads directory metadata by default; optional `shellPath` inspects one exact VST2 binary in an isolated worker and reports its named effects |
-| `plugins.list` | `pluginScan` | read-only |
-| `plugins.inventory` | `pluginScan` | read-only; every remembered scan (one per folder), persisted across restarts; never scans or loads plugin code |
+| `plugins.list` | `read` | read-only |
+| `plugins.inventory` | `read` | read-only; every remembered scan (one per folder), persisted across restarts; never scans or loads plugin code |
 | `plugins.saveState` | `pluginScan` | mutating; captures a playing plugin node's opaque state, stores it under the database's `plugin-states` folder, and returns a `stateId` to set on the node |
 | `plugins.prepareUpdate` | `pluginScan` | mutating; optional `sessionId`, `nodeId` as ID or exact name; prepares parameters for a currently scanned vendor update while keeping old state assets. `resetState: true` explicitly prepares factory defaults. Apply returned parameters through ordinary graph plan/commit; preparation changes no route or audio. |
 | `plugins.openEditor` | `pluginScan` | external operation; opens a playing VST3 or VST2 plugin's own editor inside a parent window owned by `ownerProcessId` (the desktop shell) |

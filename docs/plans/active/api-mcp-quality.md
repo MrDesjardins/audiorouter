@@ -289,5 +289,192 @@ from the new `notFound` and `idempotencyConflict` codes, so scripts that branch 
 
 ## Next action
 
-Run the validation matrix once the owner says the PC is free, fix failures,
-then report. No commit or PR without the owner's request and approval.
+Superseded by the second review below: PR #170 merged at `29a77bb9d`
+(CI green). The owner now chooses how to resolve finding R2-1.
+
+## Second review: coverage and parity (2026-11-22)
+
+Owner request: "I want to be sure: 1) Work well 2) User can do everything
+from both entry points". Read on `main` at `29a77bb9d`, static only.
+AudioRouter was running, so nothing was compiled or run. Each item names
+the test that should prove it first.
+
+Coverage method: compared the scope of every `API_METHODS` entry (156) with
+the grants each entry point really holds, and every backend method the UI
+calls (126) with the API. Every UI call is a public API method.
+
+- **REST** forwards with the window's grant (`http_forward` in
+  `src-tauri/src/main.rs`; the in-process caller in `dispatch_control_frame`).
+  It reaches everything the window does except the 9 methods `http_access`
+  refuses (export file and approval, `recordings.setRoot`,
+  `devices.setAccess`, the five OBS writes). Once the user has allowed device
+  access, every `DeviceAdministration` method works over REST, not only Play.
+- **MCP** clients are enrolled with a role only. Storage keeps a role string,
+  the setup UI offers Observer, Editor or Operator, and `grant_for_client`
+  returns `for_role`. Operator is Read + GraphWrite + SessionControl. No MCP
+  client can ever hold Record, PluginScan or DeviceAdministration.
+
+### R2-1 (High): 13 default MCP tools can never succeed
+
+| Tools | Method scope |
+|---|---|
+| `play`, `toggle_play` | DeviceAdministration |
+| `start_recording`, `stop_recording`, `list_recordings`, `list_live_recorders`, `get_recording`, `set_recording_metadata`, `rename_recording` | Record |
+| `list_plugins`, `list_plugin_buses`, `list_plugin_programs`, `prepare_plugin_update` | PluginScan |
+
+- Play over MCP is refused by design (AUTO-18, SEC), so it is a documented
+  limitation.
+- The recording and plugin tools are the defect. Their descriptions say they
+  need "recording permission" or "the plugin-scan permission, which the user
+  grants", but the user has no way to grant either to an MCP client.
+  `list_plugins` tells the assistant to "ask the user to scan in the
+  AudioRouter window", which does not change the grant.
+- Recipes 1 ("Then play"), 3 (start/stop recording) and 13
+  (`list_plugin_buses`, "Operator to play") rely on refused tools. The
+  server instructions say "Operator also controls running audio".
+
+**Why CI stayed green:**
+- `every_api_method_is_reached_by_a_default_mcp_tool_or_excluded` records a
+  method before dispatch, so a refused call counts as reached.
+- The read-only hint test drops refused probes.
+- The recording tests use hand-built `with_scopes([Record])` grants.
+
+**Proposed test:** run every default tool under `ClientGrant::for_role(Operator)`
+(and Observer, Editor). Require success, or a tool listed with the reason it
+needs the window.
+
+**Owner decision (authorization change, needs a decision record):**
+- (a) Per-client opt-in scopes in MCP setup, for example "may record" and
+  "may read the plugin list".
+- (b) Move pure reads of stored data to Read: `plugins.inventory` and
+  `recordings.list`/`get` metadata. Check first that `plugins.buses` and
+  `plugins.programs` do not load plugin code.
+- (c) Remove the tools from the default set, list them in
+  `MCP_EXCLUDED_METHODS` with reasons, and fix the recipes and instructions.
+
+### R2-2 (High): REST can revoke the window's own enrollment
+
+- `clients.list` is Read, and `clients.revoke` is DeviceAdministration,
+  which the REST grant holds after device consent. `http_access` leaves
+  `clients.*` open, and `revoke_client` has no guard for the current user's
+  SID.
+- So a token holder (including a LAN device under HTTP-09) can list the
+  shell's SID and revoke it. The running window keeps its in-process grant.
+  At the next launch, `main.rs` refuses to start ("This user's AudioRouter
+  access was revoked. Restore access with an authorized local
+  administrator").
+- The same grant lets REST enroll clients (`clients.authorize`), which
+  bypasses the window's enrollment confirmation (SEC: "first client
+  enrollment" needs specific authorization). It also lets REST call
+  `virtualDevices.*` and `virtualRoutes.replace`.
+- Fix: refuse `clients.authorize` and `clients.revoke` in `http_access`
+  (desktop-only), and refuse revoking the caller's own identity in the
+  backend.
+- Test: through the HTTP adapter, `clients.revoke` gets 403. A backend
+  dispatch revoking the hosting SID is refused.
+
+### R2-3 (Medium): `sessions.start` reports a silent route as running
+
+- `session_start_with_candidate` refuses an unprepared route only when it
+  holds an enabled plugin. Otherwise it starts a runtime labelled `"fake"`
+  with no device worker. `status.get` and `sessions.summary` then report it
+  running or `playing: true`.
+- MCP `control_session action=start` and REST `sessions/start` on a route the
+  window never prepared therefore return success while nothing plays, and an
+  assistant tells the user audio started.
+- Fix: refuse with `nodeNotReady` and the "press Play in AudioRouter" text
+  when the route has device nodes and no native attachment.
+- Test: dispatch `sessions.start` on an unprepared device route and require
+  the refusal. Also verify a stop followed by a start, while workers stay
+  attached, still restarts native audio.
+
+### R2-4 (Medium): MCP cannot do these window actions
+
+- **Rename a session.** The window does it (`App.tsx`). MCP has only
+  `plan_graph_change`, an advanced tool. Add a `rename_session` tool, or
+  accept `name` in an existing session tool.
+- **Read the OBS status.** `obs.status` and `obs.refresh` are Read scope and
+  SEC-15 says MCP has read access. They are excluded as `WINDOW_ONLY` ("refused
+  to MCP and HTTP"), which is wrong on both counts: REST serves them. Give
+  them a read-only default tool, or correct the exclusion reason.
+- **Read the virtual cable buses.** `virtualRoutes.list` and
+  `virtualDevices.list` are Read. Only `get_virtual_cable_status` is offered.
+  Decide whether an assistant needs the bus list.
+
+### R2-5 (Low): REST shares the window's rate bucket and idempotency scope
+
+- HTTP requests reach the backend under the window's identity. The backend
+  mutation bucket (40 burst, 20/s per client) is therefore shared.
+- A controller at the adapter's own limit (also 40/20) can make the window's
+  edits fail with `rateLimited`, and the reverse.
+- Fix: give forwarded HTTP calls their own limiter and idempotency client ID
+  (for example `<sid>/http`).
+
+### R2-6 (Low): smaller defects
+
+- An `undo_last_change` or `go_back_to_version` retry with the same key plans
+  against the new revision and gets `idempotencyConflict`, not the first
+  result. This is safe (no double undo) but the message confuses the
+  assistant.
+- An unprepared `sessions.start` with a plugin returns a message that names
+  `nativePaths.prepare` and HTTP. Neither is available to an assistant.
+- `local-http-api.md` is out of date:
+  - it says "119 of the 121" methods (there are 156) and "four GET aliases"
+    (there are five);
+  - it lists 2 desktop-only methods (there are 9).
+- HTTP-04 in `docs/spec/16-local-http-api.md` lists 400/403/409/429/503 and
+  omits 401, 404, 413 and 500.
+- The doc comment of the reachability test sits on
+  `default_mcp_adds_and_removes_verified_vst2_key_by_name`.
+
+### Confirmed working (static)
+
+- Every window action is a public API method, so REST covers the window
+  apart from the documented desktop-only methods.
+- MCP and pipe grants are resolved in the backend from the enrolled role.
+- Network-location refusal, error codes, HTTP status mapping, MCP lifecycle
+  (notifications, version negotiation, batches) and retry-safe session
+  creation read as described above.
+- CI on `29a77bb9d` is green.
+
+### Edits written while the owner played (2026-11-22, not compiled or run)
+
+Only `cargo fmt --check` (both manifests) and `tools/docs/validate.mjs` ran.
+
+| Item | Change | Test (not yet run) |
+|---|---|---|
+| R2-2 | `clients.authorize` and `clients.revoke` are window-only over HTTP (`http_access`, `DESKTOP_ONLY_METHODS`); the dispatcher refuses `clients.revoke` of the caller's own ID with `permissionDenied`. | `a_client_cannot_revoke_its_own_access_but_can_revoke_another`; the existing HTTP policy test walks `DESKTOP_ONLY_METHODS` |
+| R2-4 | New default tool `get_obs_status` (`obs.status`, read-only); `obs.refresh` stays excluded with a correct reason. | `default_tools_work_without_keys_or_a_session_id` probe list, reachability and read-only hint tests |
+| R2-6 | `local-http-api.md` (window-only list), HTTP-04 status list, SEC client-enrollment note, release notes. | `tools/docs/validate.mjs` passed |
+
+**R2-1, owner chose option (b) (2026-11-22).** Decision record in
+`docs/spec/13-security.md`.
+- `recordings.list`, `recordings.get`, `recorders.list`, `plugins.list` and
+  `plugins.inventory` are now `Read` (domain `API_METHODS`,
+  `docs/operations/api-reference.md` and `site/assets/api-methods.json`
+  hand-edited: regenerate after the build and diff).
+- `plugins.buses` loads plugin code and `plugins.programs` asks a live
+  worker, so they stay `PluginScan`. Recording writes stay `Record`.
+- Tools no MCP role can use (`start_recording`, `stop_recording`,
+  `set_recording_metadata`, `rename_recording`, `list_plugin_buses`,
+  `list_plugin_programs`, `prepare_plugin_update`) left `DEFAULT_MCP_TOOLS`,
+  got exclusion reasons and an honest description; recipes 3 and 13 and the
+  server instructions no longer rely on them.
+- Tests: `stored_recording_and_plugin_reads_need_only_read_and_writes_keep_their_scope`;
+  `plugins_tests` now lists with a read-only grant. Not run.
+
+Still open:
+- A per-client opt-in for recording (option a) if the owner wants assistants
+  to record.
+- **R2-3** (`sessions.start` on an unprepared route): many tests rely on the
+  fake runtime starting, so it needs a build-and-iterate session.
+- **R2-4** session rename: no API method exists (the window commits a draft),
+  so it needs a new method with schemas, contracts and docs.
+- **R2-5** separate rate bucket and idempotency scope for REST calls.
+- **R2-6** the `undo_last_change` retry message, and the misplaced doc comment
+  on `default_mcp_adds_and_removes_verified_vst2_key_by_name`.
+
+### Next action
+
+After the build: run the validation matrix above plus the new tests, then
+the owner chooses R2-1.
