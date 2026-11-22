@@ -426,7 +426,7 @@ Why: the [gap analysis](../plans/active/evidence/2026-11-21-virtual-cable-stage-
 found Stage A on 0.2.5 not passed. `round2` answers its open items in one
 unattended run (about 4 hours, many restarts). It is not part of `all`.
 
-What it runs (`-Blocks`, default `ab,live,pool,verifier`):
+What it runs (`-Blocks`, default `ab,pool,verifier,live`):
 
 | Block | Question it answers | Pass rule |
 | --- | --- | --- |

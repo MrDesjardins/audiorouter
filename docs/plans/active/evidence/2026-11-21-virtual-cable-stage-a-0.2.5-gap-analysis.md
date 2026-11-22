@@ -189,6 +189,19 @@ Changes from the list above, decided before any result:
   driver using `MNWR`, so the tag alone proves nothing on the host; the guest has none.
 - **Item 5** is only available with `-WithHostPause` and the host watcher (`round2-pause-watcher.ps1`, never run
   against a live VM); it is a `controlvm pause`, not a real S3 sleep.
+- **Block order is `ab, pause, pool, verifier, live`.** `live` leaves 0.2.6 installed, the highest version, so it
+  runs last; every block starts from "no AudioRouter driver" and checks the loaded SYS hash against the 0.2.5 package.
+- **Driver store between phases (checked in the helper source, not in a VM).** `remove` unstages the recorded
+  `oem*.inf` (`SetupUninstallOEMInfW`, refuses while a device uses it) and `install` binds the INF it is given with
+  `INSTALLFLAG_FORCE` (`crates/driver-helper/src/windows_platform.rs`), so RC3 after 0.2.5 in one guest session
+  should bind RC3. Not yet observed in the VM: if a phase still loads the wrong image, its install/status step FAILs
+  on the hash check and its runs are not counted.
+- Checked on real reports: `Get-ToneAbCounters` reads `driver_version: [0, 2, 5, 0]` from real 0.2.5 tone reports
+  (`tone-evidence`, the 2026-11-11 review packets) and marks the real error report incomplete. No stored RC3 tone
+  report has a driver line (older tool); the bundle's tone tool prints it for any driver before its compatibility
+  check, so an RC3 run reports 0.2.4.0 or the tool fails and the run is not counted. The route-state check uses the
+  `progress N ms: cableRoute={...} max_service_gap_us=` line from `m03_cable_session.rs` and the `state` value
+  `running` from the `cableRoute` output schema; no stored real route output was available to replay.
 - The guest signs in by itself after each planned restart with `-AutoLogon` (password stored in the guest Winlogon key
   for the run only). The PC must not sleep overnight.
 

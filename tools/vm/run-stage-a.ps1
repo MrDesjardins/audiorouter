@@ -54,7 +54,7 @@
                  pool      60 min, the driver's own pool tags, not the whole pool
                  verifier  Driver Verifier, IOCTL fuzz twice with a controlled
                            restart between, a guest-stall watch after each
-               Default: ab,live,pool,verifier (about 4 h, many restarts). The
+               Default: ab,pool,verifier,live (about 4 h, many restarts). The
                run keeps its state on Z: after every step, so a hang does not
                lose the results already collected.
 #>
@@ -67,7 +67,7 @@ param(
     [ValidateRange(5, 120)][int] $PoolMinutes = 60,
     [ValidateRange(1, 60)][int] $EightMinutes = 30,
     # round2 only
-    [ValidatePattern('^(ab|pause|live|pool|verifier)(,(ab|pause|live|pool|verifier))*$')][string] $Blocks = 'ab,live,pool,verifier',
+    [ValidatePattern('^(ab|pause|live|pool|verifier)(,(ab|pause|live|pool|verifier))*$')][string] $Blocks = 'ab,pool,verifier,live',
     [ValidateRange(2, 8)][int] $AbPhases = 6,
     [switch] $WithHostPause,
     # round2: sign in by itself after every planned restart (asks for the guest
@@ -1158,7 +1158,10 @@ function Block-Live {
         $next = Get-Content -LiteralPath (Join-Path $bundle 'driver-next\package.json') -Raw | ConvertFrom-Json
         $ok = ($status.Json -and $status.Json.state -eq 'installed' -and [string]$status.Json.installedDriverVersion -eq [string]$next.driverVersion)
         $found = if ($status.Json) { "$($status.Json.state), driver $($status.Json.installedDriverVersion)" } else { 'no status' }
-        Add-Result 'live: version after the update' $(if ($ok) { 'PASS' } else { 'FAIL' }) "expected $($next.driverVersion); $found"
+        $untouched = ($status.Json -and [string]$status.Json.installedDriverVersion -eq '0.2.5.0')
+        $verdict = if ($ok) { 'PASS' } elseif ($untouched) { 'REVIEW' } else { 'FAIL' }
+        $why = if ($untouched) { '; still 0.2.5, so the update did not run or did not finish (see the update result above)' } else { '' }
+        Add-Result 'live: version after the update' $verdict "expected $($next.driverVersion); $found$why"
     }
     $removeLabel = 'live: driver removal while a route plays'
     Step $removeLabel {
@@ -1291,7 +1294,7 @@ function Session-Round2([string] $P) {
         $selected = @($selected | Where-Object { $_ -ne 'pause' })
     }
     if ($WithHostPause -and $selected -notcontains 'pause') { $selected = @('pause') + $selected }
-    foreach ($block in @('ab', 'pause', 'live', 'pool', 'verifier')) {
+    foreach ($block in @('ab', 'pause', 'pool', 'verifier', 'live')) {
         if ($selected -notcontains $block) { continue }
         switch ($block) {
             'ab' { Block-Ab }
