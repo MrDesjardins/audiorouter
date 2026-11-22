@@ -653,14 +653,15 @@ Open, in priority order (each blocks "Stage A on 0.2.5 passed"):
 Ordered tasks:
 
 1. [done 2026-11-21] Gap analysis, package identity, `infverif`, section scan.
-2. [open, agent, host] Guest wrapper for the paired render A/B and the tagged
-   pool sample; test it by parsing and by the existing host dry-run paths before
-   it goes to the owner. Do not hand over unrun guest code.
-3. [open, owner, VM] One batched, fail-fast block from `02-test-signing-ready`:
-   render A/B (3 pairs, alternating), update and remove with a route playing,
-   60 min tagged pool, Verifier fuzz twice with a controlled restart, a 90 s
-   `controlvm pause` and resume under a route (not a real sleep), VB-Cable and
-   A12 or their deferral.
+2. [done 2026-11-21, host-tested only] Guest wrapper: `run-stage-a.ps1 -Session round2`
+   with `tools/vm/round2-support.ps1`, `round2-restart-render.ps1`, `round2-pause-watcher.ps1` and
+   `prepare-round2-bundle.ps1`; host test `tools/vm/round2-support.tests.ps1` passes. The guest scripts
+   have not run in the VM.
+3. [open, owner, VM] One unattended night from `02-test-signing-ready` (VM guide, session `round2`,
+   `-AutoLogon`, PC kept awake): render A/B (6 alternating phases, median rule), update and remove with a
+   route playing (helper called directly), tagged pool, Verifier fuzz twice with a controlled restart and
+   stall watch, optional 90 s `controlvm pause` (not a real sleep). VB-Cable ratio and A12 stay Stage C or a
+   recorded deferral.
 4. [decision] If the A/B shows 0.2.5 worse than RC3, or any block finds a kernel
    defect: new RC, version above 0.2.6 (0.2.6 was installed in the VM and an
    identical `DriverVer` does not bind), keep its PDB, restart Stage A.
@@ -674,5 +675,6 @@ the A/B is the best host-side-first design, not proof. Block 4 can still end in
 a new RC, and the pre-purchase decision gate (task 5 of
 [virtual-cable.md](virtual-cable.md)) stays closed until then.
 
-Next action: task 2, then ask the owner for the VM block when the call or game
-is over.
+Next action: the owner starts the round2 night (task 3; commands in the VM guide). Then grade
+the results against the rules in the gap analysis (sections 4 and 5), record them in an evidence file,
+and decide task 4.

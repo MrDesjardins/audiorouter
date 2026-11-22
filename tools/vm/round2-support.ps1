@@ -28,7 +28,11 @@ function Get-ToneAbCounters {
         CaptureUnderrun = $null; CaptureOverrun = $null; CaptureSequenceGaps = $null
         Accepted = $null; Late = $null; PacketOverrun = $null
         MaxGapMs = $null
+        DriverVersion = $null
     }
+    # "driver: NativeBridgeDriverInfo { ..., driver_version: [0, 2, 5, 0], ... }": what the loaded driver reports.
+    $version = [regex]::Match($Text, '(?m)^\W*driver: NativeBridgeDriverInfo \{[^}]*driver_version: \[(\d+), (\d+), (\d+), (\d+)\]')
+    if ($version.Success) { $result.DriverVersion = ($version.Groups[1..4] | ForEach-Object { $_.Value }) -join '.' }
     if ($capture.Count -ne 1 -or $render.Count -ne 1) { return [pscustomobject]$result }
     $result.RenderUnderrun = & $field $render[0] 'underrun_frames'
     $result.RenderOverrun = & $field $render[0] 'overrun_frames'
@@ -55,58 +59,104 @@ function Get-ToneAbCounters {
 
 # --- the paired RC3 / 0.2.5 render comparison --------------------------------
 # Rows: objects with Driver ('rc3' or 'new'), Variant ('steady' or 'restarts'),
-# Valid (tone tool exit 0 and a complete report) and the counters above.
-# A run is "quiet" when its largest service gap is at most QuietGapMs: a
-# VirtualBox stall inflates counters on either driver and says nothing about
-# the driver (2026-10-10 lesson), so only quiet runs decide.
-# Pre-registered rule (2026-11-21, before any result): 0.2.5 regresses when its
-# mean per-run render underrun frames, or its mean late packets, exceed RC3's by
-# more than one packet (480 frames, 1 packet) AND by more than 50 percent.
-# Fewer than MinQuiet quiet runs on either driver is inconclusive, not a pass.
+# Valid (tone tool exit 0, a complete report, and the loaded driver reported the
+# version the phase expected), and the counters above.
+#
+# Rule, pre-registered 2026-11-21 before any round-2 result and recalibrated the
+# same day on the existing tone reports (only 1 of 9 earlier runs had a largest
+# service gap under 40 ms; 61, 78, 154, 248 and 332 ms were typical, so a "quiet
+# run" filter would have discarded the night). The VM stalls hit both drivers,
+# because the phases alternate, so the decision uses MEDIANS over all valid runs
+# of each render shape, which a minority of stalled runs cannot move:
+#   * a shape is judged only with at least MinValid valid runs on both drivers;
+#   * 0.2.5 regresses in a shape when its median render underrun frames, or its
+#     median late packets, exceed RC3's by more than one packet (480 frames, 1
+#     packet) AND by more than 50 percent;
+#   * a shape whose median largest service gap exceeds MaxMedianGapMs on either
+#     driver is stall-dominated and inconclusive;
+#   * FAIL if any shape regresses; PASS only if both shapes were judged and none
+#     regressed; otherwise REVIEW (inconclusive), never PASS.
+function Get-Median([double[]] $Values) {
+    $v = @($Values | Sort-Object)
+    if ($v.Count -eq 0) { return $null }
+    $mid = [int][Math]::Floor($v.Count / 2)
+    if ($v.Count % 2 -eq 1) { return [double]$v[$mid] }
+    return ([double]$v[$mid - 1] + [double]$v[$mid]) / 2.0
+}
 function Compare-RenderAb {
-    param([object[]] $Rows, [double] $QuietGapMs = 40, [int] $MinQuiet = 4)
-    $summary = [ordered]@{ Verdict = 'REVIEW'; Detail = ''; Rc3 = $null; New = $null }
-    $stats = @{}
-    foreach ($driver in 'rc3', 'new') {
-        $all = @($Rows | Where-Object { $_.Driver -eq $driver })
-        $valid = @($all | Where-Object { $_.Valid })
-        $quiet = @($valid | Where-Object { $null -ne $_.MaxGapMs -and $_.MaxGapMs -le $QuietGapMs })
-        $withWrites = @($quiet | Where-Object { $_.HasPacketWrites })
-        $meanOf = {
-            param($Set, [string] $Name)
-            if (@($Set).Count -eq 0) { return $null }
-            return [Math]::Round((@($Set | ForEach-Object { [double]$_.$Name } | Measure-Object -Sum).Sum) / @($Set).Count, 2)
-        }
-        $stats[$driver] = [pscustomobject]@{
-            Runs = $all.Count; Valid = $valid.Count; Quiet = $quiet.Count
-            MeanRenderUnderrun = (& $meanOf $quiet 'RenderUnderrun')
-            MeanLate = (& $meanOf $withWrites 'Late')
-            MeanPacketOverrun = (& $meanOf $withWrites 'PacketOverrun')
-            LateRuns = $withWrites.Count
-        }
-    }
-    $r = $stats['rc3']; $n = $stats['new']
-    $summary.Rc3 = $r; $summary.New = $n
-    $shown = "RC3: $($r.Quiet)/$($r.Runs) quiet runs, mean render underrun $($r.MeanRenderUnderrun) frames, mean late $($r.MeanLate); 0.2.5: $($n.Quiet)/$($n.Runs) quiet runs, mean render underrun $($n.MeanRenderUnderrun) frames, mean late $($n.MeanLate)"
-    if ($r.Quiet -lt $MinQuiet -or $n.Quiet -lt $MinQuiet) {
-        $summary.Detail = "inconclusive: fewer than $MinQuiet quiet runs on a driver (stalls decide nothing); $shown"
-        return [pscustomobject]$summary
-    }
+    param([object[]] $Rows, [int] $MinValid = 4, [double] $MaxMedianGapMs = 500)
     $worse = {
         param($New, $Old, [double] $Margin)
         if ($null -eq $New -or $null -eq $Old) { return $false }
         return ($New -gt $Old + $Margin) -and ($New -gt $Old * 1.5)
     }
-    $underrunWorse = & $worse $n.MeanRenderUnderrun $r.MeanRenderUnderrun 480
-    $lateWorse = & $worse $n.MeanLate $r.MeanLate 1
-    if ($underrunWorse -or $lateWorse) {
-        $summary.Verdict = 'FAIL'
-        $summary.Detail = "0.2.5 is worse than RC3 (rule: more than one packet and 50 percent above RC3); the frame-clock change (review item 6) is the revert candidate; $shown"
-    } else {
-        $summary.Verdict = 'PASS'
-        $summary.Detail = "no regression visible against RC3 on quiet runs; $shown"
+    $shapes = [ordered]@{}
+    foreach ($variant in 'steady', 'restarts') {
+        $info = [ordered]@{ Judged = $false; Regressed = $false; Note = ''; Rc3 = $null; New = $null }
+        $set = @{}
+        foreach ($driver in 'rc3', 'new') {
+            $valid = @($Rows | Where-Object { $_.Driver -eq $driver -and $_.Variant -eq $variant -and $_.Valid })
+            $withWrites = @($valid | Where-Object { $_.HasPacketWrites })
+            $set[$driver] = [pscustomobject]@{
+                Valid = $valid.Count
+                MedianUnderrun = Get-Median @($valid | ForEach-Object { [double]$_.RenderUnderrun })
+                MedianLate = if ($withWrites.Count -ge $MinValid) { Get-Median @($withWrites | ForEach-Object { [double]$_.Late }) } else { $null }
+                MedianGapMs = Get-Median @($valid | Where-Object { $null -ne $_.MaxGapMs } | ForEach-Object { [double]$_.MaxGapMs })
+            }
+        }
+        $r = $set['rc3']; $n = $set['new']
+        $info.Rc3 = $r; $info.New = $n
+        $text = "${variant}: RC3 $($r.Valid) valid runs (median underrun $($r.MedianUnderrun), late $($r.MedianLate), gap $($r.MedianGapMs) ms); 0.2.5 $($n.Valid) valid runs (median underrun $($n.MedianUnderrun), late $($n.MedianLate), gap $($n.MedianGapMs) ms)"
+        if ($r.Valid -lt $MinValid -or $n.Valid -lt $MinValid) {
+            $info.Note = "inconclusive, fewer than $MinValid valid runs on a driver; $text"
+        } elseif (($r.MedianGapMs -gt $MaxMedianGapMs) -or ($n.MedianGapMs -gt $MaxMedianGapMs)) {
+            $info.Note = "inconclusive, stall-dominated (median largest gap above $MaxMedianGapMs ms); $text"
+        } else {
+            $info.Judged = $true
+            $info.Regressed = (& $worse $n.MedianUnderrun $r.MedianUnderrun 480) -or (& $worse $n.MedianLate $r.MedianLate 1)
+            $lateNote = if ($null -eq $r.MedianLate -or $null -eq $n.MedianLate) { ' (late packets not compared: too few runs with packet counters)' } else { '' }
+            $info.Note = "$(if ($info.Regressed) { 'REGRESSED' } else { 'no regression' })$lateNote; $text"
+        }
+        $shapes[$variant] = [pscustomobject]$info
     }
-    return [pscustomobject]$summary
+    $verdict = 'REVIEW'
+    if (@($shapes.Values | Where-Object { $_.Regressed }).Count -gt 0) { $verdict = 'FAIL' }
+    elseif (@($shapes.Values | Where-Object { $_.Judged }).Count -eq 2) { $verdict = 'PASS' }
+    $detail = (@($shapes.Keys | ForEach-Object { $shapes[$_].Note }) -join ' | ')
+    if ($verdict -eq 'FAIL') { $detail = "0.2.5 is worse than RC3 (more than one packet and 50 percent above RC3's median); the frame-clock change (review item 6) is the revert candidate. $detail" }
+    return [pscustomobject]@{ Verdict = $verdict; Detail = $detail; Shapes = [pscustomobject]$shapes }
+}
+
+# --- guest auto-logon (reversible; the guest is a throwaway VM) -----------------
+# A planned restart resumes through a logon task, so an unattended night needs the
+# guest to sign in by itself. The password is stored in the Winlogon key only for
+# the run and removed at the end; restoring the checkpoint removes it as well.
+$script:WinlogonKey = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+function Set-GuestAutoLogon {
+    param([string] $UserName, [string] $Domain, [Security.SecureString] $Password, [string] $KeyPath = $script:WinlogonKey)
+    $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($Password))
+    if (-not (Test-Path -LiteralPath $KeyPath)) { New-Item -Path $KeyPath -Force | Out-Null }
+    $before = [ordered]@{}
+    foreach ($name in 'AutoAdminLogon', 'DefaultUserName', 'DefaultDomainName', 'DefaultPassword', 'AutoLogonCount') {
+        $item = Get-ItemProperty -LiteralPath $KeyPath -Name $name -ErrorAction SilentlyContinue
+        $before[$name] = if ($item) { [string]$item.$name } else { $null }
+    }
+    Set-ItemProperty -LiteralPath $KeyPath -Name AutoAdminLogon -Value '1' -Type String
+    Set-ItemProperty -LiteralPath $KeyPath -Name DefaultUserName -Value $UserName -Type String
+    Set-ItemProperty -LiteralPath $KeyPath -Name DefaultDomainName -Value $Domain -Type String
+    Set-ItemProperty -LiteralPath $KeyPath -Name DefaultPassword -Value $plain -Type String
+    Remove-ItemProperty -LiteralPath $KeyPath -Name AutoLogonCount -ErrorAction SilentlyContinue
+    return [pscustomobject]$before
+}
+function Clear-GuestAutoLogon {
+    param([object] $Before, [string] $KeyPath = $script:WinlogonKey)
+    Remove-ItemProperty -LiteralPath $KeyPath -Name DefaultPassword -ErrorAction SilentlyContinue
+    foreach ($name in 'AutoAdminLogon', 'DefaultUserName', 'DefaultDomainName') {
+        $value = if ($Before) { $Before.$name } else { $null }
+        if ($null -ne $value) { Set-ItemProperty -LiteralPath $KeyPath -Name $name -Value $value -Type String }
+        elseif ($name -eq 'AutoAdminLogon') { Set-ItemProperty -LiteralPath $KeyPath -Name $name -Value '0' -Type String }
+        else { Remove-ItemProperty -LiteralPath $KeyPath -Name $name -ErrorAction SilentlyContinue }
+    }
 }
 
 # --- driver pool tags ---------------------------------------------------------

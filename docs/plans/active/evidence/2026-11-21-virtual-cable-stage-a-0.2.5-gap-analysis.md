@@ -164,10 +164,33 @@ Every step is test-signed, VM only. Nothing here is built on the host.
 6. **VB-Cable ratio** (owner install) and **A12** (attended), or both deferred to
    Stage C by recorded decision.
 
-Agent work that does not need the owner: write a guest wrapper for block 1 and 3
-(an A/B runner with one fail-fast command) and test it on the host with the
-existing `-WhatIf`/parse checks. Not written yet, because an untested guest
-script is the failure mode the host-first rule exists to prevent.
+**Prepared 2026-11-21 as session `round2`** (`tools/vm/run-stage-a.ps1 -Session round2 -AutoLogon`,
+operator steps in the [VM guide](../../../operations/virtual-cable-vm-guide.md#session-round2-second-stage-a-round-on-025-overnight)).
+Blocks `ab`, `live`, `pool`, `verifier` (and optional `pause`) cover items 1 to 5 above in one unattended night.
+Host-tested: `tools/vm/round2-support.tests.ps1` (parse, ASCII, undefined-command scan, tone-report parsing,
+the A/B rule on synthetic runs, growth fit, the pool-tag reader against the host's own table, auto-logon set and
+clear on a fake registry key, the route-state check). The guest scripts themselves have **not** run in the VM.
+
+Changes from the list above, decided before any result:
+
+- **A/B rule recalibrated.** The first draft counted only "quiet" runs (largest service gap 40 ms or less). The
+  existing tone reports showed only 1 of 9 runs under 40 ms (typical gaps 61, 78, 154, 248, 332 ms), so that filter
+  would have discarded the night. The rule is now per render shape (steady stream, four short streams) on medians
+  of at least 4 valid runs per driver; 0.2.5 regresses when its median underrun frames or late packets exceed RC3's
+  by more than 480 frames (1 packet) and by 50 percent; a shape whose median gap exceeds 500 ms is inconclusive;
+  PASS needs both shapes judged; the drivers alternate over six phases, so stalls hit both. Each run must report
+  the expected driver version (`driver_version` in the tone tool's driver line) and the loaded SYS hash must match
+  the package, or the run is not counted.
+- **Item 2 is run by calling the helper directly** with the route verified alive and `running` just before, because
+  `vm-checks update` first sets a 96 kHz format on Cable B Output, which could end the route and make the test
+  meaningless. An invalid precondition is REVIEW "not counted", never PASS.
+- **Pool block** reads the driver's four tags (`MNWR`, `MNTR`, `SyAu`, `AUDR`) in-guest through
+  `NtQuerySystemInformation` instead of `poolmon`; PASS at most 0.25 MiB/h growth. The host has another SysVAD-derived
+  driver using `MNWR`, so the tag alone proves nothing on the host; the guest has none.
+- **Item 5** is only available with `-WithHostPause` and the host watcher (`round2-pause-watcher.ps1`, never run
+  against a live VM); it is a `controlvm pause`, not a real S3 sleep.
+- The guest signs in by itself after each planned restart with `-AutoLogon` (password stored in the guest Winlogon key
+  for the run only). The PC must not sleep overnight.
 
 ## 5. Decision rules
 
