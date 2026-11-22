@@ -6,7 +6,7 @@
 
   Start it in a normal PowerShell on the PC before the guest run:
 
-      powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\round2-pause-watcher.ps1 -Share C:\VMs\ar-share\rc-0.2.5-r2
+      powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\round2-pause-watcher.ps1 -Share C:\VMs\ar-share\rc-0.2.5-r3
 
   It only ever runs "controlvm AR-DriverTest pause" and "resume", only after the
   guest wrote round2-pause-request.txt in the share, never more than -MaxPauses
