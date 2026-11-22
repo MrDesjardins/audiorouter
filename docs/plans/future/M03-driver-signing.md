@@ -183,6 +183,37 @@ consider Artifact Signing ($9.99/month) for the app instead.
 | 3. Register a business, then EV and Partner Center | state fee plus $359+ (not researched) | A business was blocked too in one report; company name replaces the personal one | Only if route 2 is refused |
 | 4. Stay on VB-Cable (Route D) | $0 | Install step stays for users | Always available |
 
+### SSL.com reply (2026-11-21, ticket #159205994) and what it changes
+
+SSL.com's written answers:
+1. Sole Proprietor EV is offered to "eligible individuals operating without a registered corporation"; requirements are in its [application guide](https://www.ssl.com/guide/sole-proprietor-ev-application/) (dated 2026-08-25).
+2. "We have customers who have successfully used our Sole Proprietor EV Code Signing certificates for Microsoft Hardware Program registration", with no guarantee: Microsoft decides. No example, count or date was given.
+3. Key storage for kernel driver submissions: **eSigner (cloud) or a Thales hardware token** (not YubiKey, despite its product page).
+4. **No refund once the certificate is issued, even if Microsoft declines the enrollment.**
+5. The 30-day eSigner trial starts when the **eSigner certificate is issued**. If the key lives only in eSigner, **cancelling or revoking eSigner may revoke the certificate.** Move it to a token first if you want to stop paying and keep it.
+6. 458-day maximum validity; reissue is free within the order's remaining validity.
+7. Validation typically 3-5 business days.
+
+What the application guide adds (read 2026-11-21): the form is a Personal
+Identification form that must be notarized (or sealed by a CPA or signed by an
+attorney); validation includes a callback and a third-party check by lawyer, CPA
+or notary; and "all EV applicants must appear in a qualified independent business
+listing service such as Dun & Bradstreet and government business listings".
+Whether an unregistered individual meets that listing rule was not stated; ask.
+Accepted ID types, proof of address and fees were not on the page.
+
+Consequences for the plan:
+- The identity risk now has two gates: SSL.com's validation (notarized form,
+  business-listing rule) and Microsoft's trust check. Only the second is outside
+  SSL.com's control, and a failure there is not refundable.
+- Cancelling eSigner may kill the certificate, so for a single driver signing:
+  buy, start the trial only when ready, register, submit, then simply let it
+  lapse. Do not cancel before the signed driver is downloaded. If Partner Center
+  vetting outlasts the 30 days, signing the CAB needs a paid month ($100).
+- Keeping the certificate for the app means a Thales token (price not found).
+- Net: route 2 (own EV) stays viable but riskier and a bit dearer than $359; OSSign
+  remains the better first answer.
+
 ### Questions only the owner can answer
 
 1. Will the owner register a business (state fee, a business address and phone listing become public in the certificate) if Partner Center refuses individuals? Or is "no business" firm?
