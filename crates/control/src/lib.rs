@@ -71,6 +71,7 @@ mod native_dispatch;
 mod native_paths;
 mod native_workers;
 mod network;
+mod network_paths;
 mod persistence;
 mod plugins;
 mod recorder_workers;
@@ -98,6 +99,7 @@ use graph::*;
 pub use native_application::*;
 pub use native_paths::*;
 use network::*;
+pub use network_paths::{is_network_path, network_location_parameter};
 use persistence::*;
 pub use recorder_workers::*;
 use recording::*;
@@ -232,6 +234,54 @@ pub enum ControlError {
     Json(String),
     Storage(String),
     CorruptDatabase(String),
+}
+
+/// Plain sentences for every caller (REST scripts, assistants, the window).
+/// The stable machine code is `error.data.code`; never branch on this text.
+impl std::fmt::Display for ControlError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Internal(invariant) => write!(
+                f,
+                "AudioRouter hit an internal error ({invariant}); try again, and restart AudioRouter if it repeats."
+            ),
+            Self::InvalidRequest(message)
+            | Self::RestartRequired(message)
+            | Self::Audio { message, .. }
+            | Self::NodeNotReady { message, .. } => write!(f, "{message}"),
+            Self::PluginScan(error) => match error {
+                audiorouter_plugin_host::ScanError::InvalidRoot => {
+                    write!(f, "The plugin folder does not exist or is not a folder.")
+                }
+                audiorouter_plugin_host::ScanError::TooManyCandidates => {
+                    write!(f, "The plugin folder holds too many files to scan; choose a narrower folder.")
+                }
+                audiorouter_plugin_host::ScanError::TooManyDirectories => {
+                    write!(f, "The plugin folder has too many subfolders to scan; choose a narrower folder.")
+                }
+                audiorouter_plugin_host::ScanError::Cancelled => write!(f, "The plugin scan was cancelled."),
+                audiorouter_plugin_host::ScanError::DeadlineExceeded => {
+                    write!(f, "The plugin scan took too long and was stopped; retry it.")
+                }
+                audiorouter_plugin_host::ScanError::Io(message) => {
+                    write!(f, "The plugin folder could not be read: {message}")
+                }
+            },
+            Self::IdempotencyConflict => write!(
+                f,
+                "This idempotency key was already used for a different request; use a new key for a new request."
+            ),
+            Self::Store(error) => write!(f, "{error}"),
+            Self::Json(message) => write!(f, "AudioRouter could not read or write JSON: {message}"),
+            Self::Storage(message) => {
+                write!(f, "The AudioRouter database could not be read or written: {message}")
+            }
+            Self::CorruptDatabase(message) => write!(
+                f,
+                "The AudioRouter database is damaged ({message}); open a backup or restore into a new database."
+            ),
+        }
+    }
 }
 
 fn audio_control_error(error: audiorouter_windows_audio::AudioError) -> ControlError {
@@ -573,14 +623,7 @@ impl Default for ControlPlane {
 
 /// A short, bounded human-readable reason for a control error.
 fn control_error_message(error: &ControlError) -> String {
-    let text = match error {
-        ControlError::InvalidRequest(message) => message.clone(),
-        ControlError::RestartRequired(message) => message.clone(),
-        ControlError::Audio { message, .. } => message.clone(),
-        ControlError::NodeNotReady { message, .. } => message.clone(),
-        other => format!("{other:?}"),
-    };
-    text.chars().take(240).collect()
+    error.to_string().chars().take(240).collect()
 }
 
 impl ControlPlane {
@@ -837,6 +880,30 @@ impl ControlPlane {
             }
             return response;
         }
+        // Only the person at the window may name a network location: opening
+        // one connects to that host and offers the user's credentials before
+        // any later check runs (UNC presets, plugin folders, imports).
+        if !grant.accepts_device_consent() {
+            if let Some(pointer) = request
+                .params
+                .as_ref()
+                .and_then(|params| self.new_network_location(params))
+            {
+                let mut response = JsonRpcResponse::failure(
+                    id,
+                    -32001,
+                    format!(
+                        "The parameter {pointer} names a network location (or a drive this PC does not have). Choose a file or folder on this PC; network folders can be chosen in the AudioRouter window."
+                    ),
+                );
+                if let Some(error) = response.error.as_mut() {
+                    let mut data = application_error_data("permissionDenied");
+                    data["fieldPath"] = json!(pointer);
+                    error.data = Some(data);
+                }
+                return response;
+            }
+        }
         if matches!(request.method.as_str(), "session.start" | "sessions.start")
             && request
                 .params
@@ -1078,12 +1145,9 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
         ControlError::PluginScan(error) => error.code(),
         ControlError::NodeNotReady { .. } => "nodeNotReady",
     };
-    let message = match &error {
-        ControlError::Audio { message, .. } => message.clone(),
-        ControlError::NodeNotReady { message, .. } => message.clone(),
-        ControlError::RestartRequired(message) => message.clone(),
-        _ => format!("{error:?}"),
-    };
+    // Plain text, never Rust debug syntax such as
+    // `Store(RevisionConflict { .. })`: REST scripts and assistants read it.
+    let message = error.to_string();
     let audio_details = match &error {
         ControlError::Audio {
             hresult,
@@ -1342,6 +1406,193 @@ mod tests {
         );
         assert_eq!(named["code"], plain["code"]);
         assert_eq!(named["hresult"], plain["hresult"]);
+    }
+
+    /// A UNC preset reached `canonicalize()` (an SMB connection offering the
+    /// user's credentials) for any Operator client; only the HTTP adapter
+    /// refused it. The backend now refuses it for every non-window client.
+    #[test]
+    fn network_locations_are_refused_for_clients_other_than_the_window() {
+        let mut plane = ControlPlane::new("network-paths");
+        let request = |method: &str, params: Value| JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: method.into(),
+            params: Some(params),
+        };
+        let operator = ClientGrant::for_role(ClientRole::Operator);
+        for (method, params, field) in [
+            (
+                "plugins.applyPreset",
+                json!({ "nodeId": "fx", "presetPath": r"\\attacker\share\x.fxp" }),
+                "/presetPath",
+            ),
+            (
+                "plugins.applyPreset",
+                json!({ "nodeId": "fx", "presetPath": "//attacker/share/x.fxp" }),
+                "/presetPath",
+            ),
+            (
+                "graph.plan",
+                json!({ "sessionId": "s", "baseRevision": 0, "candidate": { "nodes": [ { "parameters": { "path": r"\\h\s\a.wav" } } ] } }),
+                "/candidate/nodes/0/parameters/path",
+            ),
+        ] {
+            let error = plane
+                .dispatch_authorized_for_client(
+                    request(method, params.clone()),
+                    "mcp-client",
+                    &operator,
+                )
+                .error
+                .unwrap_or_else(|| panic!("{method} accepted a network path"));
+            let data = error.data.unwrap();
+            assert_eq!(data["code"], "permissionDenied", "{method}");
+            assert_eq!(data["fieldPath"], field, "{method}");
+            assert!(
+                error.message.contains("network location"),
+                "{}",
+                error.message
+            );
+        }
+        // The window keeps its own choice of a network folder; any later
+        // failure here is the method's own, not this refusal. The missing
+        // session fails the request before any path is opened.
+        let desktop = ClientGrant::for_desktop_shell();
+        let response = plane.dispatch_authorized_for_client(
+            request(
+                "plugins.applyPreset",
+                json!({ "sessionId": "missing", "nodeId": "fx", "presetPath": r"\\attacker\share\x.fxp" }),
+            ),
+            "desktop",
+            &desktop,
+        );
+        assert!(!response
+            .error
+            .is_some_and(|error| error.message.contains("network location")));
+
+        // A network location the person already saved in the session may be
+        // sent back unchanged in a whole-session candidate; a new one may not.
+        let stored: audiorouter_domain::Session = serde_json::from_value(json!({
+            "id": "shared", "name": "Shared", "schemaVersion": 1, "revision": 0,
+            "nodes": [{
+                "id": "tone", "kind": "testSignal", "typeVersion": 1, "name": "Tone",
+                "enabled": true, "bypass": false,
+                "parameters": { "presetPath": r"\\nas\presets\warm.fxp" },
+                "ports": [{ "name": "out", "direction": "output", "channels": 2 }]
+            }],
+            "edges": []
+        }))
+        .unwrap();
+        plane.store.insert_session(stored.clone()).unwrap();
+        let mut candidate = serde_json::to_value(&stored).unwrap();
+        let unchanged =
+            json!({ "sessionId": "shared", "baseRevision": 0, "candidate": candidate.clone() });
+        assert_eq!(plane.new_network_location(&unchanged), None);
+        candidate["nodes"][0]["parameters"]["presetPath"] = json!(r"\\attacker\share\x.fxp");
+        let changed = json!({ "sessionId": "shared", "baseRevision": 0, "candidate": candidate });
+        assert_eq!(
+            plane.new_network_location(&changed).as_deref(),
+            Some("/candidate/nodes/0/parameters/presetPath")
+        );
+        // Outside a candidate the saved location is no pass: an assistant
+        // must not open (inspect, load a preset from) the session's share.
+        let direct = json!({ "sessionId": "shared", "nodeId": "tone", "presetPath": r"\\nas\presets\warm.fxp" });
+        assert_eq!(
+            plane.new_network_location(&direct).as_deref(),
+            Some("/presetPath")
+        );
+    }
+
+    /// REST scripts and assistants read `error.message`; it used to be Rust
+    /// debug text such as `Store(RevisionConflict { expected: 1, actual: 2 })`.
+    #[test]
+    fn every_application_error_message_is_plain_text_with_its_code_in_data() {
+        use audiorouter_domain::StoreError;
+        let cases = [
+            (ControlError::Internal("plan cache"), "internalError"),
+            (ControlError::Store(StoreError::SessionNotFound), "notFound"),
+            (ControlError::Store(StoreError::PlanNotFound), "notFound"),
+            (ControlError::Store(StoreError::PlanExpired), "planExpired"),
+            (
+                ControlError::Store(StoreError::PlanLimitReached),
+                "planLimitReached",
+            ),
+            (
+                ControlError::Store(StoreError::InvalidGraph(vec![
+                    audiorouter_domain::ValidationError::EmptyId {
+                        path: "nodes[0].id".into(),
+                    },
+                ])),
+                "invalidGraph",
+            ),
+            (
+                ControlError::Store(StoreError::RevisionConflict {
+                    expected: 112,
+                    actual: 113,
+                }),
+                "revisionConflict",
+            ),
+            (
+                ControlError::Store(StoreError::EmptyIdempotencyKey),
+                "invalidRequest",
+            ),
+            (
+                ControlError::Store(StoreError::NoUndoAvailable),
+                "noUndoAvailable",
+            ),
+            (
+                ControlError::Store(StoreError::IdempotencyConflict),
+                "idempotencyConflict",
+            ),
+            (ControlError::IdempotencyConflict, "idempotencyConflict"),
+            (ControlError::Storage("disk full".into()), "storageFailure"),
+            (
+                ControlError::CorruptDatabase("page checksum".into()),
+                "corruptDatabase",
+            ),
+            (ControlError::Json("trailing comma".into()), "internalError"),
+            (
+                ControlError::PluginScan(audiorouter_plugin_host::ScanError::InvalidRoot),
+                "invalidRoot",
+            ),
+        ];
+        for (error, code) in cases {
+            let error = application_error_response(Some(json!(1)), error)
+                .error
+                .unwrap();
+            let message = &error.message;
+            for debug in [
+                "Store",
+                "{ ",
+                "(\"",
+                "\")",
+                "InvalidRequest",
+                "IdempotencyConflict",
+                "SessionNotFound",
+                "PluginScan",
+                "InvalidRoot",
+            ] {
+                assert!(!message.contains(debug), "{debug} in {message}");
+            }
+            assert!(
+                message.starts_with(|first: char| first.is_ascii_uppercase()),
+                "{message}"
+            );
+            assert_eq!(error.data.unwrap()["code"], code, "{message}");
+        }
+        let conflict = application_error_response(
+            None,
+            ControlError::Store(audiorouter_domain::StoreError::RevisionConflict {
+                expected: 112,
+                actual: 113,
+            }),
+        );
+        assert!(conflict
+            .error
+            .unwrap()
+            .message
+            .contains("revision 112, but the session is now at revision 113"));
     }
 
     #[test]

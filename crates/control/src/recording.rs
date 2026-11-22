@@ -948,7 +948,9 @@ impl ControlPlane {
             .unwrap_or(default_dither_for_format(format));
         let session = EntityId::new(session_id);
         if self.store.session(&session).is_none() {
-            return Err(ControlError::InvalidRequest("session not found".into()));
+            return Err(ControlError::Store(
+                audiorouter_domain::StoreError::SessionNotFound,
+            ));
         }
         let config = FileRecorderConfig {
             version: FILE_RECORDER_CONFIG_VERSION,
@@ -1049,7 +1051,9 @@ impl ControlPlane {
             .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
         let session_id = EntityId::new(session_id);
         if self.store.session(&session_id).is_none() {
-            return Err(ControlError::InvalidRequest("session not found".into()));
+            return Err(ControlError::Store(
+                audiorouter_domain::StoreError::SessionNotFound,
+            ));
         }
         let node_id = params
             .get("nodeId")

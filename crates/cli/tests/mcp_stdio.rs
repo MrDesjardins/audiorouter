@@ -277,6 +277,39 @@ fn assert_stdio_client(client_id: &str) {
     );
     assert_eq!(modern_ping["error"]["code"], -32601);
 
+    // Legacy MCP allows ping before initialize; other requests are refused
+    // with -32600 (MCP keeps -32002 for "resource not found").
+    let early_ping = send(
+        &mut input,
+        &mut output,
+        json!({ "jsonrpc": "2.0", "id": "early-ping", "method": "ping" }),
+    );
+    assert_eq!(early_ping["result"], json!({}), "{early_ping}");
+    let early_list = send(
+        &mut input,
+        &mut output,
+        json!({ "jsonrpc": "2.0", "id": "early-list", "method": "tools/list" }),
+    );
+    assert_eq!(early_list["error"]["code"], -32600, "{early_list}");
+
+    // An unknown (newer) version is negotiated down, not refused.
+    let negotiated = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0", "id": "negotiate", "method": "initialize",
+            "params": { "protocolVersion": "2099-01-01", "capabilities": {},
+                "clientInfo": { "name": "future-client", "version": "1" } }
+        }),
+    );
+    assert_eq!(
+        negotiated["result"]["protocolVersion"], "2025-11-25",
+        "{negotiated}"
+    );
+    assert!(negotiated["result"]["instructions"]
+        .as_str()
+        .is_some_and(|text| text.contains("get_session_summary")));
+
     let initialized = send(
         &mut input,
         &mut output,
@@ -313,13 +346,50 @@ fn assert_stdio_client(client_id: &str) {
     )
     .unwrap();
     input.flush().unwrap();
+    // Other notifications get no reply either (an error reply used to
+    // arrive with id null), and a tool call sent as a notification never
+    // runs: the next reply read below must be the tools/list answer.
+    for notification in [
+        json!({ "jsonrpc": "2.0", "method": "notifications/cancelled", "params": { "requestId": 99 } }),
+        json!({ "jsonrpc": "2.0", "method": "tools/call", "params": { "name": "create_session", "arguments": { "name": "from a notification" } } }),
+    ] {
+        writeln!(input, "{}", serde_json::to_string(&notification).unwrap()).unwrap();
+    }
+    input.flush().unwrap();
 
     let tools = send(
         &mut input,
         &mut output,
         json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": { "_meta": { "example.com/trace": "legacy-list" } } }),
     );
+    assert_eq!(tools["id"], 2, "{tools}");
     assert_advanced_tool_catalog(&tools["result"]["tools"]);
+
+    let unknown_tool = send(
+        &mut input,
+        &mut output,
+        json!({ "jsonrpc": "2.0", "id": "unknown-tool", "method": "tools/call", "params": { "name": "add_tools", "arguments": {} } }),
+    );
+    assert_eq!(unknown_tool["error"]["code"], -32602, "{unknown_tool}");
+    let unknown_resource = send(
+        &mut input,
+        &mut output,
+        json!({ "jsonrpc": "2.0", "id": "unknown-resource", "method": "resources/read", "params": { "uri": "audiorouter://nope" } }),
+    );
+    assert_eq!(
+        unknown_resource["error"]["code"], -32002,
+        "{unknown_resource}"
+    );
+    let templates = send(
+        &mut input,
+        &mut output,
+        json!({ "jsonrpc": "2.0", "id": "templates", "method": "resources/templates/list" }),
+    );
+    assert_eq!(
+        templates["result"]["resourceTemplates"],
+        json!([]),
+        "{templates}"
+    );
 
     // A malformed line gets a JSON-RPC parse error and the session continues.
     writeln!(input, "{{ not json").unwrap();
@@ -328,6 +398,15 @@ fn assert_stdio_client(client_id: &str) {
     output.read_line(&mut line).unwrap();
     let parse_error: serde_json::Value = serde_json::from_str(&line).unwrap();
     assert_eq!(parse_error["error"]["code"], -32700);
+
+    // A batch used to be dropped without a reply, so the client waited.
+    let batch = send(
+        &mut input,
+        &mut output,
+        json!([{ "jsonrpc": "2.0", "id": "in-batch", "method": "ping" }]),
+    );
+    assert_eq!(batch["error"]["code"], -32600, "{batch}");
+    assert!(batch["id"].is_null(), "{batch}");
 
     let processors = send(
         &mut input,

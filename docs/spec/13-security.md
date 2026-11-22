@@ -77,6 +77,17 @@ fresh install):
 - **The localhost API:** it shares the desktop grant, so after consent it can
   start Play too (StreamDeck). File and folder path parameters over HTTP must
   point to this PC; network folders remain available in the AudioRouter window.
+- **Network locations (2026-11-21):** opening a UNC path or mapped network
+  drive offers the user's Windows credentials to that host. The backend
+  refuses a network location in any file or folder parameter, at any depth,
+  for every grant except the desktop window's (MCP and enrolled pipe
+  clients; local CLI commands acting on a database directly run as the
+  user and are not refused),
+  unless the targeted session already holds that exact location (chosen in
+  the window and sent back unchanged in a whole-session candidate);
+  the HTTP adapter, which forwards with the window's grant, applies the same
+  rule itself. Local device paths (`\\.\pipe\…`, the bridge device, verbatim
+  `\\?\C:\…`) are not network locations.
 - **Unchanged:** driver installation still needs Windows elevation.
 
 Show the concrete action and affected resources: for example, “Allow this client to edit Gaming and record under D:\\Recordings.” Do not ask for a universal “AI access” grant. Existing grants may persist until revoked, with last-used time and scope visible. Driver install uses Windows elevation; granting API device administration alone cannot bypass the OS prompt.

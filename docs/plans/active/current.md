@@ -134,6 +134,12 @@ and tool catalogs, structured backend error mapping, a real reviewed second
 language, and three-theme/Narrator/packaged evidence; see the plan’s execution
 record. No release or PR is authorized by the plan.
 
+Owner-requested REST API and MCP quality review (2026-11-21):
+[findings](api-mcp-quality.md). 14 ranked findings (a network preset path
+reachable through MCP, non-retry-safe session creation, Rust debug text in
+error messages, wrong tool annotations, protocol conformance). No fix is
+authorized yet; the owner picks the first group.
+
 Execution plans that still hold open work:
 
 - [Application quality](application-quality.md) — Q3.2 hosted, then Q4–Q6.

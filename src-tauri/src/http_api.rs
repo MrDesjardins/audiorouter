@@ -1,5 +1,5 @@
 //! Optional loopback adapter. No state or audio execution is owned here.
-use crate::http_accept::{close_gracefully, reply_with, ConnectionPool};
+use crate::http_accept::{adapter_error_body, close_gracefully, reply_with, ConnectionPool};
 use audiorouter_protocol::{JsonRpcRequest, JsonRpcResponse};
 use serde_json::{json, Value};
 use std::io::{Read, Write};
@@ -195,26 +195,12 @@ fn http_access(method: &str) -> HttpAccess {
 }
 
 /// Check the spelling before touching a caller-selected filesystem path.
+/// HTTP requests are forwarded with the window's grant, which may name a
+/// network folder, so this adapter keeps its own refusal; the backend
+/// applies `is_network_path` to every other client. A chosen file or folder
+/// parameter refuses any `\\` spelling, even a local device path.
 fn network_path(text: &str) -> bool {
-    if text.starts_with(r"\\") || text.starts_with("//") {
-        return true;
-    }
-    #[cfg(windows)]
-    {
-        let bytes = text.as_bytes();
-        if bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' {
-            let root = [u16::from(bytes[0]), u16::from(b':'), u16::from(b'\\'), 0];
-            // SAFETY: root is a NUL-terminated drive root alive for this
-            // metadata-only call. GetDriveTypeW retains no pointer.
-            let kind = unsafe {
-                windows::Win32::Storage::FileSystem::GetDriveTypeW(windows::core::PCWSTR(
-                    root.as_ptr(),
-                ))
-            };
-            return matches!(kind, 1 | 4);
-        }
-    }
-    false
+    text.starts_with(r"\\") || text.starts_with("//") || audiorouter_control::is_network_path(text)
 }
 
 pub fn operation_path(name: &str) -> String {
@@ -234,7 +220,7 @@ pub fn openapi(describe: &Value, port: u16, lan: Option<Ipv4Addr>) -> Value {
             "summary": method["description"],
             "description": format!("Permission: {}. Side effect: {}. Backend validation remains authoritative.", method["permission"], method["sideEffect"]),
             "requestBody": {"required": true, "content": {"application/json": {"schema": method["inputSchema"]}}},
-            "responses": {"200": {"description": "Backend result; inspect activation for durable graph commits", "content": {"application/json": {"schema": method["outputSchema"]}}}, "400": {"description": "Invalid request"}, "403": {"description": "Permission denied"}, "409": {"description": "Revision conflict"}, "429": {"description": "Rate limited"}, "503": {"description": "Backend unavailable"}},
+            "responses": error_responses(json!({"200": {"description": "Backend result; inspect activation for durable graph commits", "content": {"application/json": {"schema": method["outputSchema"]}}}})),
             "security": [{"bearerAuth": []}]
         }}));
     }
@@ -254,8 +240,21 @@ pub fn openapi(describe: &Value, port: u16, lan: Option<Ipv4Addr>) -> Value {
         let entry = paths
             .entry(format!("/api/v1/{path}"))
             .or_insert_with(|| json!({}));
+        let summary = describe["methods"]
+            .as_array()
+            .and_then(|methods| methods.iter().find(|method| method["name"] == name))
+            .map(|method| method["description"].clone())
+            .unwrap_or(Value::Null);
         if let Some(operations) = entry.as_object_mut() {
-            operations.insert("get".into(), json!({"operationId": format!("http.{path}"), "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Backend result", "content": {"application/json": {"schema": schema}}}}}));
+            let mut get = json!({"operationId": format!("http.{path}"), "tags": [name.split('.').next().unwrap_or("API")], "summary": summary, "description": format!("Same as POST /api/v1/{} with no body.", name.replace('.', "/")), "security": [{"bearerAuth": []}], "responses": error_responses(json!({"200": {"description": "Backend result", "content": {"application/json": {"schema": schema}}}}))});
+            if path == "sessions" {
+                get["description"] = json!("Same as POST /api/v1/sessions/list. Page with the cursor and limit query parameters; pass the returned nextCursor to read the next page.");
+                get["parameters"] = json!([
+                    {"name": "cursor", "in": "query", "required": false, "schema": {"type": "string"}, "description": "nextCursor from the previous page"},
+                    {"name": "limit", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1, "maximum": 500}}
+                ]);
+            }
+            operations.insert("get".into(), get);
         }
     }
     let active_get = describe["methods"]
@@ -273,9 +272,60 @@ pub fn openapi(describe: &Value, port: u16, lan: Option<Ipv4Addr>) -> Value {
     let active_path = paths
         .entry("/api/v1/sessions/active")
         .or_insert_with(|| json!({}));
-    active_path["get"] = json!({ "operationId": "http.sessions.active", "responses": { "200": { "description": "Currently selected editing session; audio is not started", "content": { "application/json": { "schema": active_get } } } }, "security": [{"bearerAuth": []}] });
-    active_path["put"] = json!({ "operationId": "http.sessions.activate", "summary": "Select the editing session without starting audio", "requestBody": { "required": true, "content": { "application/json": { "schema": active_set.map(|method| method["inputSchema"].clone()).unwrap_or(json!({})) } } }, "responses": { "200": { "description": "Selected session", "content": { "application/json": { "schema": active_set.map(|method| method["outputSchema"].clone()).unwrap_or(json!({})) } } }, "400": { "description": "Unknown session"}, "403": { "description": "Permission denied"} }, "security": [{"bearerAuth": []}] });
-    json!({"openapi": "3.1.0", "info": {"title": "AudioRouter local API", "version": "1.0.0"}, "servers": std::iter::once(format!("http://127.0.0.1:{port}")).chain(lan.map(|address| format!("http://{address}:{port}"))).map(|url| json!({"url": url})).collect::<Vec<_>>(), "paths": paths, "components": {"securitySchemes": {"bearerAuth": {"type": "http", "scheme": "bearer"}}}})
+    active_path["get"] = json!({ "operationId": "http.sessions.active", "tags": ["sessions"], "summary": "Read the session open in AudioRouter", "responses": error_responses(json!({ "200": { "description": "Currently selected editing session; audio is not started", "content": { "application/json": { "schema": active_get } } } })), "security": [{"bearerAuth": []}] });
+    active_path["put"] = json!({ "operationId": "http.sessions.activate", "tags": ["sessions"], "summary": "Select the editing session without starting audio", "requestBody": { "required": true, "content": { "application/json": { "schema": active_set.map(|method| method["inputSchema"].clone()).unwrap_or(json!({})) } } }, "responses": error_responses(json!({ "200": { "description": "Selected session", "content": { "application/json": { "schema": active_set.map(|method| method["outputSchema"].clone()).unwrap_or(json!({})) } } } })), "security": [{"bearerAuth": []}] });
+    json!({"openapi": "3.1.0", "info": {"title": "AudioRouter local API", "version": env!("CARGO_PKG_VERSION"), "description": "Errors return {\"error\": {\"code\", \"message\", \"data\"}}. Branch on error.data.code (stable), never on the message text."}, "servers": std::iter::once(format!("http://127.0.0.1:{port}")).chain(lan.map(|address| format!("http://{address}:{port}"))).map(|url| json!({"url": url})).collect::<Vec<_>>(), "paths": paths, "components": {"securitySchemes": {"bearerAuth": {"type": "http", "scheme": "bearer"}}, "schemas": {"Error": error_schema()}, "headers": {"RetryAfter": {"description": "Seconds to wait before retrying", "schema": {"type": "integer", "minimum": 1}}}}})
+}
+
+/// The error body every non-2xx response carries.
+fn error_schema() -> Value {
+    json!({
+        "type": "object",
+        "required": ["error"],
+        "properties": { "error": {
+            "type": "object",
+            "required": ["message"],
+            "properties": {
+                "code": { "type": "integer", "description": "JSON-RPC error code, when the backend answered." },
+                "message": { "type": "string", "description": "Plain-language reason; do not parse it." },
+                "data": {
+                    "type": "object",
+                    "properties": {
+                        "code": { "type": "string", "description": "Stable machine code, for example permissionDenied, notFound, revisionConflict, idempotencyConflict, rateLimited." },
+                        "fieldPath": { "type": ["string", "null"] },
+                        "resourceIds": { "type": "array", "items": { "type": "string" } },
+                        "retryable": { "type": "boolean" },
+                        "remediation": { "type": "string" },
+                        "retryAfterMs": { "type": "integer" }
+                    }
+                }
+            }
+        } }
+    })
+}
+
+/// Add the documented error responses (each with the Error body) to an
+/// operation's success response. Mirrors `http_status_for_error_code` and
+/// the adapter's own refusals.
+fn error_responses(mut responses: Value) -> Value {
+    let error = |description: &str| json!({ "description": description, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } });
+    let entries = [
+        ("400", error("Invalid request: malformed JSON, a parameter the schema refuses, or an unsupported query string")),
+        ("401", error("Missing or wrong bearer token")),
+        ("403", error("Permission denied, Windows refused the device, a window-only action, or a network location")),
+        ("404", error("Unknown operation, or the named session, plan or resource does not exist")),
+        ("409", error("The current state refuses the request: a newer revision, a reused idempotency key, an expired or too many plans, a busy device, a node not set up, or nothing to undo")),
+        ("413", error("JSON body larger than 4 MiB")),
+        ("500", error("Internal backend error")),
+        ("503", error("Backend unavailable, its database cannot be used, or Windows audio is restarting; retry later")),
+    ];
+    for (status, body) in entries {
+        responses[status] = body;
+    }
+    let mut limited = error("Rate limited; wait for Retry-After");
+    limited["headers"] = json!({ "Retry-After": { "$ref": "#/components/headers/RetryAfter" } });
+    responses["429"] = limited;
+    responses
 }
 
 fn reply(
@@ -307,9 +357,7 @@ fn fail(stream: &mut TcpStream, status: u16, message: &str) -> std::io::Result<(
         stream,
         status,
         "application/json",
-        json!({"error": {"message": message}})
-            .to_string()
-            .as_bytes(),
+        &adapter_error_body(status, message),
     )?;
     close_gracefully(
         stream,
@@ -417,13 +465,35 @@ fn handle(
             "Only this API's exact Host and same-origin requests are allowed",
         );
     }
-    if fields.contains_key("transfer-encoding") || path.contains('?') {
+    if fields.contains_key("transfer-encoding") {
         return fail(
             stream,
             400,
-            "Chunked bodies and query strings are unsupported; use JSON parameters",
+            "Chunked bodies are unsupported; send a Content-Length",
         );
     }
+    // Only the paged session list takes a query string (GET has no body),
+    // and only its cursor and limit; everything else uses JSON parameters.
+    let (path, query) = match path.split_once('?') {
+        Some((path, query)) => (path, Some(query)),
+        None => (path, None),
+    };
+    let query_params = match query {
+        None => None,
+        Some(query) if verb == "GET" && path == "/api/v1/sessions" => {
+            match paging_query(query) {
+                Ok(params) => Some(params),
+                Err(message) => return fail(stream, 400, &message),
+            }
+        }
+        Some(_) => {
+            return fail(
+                stream,
+                400,
+                "Query strings are accepted only on GET /api/v1/sessions (cursor, limit); use JSON parameters",
+            )
+        }
+    };
     if verb == "GET" {
         match path {
             "/docs" | "/docs/" => return reply(stream, 200, "text/html; charset=utf-8", b"<!doctype html><html><head><meta charset='utf-8'><title>AudioRouter API</title><link rel='stylesheet' href='/swagger-ui.css'></head><body><p><a href='/licenses/swagger-ui.txt'>Bundled Swagger UI licenses</a></p><div id='swagger-ui'></div><script src='/swagger-ui-bundle.js'></script><script src='/swagger-init.js'></script></body></html>"),
@@ -518,7 +588,7 @@ fn handle(
         if length != 0 {
             return fail(stream, 400, "GET cannot have a body");
         }
-        None
+        query_params
     };
     if let HttpAccess::LocalPaths(parameters) = http_access(&method) {
         if parameters.iter().any(|name| {
@@ -530,6 +600,14 @@ fn handle(
         }) {
             return fail(stream, 403, "Over the API, choose a folder on this PC. Network folders can be chosen in the AudioRouter window.");
         }
+    }
+    // Any other location parameter, at any depth (a node's file inside a
+    // graph candidate or an imported session), gets the backend's rule.
+    if let Some(pointer) = params
+        .as_ref()
+        .and_then(audiorouter_control::network_location_parameter)
+    {
+        return fail(stream, 403, &format!("Over the API, choose a file or folder on this PC ({pointer} names a network location). Network folders can be chosen in the AudioRouter window."));
     }
     if stop.load(Ordering::Acquire) {
         return fail(stream, 503, "API stopped");
@@ -550,7 +628,22 @@ fn handle(
             1.0
         };
         if budget.1 < cost {
-            return fail(stream, 429, "Local API rate exceeded; retry later");
+            // The budget refills at 20 requests a second.
+            drop(budget);
+            reply_with(
+                stream,
+                429,
+                "application/json",
+                "Retry-After: 1\r\n",
+                &adapter_error_body(429, "Local API rate exceeded; retry after one second"),
+            )?;
+            close_gracefully(
+                stream,
+                Duration::from_millis(20),
+                Duration::from_millis(50),
+                MAX_BODY,
+            );
+            return Ok(());
         }
         budget.1 -= cost;
     }
@@ -562,18 +655,26 @@ fn handle(
                     .as_ref()
                     .and_then(|data| data["code"].as_str())
                     .unwrap_or_default();
-                let status = match kind {
-                    "permissionDenied" | "clientRevoked" => 403,
-                    "revisionConflict" => 409,
-                    "rateLimited" => 429,
-                    _ => 400,
-                };
-                reply_with_id(
+                let status = http_status_for_error_code(kind);
+                // The backend's own retry hint, in whole seconds (at least 1).
+                let retry_after = (status == 429).then(|| {
+                    let ms = error
+                        .data
+                        .as_ref()
+                        .and_then(|data| data["retryAfterMs"].as_u64())
+                        .unwrap_or(1000);
+                    format!("Retry-After: {}\r\n", ms.div_ceil(1000).max(1))
+                });
+                let request_header =
+                    audiorouter_protocol::diagnostics::valid_correlation_id(Some(&request_id))
+                        .map(|id| format!("X-Request-Id: {id}\r\n"))
+                        .unwrap_or_default();
+                reply_with(
                     stream,
                     status,
                     "application/json",
+                    &format!("{request_header}{}", retry_after.unwrap_or_default()),
                     json!({"error": error}).to_string().as_bytes(),
-                    Some(&request_id),
                 )
             }
             None => reply_with_id(
@@ -592,11 +693,92 @@ fn handle(
             stream,
             503,
             "application/json",
-            json!({"error": {"message": "Backend unavailable; reconnect in AudioRouter"}})
-                .to_string()
-                .as_bytes(),
+            &adapter_error_body(503, "Backend unavailable; reconnect in AudioRouter"),
             Some(&request_id),
         ),
+    }
+}
+
+/// `cursor` and `limit` from the query string of `GET /api/v1/sessions`.
+/// Each may appear once; anything else is refused rather than ignored.
+fn paging_query(query: &str) -> Result<Value, String> {
+    let mut params = serde_json::Map::new();
+    for pair in query.split('&').filter(|pair| !pair.is_empty()) {
+        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+        let value =
+            percent_decode(value).ok_or("Query values must be valid percent-encoded UTF-8")?;
+        let value = match key {
+            "cursor" => json!(value),
+            "limit" => json!(value
+                .parse::<u64>()
+                .map_err(|_| "limit must be a whole number".to_owned())?),
+            _ => {
+                return Err(format!(
+                    "Unknown query parameter {:?}; use cursor and limit",
+                    key.chars().take(32).collect::<String>()
+                ))
+            }
+        };
+        if params.insert(key.to_owned(), value).is_some() {
+            return Err(format!("{key} appears twice"));
+        }
+    }
+    Ok(Value::Object(params))
+}
+
+/// Decode `%XX` escapes and `+` (a space in query strings).
+fn percent_decode(text: &str) -> Option<String> {
+    let bytes = text.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'%' => {
+                // Two hex digits exactly: from_str_radix alone accepts "+1".
+                let hex = bytes.get(index + 1..index + 3)?;
+                if !hex.iter().all(u8::is_ascii_hexdigit) {
+                    return None;
+                }
+                decoded.push(u8::from_str_radix(std::str::from_utf8(hex).ok()?, 16).ok()?);
+                index += 3;
+            }
+            b'+' => {
+                decoded.push(b' ');
+                index += 1;
+            }
+            byte => {
+                decoded.push(byte);
+                index += 1;
+            }
+        }
+    }
+    String::from_utf8(decoded).ok()
+}
+
+/// The HTTP status for a backend error code (`error.data.code`). Requests
+/// the backend rejects without a code (malformed parameters) stay 400.
+fn http_status_for_error_code(code: &str) -> u16 {
+    match code {
+        // Windows refusing a device is a permission problem too.
+        "permissionDenied" | "clientRevoked" | "accessDenied" => 403,
+        "notFound" => 404,
+        // The request is well formed but the current state refuses it: a
+        // newer revision, a reused key, an expired or too many plans, a busy
+        // or exclusive device, a node not set up yet, nothing to undo.
+        "revisionConflict"
+        | "idempotencyConflict"
+        | "planExpired"
+        | "planLimitReached"
+        | "deviceInUse"
+        | "exclusiveModeOnly"
+        | "nodeNotReady"
+        | "noUndoAvailable" => 409,
+        "rateLimited" => 429,
+        "internalError" => 500,
+        // Worth retrying later: the database, the Windows audio service, a
+        // device that just went away.
+        "storageFailure" | "corruptDatabase" | "serviceUnavailable" | "deviceInvalidated" => 503,
+        _ => 400,
     }
 }
 
@@ -739,6 +921,36 @@ mod tests {
                     .contains("Network folders can be chosen in the AudioRouter window"));
             }
         }
+        // A node's file deep inside a graph candidate or a set call was
+        // forwarded with the window's grant before the generic walk.
+        for (method, params) in [
+            (
+                "graph.plan",
+                json!({"sessionId": "s", "baseRevision": 0, "candidate": {"nodes": [{"parameters": {"path": r"\\host\share\a.wav"}}]}}),
+            ),
+            (
+                "nodes.set",
+                json!({"nodeId": "file", "parameters": {"path": "//host/share/a.wav"}}),
+            ),
+        ] {
+            let (status, error) = call(&api, &operation_path(method), Some(params));
+            assert_eq!(status, 403, "{method}: {error}");
+            // Adapter refusals carry a code like backend errors do, and name
+            // the refused parameter.
+            assert_eq!(
+                error["error"]["data"]["code"], "permissionDenied",
+                "{error}"
+            );
+            assert!(
+                error["error"]["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("/parameters/path")),
+                "{error}"
+            );
+        }
+        let (status, unknown) = call(&api, "/api/v1/no/such/method", Some(json!({})));
+        assert_eq!(status, 404);
+        assert_eq!(unknown["error"]["data"]["code"], "notFound", "{unknown}");
         assert_eq!(forwarded.load(Ordering::Relaxed), 0);
         let (status, _) = call(
             &api,
@@ -1273,6 +1485,101 @@ mod tests {
     }
 
     #[test]
+    fn backend_error_codes_get_their_own_http_status() {
+        // notFound, idempotencyConflict, internalError and the database
+        // failures all used to answer 400.
+        for (code, status) in [
+            ("permissionDenied", 403),
+            ("clientRevoked", 403),
+            ("notFound", 404),
+            ("revisionConflict", 409),
+            ("idempotencyConflict", 409),
+            ("planExpired", 409),
+            ("rateLimited", 429),
+            ("internalError", 500),
+            ("storageFailure", 503),
+            ("corruptDatabase", 503),
+            ("accessDenied", 403),
+            ("planLimitReached", 409),
+            ("deviceInUse", 409),
+            ("exclusiveModeOnly", 409),
+            ("nodeNotReady", 409),
+            ("noUndoAvailable", 409),
+            ("serviceUnavailable", 503),
+            ("deviceInvalidated", 503),
+            ("invalidGraph", 400),
+            ("unsupportedFormat", 400),
+            ("", 400),
+        ] {
+            assert_eq!(http_status_for_error_code(code), status, "{code}");
+        }
+        // Through the adapter: a missing session is 404, and a backend rate
+        // limit carries its retry hint as Retry-After.
+        let (_fixture, backend) = fixture();
+        let api = HttpApi::start(
+            0,
+            Arc::new(move |request, correlation| {
+                if request.method == "status.get" {
+                    let mut response =
+                        JsonRpcResponse::failure(request.id.clone(), -32000, "rate limited");
+                    response.error.as_mut().unwrap().data =
+                        Some(json!({"code": "rateLimited", "retryAfterMs": 2500}));
+                    return Ok(response);
+                }
+                backend(request, correlation)
+            }),
+        )
+        .unwrap();
+        let (status, _) = call(
+            &api,
+            "/api/v1/sessions/get",
+            Some(json!({"sessionId": "missing"})),
+        );
+        assert_eq!(status, 404);
+        let raw = exchange(
+            api.port,
+            &format!(
+                "GET /api/v1/status HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nAuthorization: Bearer {}\r\n\r\n",
+                api.port, api.token
+            ),
+        );
+        assert!(raw.starts_with("HTTP/1.1 429"), "{raw}");
+        assert!(raw.contains("Retry-After: 3\r\n"), "{raw}");
+    }
+
+    #[test]
+    fn get_sessions_pages_with_cursor_and_limit_query_parameters() {
+        // GET took no body and refused every query string, so a script
+        // could read only the first page of sessions.
+        assert_eq!(
+            paging_query("cursor=a%2Db+c&limit=2").unwrap(),
+            json!({"cursor": "a-b c", "limit": 2})
+        );
+        assert!(paging_query("limit=two").is_err());
+        assert!(paging_query("limit=1&limit=2").is_err());
+        assert!(paging_query("sessionId=x").is_err());
+        assert!(paging_query("cursor=%zz").is_err());
+        assert!(paging_query("cursor=%+1").is_err());
+        assert!(paging_query("cursor=%4").is_err());
+        let (api, _) = fixture();
+        let get = |target: &str| {
+            exchange(
+                api.port,
+                &format!(
+                    "GET {target} HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nAuthorization: Bearer {}\r\n\r\n",
+                    api.port, api.token
+                ),
+            )
+        };
+        let page = get("/api/v1/sessions?limit=1");
+        assert!(page.starts_with("HTTP/1.1 200"), "{page}");
+        let body: Value = serde_json::from_str(page.split_once("\r\n\r\n").unwrap().1).unwrap();
+        assert!(body["items"].as_array().unwrap().len() <= 1, "{body}");
+        assert!(get("/api/v1/status?verbose=1").starts_with("HTTP/1.1 400"));
+        assert!(get("/api/v1/sessions?limit=x").starts_with("HTTP/1.1 400"));
+    }
+
+    #[test]
     fn openapi_covers_every_method_and_docs_are_offline() {
         let (api, plane) = fixture();
         let (_, schema) = call(&api, "/openapi.json", None);
@@ -1298,6 +1605,22 @@ mod tests {
                     .find(|method| method["name"] == spec.name)
                     .unwrap()["inputSchema"]
             );
+        }
+        // Every operation documents its error responses with one body schema,
+        // and the document carries the app version, not a fixed 1.0.0.
+        assert_eq!(schema["info"]["version"], env!("CARGO_PKG_VERSION"));
+        assert!(schema["components"]["schemas"]["Error"].is_object());
+        for (path, operations) in schema["paths"].as_object().unwrap() {
+            for (verb, operation) in operations.as_object().unwrap() {
+                for status in ["401", "403", "404", "409", "429", "500", "503"] {
+                    assert_eq!(
+                        operation["responses"][status]["content"]["application/json"]["schema"]
+                            ["$ref"],
+                        "#/components/schemas/Error",
+                        "{verb} {path} {status}"
+                    );
+                }
+            }
         }
         // The cable status GET alias shares its path with the POST operation.
         let cable = &schema["paths"]["/api/v1/virtualCable/status"];

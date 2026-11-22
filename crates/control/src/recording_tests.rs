@@ -1579,11 +1579,15 @@ fn recorder_idempotency_replays_and_rejects_hash_conflicts() {
     let first_result = first.result.clone().unwrap();
     let replay = plane.dispatch_authorized(request(10), &grant);
     assert_eq!(replay.result.unwrap(), first_result);
-    let conflict = plane.dispatch_authorized(request(11), &grant);
+    let conflict = plane
+        .dispatch_authorized(request(11), &grant)
+        .error
+        .unwrap();
     assert_eq!(
-        conflict.error.unwrap().message,
-        "idempotency key is already used for a different request"
+        conflict.message,
+        "This idempotency key was already used for a different request; use a new key for a new request."
     );
+    assert_eq!(conflict.data.unwrap()["code"], "idempotencyConflict");
 }
 
 #[test]

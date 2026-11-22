@@ -231,13 +231,39 @@ durable save does not guarantee that every topology change can apply live.
 
 ## Errors and limits
 
-401: missing/wrong token; reveal the current one. 403: denied permission,
-foreign browser Origin or wrong Host. Use the displayed **127.0.0.1** address,
-not `localhost`; from another device use the Network URL. 409: stale revision; fetch and plan again.
-429: request budget exhausted; back off. 503: backend unavailable; reconnect
-in the app. 503 with `Retry-After: 1`: the adapter is busy (all workers and
-queue slots taken); retry after a second. A busy port prevents startup and says to choose another port.
-Backend errors retain `error.code`, `message` and structured `data`.
+Every error body is `{"error": {"code", "message", "data"}}`. Refusals the
+adapter answers itself (token, Host, body size, budget) carry only `message`
+and `data.code` (`unauthorized`, `permissionDenied`, `notFound`,
+`methodNotAllowed`, `payloadTooLarge`, `rateLimited`, `unavailable` or
+`invalidRequest`). `message` is plain text for a person and may change between versions; branch on the stable
+`error.data.code`, never on the text. The status follows that code:
+
+| Status | When |
+| --- | --- |
+| 400 | Malformed request, parameters the schema refuses, or another refusal such as `invalidGraph`, `invalidRequest` or `unsupportedFormat` |
+| 401 | `unauthorized`: missing or wrong token; reveal the current one |
+| 403 | `permissionDenied`/`clientRevoked`, Windows refusing a device (`accessDenied`), a window-only method, a network file or folder, a foreign browser Origin or a wrong Host. Use the displayed **127.0.0.1** address, not `localhost`; from another device use the Network URL |
+| 404 | `notFound` (no session with that ID, or an unknown plan), or an unknown operation path |
+| 409 | The current state refuses a valid request: `revisionConflict` (fetch and plan again), `idempotencyConflict` (a key reused for a different request; use a new key), `planExpired`, `planLimitReached`, `deviceInUse`/`exclusiveModeOnly` (another app holds the device), `nodeNotReady` (a node still needs a setting, such as its device) or `noUndoAvailable` |
+| 413 | Body larger than 4 MiB |
+| 429 | `rateLimited` or the adapter's request budget; wait for `Retry-After` (seconds) |
+| 500 | `internalError` |
+| 503 | `storageFailure`/`corruptDatabase`, `serviceUnavailable`/`deviceInvalidated` (Windows audio is restarting or a device went away; retry), or the backend is unavailable (reconnect in the app). With `Retry-After: 1`: the adapter is busy (all workers and queue slots taken); retry after a second |
+
+A busy port prevents startup and says to choose another port.
+
+`sessions.get`, `sessions.export`, `sessions.start`, `sessions.stop` and
+`routes.inspect` use the session open in AudioRouter when `sessionId` is
+omitted; `routes.inspect` also takes the destination node by exact name.
+`GET /api/v1/sessions` pages with `?cursor=...&limit=...` (pass the returned
+`nextCursor`); every other path refuses a query string.
+
+A file or folder parameter at any depth (for example a node's `path` inside a
+graph candidate) must be on this PC: a UNC path or mapped network drive is
+refused with 403 before the backend sees it, because opening one would offer
+your Windows credentials to that host. Choose network folders in the
+AudioRouter window. Named-pipe and MCP clients get the same refusal from the
+backend.
 
 Every request that reaches the backend gets a request ID, returned in the
 `X-Request-Id` response header (success and error alike). Send your own
@@ -256,8 +282,8 @@ limits additionally apply. Each listener waits for connections without
 polling. A connection that arrives while every worker is busy and the queue
 is full runs no operation: it gets `503 Service Unavailable` with
 `Retry-After: 1`, `Connection: close` and a JSON `error.message`, written
-within a 100 ms bound so a slow client cannot stall the listener. JSON must be an object; no HTTP batches, query parameters, chunked
-bodies, cookie auth or cross-origin browser calls. `Expect: 100-continue` is
+within a 100 ms bound so a slow client cannot stall the listener. JSON must be an object; no HTTP batches, query parameters (except
+paging on `GET /api/v1/sessions`), chunked bodies, cookie auth or cross-origin browser calls. `Expect: 100-continue` is
 accepted only after authentication and body-length checks.
 Swagger/docs assets are public local documentation; API data/control needs the
 token. No CDN or online validator is used.

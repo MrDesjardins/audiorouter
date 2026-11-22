@@ -1010,21 +1010,18 @@ impl ControlPlane {
         &self,
         params: Option<Value>,
     ) -> Result<Value, ControlError> {
-        let params = params.ok_or_else(|| {
-            ControlError::InvalidRequest("routes.inspect params are required".into())
-        })?;
-        let session_id: EntityId = serde_json::from_value(
-            params
-                .get("sessionId")
-                .cloned()
-                .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?,
-        )
-        .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))?;
-        let destination_node: EntityId =
-            serde_json::from_value(params.get("destinationNode").cloned().ok_or_else(|| {
-                ControlError::InvalidRequest("destinationNode is required".into())
-            })?)
-            .map_err(|_| ControlError::InvalidRequest("invalid destinationNode".into()))?;
+        // Task-method rules: the open session by default, and the node by
+        // its ID or exact name.
+        let params = self.with_open_session(params)?;
+        let session_id: EntityId = serde_json::from_value(params["sessionId"].clone())
+            .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))?;
+        let reference = params
+            .get("destinationNode")
+            .and_then(Value::as_str)
+            .filter(|reference| !reference.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("destinationNode is required".into()))?;
+        let session = self.get_session(&session_id)?;
+        let destination_node = crate::simple::resolve_node(session, reference)?.id.clone();
         self.inspect_routes(&session_id, &destination_node)
     }
 
