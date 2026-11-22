@@ -18,7 +18,7 @@ resumed by itself).
 | ab (RC3 0.2.4 against 0.2.5) | **FAIL by the pre-registered rule, confounded** (below) | `round2-ab-rows.jsonl` |
 | pool (A8, 60 min, 117 samples) | **PASS** | driver tags MNWR/MNTR/SyAu/AUDR flat at 524 KiB, 28 live allocations, growth 0 MiB/h; whole non-paged pool +6.98 MiB/h shown for comparison only; no bugcheck, no dump |
 | verifier | **guest froze at the start of fuzz round 1 on 0.2.5** | below |
-| live (update/remove under a route) | **not run** (never reached) | |
+| live (update/remove under a route) | **REVIEW** (run alone the next morning, below) | `night2\` |
 | pause | not requested (no `-WithHostPause`) | |
 
 ### ab
@@ -62,17 +62,35 @@ Preserved before power-off (the snapshot was not restored first): `freeze-202611
 VirtualBox ELF core of the frozen guest, `VBoxManage debugvm dumpvmcore`), `VBox.log*`, `frozen-screen.png`.
 The core has not been analysed. The VM was then powered off.
 
+### live (run alone, 2026-11-22 morning)
+
+`-Blocks live -AutoLogon` from a fresh restore of `02-test-signing-ready` (the snapshot's `artest` password again
+expired, changed to a run-only value; the first attempt with the night's password was rejected, so it was not reused).
+Raw files: `C:\VMs\ar-share\rc-0.2.5-r3\night2\` (`stage-a-round2-20261122-111750.zip`, `round2-state.json`).
+
+| Step | Result |
+| --- | --- |
+| install 0.2.5, status, quiet guest, driver identity (SYS SHA-256 D2C26DD92C00) | PASS |
+| update to 0.2.6 while a route plays (route `running` at 29 s before the call) | **REVIEW**: helper exit 5, `restartRequired: true`, `oem5.inf` removed, `oem6.inf` installed; route still `running` afterwards |
+| version after the update | PASS (0.2.6.0, status `restartRequired: false`) |
+| remove while a route plays | **REVIEW**: helper exit 5, `restartRequired: true`, `oem6.inf` removed, 0 AudioRouter devices left |
+| no bugcheck, no dump | PASS |
+
+So update and removal under a live route do not finish without a restart: the helper asks for one (exit 5) and the
+route survives until then. No crash and no bugcheck. Review item 3 stays **not verified** by the pass rule written
+before the run (exit 0 required); whether exit 5 with a surviving route is acceptable behavior is the owner's call.
+
 ## What this does to Stage A on 0.2.5
 
 Stage A on 0.2.5 is **not passed**: the A/B rule fails (confounded), the Verifier freeze reproduced, and the
-live update/remove under a route (review item 3) remains unverified. Pool (A8) passed.
+live update/remove under a route (review item 3) ended in REVIEW (helper exit 5, restart required, no crash). Pool (A8) passed.
 
 ## Next
 
 1. Analyse the core (`guest-core.elf`) with the debugger for the stuck threads; the Verifier freeze is the main
    open kernel question.
-2. Run `-Blocks live` alone from a restored snapshot (about 15 minutes).
+2. ~~Run `-Blocks live` alone~~ done 2026-11-22: REVIEW (exit 5 on update and remove). Decide whether that is acceptable.
 3. Owner decision on the frame-clock hunk (revert as a new RC above 0.2.6 with PDB kept, or a repeat A/B with a
    quieter design: fewer runs per boot, and a fresh restore between drivers).
 
-Not run: `live`, `pause`, Verifier fuzz round 2, the controlled restart under Verifier, VB-Cable ratio, A12.
+Not run: `pause`, Verifier fuzz round 2, the controlled restart under Verifier, VB-Cable ratio, A12.
