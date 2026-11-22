@@ -77,9 +77,15 @@ reconciling the later handoff against older open-work summaries first.
    [VST handoff](vst-handoff.md), then the
    [completion work plan](vst-completion-work.md) and
    [full compatibility](vst-full-compatibility.md).
-3. **Virtual cable (DEC-18, VCAB-24/25/27/28/30).** After the 2026-11-10 review
-   fixes, the next package is RC 0.2.5 and Stage A restarts on it; then Stage C
-   and the owner-run signing track. Plans: [virtual cable](virtual-cable.md),
+3. **Virtual cable (DEC-18, VCAB-24/25/27/28/30).** RC 0.2.5 is frozen
+   (commit `7c88895c2`, no driver change since) and Stage A ran on it on
+   2026-11-11/12, but **is not passed**: the 2026-11-21
+   [gap analysis](evidence/2026-11-21-virtual-cable-stage-a-0.2.5-gap-analysis.md)
+   lists what blocks it (frame-clock revert gate, unexplained render underruns,
+   unload with a live route, the post-fuzz guest freeze, tagged pool, A15
+   unexplained events). Next: a guest A/B wrapper, then one owner VM block; a
+   worse A/B means a new RC above 0.2.6. Then Stage C and the owner-run signing
+   track. Plans: [virtual cable](virtual-cable.md),
    [review fixes](virtual-cable-review-fixes.md) and the
    [agent handoff](virtual-cable-agent-handoff.md). Do not install the
    test-signed driver on the development PC.

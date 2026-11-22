@@ -614,3 +614,65 @@ remain for Stage C on native hardware.
 Stage A for 0.2.5 is therefore complete except VCAB-25 (VB-Cable not
 installed), A12 (attended), A8 pool growth and the 96 kHz sweep (REVIEW), and
 the post-fuzz guest freeze (dump `C:\VMs\ar-dump-a11.elf`, not analysed).
+
+**Superseded 2026-11-21 by the gap analysis below: Stage A on 0.2.5 is not
+passed.** The summary above left out gates this plan set for itself.
+
+## Stage A on 0.2.5: gap analysis and second VM round (2026-11-21)
+
+Objective: say exactly what Stage A on 0.2.5 still requires, then prepare it.
+Requirement IDs: VCAB-20/24/25/27/28, VDEV-09, SEC-08, NFR-02. Authority: host
+read-only analysis and documentation. No VM start, driver load, build,
+purchase or signing step is authorized by this section. Evidence and numbers:
+[gap analysis](evidence/2026-11-21-virtual-cable-stage-a-0.2.5-gap-analysis.md).
+
+Package frozen: driver 0.2.5.0, commit `7c88895c2`, SYS `D2C26DD9…`, CAT
+`12F48561…`, INF `AE3212D0…`; no driver commit since; **no PDB exists** for it.
+`infverif /rulever 25h2` is valid and no section is writable and executable.
+
+Open, in priority order (each blocks "Stage A on 0.2.5 passed"):
+
+1. **Item 6 revert gate undecided.** Bit-exact pass rate 1 of 11 on 0.2.5
+   against 5 of 10 on RC3 r10 (one-sided p≈0.055, inconclusive); driver late
+   and underrun counters were not recorded. Paired RC3/0.2.5 render A/B needed.
+2. **Render underruns of the 2026-11-11 traced run** (6,167 frames, zero late
+   packets) never explained; the packet diagnostic did not exercise render.
+3. **Item 3 not verified under its own condition**: the A13 update ran with no
+   cable route playing; `remove` once returned exit 5, cause unrecorded.
+4. **A11 post-fuzz freeze** (72,337 s heartbeat loss, no state change, no host
+   sleep event). The same signature exists in an RC3 Verifier hang on
+   2026-10-30, so it is not new, but its cause is unknown and the ELF core is
+   unread.
+5. **A8**: endpoints flat (134.12 to 133.85 MiB) with one 13 MiB excursion;
+   whole-system pool cannot attribute it; read the driver's four tags.
+6. **A15 30-minute run**: 4 unexplained events; the pre-purchase bar ("every
+   FAIL attributed") is not met.
+7. VB-Cable ratio (owner install) and A12 (attended): run or defer to Stage C by
+   recorded decision.
+
+Ordered tasks:
+
+1. [done 2026-11-21] Gap analysis, package identity, `infverif`, section scan.
+2. [open, agent, host] Guest wrapper for the paired render A/B and the tagged
+   pool sample; test it by parsing and by the existing host dry-run paths before
+   it goes to the owner. Do not hand over unrun guest code.
+3. [open, owner, VM] One batched, fail-fast block from `02-test-signing-ready`:
+   render A/B (3 pairs, alternating), update and remove with a route playing,
+   60 min tagged pool, Verifier fuzz twice with a controlled restart, a 90 s
+   `controlvm pause` and resume under a route (not a real sleep), VB-Cable and
+   A12 or their deferral.
+4. [decision] If the A/B shows 0.2.5 worse than RC3, or any block finds a kernel
+   defect: new RC, version above 0.2.6 (0.2.6 was installed in the VM and an
+   identical `DriverVer` does not bind), keep its PDB, restart Stage A.
+
+Verification: each block's results graded against the rules in the gap analysis
+section 5; nothing is called passed from a build or from counters alone.
+Rollback: documentation only; the VM returns to `02-test-signing-ready`, the
+RC3 share `rc-0.2.4-base` and the 0.2.5 share `rc-0.2.5` stay untouched.
+Risks: the VM remains a NEM guest, so a stall can still hide a real difference;
+the A/B is the best host-side-first design, not proof. Block 4 can still end in
+a new RC, and the pre-purchase decision gate (task 5 of
+[virtual-cable.md](virtual-cable.md)) stays closed until then.
+
+Next action: task 2, then ask the owner for the VM block when the call or game
+is over.

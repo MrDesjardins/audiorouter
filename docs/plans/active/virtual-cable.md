@@ -12,6 +12,13 @@ review fixes in [virtual-cable-review-fixes.md](virtual-cable-review-fixes.md)
 change kernel code; the next package is 0.2.5 and Stage A restarts on it.
 RC3 statements below remain history.
 
+**2026-11-21: Stage A ran on 0.2.5 (2026-11-11/12) and is not passed.** The
+package is frozen (commit `7c88895c2`, SYS `D2C26DD9…`, no PDB). Open gates and
+the second VM round are in the
+[gap analysis](evidence/2026-11-21-virtual-cable-stage-a-0.2.5-gap-analysis.md)
+and [review-fixes plan](virtual-cable-review-fixes.md#stage-a-on-025-gap-analysis-and-second-vm-round-2026-11-21).
+The pre-purchase task 4 and decision gate (task 5) run on 0.2.5 and stay open.
+
 - WP-09b portable capture-analysis and reporting code is in place; the required
   endpoint measurement matrix has not been run.
 - WP-10 host implementation is archived. The attended app gate needs the signed
