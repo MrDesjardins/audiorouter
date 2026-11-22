@@ -158,7 +158,8 @@ automatic reply the same day gave ticket **991393** (Cloudyne support system) an
 said responses take 3-5 business days but a large backlog is slowing them; no
 human answer yet. The owner also sent the pre-sales questions to SSL.com on
 2026-11-21 (eligibility, Hardware Dev Center acceptance, key storage, refund if
-enrollment is refused, eSigner after the trial, reissue, timing); no reply yet. If it accepts the driver, the driver costs $0 and avoids the
+enrollment is refused, eSigner after the trial, reissue, timing); SSL.com ticket
+**#159205994**; no reply yet. If it accepts the driver, the driver costs $0 and avoids the
 enrollment risk. Risks: eligibility mirrors SignPath's reputation test; a small
 volunteer-style service is a continuity and trust dependency (it would handle
 the CAB and the RC); the first release would be signed by OSSign's account, not
