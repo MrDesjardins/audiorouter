@@ -38,6 +38,12 @@
     `prepare_plugin_update` are no longer default assistant tools: they
     needed permissions no assistant could hold, so every call was refused.
     They remain with `--advanced-tools`.
+  - `sessions.start` (and `control_session action=start`) on a route that uses
+    audio devices which are not prepared now fails with `nodeNotReady` and says
+    to use Play. It used to report `running` while nothing played.
+  - HTTP calls get their own rate budget and idempotency scope, so a busy
+    controller no longer uses up the window's budget.
+  - A retried `undo_last_change` with a used key explains what happened.
 
 ## 0.0.31 — 2026-11-19 (unsigned experimental preview)
 

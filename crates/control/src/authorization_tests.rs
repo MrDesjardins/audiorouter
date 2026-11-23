@@ -34,7 +34,7 @@ fn mutation_rate_limiter_bounds_distinct_client_retention() {
 #[test]
 fn authenticated_dispatch_returns_rate_limit_metadata() {
     let mut plane = ControlPlane::default();
-    let original = session();
+    let original = session_without_devices();
     plane.insert_session(original).unwrap();
     let grant = ClientGrant::for_role(ClientRole::Operator);
     let request = || JsonRpcRequest {

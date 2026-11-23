@@ -637,7 +637,7 @@ fn start_http_api(
 fn http_forward(pipe: String) -> std::sync::Arc<http_api::Forward> {
     std::sync::Arc::new(move |request: &JsonRpcRequest, request_id: &str| {
         let started = std::time::Instant::now();
-        let response = forward_rpc_request_correlated(request, Some(request_id), &pipe);
+        let response = forward_rpc_request_from(request, Some(request_id), Some("http"), &pipe);
         log_shell_rpc_correlated(
             request,
             &response,
@@ -1407,9 +1407,22 @@ fn forward_rpc_request_correlated(
     request_id: Option<&str>,
     pipe_name: &str,
 ) -> Result<JsonRpcResponse, String> {
-    let frame = encode_frame(&audiorouter_protocol::diagnostics::CorrelatedRequest::new(
-        request, request_id,
-    ))
+    forward_rpc_request_from(request, request_id, None, pipe_name)
+}
+
+/// Like `forward_rpc_request_correlated`, naming the adapter (`"http"`) so
+/// the backend gives it its own rate budget and idempotency scope.
+fn forward_rpc_request_from(
+    request: &JsonRpcRequest,
+    request_id: Option<&str>,
+    adapter: Option<&str>,
+    pipe_name: &str,
+) -> Result<JsonRpcResponse, String> {
+    let correlated = audiorouter_protocol::diagnostics::CorrelatedRequest::new(request, request_id);
+    let frame = encode_frame(&match adapter {
+        Some(adapter) => correlated.from_adapter(adapter),
+        None => correlated,
+    })
     .map_err(|error| format!("request encoding failed: {error}"))?;
 
     #[cfg(windows)]

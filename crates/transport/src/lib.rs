@@ -2005,6 +2005,22 @@ fn serve_control_plane_frames(
     }
 }
 
+/// The identity a forwarded request is budgeted under. Only the hosting
+/// process may name an adapter (anything else keeps its own identity), and
+/// only known adapter names are accepted, so the suffix cannot be forged or
+/// grow without bound.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn adapter_client_id(
+    in_process: bool,
+    adapter: Option<&str>,
+    client_id: &str,
+) -> String {
+    match adapter {
+        Some("http") if in_process => format!("{client_id}/http"),
+        _ => client_id.to_owned(),
+    }
+}
+
 #[cfg(windows)]
 fn dispatch_control_frame(
     plane: &mut audiorouter_control::ControlPlane,
@@ -2044,7 +2060,15 @@ fn dispatch_control_frame(
                 // raw callers may discover the backend, but may never mutate it.
                 audiorouter_control::ClientGrant::read_only()
             };
-            (frame.to_vec(), client_id.to_owned(), caller_grant)
+            // The shell's HTTP adapter forwards with the window's grant and
+            // names itself, so a busy controller gets its own rate budget and
+            // idempotency scope instead of consuming the window's.
+            let identity = adapter_client_id(
+                client_pid == std::process::id(),
+                payload.get("adapter").and_then(serde_json::Value::as_str),
+                client_id,
+            );
+            (frame.to_vec(), identity, caller_grant)
         };
     let responses = plane
         .dispatch_frame_authorized_for_client(&frame, &identity, &caller_grant)
@@ -2202,6 +2226,15 @@ pub fn serve_control_connections_as_role(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_the_hosting_process_can_name_the_http_adapter() {
+        use super::adapter_client_id;
+        assert_eq!(adapter_client_id(true, Some("http"), "sid"), "sid/http");
+        assert_eq!(adapter_client_id(true, None, "sid"), "sid");
+        assert_eq!(adapter_client_id(true, Some("other"), "sid"), "sid");
+        assert_eq!(adapter_client_id(false, Some("http"), "sid"), "sid");
+    }
+
     use super::*;
     use audiorouter_control::{ClientGrant, ClientRole, ControlPlane};
     use audiorouter_protocol::encode_frame;
