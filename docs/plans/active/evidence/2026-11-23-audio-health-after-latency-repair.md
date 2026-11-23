@@ -56,17 +56,21 @@ frames each, so the pacing input and the others agree closely.
 
 1. **Stream start.** 33 underruns in the first minute of a run, one per output
    per Play. Expected and not counted above.
-2. **Stalls (26 underruns).** Two kinds:
-   - The microphone alone stopped delivering for 35–42 ms (seven minutes,
-     for example 2026-11-15 02:37 and 2026-11-23 00:42 UTC). The other
-     inputs and the audio thread were on time, so this is the mic device or
-     its driver. Nothing in the queue can cover a 40 ms hole without adding
-     that much latency all the time.
-   - Every input and the audio thread stopped together for 56–124 ms on
-     2026-11-22 between 00:45 and 01:09 UTC (2026-11-21 16:45–17:09 local).
-     That is the whole PC not running the thread. No commit, checkout or
-     build output in this repository falls in that window (reflog and
-     `target/` timestamps), so the cause is outside AudioRouter's evidence.
+2. **Stalls (26 underruns in 11 minutes).** Three kinds:
+   - The microphone alone stopped delivering for 35–42 ms: 10 underruns in
+     5 minutes (2026-11-15 02:37, 11-16 02:39, 11-20 00:37, 11-22 00:41 and
+     11-23 00:42 UTC). The other inputs and the audio thread were on time,
+     so this is the mic device or its driver. Nothing in the queue can cover
+     a 40 ms hole without adding that much latency all the time.
+   - The audio thread alone ran late by 11–21 ms: 5 underruns in 3 minutes
+     (11-13 03:47, 11-14 22:10, 11-22 22:08 UTC). The PC was busy at that
+     moment.
+   - Every input and the audio thread stopped together for 56–124 ms: 11
+     underruns in 3 minutes on 2026-11-22 between 00:45 and 01:09 UTC
+     (2026-11-21 16:45–17:09 local). That is the whole PC not running the
+     thread. No commit, checkout or build output in the main checkout falls
+     in that window (reflog and `target/` timestamps); worktrees under
+     `.worktrees/` were not checked, so the cause is not established.
 3. **The 10 ms cushion on `voice-to-cable-a` (20 underruns).** Underruns
    outside stalls, by the cushion (`targetMs`) in force when they happened:
 

@@ -72,8 +72,11 @@ were read; each failure is classified from its retained log:
 | shell `chosen_save_destination_is_approved_and_exported_through_the_real_pipe` | 1 (run 45122522886) | product (Q4.2) | Branch `fix/pipe-guard-claim-race`: a client could take the backend's guard pipe instance before the server claimed it, so the server never started. Transport regression added. |
 | `LogFilesPanel` "switches verbose logging and counts down the hour" | 1 (nightly 45017043920 coverage, 5 s timeout) | unknown | Not reproduced: the file passed 5 times alone with coverage and in a full local coverage run (1,166 tests). Not changed on a guess; watch the next nightlies. |
 
-Other recent failures were branch work fixed before merge (CLI parity,
-`cargo-deny`, the Dependabot xyflow 13 PR's own run) and are not open.
+The other recent failures were on branches and were fixed before merge:
+CLI parity and `cargo-deny`. The Dependabot xyflow 13 PR (#178) failed its
+first run (release build and five App tests). Its four later runs passed
+before the owner merged it by hand (auto-merge skipped it), so none of these
+failures is still open.
 
 Open for delivery: the two repair branches above (owner PR approval); Q4
 items 1–7 beyond the storage and guard-pipe slices; Q5; Q6 on each release.

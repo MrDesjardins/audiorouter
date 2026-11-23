@@ -19,7 +19,7 @@ retained without dependency or code changes in this build-only task. No live
 audio or plugin processing was exercised. No source changes or release/driver
 qualification claimed. Next: owner tests this executable with their routes.
 
-`main` is at `8f42bf8de` (PR #151, global-only keyboard shortcuts). The November 6–16 work
+`main` is at `ba34371ad` (2026-11-23, after #170–#180). The November 6–16 work
 streams are merged: release-readiness repairs (#155–#159), the three-day code
 review (#158), device-binding recovery (#154), theme-editor preview (#153), the
 VST plugin experience (#152), live-parameter autosave (#150), the resilience

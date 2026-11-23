@@ -51,9 +51,18 @@ const startsRun = (previous, record) =>
   previous.processId !== record.processId ||
   passes(record) < passes(previous) ||
   record.timeUnixMs - previous.timeUnixMs > 5 * 60_000;
-const stalled = (record) =>
-  Math.max(0, ...inputs(record).map((input) => input.maxPacketGapMs ?? 0)) > STALL_INPUT_GAP_MS ||
-  (record.plane?.audioThread?.intervalMaxGapMs ?? 0) > STALL_THREAD_GAP_MS;
+// The kind of stall a minute shows, or null: the whole PC (the thread late
+// and three or more inputs gapped), the audio thread alone, or named inputs.
+const stallKind = (record) => {
+  const threadLate = (record.plane?.audioThread?.intervalMaxGapMs ?? 0) > STALL_THREAD_GAP_MS;
+  const gapped = inputs(record)
+    .filter((input) => (input.maxPacketGapMs ?? 0) > STALL_INPUT_GAP_MS)
+    .map((input) => input.nodeId);
+  if (threadLate && gapped.length >= 3) return "whole PC";
+  if (threadLate) return "audio thread late";
+  return gapped.length > 0 ? `input ${gapped.join(" + ")}` : null;
+};
+const stalled = (record) => stallKind(record) !== null;
 
 console.log(`${records.length} records, ${utc(records[0].timeUnixMs)} to ${utc(records.at(-1).timeUnixMs)} UTC`);
 console.log(`versions: ${[...new Set(records.map((record) => record.version))].join(", ")}`);
@@ -68,11 +77,25 @@ for (const [label, subset] of [
   const perInput = new Map();
   const perCushion = new Map();
   const threadGaps = [];
+  const stallKinds = new Map();
   let startupUnderruns = 0;
   let previous = null;
   for (const record of subset) {
     const fresh = startsRun(previous, record);
     const stall = stalled(record);
+    if (stall && !fresh) {
+      const underruns = outputs(record).reduce((sum, output) => {
+        const before = outputs(previous).find((candidate) => candidate.nodeId === output.nodeId);
+        return sum + (before ? Math.max(0, (output.underruns ?? 0) - (before.underruns ?? 0)) : 0);
+      }, 0);
+      if (underruns > 0) {
+        const kind = stallKind(record);
+        const entry = stallKinds.get(kind) ?? { minutes: [], underruns: 0 };
+        stallKinds.set(kind, entry);
+        entry.minutes.push(utc(record.timeUnixMs));
+        entry.underruns += underruns;
+      }
+    }
     const gap = record.plane?.audioThread?.intervalMaxGapMs;
     if (gap != null) threadGaps.push(gap);
     for (const output of outputs(record)) {
@@ -140,6 +163,12 @@ for (const [label, subset] of [
   console.log(
     `audio thread intervalMaxGapMs p50 ${percentile(threadGaps, 50)} p99 ${percentile(threadGaps, 99)} max ${percentile(threadGaps, 100)}`,
   );
+  if (stallKinds.size > 0) {
+    console.log("underruns during stalls, by kind (minutes in UTC):");
+    for (const [kind, entry] of stallKinds) {
+      console.log(`  ${kind}: ${entry.underruns} in ${entry.minutes.length} min (${entry.minutes.join(", ")})`);
+    }
+  }
   if (perCushion.size > 0) {
     console.log("underruns without a stall, by the cushion (targetMs) in force:");
     for (const [key, cushion] of [...perCushion].sort()) {
