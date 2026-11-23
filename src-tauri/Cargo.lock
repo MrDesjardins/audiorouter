@@ -1684,7 +1684,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.62.2",
+ "windows-core 0.61.2",
 ]
 
 [[package]]
@@ -1899,9 +1899,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ab1baf72f08796de0260609515130699b890ac25f30e610ad894bc5856cafdb"
 dependencies = [
  "defmt",
- "jiff-core",
- "jiff-static",
+ "jiff-core 0.1.1",
+ "jiff-static 0.2.37",
  "jiff-tzdb-platform",
+ "log",
+ "portable-atomic",
+ "portable-atomic-util",
+ "serde_core",
+ "windows-link 0.2.1",
+]
+
+[[package]]
+name = "jiff"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5e77cbfb9fff4798e283c2d69dff39fc2c45e7da017e5ce95b654e46ea41236"
+dependencies = [
+ "jiff-core 1.0.1",
+ "jiff-static 1.0.2",
  "log",
  "portable-atomic",
  "portable-atomic-util",
@@ -1920,15 +1935,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "jiff-core"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6b46a105a9874634dd96231021526bf24ca04955a5998c59a9c7666e634b7b8"
+dependencies = [
+ "log",
+]
+
+[[package]]
 name = "jiff-static"
 version = "0.2.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "378268a1116ad67ae6228701118ac9f491d78fda38a40a1f1a9e1348de6f7212"
 dependencies = [
- "jiff-core",
+ "jiff-core 0.1.1",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "jiff-static"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9067a0b23e5be3147d56b2dcf652b18e6b1364caca93fb157653b6fbcab23a9"
+dependencies = [
+ "jiff-core 1.0.1",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -3213,7 +3249,7 @@ dependencies = [
  "hex",
  "indexmap 1.9.3",
  "indexmap 2.14.2",
- "jiff",
+ "jiff 0.2.37",
  "schemars 0.9.0",
  "schemars 1.2.2",
  "serde_core",
@@ -4191,11 +4227,11 @@ dependencies = [
 
 [[package]]
 name = "trash"
-version = "5.3.0"
+version = "5.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e13ed7a76ae8b9053f33493745ebb4cd2e5ee1cccd9823bb96ec97b78ec4844"
+checksum = "7363f9516b65bd2e855f4e6c3338b1a98efc2773c25349c958908897e1170ded"
 dependencies = [
- "chrono",
+ "jiff 1.0.2",
  "libc",
  "log",
  "objc2",
@@ -5226,9 +5262,9 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "9.5.1"
+version = "9.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3476fd497ac8af5b1ec7b51acab7bef380f7e8dd8e0487595bafd839417a302"
+checksum = "721c8158b9503b2660291ad3056a20f722deaeed21bb908a9a363d7e17b34f0e"
 dependencies = [
  "constant_time_eq",
  "crc32fast",
