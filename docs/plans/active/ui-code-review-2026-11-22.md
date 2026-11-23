@@ -281,6 +281,47 @@ This does **not** qualify owned-backend save/restart persistence or native audio
 
 ## Next task, risks and rollback
 
+### PR #176 CI follow-up
+
+Verified on Windows, 2026-11-22: the compiled fixture reproduced the exact
+327.78125/348.78125 height mismatch before the fix. Both localized normal
+messages now share a grid cell and contribute to its reserved height; the
+inactive message is hidden visually and from accessibility APIs. This avoids
+a fixed English-only height (UI-17).
+
+Validation: `npm --prefix ui run format`, `lint`, `typecheck:all`, and
+`format:check` passed; the focused `uiReviewRegressions.test.tsx` suite passed
+16 tests. Rebuilt the browser acceptance bundle and ran `instrument-editor.pw.ts`
+plus `ui-review-repairs.pw.ts` through `playwright.ci.config.ts`: 18 passed,
+including stopped/playing height equality at 1500 and 640 px in dark, light,
+and high-contrast. Inspected all three Instrument screenshots under
+`target/ui-quality-review/instrument/` (no clipping or overlap).
+
+Refreshed the silent portrait Instrument Properties overview and generated
+guide page. Property coverage passed (258 properties); all 204 videos passed
+format/size/duration checks; stock Firefox passed Instrument overview and
+shared-flags playback (`target/tool-guide-firefox-results.json`). Read both
+annotations on head 857262913: check runs 137479134501 and 137482966531 only
+report the failed browser shard and consequent quality gate. Neither contains
+an additional diagnostic. Build chunk-size and runner color advisories retain
+the documented disposition above; no new warning was suppressed.
+
+No native audio or desktop executable was exercised for this CSS/status
+repair. The native qualification limitations above remain open. Next: commit
+and push the focused follow-up to PR #176, then let hosted checks verify it.
+
+Owner requested repair of PR #176. Edge shard 2/4 failed consistently in
+`instrument-editor.pw.ts` (including its retry): stopped editor height
+327.78125 px, playing height 348.78125 px. The updated playing guidance is
+longer than the 2.6rem status minimum (UI-17). No review comments were present.
+Plan: reproduce with compiled CI assets; overlay normal status messages in
+a shared sizing grid so the longest localized guidance reserves space;
+strengthen the stopped/running browser regression across all themes and
+narrow widths; run owning unit/browser and UI formatting/type/lint checks,
+refresh the affected guide, inspect annotations and push. Rollback: revert
+only this follow-up; MIDI, API and storage behavior stay unchanged. Existing
+native/attended limitations below remain open.
+
 Implementation of R1-R7 is repaired and locally verified within the scopes
 above. Leave this plan active for the remaining owned-backend packaged
 save/restart check after the owner closes the running app. Live instrument,

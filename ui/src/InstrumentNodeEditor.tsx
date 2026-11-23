@@ -215,11 +215,21 @@ export function InstrumentNodeEditor({
         </button>
       </div>
       <div className="instrument-status">
-        {message ? (
-          <PanelMessage message={message} small />
-        ) : (
-          <small className="muted">{running ? tr("g3Instrument.holdKey") : tr("g3Instrument.pressPlay")}</small>
-        )}
+        <small
+          className="muted instrument-status-guide"
+          aria-hidden={Boolean(message) || !running}
+          style={{ visibility: !message && running ? "visible" : "hidden" }}
+        >
+          {tr("g3Instrument.holdKey")}
+        </small>
+        <small
+          className="muted instrument-status-guide"
+          aria-hidden={Boolean(message) || running}
+          style={{ visibility: !message && !running ? "visible" : "hidden" }}
+        >
+          {tr("g3Instrument.pressPlay")}
+        </small>
+        {message ? <PanelMessage message={message} small /> : null}
       </div>
     </div>
   );
