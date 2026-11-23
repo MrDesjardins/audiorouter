@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { LogFilesPanel } from "./LogFilesPanel";
 
 afterEach(() => {
@@ -69,7 +69,7 @@ it("saves a support bundle with the client diagnostics through the shell", async
 });
 
 it("switches verbose logging and counts down the hour in a fixed-size status", async () => {
-  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.useFakeTimers();
   try {
     desktop();
     const get = vi
@@ -80,20 +80,30 @@ it("switches verbose logging and counts down the hour in a fixed-size status", a
         ? { enabled: true, expiresAtUnixMs: Date.now() + 3_600_000, remainingSeconds: 3600, maxSeconds: 3600 }
         : { enabled: false, expiresAtUnixMs: null, remainingSeconds: 0, maxSeconds: 3600 },
     );
-    render(<LogFilesPanel verbose={{ get, set }} />);
+    await act(async () => {
+      render(<LogFilesPanel verbose={{ get, set }} />);
+    });
     const status = screen.getByRole("status", { name: "Verbose logging status" });
-    await waitFor(() => expect(status.textContent).toBe("Off"));
+    expect(status.textContent).toBe("Off");
     const toggle = screen.getByRole("checkbox", { name: "Verbose logging" }) as HTMLInputElement;
-    fireEvent.click(toggle);
-    await waitFor(() => expect(status.textContent).toBe("On · 60:00 left"));
+    await act(async () => {
+      fireEvent.click(toggle);
+    });
+    expect(status.textContent).toBe("On · 60:00 left");
     expect(set).toHaveBeenCalledWith(true);
     expect(toggle.checked).toBe(true);
-    await vi.advanceTimersByTimeAsync(61_000);
+    vi.setSystemTime(Date.now() + 60_000);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
     expect(status.textContent).toMatch(/^On · (58:59|59:00) left$/);
     // The same element stays in place; only its text changes.
     expect(screen.getByRole("status", { name: "Verbose logging status" })).toBe(status);
-    await vi.advanceTimersByTimeAsync(3_600_000);
-    await waitFor(() => expect(status.textContent).toBe("Off"));
+    vi.setSystemTime(Date.now() + 3_600_000);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(status.textContent).toBe("Off");
     expect(toggle.checked).toBe(false);
   } finally {
     vi.useRealTimers();

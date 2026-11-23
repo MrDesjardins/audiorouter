@@ -26,6 +26,8 @@ const injected = globalThis as {
   __routeFixtureSessions?: Session[];
   __routeFixtureTelemetry?: unknown[];
   __routeFixtureRunning?: boolean;
+  /** Mutable external playback facts for source-control reconciliation tests. */
+  __routeFixtureSourceStates?: Record<string, "playing" | "paused" | "stopped">;
   __routeFixtureActiveSessionIds?: string[];
   __routeFixturePrivacyMuted?: boolean;
   __routeFixtureRecordings?: unknown[];
@@ -545,8 +547,16 @@ const previewBackend: UiBackend = {
     if (action === "play") sourceStates.set(nodeId, "playing");
     if (action === "pause") sourceStates.set(nodeId, "paused");
     if (action === "stop") sourceStates.set(nodeId, "stopped");
-    sequence += 1;
-    return { sessionId, nodeId, state: sourceStates.get(nodeId) ?? "stopped", loop: false };
+    if (action !== "status") {
+      if (injected.__routeFixtureSourceStates) injected.__routeFixtureSourceStates[nodeId] = sourceStates.get(nodeId)!;
+      sequence += 1;
+    }
+    return {
+      sessionId,
+      nodeId,
+      state: injected.__routeFixtureSourceStates?.[nodeId] ?? sourceStates.get(nodeId) ?? "stopped",
+      loop: false,
+    };
   },
   // Offline MIDI: one fake keyboard, and notes are only recorded for the e2e to read back.
   async midiDevices() {
@@ -556,6 +566,8 @@ const previewBackend: UiBackend = {
     if (!running || sessionId !== committed.id) throw new Error("Fixture route is stopped");
     const sent = ((window as unknown as { __routeFixtureMidi?: unknown[] }).__routeFixtureMidi ??= []);
     sent.push(...events);
+    const calls = ((window as unknown as { __routeFixtureMidiCalls?: unknown[] }).__routeFixtureMidiCalls ??= []);
+    calls.push({ sessionId, nodeId, events });
     return { sessionId, nodeId, accepted: events.length, scheduled: 0, heldNotes: 1 };
   },
   // The offline harness has no worker to recover, so Retry always stays silenced.

@@ -63,6 +63,7 @@ export function InstrumentNodeEditor({
   const [devices, setDevices] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const held = useRef(new Set<number>());
+  const requestTail = useRef<Promise<unknown> | null>(null);
   const saved = typeof node.parameters.midiInput === "string" ? node.parameters.midiInput : INSTRUMENT_KEYBOARD_ONLY;
   const midiInput = saved === "" ? INSTRUMENT_KEYBOARD_ONLY : saved;
   const canPlay = running && !disabled && Boolean(backend.midiSendEvents);
@@ -80,29 +81,47 @@ export function InstrumentNodeEditor({
     loadDevices();
   }, [backend.connected]);
 
-  const send = async (events: Parameters<NonNullable<UiBackend["midiSendEvents"]>>[2]) => {
-    if (!backend.midiSendEvents) return;
+  const sendTo = async (
+    target: UiBackend,
+    targetSession: string,
+    targetNode: string,
+    events: Parameters<NonNullable<UiBackend["midiSendEvents"]>>[2],
+  ) => {
+    const sendEvents = target.midiSendEvents;
+    if (!sendEvents) return;
+    const previous = requestTail.current;
+    const invoke = () => sendEvents.call(target, targetSession, targetNode, events);
+    const request = previous ? previous.catch(() => undefined).then(invoke) : invoke();
+    requestTail.current = request;
     try {
-      await backend.midiSendEvents(sessionId, node.id, events);
+      await request;
       setMessage(null);
     } catch (error) {
       setMessage(formatUiError(error, tr("g3Instrument.sendFail")));
+    } finally {
+      if (requestTail.current === request) requestTail.current = null;
     }
   };
+  const send = (events: Parameters<NonNullable<UiBackend["midiSendEvents"]>>[2]) =>
+    sendTo(backend, sessionId, node.id, events);
   const release = (note: number) => {
     if (!held.current.delete(note)) return;
     void send([{ type: "noteOff", note }]);
   };
-  const releaseAll = useEffectEvent(() => {
+  const releaseAll = useEffectEvent((target: UiBackend, targetSession: string, targetNode: string) => {
     if (held.current.size === 0) return;
     held.current.clear();
-    void send([{ type: "allNotesOff" }]);
+    void sendTo(target, targetSession, targetNode, [{ type: "allNotesOff" }]);
   });
-  // Leaving the panel, or the route stopping, must not leave a note ringing.
-  useEffect(() => () => releaseAll(), []);
+  // Cleanup names the original target, even if the component is reused for another instrument.
   useEffect(() => {
-    if (!canPlay) held.current.clear();
-  }, [canPlay]);
+    const silence = () => releaseAll(backend, sessionId, node.id);
+    window.addEventListener("blur", silence);
+    return () => {
+      window.removeEventListener("blur", silence);
+      silence();
+    };
+  }, [backend, sessionId, node.id, canPlay]);
 
   const press = (note: number) => {
     if (!canPlay || held.current.has(note)) return;
@@ -160,6 +179,24 @@ export function InstrumentNodeEditor({
             onPointerUp={() => release(key.note)}
             onPointerCancel={() => release(key.note)}
             onLostPointerCapture={() => release(key.note)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              if (!event.repeat) press(key.note);
+            }}
+            onKeyUp={(event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              release(key.note);
+            }}
+            onBlur={() => release(key.note)}
+            onClick={(event) => {
+              // Assistive technology can activate a button without key/pointer events.
+              if (event.detail === 0 && !held.current.has(key.note)) {
+                press(key.note);
+                release(key.note);
+              }
+            }}
           />
         ))}
       </div>
