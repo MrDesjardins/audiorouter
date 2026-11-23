@@ -51,6 +51,23 @@ if preparation fails. Never replace published assets in place.
 
 ## Execution and next action
 
+### Authorized consolidation (2026-11-23)
+
+The owner selected consolidation of the verified pipe-guard fix
+`d4290f8d8`, keybinding-delete recovery `eb759a522`, and latency/quality
+documentation `3936293bc` (including `3774f43aa`) into PR #181.
+Requirements: ENG-02, NFR-15, UI-10/11/17/29 and the existing Q3.2 evidence.
+Plan: merge the branches preserving ancestry; immediately check transport
+compilation and UI types; resolve only documentation overlaps; run transport
+regressions, keybinding component/browser checks and lint/format, docs/summary
+checks and strict Clippy; inspect the combined diff. Commit clean inputs,
+rebuild app-only artifacts into a new candidate directory, verify and smoke
+the exact shell with isolated profiles, update PR #181 and monitor CI.
+No live endpoint, driver, signing or publication action is authorized.
+Rollback: revert the consolidation merges and any integration fix without
+discarding the original branches. Preserve them until the release PR reaches
+main, then use the prescribed merged-worktree cleanup mechanism.
+
 ### PR #181 CI repair and branch reconciliation (2026-11-23)
 
 Observed head `c8f6fbe90`: mergeable, no unresolved review threads, dependency
