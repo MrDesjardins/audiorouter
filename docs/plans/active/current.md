@@ -129,6 +129,11 @@ them.
 
 ## Active plan index
 
+Owner-tested local build and next prerelease (2026-11-22):
+[0.0.32 candidate preparation](release-0.0.32.md). Build in an isolated
+worktree while the owner's app remains running; publication is a separate
+human action. No driver or signing scope change.
+
 Owner-requested UI-only code review (2026-11-22):
 [review findings and evidence](ui-code-review-2026-11-22.md).
 Reviewed latest main `c6f59c195`; seven reproduced findings, including Sound

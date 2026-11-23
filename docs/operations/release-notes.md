@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.0.32 — 2026-11-22 (unsigned experimental preview)
+
+- **Sound Check keeps Stop available until recording is stopped.** Failed
+  status reads or stop requests leave a retry path, and navigating away still
+  enforces the ten-second stop.
+- **Instrument playback and held notes.** An instrument can play directly
+  into an output without an input device. Held notes release on their original
+  instrument when you switch tools or sessions, including keyboard holds.
+- **Playback controls follow external changes.** File, tone and Soundboard
+  status refreshes after another controller starts or stops playback; delayed
+  replies no longer overwrite a newer command.
+- **Plugin controls follow the selected plugin.** Programs, preset paths and
+  sidechain results reset when switching plugins, and old replies are ignored.
+- **Security dependency update.** Updated `url` to 2.5.9 for
+  RUSTSEC-2026-0592, plus Rust and UI dependency updates.
+
 - **Assistants and scripts can no longer make AudioRouter open a network
   share.** A UNC path or network drive in any file or folder setting is
   refused for every client except the AudioRouter window, so a misled
