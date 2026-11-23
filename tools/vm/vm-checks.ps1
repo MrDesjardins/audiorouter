@@ -27,7 +27,9 @@
                   New endpoint IDs are expected (17 VCAB-05)
     repair        A13: helper repair with driver-next\ (same version reinstalled)
     verifier-on   enable Driver Verifier for audioroutervirtual.sys (then reboot)
+    verifier-ms-on enable Driver Verifier for Microsoft's ks.sys and portcls.sys only (control run; then reboot)
     fuzz          30-minute IOCTL fuzz (run with Driver Verifier on) (A10, A11)
+    fuzz-plain    the same fuzz with Driver Verifier NOT watching audioroutervirtual.sys (control run)
     verifier-off  disable Driver Verifier (then reboot)
     remove        uninstall with the helper
     collect       zip C:\ar\evidence for the developer
@@ -40,11 +42,13 @@
 param(
     [Parameter(Mandatory = $true)]
     [ValidateSet('preflight', 'smoke', 'install', 'status', 'tone', 'tone-stall', 'tone-8ch', 'cables', 'rename',
-        'update', 'update-verify', 'repair', 'verifier-on', 'fuzz', 'verifier-off', 'remove', 'collect')]
+        'update', 'update-verify', 'repair', 'verifier-on', 'verifier-ms-on', 'fuzz', 'fuzz-plain', 'verifier-off', 'remove', 'collect')]
     [string] $Step,
     [int] $FuzzSeconds = 1800,
     [ValidateRange(1, 3600)][int] $ToneSeconds = 600,
-    [switch] $TraceScheduling
+    [switch] $TraceScheduling,
+    # Package folder under the bundle for preflight/install (round 2 installs RC3 as 'driver-rc3').
+    [ValidateSet('driver', 'driver-rc3')][string] $PackageName = 'driver'
 )
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
@@ -63,7 +67,7 @@ if ($TraceScheduling -and ($Step -ne 'tone' -or $ToneSeconds -notin @(30,300))) 
     throw 'Scheduling trace requires the tone step for 30 or 300 seconds.'
 }
 
-$package = Join-Path $root 'driver'
+$package = Join-Path $root $PackageName
 # A13: the same source built as version N+1 (prepare-vm-share.ps1 -NextVersion).
 $nextPackage = Join-Path $root 'driver-next'
 $formatTool = Join-Path $root 'tools\m03_cable_format.exe'
@@ -368,6 +372,20 @@ try {
         'verifier-on' {
             & verifier /standard /driver audioroutervirtual.sys | Set-Content (Join-Path $evidence 'verifier.txt')
             Check 'Driver Verifier configured' ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 2) 'Reboot the VM now (Restart-Computer).'
+        }
+        'verifier-ms-on' {
+            & verifier /standard /driver ks.sys portcls.sys | Set-Content (Join-Path $evidence 'verifier.txt')
+            Check 'Driver Verifier configured for ks.sys and portcls.sys' ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 2) 'Reboot the VM now (Restart-Computer).'
+        }
+        'fuzz-plain' {
+            $verifier = (& verifier /querysettings) -join "`n"
+            $verifier | Set-Content -LiteralPath (Join-Path $evidence 'verifier-settings.txt') -Encoding UTF8
+            Check 'Driver Verifier is NOT watching audioroutervirtual.sys' ($verifier -notmatch 'audioroutervirtual.sys')
+            $text = & $fuzzer --seconds $FuzzSeconds 2>&1 | Out-String
+            $code = $LASTEXITCODE
+            $text | Set-Content -LiteralPath (Join-Path $evidence 'fuzz.txt') -Encoding UTF8
+            Write-Host ($text -split "`n" | Select-Object -Last 3)
+            Check "IOCTL fuzz $FuzzSeconds s without Verifier on the driver: no crash, no unexpected result" ($code -eq 0)
         }
         'fuzz' {
             $verifier = (& verifier /querysettings) -join "`n"
