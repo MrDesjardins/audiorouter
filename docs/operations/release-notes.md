@@ -25,6 +25,19 @@
     `destinationNode`), and `start_recording`/`stop_recording` take `node`
     (was `nodeId`).
   - `GET /api/v1/sessions` accepts `cursor` and `limit`.
+  - `clients.authorize` and `clients.revoke` are window-only over HTTP
+    (403). A client can no longer revoke its own access.
+  - New assistant tool `get_obs_status` reads the OBS connection.
+  - Reading saved recordings, live recorders and the remembered plugin scan
+    (`recordings.list`, `recordings.get`, `recorders.list`, `plugins.list`,
+    `plugins.inventory`) now needs only `read`, so any assistant can use
+    `list_recordings`, `get_recording`, `list_live_recorders` and
+    `list_plugins`.
+  - `start_recording`, `stop_recording`, `set_recording_metadata`,
+    `rename_recording`, `list_plugin_buses`, `list_plugin_programs` and
+    `prepare_plugin_update` are no longer default assistant tools: they
+    needed permissions no assistant could hold, so every call was refused.
+    They remain with `--advanced-tools`.
 
 ## 0.0.31 — 2026-11-19 (unsigned experimental preview)
 

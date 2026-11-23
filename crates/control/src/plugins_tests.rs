@@ -1540,7 +1540,7 @@ fn plugin_scan_is_read_only_and_keeps_invalid_candidates_visible() {
             method: "plugins.list".into(),
             params: Some(json!({ "directory": root.to_string_lossy() })),
         },
-        &ClientGrant::with_scopes([PermissionScope::PluginScan]),
+        &ClientGrant::read_only(),
     );
     assert_eq!(listed.result.unwrap(), result);
     let retry_request = JsonRpcRequest {

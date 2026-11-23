@@ -1089,7 +1089,7 @@ pub const API_METHODS: [ApiMethodSpec; 156] = [
     },
     ApiMethodSpec {
         name: "recordings.list",
-        permission: PermissionScope::Record,
+        permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
     },
     ApiMethodSpec {
@@ -1164,7 +1164,7 @@ pub const API_METHODS: [ApiMethodSpec; 156] = [
     },
     ApiMethodSpec {
         name: "recorders.list",
-        permission: PermissionScope::Record,
+        permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
     },
     ApiMethodSpec {
@@ -1240,7 +1240,7 @@ pub const API_METHODS: [ApiMethodSpec; 156] = [
     },
     ApiMethodSpec {
         name: "recordings.get",
-        permission: PermissionScope::Record,
+        permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
     },
     ApiMethodSpec {
@@ -1400,12 +1400,12 @@ pub const API_METHODS: [ApiMethodSpec; 156] = [
     },
     ApiMethodSpec {
         name: "plugins.list",
-        permission: PermissionScope::PluginScan,
+        permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
     },
     ApiMethodSpec {
         name: "plugins.inventory",
-        permission: PermissionScope::PluginScan,
+        permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
     },
     ApiMethodSpec {

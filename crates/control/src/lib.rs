@@ -904,6 +904,30 @@ impl ControlPlane {
                 return response;
             }
         }
+        // A client must never cut off its own access: that would lock the
+        // owner's window out at the next launch.
+        if request.method == "clients.revoke"
+            && client_id.is_some_and(|caller| {
+                request
+                    .params
+                    .as_ref()
+                    .and_then(|params| params.get("clientId"))
+                    .and_then(Value::as_str)
+                    == Some(caller)
+            })
+        {
+            let mut response = JsonRpcResponse::failure(
+                id,
+                -32001,
+                "A client cannot revoke its own access. Remove it from another client or the AudioRouter window.",
+            );
+            if let Some(error) = response.error.as_mut() {
+                let mut data = application_error_data("permissionDenied");
+                data["fieldPath"] = json!("/clientId");
+                error.data = Some(data);
+            }
+            return response;
+        }
         if matches!(request.method.as_str(), "session.start" | "sessions.start")
             && request
                 .params

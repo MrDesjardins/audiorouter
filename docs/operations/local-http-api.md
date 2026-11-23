@@ -62,9 +62,9 @@ permission, like `nativePaths.prepare`.
 
 AI assistants use the same operations through MCP: `get_recipes`,
 `get_session_summary`, `add_tool`, `change_settings`, `toggle_setting`,
-`connect_nodes`, `play`, `toggle_mic_mute`, `start_recording`,
+`connect_nodes`, `play`, `toggle_mic_mute`, `list_recordings`,
 `trigger_sound`, `control_audio_file`, `undo_last_change` and others.
-They take names and generate the idempotency key automatically.
+They take names and generate the idempotency key automatically. Assistants (Observer, Editor, Operator) cannot start Play or recording or inspect plugin buses: those use permissions only the window and this REST API hold. Assistants can read saved recordings, live recorders and the remembered plugin scan.
 
 `soundboard.trigger`, `soundboard.stop`, `soundboard.status`,
 `audioSources.transport`, `timeShift.transport`, `meters.reset` and
@@ -182,12 +182,18 @@ for example `graph.plan` → `POST /api/v1/graph/plan`. Send its discovery-defin
 parameters as a plain JSON object and receive the plain result, without a
 JSON-RPC envelope. Use `Content-Type: application/json` and
 `Authorization: Bearer <token>` for API calls. The generated `/openapi.json`
-contains exact schemas for 119 of the 121 backend methods, four GET aliases,
-and the active session PUT alias. Two methods are exceptions, because they are
-the user's own decisions; only the AudioRouter window may call them, and this
-adapter answers 403:
+contains exact schemas for every backend method except the window-only ones
+below, plus the GET aliases and the active session PUT alias. These methods
+are the user's own decisions; only the AudioRouter window may call them, and
+this adapter answers 403:
 - `recordings.setRoot` approves where recordings are written;
-- `devices.setAccess` allows AudioRouter to open audio devices on Play.
+- `devices.setAccess` allows AudioRouter to open audio devices on Play;
+- `sessions.exportFile` and `sessions.approveExport` write a session file;
+- `obs.connect`, `obs.disconnect`, `obs.preview`, `obs.apply` and
+  `obs.restore` connect to OBS and change its sources;
+- `clients.authorize` and `clients.revoke` enroll and remove assistants and
+  apps. `clients.list` still reads them. A client also cannot revoke its own
+  access through the backend.
 
 `recordings.getRoot` and `devices.getAccess` read them. Once the user has
 allowed device access in the window, `sessions.play` and `sessions.togglePlay`

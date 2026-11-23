@@ -144,12 +144,23 @@ fn recordings_list_dispatch_exposes_storage_metadata_without_file_actions() {
             method: "recordings.list".into(),
             params: Some(json!({ "sessionId": "session" })),
         },
-        &ClientGrant::read_only(),
+        &ClientGrant::default(),
     );
     assert_eq!(
         denied.error.unwrap().data.unwrap()["code"],
         "permissionDenied"
     );
+    // Owner decision 2026-11-22: stored recording metadata is a plain read.
+    let observer = plane.dispatch_authorized(
+        JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(9)),
+            method: "recordings.list".into(),
+            params: Some(json!({ "sessionId": "session" })),
+        },
+        &ClientGrant::read_only(),
+    );
+    assert_eq!(observer.result.unwrap().as_array().unwrap().len(), 2);
     let response = plane.dispatch(JsonRpcRequest {
         jsonrpc: "2.0".into(),
         id: Some(json!(8)),
