@@ -10167,6 +10167,10 @@ button.danger {
   border-radius: var(--radius-md);
   background: var(--ambient-surface);
 }
+.session-flow-canvas .react-flow__controls-button {
+  /* React Flow 13 layers its CSS; preserve icon space beneath app button styling. */
+  padding: 4px;
+}
 .session-flow-canvas .canvas-minimap svg {
   display: block;
   width: 100%;

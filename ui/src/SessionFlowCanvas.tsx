@@ -2810,7 +2810,7 @@ export function SessionFlowCanvas({
       if (newest && !fits) {
         void flow.fitView({
           nodes: [{ id: newest }],
-          padding: FIT_PADDING,
+          padding: `${FIT_PADDING * 100}%`,
           minZoom: READABLE_ZOOM,
           maxZoom: READABLE_ZOOM,
           duration,
@@ -2874,7 +2874,7 @@ export function SessionFlowCanvas({
         const flow = flowInstanceRef.current;
         const duration = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 220;
         if (flow && fitReadable.current) openRouteView(flow, duration);
-        else void flow?.fitView({ padding: 0.12, duration });
+        else void flow?.fitView({ padding: "12%", duration });
       });
     });
     return () => {
@@ -3421,7 +3421,7 @@ export function SessionFlowCanvas({
                 onDuplicateNode?.(selectedNodeIds[0]);
             } else if (key === "0" && !event.shiftKey) {
               event.preventDefault();
-              void flowInstanceRef.current?.fitView({ padding: 0.12, duration: 0 });
+              void flowInstanceRef.current?.fitView({ padding: "12%", duration: 0 });
             } else if (key === "+" || (key === "=" && !event.shiftKey)) {
               event.preventDefault();
               void flowInstanceRef.current?.zoomIn({ duration: 0 });
@@ -3620,7 +3620,7 @@ export function SessionFlowCanvas({
                   commitGeometry(next, true);
                 }
               }
-              const selection = changes.filter((change) => change.type === "select");
+              const selection = changes.getByType("select");
               if (selection.length) {
                 const selected = new Set([...selectedNodeIds, ...selectedGroupIds]);
                 for (const change of selection)

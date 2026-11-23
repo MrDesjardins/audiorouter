@@ -2,6 +2,17 @@ import { test, expect } from "./browser-test";
 import { setColorTheme, fitCanvas } from "./workbench";
 
 for (const theme of ["dark", "light", "high-contrast"]) {
+  test(`${theme}: canvas zoom controls retain visible icons`, async ({ page }) => {
+    await page.goto("/route-harness.html");
+    await setColorTheme(page, theme);
+    for (const icon of await page.locator(".react-flow__controls-button svg").all()) {
+      const bounds = await icon.boundingBox();
+      expect(bounds?.width).toBeGreaterThanOrEqual(10);
+      expect(bounds?.height).toBeGreaterThan(0);
+    }
+    await expect(page.locator(".react-flow__controls-button svg")).toHaveCount(3);
+  });
+
   test(`${theme}: keyboard focus visibly marks a canvas card without moving it`, async ({ page }) => {
     await page.goto("/route-harness.html");
     await expect(page.getByTestId("canvas-readiness")).toHaveAttribute("data-ready", "true");
