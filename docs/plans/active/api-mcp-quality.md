@@ -467,7 +467,7 @@ Only `cargo fmt --check` (both manifests) and `tools/docs/validate.mjs` ran.
 - **R2-3 fixed.** `sessions.start` (REST, MCP `control_session start`) refuses an unprepared route that has an enabled device node (`node_kind_opens_audio_device`, exhaustive match) with `nodeNotReady`; previews, plugin routes (their own message) and device-free routes are unchanged. The window and `sessions.play` prepare first. Four lifecycle tests moved to `session_without_devices()`. Tests: `api_start_refuses_a_device_route_that_is_not_prepared`, `api_start_still_runs_routes_without_audio_devices`, `every_node_kind_is_classified_for_device_use`.
 - **R2-5 fixed.** The shell tags HTTP-forwarded frames `adapter: "http"`; the transport budgets them under `<sid>/http` (rate bucket and idempotency scope), believing the tag only from the hosting process (`adapter_client_id`). Tests: `only_the_hosting_process_can_name_the_http_adapter`, `a_forwarding_adapter_is_named_only_when_asked`.
 - **R2-6 fixed.** Undo retry with a used key explains itself (`retrying_an_undo_with_the_same_key_explains_itself`); the reachability test doc comment is back on its test.
-- **Not run:** the built shell was not launched, so Play from the real window after this change is covered by the browser specs and unit tests, not by the exe.
+- **Built exe exercised (2026-11-22).** Release shell built with `custom-protocol` after `npm --prefix ui run build` (exe newer than `ui/dist`); `fresh_install_shell` passed on it. Then a disposable launch (own database and `WEBVIEW2_USER_DATA_FOLDER`, CDP port, output CABLE-A Input and input CABLE Output so nothing audible): window Play went to "Audio running" with no error in the backend log; `sessions.stop` then `sessions.start` returned `native`/`running` (route still prepared, so the guard rightly did not fire); after restarting the shell, `sessions.start` on the unprepared route returned `nodeNotReady` ("Start it with Play…") and the window stayed stopped; `sessions.play` then ran it natively and `sessions.stop` stopped it. Not run: `#[ignore]` hardware/fixture tests beyond `fresh_install_shell`, UI vitest, and the exe was launched with `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1` (the no-variable path is covered only by `fresh_install_shell`).
 
 Still open:
 - A per-client opt-in for recording (option a), if assistants should record.
@@ -476,5 +476,4 @@ Still open:
 ### Next action
 
 Owner: merge, then decide whether assistants may record (option a) and whether
-session rename needs a new API method. Launch the built shell and press Play
-from the window and from `sessions.play` to cover the exe.
+session rename needs a new API method.
