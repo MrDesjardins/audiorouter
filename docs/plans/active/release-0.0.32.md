@@ -4,7 +4,8 @@
 
 Prepare an unsigned, experimental app-only 0.0.32 candidate after the owner
 tested the local main build and reported it works on 2026-11-22. Publication
-is a separate final human action (DIST-05). No PR opening is authorized.
+is a separate final human action (DIST-05). The owner approved opening PR #181
+on 2026-11-23, then requested CI repair and branch-state reconciliation.
 Requirements: DIST-01/05/06/07/08, ENG-04/05, M08; existing qualification
 gates remain open and cannot be replaced by a build or this owner report.
 
@@ -49,6 +50,40 @@ Rollback: retain v0.0.31 and owner data; abandon the unmerged candidate branch
 if preparation fails. Never replace published assets in place.
 
 ## Execution and next action
+
+### PR #181 CI repair and branch reconciliation (2026-11-23)
+
+Observed head `c8f6fbe90`: mergeable, no unresolved review threads, dependency
+advisory check failed on `cookie 0.18.2` (RUSTSEC-2026-0594; fixed in 0.18.3).
+Plan: update only that shell transitive dependency, run the exact cargo-deny
+checks and scoped shell compilation/tests, inspect all PR check annotations,
+then push and monitor checks. Do not suppress the advisory or weaken CI.
+Rollback: revert the dependency repair commit; earlier candidate hashes remain
+historical evidence and do not qualify newly built dependency bytes.
+
+Three recent remote branches have unpublished-to-main work: pipe-guard race,
+failed keybinding-delete recovery, and latency/quality documentation. Asked
+the owner whether to consolidate them into 0.0.32 or preserve them separately.
+No unmerged branch will be discarded. The cleanup-script dry run identified
+seven clean merged worktrees and preserved twenty others. Ran the prescribed
+script with `-Apply`: removed those seven and their local branches where
+present; all twenty others and active candidate artifacts were preserved.
+
+Repair results: only `cookie` version/checksum changed in the shell lockfile
+(0.18.2 to 0.18.3); no policy/configuration changes. Both exact cargo-deny
+commands passed advisories/licenses/sources/bans, production npm audits for
+UI/contracts/Stream Deck reported zero vulnerabilities, all 131 shell tests
+passed (four guarded tests ignored), and strict all-target/all-feature shell
+Clippy passed. Logs: `target/release-0.0.32-checks/ci-repair-*.log`.
+Read all 23 original-head check runs and their one annotation: the advisory
+check's exit-code failure (`pr181-annotations-original.json`). Cargo-deny
+also reports duplicate dependency versions permitted by `deny.toml` because
+the app and Tauri use different upstream API generations; the root graph
+reports the five documented shell-only advisory exemptions as unmatched.
+These diagnostics remain per the existing explicit policy, not as advisory
+waivers for cookie. No new dependency policy exception was added.
+Existing installer/smoke hashes below identify the earlier candidate; rebuild
+and repeat the exact smoke before final release from repaired/tagged sources.
 
 Version and lock metadata updated without dependency resolution changes.
 Complete version/notes diff inspected. Windows checks passed: locked workspace

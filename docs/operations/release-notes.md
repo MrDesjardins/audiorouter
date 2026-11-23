@@ -16,7 +16,8 @@
 - **Plugin controls follow the selected plugin.** Programs, preset paths and
   sidechain results reset when switching plugins, and old replies are ignored.
 - **Security dependency update.** Updated `url` to 2.5.9 for
-  RUSTSEC-2026-0592, plus Rust and UI dependency updates.
+  RUSTSEC-2026-0592 and the shell's `cookie` dependency to 0.18.3 for
+  RUSTSEC-2026-0594, plus Rust and UI dependency updates.
 
 - **Assistants and scripts can no longer make AudioRouter open a network
   share.** A UNC path or network drive in any file or folder setting is
