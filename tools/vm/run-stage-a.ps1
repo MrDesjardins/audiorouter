@@ -42,15 +42,38 @@
                after the new endpoint IDs, and the VB-Cable latency ratio
                (needs VB-Cable installed first; skipped with a note if not).
                A12 (Discord/OBS) stays an attended step.
+    round2     NOT part of 'all'. The second Stage A round on driver 0.2.5
+               (2026-11-21 gap analysis; needs a bundle from
+               prepare-round2-bundle.ps1, which carries RC3 as driver-rc3).
+               -Blocks picks and orders nothing, it only selects among:
+                 ab        paired RC3 / 0.2.5 render comparison, alternating
+                           installs, steady and restarting render streams
+                 pause     (only with -WithHostPause) a cable route across a
+                           90 s host-side VM pause; needs round2-pause-watcher.ps1
+                 live      driver update and removal while a cable route plays
+                 pool      60 min, the driver's own pool tags, not the whole pool
+                 verifier  Driver Verifier, IOCTL fuzz twice with a controlled
+                           restart between, a guest-stall watch after each
+               Default: ab,pool,verifier,live (about 4 h, many restarts). The
+               run keeps its state on Z: after every step, so a hang does not
+               lose the results already collected.
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('audio', 'users', 'eight', 'quality', 'pool', 'hardening', 'extras', 'all')][string] $Session = 'audio',
+    [ValidateSet('audio', 'users', 'eight', 'quality', 'pool', 'hardening', 'extras', 'round2', 'all')][string] $Session = 'audio',
     [switch] $Resume,
     [ValidateRange(0, 1800)][int] $SettleSeconds = 300,
     [ValidateRange(60, 3600)][int] $FuzzSeconds = 1800,
     [ValidateRange(5, 120)][int] $PoolMinutes = 60,
-    [ValidateRange(1, 60)][int] $EightMinutes = 30
+    [ValidateRange(1, 60)][int] $EightMinutes = 30,
+    # round2 only
+    [ValidatePattern('^(ab|pause|live|pool|verifier|control|repro)(,(ab|pause|live|pool|verifier|control|repro))*$')][string] $Blocks = 'ab,pool,verifier,live',
+    [ValidateRange(2, 8)][int] $AbPhases = 6,
+    [ValidateRange(1, 12)][int] $ReproBoots = 5,
+    [switch] $WithHostPause,
+    # round2: sign in by itself after every planned restart (asks for the guest
+    # password once; stored in the Winlogon key for this run, removed at the end).
+    [switch] $AutoLogon
 )
 $ErrorActionPreference = 'Stop'
 $bundle = [IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\')
@@ -64,7 +87,14 @@ $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powersh
 $probe = Join-Path $bundle 'tools\m00-probe.exe'
 $format = Join-Path $bundle 'tools\m03_cable_format.exe'
 $toneTool = Join-Path $bundle 'tools\m03_bridge_tone.exe'
+$cableSession = Join-Path $bundle 'tools\m03_cable_session.exe'
 $taskName = 'AudioRouter-StageA-Resume'
+if ($Session -eq 'round2') {
+    foreach ($needed in 'round2-support.ps1', 'round2-restart-render.ps1', 'driver-rc3\audioroutervirtual.sys', 'driver\package.json') {
+        if (-not (Test-Path -LiteralPath (Join-Path $bundle $needed))) { throw "This is not a round-2 bundle: $needed is missing (build it with tools\vm\prepare-round2-bundle.ps1)." }
+    }
+    . (Join-Path $bundle 'round2-support.ps1')
+}
 $evidenceRoot = 'C:\ar\evidence'
 $work = Join-Path 'C:\ar\stage-a' $Session
 $statePath = Join-Path $work 'state.json'
@@ -91,6 +121,13 @@ function Save-State {
     [ordered]@{ session = $Session; done = @($done); results = @($results); current = $state.current
         crashed = $state.crashed; startedUtc = $state.startedUtc } |
         ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $statePath -Encoding UTF8
+    # Keep a copy on the shared folder after every step: a guest that hangs for
+    # hours (the 2026-11-11 Verifier freeze) must not take the results with it.
+    try {
+        Copy-Item -LiteralPath $statePath -Destination (Join-Path $peer "$Session-state.json") -Force -ErrorAction Stop
+        $abRows = Join-Path $work 'ab-rows.jsonl'
+        if (Test-Path -LiteralPath $abRows) { Copy-Item -LiteralPath $abRows -Destination (Join-Path $peer 'round2-ab-rows.jsonl') -Force -ErrorAction Stop }
+    } catch { }
 }
 function Add-Result([string] $Step, [string] $Verdict, [string] $Detail) {
     $results.Add([pscustomobject]@{ step = $Step; verdict = $Verdict; detail = $Detail })
@@ -106,8 +143,11 @@ function Copy-CrashDumps([string] $Label) {
 }
 # The logon task stays registered for the whole run, so any restart resumes.
 function Register-Resume {
+    # Every option is repeated: a resumed run must behave like the one that started.
+    $extra = "-SettleSeconds $SettleSeconds -FuzzSeconds $FuzzSeconds -PoolMinutes $PoolMinutes -EightMinutes $EightMinutes -Blocks $Blocks -AbPhases $AbPhases -ReproBoots $ReproBoots"
+    if ($WithHostPause) { $extra += ' -WithHostPause' }
     $action = New-ScheduledTaskAction -Execute $powershell `
-        -Argument "-NoProfile -ExecutionPolicy Bypass -NoExit -File `"$PSCommandPath`" -Session $Session -Resume" `
+        -Argument "-NoProfile -ExecutionPolicy Bypass -NoExit -File `"$PSCommandPath`" -Session $Session -Resume $extra" `
         -WorkingDirectory $bundle
     $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
     $owner = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Highest
@@ -121,6 +161,22 @@ function Restart-AndResume([string] $Why) {
     Start-Sleep -Seconds 15
     Restart-Computer -Force
     exit 0
+}
+$autoLogonBefore = 'C:\ar\stage-a\autologon-before.json'
+if ($AutoLogon) {
+    if ($Session -ne 'round2') { throw '-AutoLogon is only for -Session round2.' }
+    if (-not $Resume) {
+        $secure = Read-Host "Password of $env:USERDOMAIN\$env:USERNAME (kept in the guest's Winlogon key for this run only, removed at the end)" -AsSecureString
+        if ($secure.Length -eq 0) { throw 'An empty password cannot be used for auto-logon; run again without -AutoLogon, or set a guest password first.' }
+        Add-Type -AssemblyName System.DirectoryServices.AccountManagement
+        $context = New-Object System.DirectoryServices.AccountManagement.PrincipalContext('Machine')
+        $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
+        if (-not $context.ValidateCredentials($env:USERNAME, $plain)) { throw 'That password is not accepted for this account; nothing was changed.' }
+        New-Item -ItemType Directory -Path (Split-Path $autoLogonBefore) -Force | Out-Null
+        $previousLogon = Set-GuestAutoLogon -UserName $env:USERNAME -Domain $env:USERDOMAIN -Password $secure
+        $previousLogon | ConvertTo-Json | Set-Content -LiteralPath $autoLogonBefore -Encoding UTF8
+        Write-Host 'Auto-logon is on for this run.' -ForegroundColor Cyan
+    }
 }
 Register-Resume
 if ($state.current -and -not $done.Contains($state.current)) {
@@ -244,16 +300,18 @@ function Start-Feeder([string] $Kind, [string[]] $Arguments) {
     }
     return $process
 }
-function Start-Feeders([int] $Seconds, [switch] $RenderOnly) {
+function Start-Feeders([int] $Seconds, [switch] $RenderOnly, [switch] $CaptureOnly) {
     $milliseconds = [string](($Seconds + 20) * 1000)
-    $render = Get-EndpointIndex 'render' 'AudioRouter Cable A Input'
     $feeders = @()
     try {
         if (-not $RenderOnly) {
             $capture = Get-EndpointIndex 'capture' 'AudioRouter Cable B Output'
             $feeders += Start-Feeder 'capture' @('capture', $capture, $milliseconds)
         }
-        $feeders += Start-Feeder 'render' @('tone', $milliseconds, $render)
+        if (-not $CaptureOnly) {
+            $render = Get-EndpointIndex 'render' 'AudioRouter Cable A Input'
+            $feeders += Start-Feeder 'render' @('tone', $milliseconds, $render)
+        }
     } catch { Stop-Feeders $feeders; throw }
     Start-Sleep -Seconds 1
     return $feeders
@@ -859,6 +917,475 @@ function Session-Extras([string] $P) {
     Step-Remove $P
 }
 
+# --- round 2 (2026-11-21 gap analysis) -----------------------------------------
+# Which package is really loaded: the service's image file against the package's
+# SYS hash. A same-version package silently keeps the stored binary (2026-11-11),
+# so the version string alone is not proof.
+function Test-ExpectedDriverLoaded([string] $PackageName) {
+    $expected = (Get-FileHash -LiteralPath (Join-Path $bundle "$PackageName\audioroutervirtual.sys") -Algorithm SHA256).Hash
+    $service = Get-CimInstance Win32_SystemDriver -Filter "Name='AudioRouterVirtual'" -ErrorAction SilentlyContinue
+    if (-not $service) { return [pscustomobject]@{ Ok = $false; Detail = 'no AudioRouterVirtual driver service' } }
+    $path = [string]$service.PathName
+    $path = $path -replace '^\\\?\?\\', '' -replace '^\\SystemRoot', $env:SystemRoot
+    if (-not [IO.Path]::IsPathRooted($path)) { $path = Join-Path $env:SystemRoot $path }
+    if (-not (Test-Path -LiteralPath $path)) { return [pscustomobject]@{ Ok = $false; Detail = "driver image not found: $path" } }
+    $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+    $detail = "service state $($service.State), image SHA-256 $($actual.Substring(0, 12)), expected $PackageName $($expected.Substring(0, 12))"
+    return [pscustomobject]@{ Ok = ($actual -ieq $expected -and $service.State -eq 'Running'); Detail = $detail }
+}
+# Round 2 judges 0.2.5 and nothing else: stop a block before any audio if another image is loaded.
+function Step-DriverIdentity([string] $P) {
+    Step "${P}driver identity" {
+        $loaded = Test-ExpectedDriverLoaded 'driver'
+        if (-not $loaded.Ok) { throw "the loaded driver is not the 0.2.5 package; stopping this block. $($loaded.Detail)" }
+        Add-Result "${P}driver identity" 'PASS' $loaded.Detail
+    }
+}
+# True when 0.2.5 is loaded; otherwise records a "not counted" REVIEW and returns false.
+function Test-DriverGate([string] $Label) {
+    $loaded = Test-ExpectedDriverLoaded 'driver'
+    if ($loaded.Ok) { return $true }
+    Add-Result $Label 'REVIEW' "not counted: 0.2.5 is not the loaded driver. $($loaded.Detail)"
+    return $false
+}
+function Get-CableEndpointIds {
+    $text = (Invoke-Native $probe @('inventory')).Text
+    $render = [regex]::Matches($text, '(?m)^render\[\d+\] name=AudioRouter Cable A Input \(AudioRouter Virtual Cable\) id=(\S+)')
+    $capture = [regex]::Matches($text, '(?m)^capture\[\d+\] name=AudioRouter Cable B Output \(AudioRouter Virtual Cable\) id=(\S+)')
+    if ($render.Count -ne 1 -or $capture.Count -ne 1) { throw 'Expected exactly one Cable A Input and one Cable B Output endpoint.' }
+    return [pscustomobject]@{ Render = $render[0].Groups[1].Value; Capture = $capture[0].Groups[1].Value }
+}
+# A product cable route in the background (tone into Cable A, recorded from Cable B).
+function Start-CableRoute([int] $Seconds, [string] $Tag) {
+    $ids = Get-CableEndpointIds
+    $out = Join-Path $work "route-$Tag.txt"
+    $process = Start-Process -FilePath $cableSession -WindowStyle Hidden -PassThru `
+        -ArgumentList @('--seconds', [string]$Seconds, '--tone', '997', '--render-endpoint', $ids.Render, '--capture-endpoint', $ids.Capture) `
+        -RedirectStandardOutput $out -RedirectStandardError "$out.err"
+    $null = $process.Handle
+    $process | Add-Member NoteProperty OutFile $out
+    Start-Sleep -Seconds 30
+    if ($process.HasExited) { throw "The cable route exited within 30 s (exit $($process.ExitCode)); see route-$Tag.txt. The test is invalid." }
+    return $process
+}
+function Get-RouteFinal($Process) {
+    $text = if (Test-Path -LiteralPath $Process.OutFile) { Get-Content -LiteralPath $Process.OutFile -Raw } else { '' }
+    $line = ([regex]::Match([string]$text, '(?m)^final cableRoute=(.*)$')).Groups[1].Value
+    $route = if ($line) { try { $line | ConvertFrom-Json } catch { $null } } else { $null }
+    $routeError = ([regex]::Match([string]$text, '(?m)^error: .*$')).Value.Trim()
+    return [pscustomobject]@{ Route = $route; Error = $routeError }
+}
+# The route process keeps writing its output file; read it without taking a lock.
+function Read-SharedText([string] $Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return '' }
+    $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+    try { return (New-Object IO.StreamReader($stream)).ReadToEnd() } finally { $stream.Dispose() }
+}
+# True only when the route process is alive and its newest progress line says 'running'.
+function Test-RouteRunning($Process) {
+    if ($Process.HasExited) { return [pscustomobject]@{ Ok = $false; Detail = "the route process already exited (exit $($Process.ExitCode))" } }
+    $lines = [regex]::Matches((Read-SharedText $Process.OutFile), '(?m)^progress (\d+) ms: cableRoute=(\{.*\}) max_service_gap_us=')
+    if ($lines.Count -eq 0) { return [pscustomobject]@{ Ok = $false; Detail = 'no progress line from the route yet' } }
+    $last = $lines[$lines.Count - 1]
+    $route = try { $last.Groups[2].Value | ConvertFrom-Json } catch { $null }
+    $state = if ($route) { [string]$route.state } else { 'unreadable' }
+    return [pscustomobject]@{ Ok = ($state -eq 'running'); Detail = "state '$state' at $($last.Groups[1].Value) ms" }
+}
+# The driver helper with the test-driver opt-in set for this child only (17 section 9.1).
+function Invoke-DriverHelper([string[]] $Arguments, [string] $Name) {
+    $resultFile = Join-Path $work "$Name.json"
+    Remove-Item -LiteralPath $resultFile -Force -ErrorAction SilentlyContinue
+    $env:AUDIOROUTER_ALLOW_TEST_DRIVER = '1'
+    try { $run = Invoke-Native (Join-Path $bundle 'tools\audiorouter-driver-helper.exe') ($Arguments + @('--result', $resultFile)) }
+    finally { Remove-Item Env:\AUDIOROUTER_ALLOW_TEST_DRIVER -ErrorAction SilentlyContinue }
+    $run.Text | Set-Content -LiteralPath (Join-Path $work "$Name.txt") -Encoding UTF8
+    $json = if (Test-Path -LiteralPath $resultFile) { try { Get-Content -LiteralPath $resultFile -Raw | ConvertFrom-Json } catch { $null } } else { $null }
+    return [pscustomobject]@{ Code = $run.Code; Json = $json; Text = $run.Text; Error = $(if ($json -and $json.error) { [string]$json.error } else { '' }) }
+}
+function Step-Quiet([string] $P) {
+    Step "${P}quiet guest" {
+        if (Test-Path -LiteralPath 'C:\ar\quiet-guest-state.json') { Add-Result "${P}quiet guest" 'PASS' 'already applied (reverted at the end)'; return }
+        $run = Invoke-Runner 'quiet-guest.ps1' @('-Apply', '-SettleSeconds', [string]$SettleSeconds)
+        Add-Result "${P}quiet guest" $(if ($run.Code -eq 0) { 'PASS' } else { 'VM' }) "exit $($run.Code); Windows Update paused, maintenance off, Defender exclusions (reverted at the end)"
+    }
+}
+# One 30 s bridge-tone run for the A/B, with the two render shapes:
+#   steady    a continuous tone into Cable A (as every earlier Stage A tone step)
+#   restarts  four short streams one after another (the Windows Test button)
+function Invoke-AbTone([string] $Label, [string] $Driver, [string] $Package, [string] $Variant) {
+    $loaded = Test-ExpectedDriverLoaded $Package
+    if (-not $loaded.Ok) { Add-Result $Label 'FAIL' "the expected $Driver driver is not the one loaded; not counted. $($loaded.Detail)"; return }
+    $restarter = $null
+    try {
+        if ($Variant -eq 'steady') {
+            $script:feeders = Start-Feeders 30
+        } else {
+            $script:feeders = Start-Feeders 30 -CaptureOnly
+            $index = Get-EndpointIndex 'render' 'AudioRouter Cable A Input'
+            $restarter = Start-Process -FilePath $powershell -WindowStyle Hidden -PassThru `
+                -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $bundle 'round2-restart-render.ps1'),
+                    '-Probe', $probe, '-RenderIndex', $index, '-DelayMs', '4000', '-Count', '4', '-ToneMs', '4000', '-GapMs', '1500') `
+                -RedirectStandardOutput (Join-Path $work "restarter-$(Get-Date -Format 'HHmmss').txt")
+            $null = $restarter.Handle
+        }
+        $run = Invoke-VmCheck 'tone' @('-ToneSeconds', '30')
+        if ($restarter -and -not $restarter.WaitForExit(30000)) { Stop-Process -Id $restarter.Id -Force -ErrorAction SilentlyContinue }
+    } finally { Stop-Feeders $script:feeders; $script:feeders = $null }
+    $evidence = if ($run.Dir) { $run.Dir.Name } else { 'no evidence folder' }
+    $text = if ($run.Dir -and (Test-Path -LiteralPath (Join-Path $run.Dir.FullName 'tone.txt'))) { Get-Content -LiteralPath (Join-Path $run.Dir.FullName 'tone.txt') -Raw } else { '' }
+    $tool = $run.Checks | Where-Object { $_.check -like 'Tone tool finished*' }
+    $c = Get-ToneAbCounters $text
+    # The tone tool names the driver it talked to: a run that met another version is not counted.
+    $expectedVersion = [string](Get-Content -LiteralPath (Join-Path $bundle "$Package\package.json") -Raw | ConvertFrom-Json).driverVersion
+    $versionOk = ($c.DriverVersion -eq $expectedVersion)
+    $valid = [bool]($tool -and $tool.passed -and $c.Complete -and $versionOk)
+    $row = [ordered]@{ Label = $Label; Driver = $Driver; Variant = $Variant; Valid = $valid; VersionOk = $versionOk; Evidence = $evidence }
+    foreach ($property in $c.PSObject.Properties) { $row[$property.Name] = $property.Value }
+    ($row | ConvertTo-Json -Compress) | Add-Content -LiteralPath (Join-Path $work 'ab-rows.jsonl')
+    $detail = "valid=$valid (driver $($c.DriverVersion), expected $expectedVersion), render underrun $($c.RenderUnderrun) frames, late $($c.Late), capture underrun $($c.CaptureUnderrun), max service gap $($c.MaxGapMs) ms; $evidence"
+    Add-Result $Label 'INFO' $detail
+}
+function Phase-Ab([int] $Index, [string] $Driver) {
+    $package = if ($Driver -eq 'new') { 'driver' } else { 'driver-rc3' }
+    $name = if ($Driver -eq 'new') { '0.2.5' } else { 'RC3 0.2.4' }
+    $P = "ab$Index $name "
+    Step "${P}install" {
+        $now = Test-ExpectedDriverLoaded $package
+        if ($now.Ok) { Add-Result "${P}install" 'PASS' "already loaded; $($now.Detail)"; return }
+        if (@(Get-PnpDevice -Class MEDIA -ErrorAction SilentlyContinue | Where-Object { $_.FriendlyName -like '*AudioRouter*' }).Count -gt 0) {
+            throw 'another AudioRouter driver is still installed; the previous phase did not remove it.'
+        }
+        $run = Invoke-VmCheck 'install' @('-PackageName', $package)
+        $first = $run.Checks | Select-Object -First 1
+        if ($first.detail -like 'exit 5*') {
+            Add-Result "${P}install" 'PASS' 'exit 5, restart required'
+            Complete-AndRestart "${P}install" 'Windows needs a restart to finish installing the driver.'
+        }
+        if ($run.Code -ne 0) { throw 'install failed; see its output above.' }
+        Add-Result "${P}install" 'PASS' 'installed'
+    }
+    Step "${P}status" {
+        $run = Invoke-VmCheck 'status'
+        $loaded = Test-ExpectedDriverLoaded $package
+        $ok = ($run.Code -eq 0) -and $loaded.Ok
+        Add-Result "${P}status" $(if ($ok) { 'PASS' } else { 'FAIL' }) "$(($run.Checks | Select-Object -First 1).detail); $($loaded.Detail)"
+    }
+    foreach ($shape in @(@('steady', 1), @('steady', 2), @('restarts', 1), @('restarts', 2))) {
+        $variant = $shape[0]
+        $label = "${P}tone $variant #$($shape[1])"
+        Step $label { Invoke-AbTone $label $Driver $package $variant }
+    }
+    Step-Remove $P
+}
+function Block-Ab {
+    Step-Quiet 'ab: '
+    foreach ($index in 1..$AbPhases) {
+        Phase-Ab $index $(if ($index % 2 -eq 1) { 'new' } else { 'rc3' })
+    }
+    Step 'ab: RC3 against 0.2.5 (review item 6, R4, R5)' {
+        $path = Join-Path $work 'ab-rows.jsonl'
+        $rows = if (Test-Path -LiteralPath $path) { @(Get-Content -LiteralPath $path | Where-Object { $_ } | ForEach-Object { $_ | ConvertFrom-Json }) } else { @() }
+        $rows | Select-Object Label, Driver, Variant, Valid, VersionOk, DriverVersion, RenderUnderrun, Late, PacketOverrun, CaptureUnderrun, MaxGapMs, Evidence |
+            Export-Csv -LiteralPath (Join-Path $work 'ab-rows.csv') -NoTypeInformation
+        $verdict = Compare-RenderAb $rows
+        Add-Result 'ab: RC3 against 0.2.5 (review item 6, R4, R5)' $verdict.Verdict $verdict.Detail
+        $valid = @($rows | Where-Object { $_.Valid }).Count
+        Add-Result 'ab: valid runs' 'INFO' "$valid of $(@($rows).Count) tone runs were valid (complete report and the expected driver version); ab-rows.csv"
+    }
+}
+function Block-Pause {
+    Step-Setup 'pause: '
+    Step-DriverIdentity 'pause: '
+    Step 'pause: route rides a 90 s host-side VM pause' {
+        if (-not (Test-DriverGate 'pause: route rides a 90 s host-side VM pause')) { return }
+        $request = Join-Path $peer 'round2-pause-request.txt'
+        $doneFile = Join-Path $peer 'round2-pause-done.txt'
+        Remove-Item -LiteralPath $request, $doneFile -Force -ErrorAction SilentlyContinue
+        $route = Start-CableRoute 330 'pause'
+        $before = Get-Date
+        'pause requested by the guest runner' | Set-Content -LiteralPath $request -Encoding ASCII
+        $deadline = (Get-Date).AddSeconds(150)
+        while (-not (Test-Path -LiteralPath $doneFile) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
+        $paused = Test-Path -LiteralPath $doneFile
+        if (-not $paused) { Remove-Item -LiteralPath $request -Force -ErrorAction SilentlyContinue }
+        [void]$route.WaitForExit(420000)
+        $final = Get-RouteFinal $route
+        $routeState = if ($final.Route) { [string]$final.Route.state } else { 'no final route line' }
+        $jump = [Math]::Round(((Get-Date) - $before).TotalSeconds, 1)
+        if (-not $paused) { Add-Result 'pause: route rides a 90 s host-side VM pause' 'SKIP' 'no host watcher answered within 150 s (start tools\vm\round2-pause-watcher.ps1 on the PC); not a result'; return }
+        if ($route.HasExited -and $route.ExitCode -eq 0 -and $routeState -eq 'running') {
+            Add-Result 'pause: route rides a 90 s host-side VM pause' 'PASS' "route state '$routeState', exit 0 after the pause ($jump s of wall time); NOT a real sleep/resume"
+        } else {
+            Add-Result 'pause: route rides a 90 s host-side VM pause' 'REVIEW' "route state '$routeState', exit $(if ($route.HasExited) { $route.ExitCode } else { 'still running' }), $($final.Error); see route-pause.txt; NOT a real sleep/resume"
+        }
+    }
+    Step-NoBugcheck 'pause: '
+    Step-Remove 'pause: '
+}
+function Block-Live {
+    Step-Setup 'live: '
+    Step-DriverIdentity 'live: '
+    # Review item 3: the update and the removal must finish without a restart even
+    # while a client holds the cable. The route cannot survive a driver update; the
+    # question is only whether Windows can unload the old image.
+    # The helper is called directly (not through vm-checks 'update', which first sets a
+    # 96 kHz format on Cable B Output and could end the route before the update).
+    # Immediately before the call the route must be alive and report state 'running';
+    # otherwise the test is invalid and is reported as not counted.
+    $label = 'live: driver update while a route plays'
+    Step $label {
+        $loaded = Test-ExpectedDriverLoaded 'driver'
+        if (-not $loaded.Ok) { Add-Result $label 'REVIEW' "not counted: 0.2.5 is not the loaded driver. $($loaded.Detail)"; return }
+        $route = Start-CableRoute 300 'update'
+        $ready = Test-RouteRunning $route
+        if (-not $ready.Ok) {
+            if (-not $route.HasExited) { Stop-Process -Id $route.Id -Force -ErrorAction SilentlyContinue }
+            Add-Result $label 'REVIEW' "not counted: the route was not running before the update. $($ready.Detail)"
+            return
+        }
+        $update = Invoke-DriverHelper @('update', '--package', (Join-Path $bundle 'driver-next')) 'live-update'
+        [void]$route.WaitForExit(330000)
+        if (-not $route.HasExited) { Stop-Process -Id $route.Id -Force -ErrorAction SilentlyContinue }
+        $final = Get-RouteFinal $route
+        $detail = "route running before the update ($($ready.Detail)); helper exit $($update.Code) $($update.Error); route ended with state '$(if ($final.Route) { $final.Route.state } else { 'unknown' })' $($final.Error); live-update.txt"
+        if ($update.Code -eq 0) { Add-Result $label 'PASS' "$detail; no restart needed (review item 3)" }
+        elseif ($update.Code -eq 5) {
+            Add-Result $label 'REVIEW' "$detail; the update still needs a restart with a client attached (review item 3 NOT verified)"
+            Complete-AndRestart $label 'Windows needs a restart to finish the driver update.'
+        } else { Add-Result $label 'FAIL' $detail }
+    }
+    Step 'live: version after the update' {
+        $status = Invoke-DriverHelper @('status') 'live-status-after-update'
+        $next = Get-Content -LiteralPath (Join-Path $bundle 'driver-next\package.json') -Raw | ConvertFrom-Json
+        $ok = ($status.Json -and $status.Json.state -eq 'installed' -and [string]$status.Json.installedDriverVersion -eq [string]$next.driverVersion)
+        $found = if ($status.Json) { "$($status.Json.state), driver $($status.Json.installedDriverVersion)" } else { 'no status' }
+        $untouched = ($status.Json -and [string]$status.Json.installedDriverVersion -eq '0.2.5.0')
+        $verdict = if ($ok) { 'PASS' } elseif ($untouched) { 'REVIEW' } else { 'FAIL' }
+        $why = if ($untouched) { '; still 0.2.5, so the update did not run or did not finish (see the update result above)' } else { '' }
+        Add-Result 'live: version after the update' $verdict "expected $($next.driverVersion); $found$why"
+    }
+    $removeLabel = 'live: driver removal while a route plays'
+    Step $removeLabel {
+        $loaded = Test-ExpectedDriverLoaded 'driver-next'
+        if (-not $loaded.Ok) { Add-Result $removeLabel 'REVIEW' "not counted: the updated driver is not the one loaded. $($loaded.Detail)"; return }
+        $route = Start-CableRoute 240 'remove'
+        $ready = Test-RouteRunning $route
+        if (-not $ready.Ok) {
+            if (-not $route.HasExited) { Stop-Process -Id $route.Id -Force -ErrorAction SilentlyContinue }
+            Add-Result $removeLabel 'REVIEW' "not counted: the route was not running before the removal. $($ready.Detail)"
+            return
+        }
+        $remove = Invoke-DriverHelper @('remove') 'live-remove'
+        [void]$route.WaitForExit(270000)
+        if (-not $route.HasExited) { Stop-Process -Id $route.Id -Force -ErrorAction SilentlyContinue }
+        $left = @(Get-PnpDevice -Class MEDIA -ErrorAction SilentlyContinue | Where-Object { $_.FriendlyName -like '*AudioRouter*' }).Count
+        $detail = "route running before the removal ($($ready.Detail)); helper exit $($remove.Code) $($remove.Error); $left AudioRouter device(s) left; live-remove.txt"
+        if ($remove.Code -eq 0 -and $left -eq 0) { Add-Result $removeLabel 'PASS' "$detail; no restart needed" }
+        elseif ($remove.Code -eq 5) {
+            Add-Result $removeLabel 'REVIEW' "$detail; the removal still needs a restart with a client attached (review item 3 NOT verified)"
+            Complete-AndRestart $removeLabel 'Windows needs a restart to finish removing the driver.'
+        } else { Add-Result $removeLabel 'FAIL' $detail }
+    }
+    Step-NoBugcheck 'live: '
+    Step-Remove 'live: '
+}
+function Block-Pool {
+    Step-Setup 'pool: '
+    $label = "pool: driver pool tags for $PoolMinutes min (A8, VCAB-28)"
+    Step-DriverIdentity 'pool: '
+    Step $label {
+        if (-not (Test-DriverGate $label)) { return }
+        $script:feeders = Start-Feeders ($PoolMinutes * 60) -RenderOnly
+        $csv = Join-Path $work 'pool-tags.csv'
+        $whole = [Collections.Generic.List[object]]::new()
+        $tagged = [Collections.Generic.List[object]]::new()
+        $tagAllocs = [Collections.Generic.List[object]]::new()
+        $restarts = 0
+        $started = Get-Date
+        try {
+            while (((Get-Date) - $started).TotalMinutes -lt $PoolMinutes) {
+                $minutes = [Math]::Round(((Get-Date) - $started).TotalMinutes, 2)
+                if (@($script:feeders)[0].HasExited) {
+                    $restarts++
+                    if ($restarts -gt 5) { throw "the tone into Cable A Input stopped $restarts times" }
+                    $script:feeders = Start-Feeders ([int][Math]::Ceiling(($PoolMinutes - $minutes) * 60)) -RenderOnly
+                }
+                $s = Get-DriverPoolTagSample
+                if (-not (Test-Path -LiteralPath $csv)) { ($s.PSObject.Properties.Name + 'minutes') -join ',' | Set-Content -LiteralPath $csv }
+                (@($s.PSObject.Properties | ForEach-Object { $_.Value }) + $minutes) -join ',' | Add-Content -LiteralPath $csv
+                $sum = 0.0; $allocs = 0.0
+                foreach ($tag in $script:DriverPoolTags) { $sum += $s.$tag; $allocs += $s."$tag-allocs" }
+                $tagged.Add([pscustomobject]@{ Minutes = $minutes; Bytes = $sum })
+                $tagAllocs.Add([pscustomobject]@{ Minutes = $minutes; Bytes = $allocs })
+                $whole.Add([pscustomobject]@{ Minutes = $minutes; Bytes = $s.TotalNonPagedBytes })
+                Start-Sleep -Seconds 30
+            }
+        } finally { Stop-Feeders $script:feeders; $script:feeders = $null }
+        $tagGrowth = Get-SeriesGrowthMiBPerHour $tagged
+        $allocGrowth = Get-SeriesGrowthMiBPerHour $tagAllocs
+        $wholeGrowth = Get-SeriesGrowthMiBPerHour $whole
+        $first = $tagged[0].Bytes; $last = $tagged[$tagged.Count - 1].Bytes
+        $detail = "driver tags (MNWR, MNTR, SyAu, AUDR): $([Math]::Round($first / 1KB)) KiB to $([Math]::Round($last / 1KB)) KiB, growth $tagGrowth MiB/h; live allocations $($tagAllocs[0].Bytes) to $($tagAllocs[$tagAllocs.Count - 1].Bytes); whole non-paged pool growth $wholeGrowth MiB/h; $($tagged.Count) samples; tone restarted $restarts time(s); pool-tags.csv"
+        if ($null -eq $tagGrowth) { Add-Result $label 'FAIL' "too few samples; $detail" }
+        elseif ($first -eq 0 -and $last -eq 0) { Add-Result $label 'FAIL' "the driver tags were never seen (wrong tag names?); $detail" }
+        elseif ($tagGrowth -le 0.25) { Add-Result $label 'PASS' $detail }
+        elseif ($tagGrowth -le 2) { Add-Result $label 'REVIEW' $detail }
+        else { Add-Result $label 'FAIL' $detail }
+    }
+    Step-NoBugcheck 'pool: '
+    Step-Remove 'pool: '
+}
+# Watches the guest for a stall: the 2026-11-11 freeze began after a Verifier fuzz.
+function Invoke-StallWatch([string] $Label, [int] $Minutes) {
+    $last = Get-Date
+    $maxGap = 0.0
+    $until = $last.AddMinutes($Minutes)
+    while ((Get-Date) -lt $until) {
+        Start-Sleep -Seconds 5
+        $now = Get-Date
+        $gap = ($now - $last).TotalSeconds
+        if ($gap -gt $maxGap) { $maxGap = $gap }
+        $last = $now
+    }
+    $maxGap = [Math]::Round($maxGap, 1)
+    if ($maxGap -le 30) { Add-Result $Label 'PASS' "guest stayed responsive for $Minutes min; longest gap between 5 s samples $maxGap s" }
+    else { Add-Result $Label 'FAIL' "the guest stalled: longest gap between 5 s samples $maxGap s (compare with VBox.log on the host)" }
+}
+function Block-Verifier {
+    $P = 'verifier: '
+    Step-Setup $P
+    Step-DriverIdentity $P
+    Step "${P}Driver Verifier on" {
+        $run = Invoke-VmCheck 'verifier-on'
+        if ($run.Code -ne 0) { throw 'verifier-on failed' }
+        Add-Result "${P}Driver Verifier on" 'PASS' 'standard checks for audioroutervirtual.sys'
+        Complete-AndRestart "${P}Driver Verifier on" 'Driver Verifier needs a restart.'
+    }
+    foreach ($round in 1, 2) {
+        Step "${P}Driver Verifier active (round $round)" {
+            $settings = (Invoke-Native 'verifier.exe' @('/querysettings')).Text
+            if ($settings -notmatch 'audioroutervirtual\.sys') { throw 'Driver Verifier is not watching audioroutervirtual.sys' }
+            Add-Result "${P}Driver Verifier active (round $round)" 'PASS' 'audioroutervirtual.sys verified'
+        }
+        Step "${P}IOCTL fuzz $([int]($FuzzSeconds / 60)) min under Verifier (round $round)" {
+            if (-not (Test-DriverGate "${P}IOCTL fuzz $([int]($FuzzSeconds / 60)) min under Verifier (round $round)")) { return }
+            $run = Invoke-VmCheck 'fuzz' @('-FuzzSeconds', [string]$FuzzSeconds)
+            Add-Result "${P}IOCTL fuzz $([int]($FuzzSeconds / 60)) min under Verifier (round $round)" $(if ($run.Code -eq 0) { 'PASS' } else { 'FAIL' }) (($run.Checks | ForEach-Object { "$($_.check): $($_.passed)" }) -join '; ')
+        }
+        Step "${P}guest stall watch after fuzz (round $round)" { Invoke-StallWatch "${P}guest stall watch after fuzz (round $round)" 10 }
+        if ($round -eq 1) {
+            Step "${P}controlled restart under Verifier" {
+                Add-Result "${P}controlled restart under Verifier" 'PASS' 'restarting on purpose; the guest must come back and the logon task continue'
+                Complete-AndRestart "${P}controlled restart under Verifier" 'Planned restart between the two fuzz rounds.'
+            }
+        }
+    }
+    Step "${P}Driver Verifier off" -AlwaysRun {
+        $run = Invoke-VmCheck 'verifier-off'
+        Add-Result "${P}Driver Verifier off" $(if ($run.Code -eq 0) { 'PASS' } else { 'FAIL' }) 'verifier /reset'
+        Complete-AndRestart "${P}Driver Verifier off" 'Turning Driver Verifier off needs a restart.'
+    }
+    Step-NoBugcheck $P
+    Step-Remove $P
+}
+function Block-Repro {
+    # Does the Verifier freeze (2026-10-30, 2026-11-11, 2026-11-22) reproduce? Verifier stays on for
+    # audioroutervirtual.sys; each boot runs one short fuzz, then restarts. A frozen guest is reset by the operator
+    # (the logon task resumes the step) and counted as a freeze in the notes.
+    $P = 'repro: '
+    Step-Setup $P
+    Step-DriverIdentity $P
+    Step "${P}Driver Verifier on" {
+        $run = Invoke-VmCheck 'verifier-on'
+        if ($run.Code -ne 0) { throw 'verifier-on failed' }
+        Add-Result "${P}Driver Verifier on" 'PASS' 'standard checks for audioroutervirtual.sys'
+        Complete-AndRestart "${P}Driver Verifier on" 'Driver Verifier needs a restart.'
+    }
+    foreach ($boot in 1..$ReproBoots) {
+        $name = "${P}boot $boot fuzz $([int]($FuzzSeconds / 60)) min under Verifier"
+        Step $name {
+            $settings = (Invoke-Native 'verifier.exe' @('/querysettings')).Text
+            if ($settings -notmatch 'audioroutervirtual.sys') { throw 'Driver Verifier is not watching audioroutervirtual.sys' }
+            if (-not (Test-DriverGate $name)) { return }
+            $run = Invoke-VmCheck 'fuzz' @('-FuzzSeconds', [string]$FuzzSeconds)
+            Add-Result $name $(if ($run.Code -eq 0) { 'PASS' } else { 'FAIL' }) (($run.Checks | ForEach-Object { "$($_.check): $($_.passed)" }) -join '; ')
+        }
+        Step "${P}boot $boot guest stall watch" { Invoke-StallWatch "${P}boot $boot guest stall watch" 2 }
+        if ($boot -lt $ReproBoots) {
+            Step "${P}boot $boot restart" {
+                Add-Result "${P}boot $boot restart" 'PASS' 'restarting on purpose for the next boot'
+                Complete-AndRestart "${P}boot $boot restart" 'Planned restart between repro boots.'
+            }
+        }
+    }
+    Step "${P}Driver Verifier off" -AlwaysRun {
+        $run = Invoke-VmCheck 'verifier-off'
+        Add-Result "${P}Driver Verifier off" $(if ($run.Code -eq 0) { 'PASS' } else { 'FAIL' }) 'verifier /reset'
+        Complete-AndRestart "${P}Driver Verifier off" 'Turning Driver Verifier off needs a restart.'
+    }
+    Step-NoBugcheck $P
+    Step-Remove $P
+}
+function Block-Control {
+    # Control runs for the Verifier freezes (2026-10-30, 2026-11-11, 2026-11-22). The fuzz is identical in both
+    # parts; only Driver Verifier changes. A: Verifier off. B: Verifier on Microsoft's ks.sys and portcls.sys,
+    # AudioRouter's driver loaded but not verified. A freeze here points at the VM, not at our driver.
+    $P = 'control: '
+    Step-Setup $P
+    Step-DriverIdentity $P
+    Step "${P}A Verifier off: fuzz" {
+        if (-not (Test-DriverGate "${P}A Verifier off: fuzz")) { return }
+        $run = Invoke-VmCheck 'fuzz-plain' @('-FuzzSeconds', [string]$FuzzSeconds)
+        Add-Result "${P}A Verifier off: fuzz" $(if ($run.Code -eq 0) { 'PASS' } else { 'FAIL' }) (($run.Checks | ForEach-Object { "$($_.check): $($_.passed)" }) -join '; ')
+    }
+    Step "${P}A guest stall watch" { Invoke-StallWatch "${P}A guest stall watch" 10 }
+    Step "${P}B Verifier on ks.sys and portcls.sys" {
+        $run = Invoke-VmCheck 'verifier-ms-on'
+        if ($run.Code -ne 0) { throw 'verifier-ms-on failed' }
+        Add-Result "${P}B Verifier on ks.sys and portcls.sys" 'PASS' 'standard checks for the Microsoft audio stack only'
+        Complete-AndRestart "${P}B Verifier on ks.sys and portcls.sys" 'Driver Verifier needs a restart.'
+    }
+    Step "${P}B Verifier active on Microsoft drivers only" {
+        $settings = (Invoke-Native 'verifier.exe' @('/querysettings')).Text
+        if ($settings -notmatch 'portcls.sys') { throw 'Driver Verifier is not watching portcls.sys' }
+        if ($settings -match 'audioroutervirtual.sys') { throw 'Driver Verifier is watching audioroutervirtual.sys: not a control run' }
+        Add-Result "${P}B Verifier active on Microsoft drivers only" 'PASS' 'ks.sys and portcls.sys verified, audioroutervirtual.sys not'
+    }
+    Step "${P}B Verifier on Microsoft drivers: fuzz" {
+        if (-not (Test-DriverGate "${P}B Verifier on Microsoft drivers: fuzz")) { return }
+        $run = Invoke-VmCheck 'fuzz-plain' @('-FuzzSeconds', [string]$FuzzSeconds)
+        Add-Result "${P}B Verifier on Microsoft drivers: fuzz" $(if ($run.Code -eq 0) { 'PASS' } else { 'FAIL' }) (($run.Checks | ForEach-Object { "$($_.check): $($_.passed)" }) -join '; ')
+    }
+    Step "${P}B guest stall watch" { Invoke-StallWatch "${P}B guest stall watch" 10 }
+    Step "${P}Driver Verifier off" -AlwaysRun {
+        $run = Invoke-VmCheck 'verifier-off'
+        Add-Result "${P}Driver Verifier off" $(if ($run.Code -eq 0) { 'PASS' } else { 'FAIL' }) 'verifier /reset'
+        Complete-AndRestart "${P}Driver Verifier off" 'Turning Driver Verifier off needs a restart.'
+    }
+    Step-NoBugcheck $P
+    Step-Remove $P
+}
+function Session-Round2([string] $P) {
+    $selected = @($Blocks -split ',')
+    if ($selected -contains 'pause' -and -not $WithHostPause) {
+        Step 'pause: skipped' { Add-Result 'pause: skipped' 'SKIP' 'the pause block needs -WithHostPause and the host watcher' }
+        $selected = @($selected | Where-Object { $_ -ne 'pause' })
+    }
+    if ($WithHostPause -and $selected -notcontains 'pause') { $selected = @('pause') + $selected }
+    foreach ($block in @('ab', 'pause', 'pool', 'verifier', 'control', 'repro', 'live')) {
+        if ($selected -notcontains $block) { continue }
+        switch ($block) {
+            'ab' { Block-Ab }
+            'pause' { Block-Pause }
+            'live' { Block-Live }
+            'pool' { Block-Pool }
+            'verifier' { Block-Verifier }
+            'control' { Block-Control }
+            'repro' { Block-Repro }
+        }
+    }
+}
+
 # --- run -----------------------------------------------------------------------
 $script:feeders = $null
 try {
@@ -872,6 +1399,7 @@ try {
             'pool' { Session-Pool $prefix }
             'hardening' { Session-Hardening $prefix }
             'extras' { Session-Extras $prefix }
+            'round2' { Session-Round2 $prefix }
         }
     }
 } finally {
@@ -886,6 +1414,11 @@ Step 'revert quieting' -AlwaysRun {
     Add-Result 'revert quieting' $verdict 'guest settings restored'
 }
 Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+if (Test-Path -LiteralPath $autoLogonBefore) {
+    Clear-GuestAutoLogon (Get-Content -LiteralPath $autoLogonBefore -Raw | ConvertFrom-Json)
+    Remove-Item -LiteralPath $autoLogonBefore -Force
+    Write-Host 'Auto-logon removed.' -ForegroundColor Cyan
+}
 $null = Invoke-VmCheck 'collect'
 Copy-Item -Path (Join-Path $bundle 'evidence-*.zip') -Destination $peer -ErrorAction SilentlyContinue
 $results | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $work 'results.json') -Encoding UTF8

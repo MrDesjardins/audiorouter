@@ -420,6 +420,78 @@ confirm Discord's input meter and OBS's meter move. Note any app that does not
 list the device. Then restore the checkpoint. If the guest cannot sign in to
 Discord, record A12 as deferred to Stage C.
 
+#### Session `round2` (second Stage A round on 0.2.5, overnight)
+
+Why: the [gap analysis](../plans/active/evidence/2026-11-21-virtual-cable-stage-a-0.2.5-gap-analysis.md)
+found Stage A on 0.2.5 not passed. `round2` answers its open items in one
+unattended run (about 4 hours, many restarts). It is not part of `all`.
+
+What it runs (`-Blocks`, default `ab,pool,verifier,live`):
+
+| Block | Question it answers | Pass rule |
+| --- | --- | --- |
+| `ab` | Is 0.2.5 worse than RC3 on render underruns and late packets (review item 6, R4, R5, the 2026-11-11 underruns)? RC3 and 0.2.5 are installed alternately, six phases, each with two steady streams and two runs of four short streams (the Windows Test button). Every run must report the expected driver version, or it is not counted. | Fixed in advance (`Compare-RenderAb`), judged per render shape on **medians** over the valid runs: 0.2.5 fails if its median render underrun frames or median late packets exceed RC3's by more than one packet (480 frames, 1 packet) **and** by 50 %. A shape needs at least 4 valid runs per driver and a median largest service gap of 500 ms or less on both, otherwise it is REVIEW (inconclusive). PASS needs both shapes judged; never PASS when inconclusive. Calibrated on the earlier tone reports before any round-2 result: only 1 of 9 had a gap under 40 ms and typical gaps were 60-330 ms, so a quiet-run filter would have discarded the night. The drivers alternate, so VM stalls hit both equally and the median ignores a stalled minority. |
+| `live` | Does a driver update, and a removal, finish without a restart while a cable route plays (review item 3)? | Needs 0.2.5 loaded and the route alive and `running` just before the call, else REVIEW "not counted". PASS only when the helper (called directly; `driver-next` is 0.2.6) exits 0; exit 5 is REVIEW (item 3 not verified). The version afterwards must be 0.2.6.0. |
+| `pool` | Does the driver's own non-paged pool grow (A8)? It samples the four driver tags (`MNWR`, `MNTR`, `SyAu`, `AUDR`) every 30 s for `-PoolMinutes`. | Growth of the tag sum at most 0.25 MiB/h PASS, up to 2 REVIEW, above FAIL. The whole-pool figure is shown for comparison only. |
+| `verifier` | Does a Driver Verifier session end cleanly twice (the 2026-11-11 guest freeze)? Fuzz, 10 min stall watch, a planned restart under Verifier, fuzz again, watch again, Verifier off. | Both fuzz rounds PASS and the guest never goes 30 s without answering its 5 s sample. |
+| `control` | Is the Verifier freeze the VM or the driver? Same IOCTL fuzz (`-FuzzSeconds`) twice, only Driver Verifier changes: A with Verifier off, B with Verifier on Microsoft's `ks.sys` and `portcls.sys` only (AudioRouter's driver loaded, not verified), a 10 min stall watch after each. Not in the default `-Blocks`; run it alone: `-Blocks control`. | Each fuzz PASS and no 30 s gap in the 5 s samples. A freeze in A or B (state file stops updating, screen frozen) means the VM stalls without Verifier on our driver. Both passing is **not** proof the driver is fine: it only says the stall did not reproduce. |
+| `repro` | Does the Verifier freeze reproduce? Verifier stays on for `audioroutervirtual.sys`; `-ReproBoots` boots (default 5), each a restart, a short fuzz (`-FuzzSeconds`, use 300) and a 2 min stall watch. Run alone: `-Blocks repro -FuzzSeconds 300`. | Every fuzz PASS. A frozen guest (state file stops, screen frozen) is a reproduction: save the evidence, reset the VM and let the run resume. Count freezes per boot in the notes. |
+| `pause` | Only with `-WithHostPause`: does a route ride a 90 s host-side VM pause (nearest analog of sleep, **not** a real S3 sleep)? | Route state `running` and exit 0 afterwards. |
+
+Every step also copies its state to `Z:\<bundle>\round2-state.json` (and the A/B
+rows to `round2-ab-rows.jsonl`) so a guest that hangs for hours does not take
+the results with it.
+
+On the PC (normal PowerShell, no build, no driver):
+
+```powershell
+Set-Location C:\code\audiorouter\.worktrees\vc-stage-a-025   # worktree of branch docs/virtual-cable-stage-a-0.2.5
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\round2-support.tests.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\prepare-round2-bundle.ps1
+```
+
+The first command must end with `All round-2 host checks passed.` The second
+builds `C:\VMs\ar-share\rc-0.2.5-r3` (the same 0.2.5 files, the new scripts and
+`driver-rc3`) and verifies every hash. Do not run either while on a call; they
+are light, but copying the bundle reads a few hundred MB.
+
+Optional host pause test (needs the VM to be running; leave this window open):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\round2-pause-watcher.ps1 -Share C:\VMs\ar-share\rc-0.2.5-r3
+```
+
+In the VM: restore `02-test-signing-ready`, start it, sign in, copy
+`Z:\rc-0.2.5-r3` to `C:\ar\rc-0.2.5-r3`, open PowerShell as administrator:
+
+```powershell
+cd C:\ar\rc-0.2.5-r3
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run-stage-a.ps1 -Session round2 -AutoLogon
+```
+
+`-AutoLogon` asks once for the guest account's password, checks it, and stores
+it in the guest's Winlogon key so the VM signs in by itself after each planned
+restart (the run resumes from a logon task). It is removed at the end of the
+run, and restoring the checkpoint removes it too. Without it you must log back
+in after every restart and the night stalls. Add `-WithHostPause` only if the
+watcher is running.
+
+**Run VM sessions only on an idle host** (owner rule, 2026-11-22: a game on the host starved the VM, which then froze or stalled for minutes with no driver installed). Close games, run `wsl --shutdown`, check at least 10 GB of available memory, and start `toolsmhost-load.ps1` (detached, writes `C:VMshost-load.csv`) so a freeze can be matched to host load. A freeze is a driver candidate only if the host stayed under 20 % CPU with 6 GB or more available.
+
+**Keep the PC awake overnight** (Settings, System, Power: screen and sleep set
+to Never, or PowerToys Awake). If the host sleeps, the VM stops with it and the
+run resumes in the morning with meaningless timings; a stalled night is not
+evidence about the driver. The summary and
+`stage-a-round2-*.zip` land on `Z:\rc-0.2.5-r3`. If the guest is frozen in the
+morning, do not restore the snapshot first: copy `round2-state.json` from the
+share, save the host's `C:\VMs\AR-DriverTest\Logs\VBox.log`, then power off.
+Shorter runs: `-Blocks ab` (about 75 min), `-AbPhases 4`, `-PoolMinutes 30`,
+`-FuzzSeconds 900`.
+
+Rollback: shut the VM down and restore `02-test-signing-ready` (untick the
+snapshot-of-current-state box). Nothing here touches the host's drivers or
+settings.
+
 ### Copy-and-run commands for each session
 
 For every session below, run `Set-Location C:\ar` first in an Administrator
