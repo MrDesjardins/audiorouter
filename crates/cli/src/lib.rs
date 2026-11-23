@@ -3688,6 +3688,20 @@ fn mcp_undo_last_change(
                 "idempotencyKey": mcp_key_or_generated(arguments, "undo_last_change"),
             }),
         )
+        .map_err(|response| {
+            // A retry with the same key plans against the new revision, so
+            // the backend sees a different request under a used key. Say what
+            // that means instead of showing the raw conflict.
+            let code = &response["result"]["structuredContent"]["error"]["data"]["code"];
+            if code == "idempotencyConflict" {
+                mcp_tool_error(
+                    id.clone(),
+                    "This key was already used, so the earlier change was probably applied. Check get_session_summary; to undo one more change, call again without an idempotencyKey (or with a new one).",
+                )
+            } else {
+                response
+            }
+        })
     };
     match run() {
         Ok(committed) => mcp_tool_result(id.clone(), committed),
@@ -3944,12 +3958,6 @@ mod tests {
         variants
     }
 
-    /// Owner rule 2026-10-31: the REST API and MCP must not drift from the
-    /// backend. This runs every default MCP tool (every enum variant) and
-    /// reads every resource against an in-memory backend, records the
-    /// backend methods they call, and requires each `API_METHODS` entry to
-    /// be reached or listed in `MCP_EXCLUDED_METHODS` with a reason. A new
-    /// API method fails here until it gets a default tool or an exclusion.
     #[cfg(windows)]
     #[test]
     #[ignore = "requires the repository bus fixture and rebuilt VST2 worker"]
@@ -4081,6 +4089,12 @@ mod tests {
         assert!(wrong.is_empty(), "{wrong:#?}");
     }
 
+    /// Owner rule 2026-10-31: the REST API and MCP must not drift from the
+    /// backend. This runs every default MCP tool (every enum variant) and
+    /// reads every resource against an in-memory backend, records the
+    /// backend methods they call, and requires each `API_METHODS` entry to
+    /// be reached or listed in `MCP_EXCLUDED_METHODS` with a reason. A new
+    /// API method fails here until it gets a default tool or an exclusion.
     #[test]
     fn every_api_method_is_reached_by_a_default_mcp_tool_or_excluded() {
         let mut plane = ControlPlane::default();
@@ -6598,6 +6612,47 @@ mod tests {
             json!({ "revision": first }),
         );
         assert_eq!(back["result"]["isError"], false, "{back}");
+    }
+
+    #[test]
+    fn retrying_an_undo_with_the_same_key_explains_itself() {
+        let mut plane = ControlPlane::default();
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        let id = session.id.as_str().to_owned();
+        plane.insert_session(session).unwrap();
+        let grant =
+            audiorouter_control::ClientGrant::for_role(audiorouter_control::ClientRole::Operator);
+        let mut call = |name: &str, arguments: Value| {
+            mcp_tool_call(
+                &mut plane,
+                "mcp-undo",
+                &grant,
+                None,
+                &json!({ "id": 1, "params": { "name": name, "arguments": arguments } }),
+            )
+        };
+        for index in 0..2 {
+            let added = call(
+                "add_tool",
+                json!({ "sessionId": id, "kind": "meter", "name": format!("Level {index}") }),
+            );
+            assert_eq!(added["result"]["isError"], false, "{added}");
+        }
+        let first = call(
+            "undo_last_change",
+            json!({ "sessionId": id, "idempotencyKey": "undo-1" }),
+        );
+        assert_eq!(first["result"]["isError"], false, "{first}");
+        let retry = call(
+            "undo_last_change",
+            json!({ "sessionId": id, "idempotencyKey": "undo-1" }),
+        );
+        assert_eq!(retry["result"]["isError"], true, "{retry}");
+        let text = retry["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("already used"), "{text}");
+        assert!(!text.contains("idempotencyConflict"), "{text}");
     }
 
     #[test]

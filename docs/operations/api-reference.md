@@ -219,8 +219,8 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `meters.levels` | `read` | read-only; peak/RMS dBFS, clipping and reduction per playing node |
 | `graph.plan` | `graphWrite` | plan-only |
 | `graph.commit` | `graphWrite` | mutating; requires an idempotency key; optional `requireStoppedSessionId` rejects at commit if that session is running or owns a native worker |
-| `session.start` | `sessionControl` | external operation; requires an idempotency key; optional `sessionId` (open session); optional `candidate` starts a temporary preview without saving the session revision |
-| `sessions.start` | `sessionControl` | external operation; requires an idempotency key; optional `sessionId` (open session); optional `candidate` starts a temporary preview without saving the session revision |
+| `session.start` | `sessionControl` | external operation; requires an idempotency key; optional `sessionId` (open session); optional `candidate` starts a temporary preview without saving the session revision; a route with audio-device nodes that is not prepared is refused (`nodeNotReady`), use `sessions.play` |
+| `sessions.start` | `sessionControl` | external operation; requires an idempotency key; optional `sessionId` (open session); optional `candidate` starts a temporary preview without saving the session revision; a route with audio-device nodes that is not prepared is refused (`nodeNotReady`), use `sessions.play` |
 | `session.stop` | `sessionControl` | external operation; requires an idempotency key; optional `sessionId` (open session) |
 | `sessions.stop` | `sessionControl` | external operation; requires an idempotency key; optional `sessionId` (open session); MCP tool `control_session` generates the key |
 
