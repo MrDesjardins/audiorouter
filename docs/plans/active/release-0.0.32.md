@@ -97,7 +97,16 @@ No runtime implementation or dependency version changed in this branch.
   startup check, not an application failure or a passing save/restart test.
   Requested owner closure; did not stop their process or touch their profile.
 
-Next: rerun the exact candidate smoke after owner closure. Then report local
-checks and branch head for explicit PR-opening approval. Publication, tags and
+After the owner closed AudioRouter, reran
+`node tools/quality/packaged-shell-smoke.mjs --shell src-tauri/target/release/audiorouter-shell.exe --output target/release-0.0.32-checks/packaged-smoke-final --timeout-ms 60000`.
+Passed: exact candidate launch, native bridge, session save, restart persistence
+and graceful quit, with isolated database/WebView profile and no uncaught UI
+errors. Evidence: `target/release-0.0.32-checks/packaged-smoke-final/result.json`.
+This supersedes the earlier pipe-ownership refusal; candidate shell bytes
+remain unchanged. No owner profile or audio was used.
+
+Next: report local checks and branch head for explicit PR-opening approval.
+After merge, create the reviewed tag and rebuild/verify tagged artifacts for
+the draft; final publication is a separate human action. Publication, tags and
 external uploads remain unperformed. Current-candidate installer lifecycle,
 Defender, signing, live audio/plugin and broader M08 gates remain open.
