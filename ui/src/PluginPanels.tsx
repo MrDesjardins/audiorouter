@@ -694,7 +694,23 @@ export function PluginRecoveryControls({
   );
 }
 
-export function PluginNodeInspector({
+export function PluginNodeInspector(props: Parameters<typeof PluginNodeInspectorContent>[0]) {
+  // Each instance owns its async replies as well as programs, presets and sidechain feedback.
+  return (
+    <PluginNodeInspectorContent
+      key={JSON.stringify([
+        props.sessionId,
+        props.node.id,
+        props.node.parameters.path,
+        props.node.parameters.fingerprint,
+        props.node.parameters.classId,
+      ])}
+      {...props}
+    />
+  );
+}
+
+function PluginNodeInspectorContent({
   node,
   disabled,
   onUnload,

@@ -7423,7 +7423,7 @@
           "default": null,
           "options": null,
           "dynamic": true,
-          "nonAudibleReason": "Ranges and effect meaning belong to the exact installed plugin; do not invent a plugin fixture.",
+          "nonAudibleReason": "Plugin-provided parameter title works with a plugin installed on your PC, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
           "recordingId": "plugin--pluginParameter-parameterId",
           "recordings": [
             {
@@ -7461,7 +7461,7 @@
               "title": "Every setting",
               "video": "assets/tool-guides/instrument-overview.mp4",
               "poster": "assets/tool-guides/instrument-overview.jpg",
-              "description": "A silent tour of the Instrument Properties panel. It chooses a MIDI device under Notes come from, presses three keys on the on-screen keyboard, then uses Stop all notes. The recording does not play a real instrument."
+              "description": "A silent tour of the Instrument Properties panel. It chooses a MIDI device under Notes come from, plays the on-screen keys with Enter, a pointer and Space, then uses Stop all notes. Release the key or move focus away to end a note. The recording does not play a real instrument."
             }
           ],
           "status": "exempted"
@@ -7483,7 +7483,7 @@
               "title": "Every setting",
               "video": "assets/tool-guides/instrument-overview.mp4",
               "poster": "assets/tool-guides/instrument-overview.jpg",
-              "description": "A silent tour of the Instrument Properties panel. It chooses a MIDI device under Notes come from, presses three keys on the on-screen keyboard, then uses Stop all notes. The recording does not play a real instrument."
+              "description": "A silent tour of the Instrument Properties panel. It chooses a MIDI device under Notes come from, plays the on-screen keys with Enter, a pointer and Space, then uses Stop all notes. Release the key or move focus away to end a note. The recording does not play a real instrument."
             }
           ],
           "status": "exempted"
@@ -7505,7 +7505,7 @@
               "title": "Every setting",
               "video": "assets/tool-guides/instrument-overview.mp4",
               "poster": "assets/tool-guides/instrument-overview.jpg",
-              "description": "A silent tour of the Instrument Properties panel. It chooses a MIDI device under Notes come from, presses three keys on the on-screen keyboard, then uses Stop all notes. The recording does not play a real instrument."
+              "description": "A silent tour of the Instrument Properties panel. It chooses a MIDI device under Notes come from, plays the on-screen keys with Enter, a pointer and Space, then uses Stop all notes. Release the key or move focus away to end a note. The recording does not play a real instrument."
             }
           ],
           "status": "exempted"
@@ -7527,7 +7527,7 @@
               "title": "Every setting",
               "video": "assets/tool-guides/instrument-overview.mp4",
               "poster": "assets/tool-guides/instrument-overview.jpg",
-              "description": "A silent tour of the Instrument Properties panel. It chooses a MIDI device under Notes come from, presses three keys on the on-screen keyboard, then uses Stop all notes. The recording does not play a real instrument."
+              "description": "A silent tour of the Instrument Properties panel. It chooses a MIDI device under Notes come from, plays the on-screen keys with Enter, a pointer and Space, then uses Stop all notes. Release the key or move focus away to end a note. The recording does not play a real instrument."
             }
           ],
           "status": "exempted"

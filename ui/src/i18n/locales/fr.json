@@ -1703,7 +1703,7 @@
       "kbGroup": "Clavier à l'écran",
       "stopTitle": "Couper toutes les notes jouées par cet instrument",
       "stopAll": "Arrêter toutes les notes",
-      "holdKey": "Maintenez une touche pour jouer. Ce clavier se commande à la souris ou au toucher ; un clavier MIDI n'a pas besoin de clic.",
+      "holdKey": "Maintenez une touche du piano avec le pointeur, ou placez le focus dessus et maintenez Entrée ou Espace. Relâchez ou déplacez le focus pour terminer la note. Un clavier MIDI n'a pas besoin de clic.",
       "pressPlay": "Appuyez sur Lecture pour l'entendre. Le clavier fonctionne pendant la lecture du routage.",
       "sendFail": "La note n'a pas pu être envoyée."
     },
