@@ -68,6 +68,26 @@ Rollback: revert the consolidation merges and any integration fix without
 discarding the original branches. Preserve them until the release PR reaches
 main, then use the prescribed merged-worktree cleanup mechanism.
 
+All three branches merged cleanly, preserving ancestry. Windows verification
+passed: transport `cargo check` and `cargo test -p audiorouter-transport --locked`
+(42 passed across unit/integration suites, 13 guarded tests ignored), including
+the deterministic stolen-guard regression; workspace strict Clippy; UI types,
+format/lint and all 1,166 tests, including immediate-save-failure selection
+recovery; contract drift; six Edge keybinding scenarios. Reviewed the bulk
+selection screenshots in dark, light and high contrast: controls, selected
+states and text remain visible without clipping. Evidence:
+`target/keybinding-ux/delete-bulk-{dark,light,high-contrast}.png` and
+`target/release-0.0.32-checks/consolidated-*.log`.
+The health-summary script passes syntax checking and a synthetic fixture
+covering run resets, startup-counter discounts, input-stall attribution,
+non-stall deltas and a torn final JSON line (`check-summary.mjs` in that
+evidence directory). No private audio or live endpoint was used. Docs pass
+(295 files/1,640 links). Formatters introduced no unrelated changes.
+The browser runner reports its NO_COLOR/FORCE_COLOR environment notice;
+no product change is justified by that runner setting.
+Next: rebuild clean consolidated candidate inputs, verify artifacts and exact
+shell smoke, then update and push PR #181 once with the final combined result.
+
 ### PR #181 CI repair and branch reconciliation (2026-11-23)
 
 Observed head `c8f6fbe90`: mergeable, no unresolved review threads, dependency
@@ -110,7 +130,8 @@ categories); docs acceptance (294 files/1,632 links); app-only profile,
 artifact-verifier and preparation path-safety regressions; workspace/shell
 Rust format checks and `git diff --check`. Full workspace test results and
 their log path are recorded below.
-No runtime implementation or dependency version changed in this branch.
+Those initial version-only checks predate the transport/UI consolidation and
+cookie patch described above; current combined checks are recorded above.
 
 ### Candidate results (Windows 11 Home build 26300, Node 22.22.3)
 
@@ -157,8 +178,9 @@ errors. Evidence: `target/release-0.0.32-checks/packaged-smoke-final/result.json
 This supersedes the earlier pipe-ownership refusal; candidate shell bytes
 remain unchanged. No owner profile or audio was used.
 
-Next: report local checks and branch head for explicit PR-opening approval.
-After merge, create the reviewed tag and rebuild/verify tagged artifacts for
-the draft; final publication is a separate human action. Publication, tags and
-external uploads remain unperformed. Current-candidate installer lifecycle,
+Next: verify and push the consolidated candidate to the already approved
+PR #181 and monitor its current-head checks. After merge, create the reviewed
+tag and rebuild/verify tagged artifacts for the draft; final publication is
+a separate human action. Publication, release tags and release-asset uploads
+remain unperformed. Current-candidate installer lifecycle,
 Defender, signing, live audio/plugin and broader M08 gates remain open.

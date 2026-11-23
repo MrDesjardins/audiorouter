@@ -32,7 +32,7 @@ previous active plan's chronological history into
 [Active-plan history](../archived/2026-11-16-active-plan-history.md) and left
 this short priorities page behind.
 
-No feature below is release-ready. The app-only candidate is 0.0.30, unsigned
+No feature below is release-ready. The app-only candidate is 0.0.32, unsigned
 and experimental; the driver track is separate. Requirement IDs live in the
 linked plans, not here.
 
@@ -254,8 +254,10 @@ Owner asked to work on priorities 5 and 6. Done so far:
 
 Next:
 
-1. Owner: approve PRs for the two repair branches (and this documentation
-   branch, `docs/quality-latency-2026-11-23`).
+1. Verify the consolidated 0.0.32 candidate in PR #181. The owner approved
+   including both repair branches and `docs/quality-latency-2026-11-23` in
+   that PR; separate PRs for these branches are no longer needed. Follow
+   [the release plan](release-0.0.32.md) for combined checks and exact artifacts.
 2. Owner, tonight: stop the route and free the cables, then the agent runs
    `live_backend_service_keeps_a_routed_tone_continuous` for the multi-input
    worker on the owner's cables.

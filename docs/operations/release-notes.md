@@ -4,6 +4,12 @@
 
 ## 0.0.32 — 2026-11-22 (unsigned experimental preview)
 
+- **More reliable backend startup.** A client connecting at exactly the wrong
+  moment can no longer leave the backend's reserved control pipe occupied and
+  prevent the backend from starting.
+- **Failed keybinding deletion keeps the selection.** If saving a bulk delete
+  fails immediately after the bindings disappear, the bindings and selection
+  remain available for another attempt.
 - **Sound Check keeps Stop available until recording is stopped.** Failed
   status reads or stop requests leave a retry path, and navigating away still
   enforces the ten-second stop.

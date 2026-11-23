@@ -78,7 +78,8 @@ first run (release build and five App tests). Its four later runs passed
 before the owner merged it by hand (auto-merge skipped it), so none of these
 failures is still open.
 
-Open for delivery: the two repair branches above (owner PR approval); Q4
+Open for delivery: the two repairs above, consolidated into PR #181 with
+owner approval on 2026-11-23; Q4
 items 1–7 beyond the storage and guard-pipe slices; Q5; Q6 on each release.
 Hardware and release evidence remain separate gates. Existing acceptance
 targets remain binding.
@@ -391,8 +392,9 @@ present; Q5 failures actionable; Q6 release/rollback evidence complete.
 
 ## Next actionable task (2026-11-23)
 
-1. Owner: approve PRs for `fix/keybind-selection-after-failed-delete` and
-   `fix/pipe-guard-claim-race`; `main` stays red until they merge.
+1. Verify PR #181, which now includes `fix/keybind-selection-after-failed-delete`
+   and `fix/pipe-guard-claim-race` by owner request. The fixes remain pending
+   delivery to main until that release PR is reviewed and merged.
 2. Q4.2, next slice: backend restart while the window, tray, HTTP and MCP
    clients have requests in flight, through the real pipe, with no partial
    graph commit and no cross-session reply. The guard-pipe repair covered
