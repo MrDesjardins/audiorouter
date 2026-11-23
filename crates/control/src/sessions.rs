@@ -1191,7 +1191,13 @@ impl ControlPlane {
     /// for a route that opens audio devices when none are prepared: the
     /// runtime would start without a worker and nothing would play. The
     /// window and `sessions.play` prepare first, so they pass.
+    ///
+    /// A one-shot command-line plane (build id `cli`) never keeps a worker
+    /// between commands, so its documented simulated lifecycle stays allowed.
     fn refuse_unprepared_device_route(&self, id: &EntityId) -> Result<(), ControlError> {
+        if self.build == "cli" {
+            return Ok(());
+        }
         let session = self.get_session(id)?;
         // A plugin route has its own, more specific refusal in session_start.
         if session

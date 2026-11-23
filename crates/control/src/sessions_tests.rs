@@ -940,6 +940,23 @@ fn api_start_refuses_a_device_route_that_is_not_prepared() {
     assert_eq!(summary.result.unwrap()["playing"], false);
 }
 
+/// The one-shot CLI (`session start --database`, build id `cli`) simulates a
+/// start by design; the Windows CLI acceptance script depends on it.
+#[test]
+fn one_shot_cli_planes_keep_their_simulated_start() {
+    let mut plane = ControlPlane::new("cli");
+    plane.insert_session(session()).unwrap();
+    let started = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "sessions.start".into(),
+        params: Some(json!({ "sessionId": "session", "idempotencyKey": "cli-start" })),
+    });
+    let result = started.result.expect("the CLI simulation is not refused");
+    assert_eq!(result["state"], "running");
+    assert_eq!(result["runtime"], "fake");
+}
+
 #[test]
 fn api_start_still_runs_routes_without_audio_devices() {
     let mut plane = ControlPlane::default();
