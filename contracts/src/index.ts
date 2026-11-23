@@ -1977,7 +1977,8 @@ export type MethodParams = {
   "obs.apply": { previewId: string; idempotencyKey: string };
   "obs.restore": { idempotencyKey: string };
   "nodes.types": undefined;
-  "routes.inspect": { sessionId: EntityId; destinationNode: EntityId };
+  /** Omitted sessionId means the open session; destinationNode is an ID or exact name. */
+  "routes.inspect": { sessionId?: EntityId; destinationNode: string };
   "graph.history": { sessionId: EntityId; cursor?: string; limit?: number };
   "graph.undoPlan": { sessionId: EntityId; baseRevision: number };
   "events.subscribe":
@@ -1997,8 +1998,9 @@ export type MethodParams = {
     }>;
     frequenciesHz: number[];
   };
-  "sessions.get": { sessionId: EntityId };
-  "sessions.export": { sessionId: EntityId; raw?: boolean };
+  /** Omitted sessionId means the open session. */
+  "sessions.get": { sessionId?: EntityId };
+  "sessions.export": { sessionId?: EntityId; raw?: boolean };
   "sessions.exportFile": { sessionId: EntityId; path: string; replace?: boolean };
   "sessions.approveExport": { path: string; replace?: boolean };
   "sessions.importFile": { path: string };
@@ -2041,10 +2043,11 @@ export type MethodParams = {
     acknowledgments?: string[] | null;
     requireStoppedSessionId?: EntityId;
   };
-  "session.start": { sessionId: EntityId; idempotencyKey?: string; candidate?: Session };
-  "sessions.start": { sessionId: EntityId; idempotencyKey?: string; candidate?: Session };
-  "session.stop": { sessionId: EntityId; idempotencyKey?: string };
-  "sessions.stop": { sessionId: EntityId; idempotencyKey?: string };
+  /** Omitted sessionId means the open session. */
+  "session.start": { sessionId?: EntityId; idempotencyKey?: string; candidate?: Session };
+  "sessions.start": { sessionId?: EntityId; idempotencyKey?: string; candidate?: Session };
+  "session.stop": { sessionId?: EntityId; idempotencyKey?: string };
+  "sessions.stop": { sessionId?: EntityId; idempotencyKey?: string };
 };
 
 export type MethodResult = {

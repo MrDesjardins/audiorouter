@@ -1089,7 +1089,7 @@ pub const API_METHODS: [ApiMethodSpec; 156] = [
     },
     ApiMethodSpec {
         name: "recordings.list",
-        permission: PermissionScope::Record,
+        permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
     },
     ApiMethodSpec {
@@ -1164,7 +1164,7 @@ pub const API_METHODS: [ApiMethodSpec; 156] = [
     },
     ApiMethodSpec {
         name: "recorders.list",
-        permission: PermissionScope::Record,
+        permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
     },
     ApiMethodSpec {
@@ -1240,7 +1240,7 @@ pub const API_METHODS: [ApiMethodSpec; 156] = [
     },
     ApiMethodSpec {
         name: "recordings.get",
-        permission: PermissionScope::Record,
+        permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
     },
     ApiMethodSpec {
@@ -1400,12 +1400,12 @@ pub const API_METHODS: [ApiMethodSpec; 156] = [
     },
     ApiMethodSpec {
         name: "plugins.list",
-        permission: PermissionScope::PluginScan,
+        permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
     },
     ApiMethodSpec {
         name: "plugins.inventory",
-        permission: PermissionScope::PluginScan,
+        permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
     },
     ApiMethodSpec {
@@ -3379,6 +3379,46 @@ pub enum StoreError {
     IdempotencyConflict,
 }
 
+/// Plain sentences for API, script and assistant callers. The machine code
+/// (`notFound`, `revisionConflict`, ...) travels separately in `error.data`.
+impl std::fmt::Display for StoreError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SessionNotFound => write!(f, "No saved session has that ID; list the sessions to find it."),
+            Self::PlanNotFound => write!(f, "That plan does not exist or was already used; create a new plan."),
+            Self::PlanExpired => write!(f, "That plan expired; create a new plan from the current session revision."),
+            Self::PlanLimitReached => write!(f, "Too many plans are waiting; wait for one to expire, then plan again."),
+            Self::InvalidGraph(errors) => {
+                // The first few problems, so one bad candidate cannot flood
+                // a script's log or an assistant's context.
+                const SHOWN: usize = 5;
+                write!(f, "The route is not valid: ")?;
+                for (index, error) in errors.iter().take(SHOWN).enumerate() {
+                    if index > 0 {
+                        write!(f, "; ")?;
+                    }
+                    write!(f, "{error}")?;
+                }
+                if errors.len() > SHOWN {
+                    write!(f, "; and {} more", errors.len() - SHOWN)?;
+                }
+                Ok(())
+            }
+            Self::RevisionConflict { expected, actual } => write!(
+                f,
+                "The session changed: the change was based on revision {expected}, but the session is now at revision {actual}. Read it again and redo the change."
+            ),
+            Self::EmptyIdempotencyKey => write!(f, "The idempotency key must not be empty."),
+            Self::IdempotencyKeyTooLong => write!(f, "The idempotency key is too long."),
+            Self::NoUndoAvailable => write!(f, "There is no earlier saved change to undo."),
+            Self::IdempotencyConflict => write!(
+                f,
+                "This idempotency key was already used for a different request; use a new key for a new request."
+            ),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CommitResult {
@@ -3804,6 +3844,26 @@ impl FakeRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_invalid_graph_message_names_the_first_five_problems_and_counts_the_rest() {
+        let errors = (0..8)
+            .map(|index| ValidationError::EmptyId {
+                path: format!("nodes[{index}].id"),
+            })
+            .collect();
+        let message = StoreError::InvalidGraph(errors).to_string();
+        assert!(
+            message.starts_with("The route is not valid: nodes[0].id"),
+            "{message}"
+        );
+        assert!(
+            message.contains("nodes[4].id") && !message.contains("nodes[5].id"),
+            "{message}"
+        );
+        assert!(message.ends_with("; and 3 more"), "{message}");
+    }
+
     fn node(id: &str, kind: NodeKind, direction: PortDirection) -> Node {
         Node {
             id: EntityId::new(id),

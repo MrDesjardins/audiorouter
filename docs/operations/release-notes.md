@@ -2,7 +2,42 @@
 
 ## Unreleased
 
-Nothing yet.
+- **Assistants and scripts can no longer make AudioRouter open a network
+  share.** A UNC path or network drive in any file or folder setting is
+  refused for every client except the AudioRouter window, so a misled
+  assistant cannot make Windows offer your sign-in to another computer.
+- **Readable API errors.** Error messages are plain text instead of internal
+  code names, and each error keeps its stable `data.code`.
+- **Assistant tools need fewer technical details.** Session tools use the
+  open session, keys are generated, nodes are named by name, and a retried
+  "create session" no longer fails.
+- **Changes for API and MCP integrations** (check scripts that read status
+  codes or MCP results):
+  - HTTP errors now use their own status: 404 for an unknown session or
+    plan, 409 for conflicts, a busy device, a node not set up or nothing to
+    undo, 503 when Windows audio or the database is unavailable, and 429 with
+    `Retry-After`. These used to be 400. Every error body now has
+    `error.data.code`, including the adapter's own refusals.
+  - A reused idempotency key returns the code `idempotencyConflict` (was
+    `invalidRequest`); a missing session returns `notFound`.
+  - MCP tool results are `{"result": ...}` or `{"error": ...}` without the
+    `jsonrpc` and `id` fields. `inspect_routes` takes `node` (was
+    `destinationNode`), and `start_recording`/`stop_recording` take `node`
+    (was `nodeId`).
+  - `GET /api/v1/sessions` accepts `cursor` and `limit`.
+  - `clients.authorize` and `clients.revoke` are window-only over HTTP
+    (403). A client can no longer revoke its own access.
+  - New assistant tool `get_obs_status` reads the OBS connection.
+  - Reading saved recordings, live recorders and the remembered plugin scan
+    (`recordings.list`, `recordings.get`, `recorders.list`, `plugins.list`,
+    `plugins.inventory`) now needs only `read`, so any assistant can use
+    `list_recordings`, `get_recording`, `list_live_recorders` and
+    `list_plugins`.
+  - `start_recording`, `stop_recording`, `set_recording_metadata`,
+    `rename_recording`, `list_plugin_buses`, `list_plugin_programs` and
+    `prepare_plugin_update` are no longer default assistant tools: they
+    needed permissions no assistant could hold, so every call was refused.
+    They remain with `--advanced-tools`.
 
 ## 0.0.31 — 2026-11-19 (unsigned experimental preview)
 

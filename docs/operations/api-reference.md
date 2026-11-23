@@ -57,7 +57,7 @@ See [network privacy and permissions](privacy-permissions.md#audio-privacy-bound
 | `clients.revoke` | `deviceAdministration` | mutating; requires an idempotency key |
 | `operations.get` | `read` | read-only |
 | `operations.cancel` | `sessionControl` | mutating; requires an idempotency key |
-| `recordings.list` | `record` | read-only |
+| `recordings.list` | `read` | read-only |
 | `audioMedia.beginUpload` | `graphWrite` | mutating; starts one bounded WAV/MP3 upload |
 | `audioMedia.uploadChunk` | `graphWrite` | mutating; appends the next ordered bounded upload chunk |
 | `audioMedia.finishUpload` | `graphWrite` | mutating; validates, decodes, and stores opaque media |
@@ -65,7 +65,7 @@ See [network privacy and permissions](privacy-permissions.md#audio-privacy-bound
 | `audioMedia.delete` | `graphWrite` | mutating; deletes media only when no session references it |
 | `audioSources.transport` | `sessionControl` | mutating; plays/stops a prepared Test Signal or plays/pauses/stops a prepared Audio File in a running session; `status` reads source state; `sessionId` optional (active session), `nodeId` an ID or exact name |
 | `timeShift.transport` | `sessionControl` | mutating; pauses, resumes, jumps back/forward 10 s, or returns to live on a running Time Shift node; `status` reads its delay and buffer; `sessionId` optional, `nodeId` an ID or exact name |
-| `recorders.list` | `record` | read-only |
+| `recorders.list` | `read` | read-only |
 | `recorders.create` | `record` | mutating; requires an idempotency key |
 | `recorders.arm` | `record` | mutating; requires an idempotency key |
 | `recorders.start` | `record` | mutating; requires an idempotency key |
@@ -79,7 +79,7 @@ See [network privacy and permissions](privacy-permissions.md#audio-privacy-bound
 | `devices.setAccess` | `session.control` | mutating; gives or withdraws that consent; desktop window grant only (refused for CLI/MCP grants and with 403 by the localhost HTTP adapter) |
 | `recordings.getRoot` | `record` | read-only; the approved recording folder (`null` until chosen) and a suggested folder |
 | `recordings.setRoot` | `record` | mutating; approves a local folder (`create: true` creates it); desktop window only, refused with 403 by the localhost HTTP adapter and not offered over MCP |
-| `recordings.get` | `record` | read-only |
+| `recordings.get` | `read` | read-only |
 | `recordings.recovery` | `record` | read-only |
 | `recordings.reveal` | `record` | external operation |
 | `recordings.preview` | `record` | read-only |
@@ -142,8 +142,8 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `nativeMultiInputs.pump` | `sessionControl` | external operation; drains bounded work from several exact capture workers into their prepared generation-bound feeder |
 | `nativeMultiInputs.bindBranches` | `sessionControl` | external operation; binds ordered validated output nodes to branch-local virtual, recording, and tool observers |
 | `plugins.scan` | `pluginScan` | reads directory metadata by default; optional `shellPath` inspects one exact VST2 binary in an isolated worker and reports its named effects |
-| `plugins.list` | `pluginScan` | read-only |
-| `plugins.inventory` | `pluginScan` | read-only; every remembered scan (one per folder), persisted across restarts; never scans or loads plugin code |
+| `plugins.list` | `read` | read-only |
+| `plugins.inventory` | `read` | read-only; every remembered scan (one per folder), persisted across restarts; never scans or loads plugin code |
 | `plugins.saveState` | `pluginScan` | mutating; captures a playing plugin node's opaque state, stores it under the database's `plugin-states` folder, and returns a `stateId` to set on the node |
 | `plugins.prepareUpdate` | `pluginScan` | mutating; optional `sessionId`, `nodeId` as ID or exact name; prepares parameters for a currently scanned vendor update while keeping old state assets. `resetState: true` explicitly prepares factory defaults. Apply returned parameters through ordinary graph plan/commit; preparation changes no route or audio. |
 | `plugins.openEditor` | `pluginScan` | external operation; opens a playing VST3 or VST2 plugin's own editor inside a parent window owned by `ownerProcessId` (the desktop shell) |
@@ -157,7 +157,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `plugins.addSidechainPort` | `sessionControl` | mutating; creates the named `sidechain` port from a declared VST3 auxiliary bus or explicitly labelled non-shell VST2 key pins, verified by a live worker; one reversible edit that creates no Mixer or connection |
 | `plugins.programs` | `pluginScan` | read-only; bounded program list for a plugin in a playing route (VST2 and VST3; VST3 is read-only); optional `sessionId`, `nodeId` is an ID or exact name |
 | `plugins.selectProgram` | `pluginScan` | mutating; selects a bounded VST2 program index on a playing plugin; optional `sessionId`, `nodeId` is an ID or exact name |
-| `plugins.applyPreset` | `pluginScan` | external operation; applies a bounded VST2 `.fxp`/`.fxb` file from the plugin's own directory to a playing plugin; optional `sessionId`, `nodeId` is an ID or exact name |
+| `plugins.applyPreset` | `sessionControl` | external operation; applies a bounded VST2 `.fxp`/`.fxb` file from the plugin's own directory to a playing plugin; optional `sessionId`, `nodeId` is an ID or exact name |
 | `virtualDevices.list` | `read` | read-only |
 | `virtualDevices.plan` | `deviceAdministration` | plan-only |
 | `virtualDevices.apply` | `deviceAdministration` | mutating; requires an idempotency key |
@@ -179,14 +179,14 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `presets.list` | `read` | read-only |
 | `processors.list` | `read` | read-only |
 | `processors.response` | `read` | read-only |
-| `routes.inspect` | `read` | read-only |
+| `routes.inspect` | `read` | read-only; optional `sessionId` (open session); `destinationNode` is an ID or exact name; MCP tool `inspect_routes` |
 | `graph.history` | `read` | read-only |
 | `graph.versions` | `read` | read-only; saved versions with counts, time and who saved |
 | `graph.restorePlan` | `graphWrite` | plan-only; commit makes a new saved version |
 | `graph.undoPlan` | `graphWrite` | plan-only |
 | `events.subscribe` | `read` | read-only; replays by cursor with optional session and bounded category filters |
-| `sessions.get` | `read` | read-only |
-| `sessions.export` | `read` | read-only |
+| `sessions.get` | `read` | read-only; optional `sessionId` (open session); a missing session is `notFound` |
+| `sessions.export` | `read` | read-only; optional `sessionId` (open session) |
 | `sessions.approveExport` | `fileExport` | plan only; desktop Save-dialog approval of one exact local `.audiorouter` destination and optional replacement for five minutes; unavailable to HTTP and MCP |
 | `sessions.exportFile` | `fileExport` | external operation; desktop only; consumes the exact Save-dialog approval and writes saved nodes, imported audio and plugin states; a changed destination needs new consent; refuses network and reparse paths |
 | `sessions.importFile` | `graphWrite` | mutating; imports a `.audiorouter` file as a new stopped session (a used session ID gets `-imported-N` and an "(imported)" name) and restores missing audio and plugin states |
@@ -219,10 +219,10 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `meters.levels` | `read` | read-only; peak/RMS dBFS, clipping and reduction per playing node |
 | `graph.plan` | `graphWrite` | plan-only |
 | `graph.commit` | `graphWrite` | mutating; requires an idempotency key; optional `requireStoppedSessionId` rejects at commit if that session is running or owns a native worker |
-| `session.start` | `sessionControl` | external operation; requires an idempotency key; optional `candidate` starts a temporary preview without saving the session revision |
-| `sessions.start` | `sessionControl` | external operation; requires an idempotency key; optional `candidate` starts a temporary preview without saving the session revision |
-| `session.stop` | `sessionControl` | external operation; requires an idempotency key |
-| `sessions.stop` | `sessionControl` | external operation; requires an idempotency key |
+| `session.start` | `sessionControl` | external operation; requires an idempotency key; optional `sessionId` (open session); optional `candidate` starts a temporary preview without saving the session revision |
+| `sessions.start` | `sessionControl` | external operation; requires an idempotency key; optional `sessionId` (open session); optional `candidate` starts a temporary preview without saving the session revision |
+| `session.stop` | `sessionControl` | external operation; requires an idempotency key; optional `sessionId` (open session) |
+| `sessions.stop` | `sessionControl` | external operation; requires an idempotency key; optional `sessionId` (open session); MCP tool `control_session` generates the key |
 
 `devices.list` returns active endpoint metadata without opening a stream. Pass
 `includeInactive: true` to include disabled, unplugged, not-present, and
@@ -392,9 +392,26 @@ The processor catalog is also available through the typed read-only command
 Discovery failures are not represented as an empty inventory. The CLI discovery
 commands preserve the JSON-RPC error envelope, including `data.code`, unsigned
 Windows `data.hresult` when available, `data.retryable`, and `data.remediation`.
-The MCP adapter carries the same envelope in both `structuredContent` and its
-textual JSON content. Clients should branch on the stable code (for example,
-`deviceInUse` or `accessDenied`) rather than parsing the English message.
+The MCP adapter returns `{"result": ...}` or `{"error": ...}` (the backend's
+JSON-RPC envelope without `jsonrpc` and `id`) in both `structuredContent` and
+its textual JSON content. Clients should branch on the stable code (for
+example, `deviceInUse`, `notFound` or `idempotencyConflict`) rather than
+parsing the message, which is plain text for a person (never Rust debug
+text) and may change between versions.
+An unreachable backend is an `isError` tool result that tells the user to
+check AudioRouter is running, so the assistant sees it.
+
+Every client other than the desktop window (local CLI commands on their own
+database excepted) is refused a network location
+(UNC path, `\\?\UNC\…`, `\??\UNC\…`, a mapped network drive or a drive
+letter that does not exist) in any file or folder parameter, at any depth,
+with `permissionDenied` and the parameter's JSON pointer in
+`data.fieldPath`. Opening such a path would offer the user's Windows
+credentials to that host. Only inside a whole-session `candidate`
+(`graph.plan`, a preview Start) may a location the targeted session already
+holds (chosen in the window) come back unchanged; everywhere else every
+network location is refused. The HTTP API cannot see
+the session and refuses every network location.
 
 The diagnostics export is a redacted, read-only JSON snapshot. Its destination
 must be absolute and must not already exist; this prevents accidental overwrite
@@ -456,6 +473,15 @@ transport, meters, undo, recording, status) and, with `--advanced-tools`,
 focused graph, virtual-route, native-output and project-driver bridge tools
 plus `call_api`. Every public method is reached by a default tool or resource
 or is excluded with a recorded reason (`MCP_EXCLUDED_METHODS`, spec AUTO-18).
+Default tools generate a missing idempotency key, default `sessionId` to the
+open session and name nodes as `node` (an ID or exact name). Each tool carries
+a `title` and the hints `readOnlyHint` (checked against `API_METHODS` side
+effects by a test), `destructiveHint` (changes undo cannot reverse),
+`idempotentHint` and `openWorldHint: false`. The server negotiates the MCP
+version at `initialize` (2025-11-25, 2025-06-18 or 2025-03-26), answers
+`ping` at any time, never replies to notifications, sends usage
+`instructions`, returns -32602 for an unknown tool and -32002 for an unknown
+resource.
 It uses the enrolled client identity and cannot bypass the backend permission
 checks. Native bridge preparation still requires the exact broker path and
 mapping inputs, and remains stopped until a qualifying managed driver exists.

@@ -140,6 +140,15 @@ and tool catalogs, structured backend error mapping, a real reviewed second
 language, and three-theme/Narrator/packaged evidence; see the plan’s execution
 record. No release or PR is authorized by the plan.
 
+Owner-requested REST API and MCP quality review (2026-11-21):
+[findings](api-mcp-quality.md). 14 ranked findings (a network preset path
+reachable through MCP, non-retry-safe session creation, Rust debug text in
+error messages, wrong tool annotations, protocol conformance). All 14 were
+fixed in PR #170. A second review (2026-11-22, same page) found 13 default
+MCP tools that no MCP role can use, a REST path that revokes the window's own
+enrollment, and `sessions.start` reporting a silent route as running. The
+owner chooses the R2-1 option.
+
 Execution plans that still hold open work:
 
 - [Application quality](application-quality.md) — Q3.2 hosted, then Q4–Q6.

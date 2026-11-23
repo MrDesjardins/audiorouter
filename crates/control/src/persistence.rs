@@ -560,9 +560,9 @@ impl ControlPlane {
     ) -> Result<Option<Value>, ControlError> {
         if let Some(result) = self.operation_outcomes.get(key) {
             if self.idempotency_hashes.get(key).map(String::as_str) != Some(request_hash) {
-                return Err(ControlError::InvalidRequest(
-                    "idempotency key is already used for a different request".into(),
-                ));
+                // Its own code, so a caller can tell a reused key from a
+                // malformed request (REST answers 409).
+                return Err(ControlError::IdempotencyConflict);
             }
             return Ok(Some(result.clone()));
         }
