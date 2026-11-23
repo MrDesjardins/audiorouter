@@ -114,6 +114,7 @@ export function useSoundboardController({
   const [store] = useState(createSoundboardStore);
   const [importing, setImporting] = useState(false);
   const pendingPresses = useRef(new Map<string, { released: boolean }>());
+  const controlActivity = useRef({ version: 0, pending: 0 });
   // The ref closes the gap between a second drop and the re-render that disables it.
   const importBusy = useRef(false);
   const importFile = async (nodeId: string, slot: number, file: File, keepCaption: boolean) => {
@@ -151,13 +152,16 @@ export function useSoundboardController({
       return;
     }
     let polling = false;
+    let active = true;
     let failing = false;
     const read = backend.soundboardStatus.bind(backend);
     const timer = window.setInterval(() => {
-      if (polling) return;
+      if (polling || controlActivity.current.pending > 0) return;
       polling = true;
+      const version = controlActivity.current.version;
       void Promise.all(ids.map(async (id) => [id, await read(sessionId, id)] as const))
         .then((results) => {
+          if (!active || controlActivity.current.pending > 0 || controlActivity.current.version !== version) return;
           failing = false;
           store.set(
             Object.fromEntries(
@@ -170,7 +174,7 @@ export function useSoundboardController({
         })
         .catch(() => {
           // A board that is not prepared yet is normal right after Start; report a real outage once.
-          if (!failing) reportFailure(tm("h1.statusUnavailable"));
+          if (active && !failing) reportFailure(tm("h1.statusUnavailable"));
           failing = true;
         })
         .finally(() => {
@@ -178,6 +182,7 @@ export function useSoundboardController({
         });
     }, POLL_MS);
     return () => {
+      active = false;
       window.clearInterval(timer);
       store.set({});
     };
@@ -193,6 +198,8 @@ export function useSoundboardController({
     if (!send || !backend.connected) return;
     const press = action === "press" ? { released: false } : null;
     if (press) pendingPresses.current.set(key, press);
+    controlActivity.current.version += 1;
+    controlActivity.current.pending += 1;
     void (async () => {
       try {
         if (action === "press" && !sessionRunning && !(await startSession())) return;
@@ -204,6 +211,8 @@ export function useSoundboardController({
       } catch {
         report(tm("h1.playFailed"));
       } finally {
+        controlActivity.current.version += 1;
+        controlActivity.current.pending -= 1;
         if (press && pendingPresses.current.get(key) === press) pendingPresses.current.delete(key);
       }
     })();
@@ -211,7 +220,15 @@ export function useSoundboardController({
   const stop = (nodeId: string, slot?: number) => {
     const send = backend.soundboardStop;
     if (!send || !backend.connected || !sessionRunning) return;
-    void send.call(backend, sessionId, nodeId, slot).catch(() => report(tm("h1.stopFailed")));
+    controlActivity.current.version += 1;
+    controlActivity.current.pending += 1;
+    void send
+      .call(backend, sessionId, nodeId, slot)
+      .catch(() => report(tm("h1.stopFailed")))
+      .finally(() => {
+        controlActivity.current.version += 1;
+        controlActivity.current.pending -= 1;
+      });
   };
   return { store, ready: backend.connected && sessionRunning, trigger, stop, importing, importFile, announce, assign };
 }

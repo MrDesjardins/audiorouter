@@ -533,17 +533,57 @@ export function applicationCaptureChoices(applications: readonly ApplicationInfo
  * is that application, or null. Such a route runs on the application worker
  * (process loopback to one output) instead of the physical endpoint pair.
  */
-const ROUTE_SOURCE_KINDS = new Set([
-  "physicalInput",
-  "applicationCapture",
-  "endpointLoopback",
-  "virtualRenderSource",
-  "soundboard",
-  "instrument",
-  "testSignal",
-  "audioFile",
-  "networkReceive",
-]);
+function routeSourceType(kind: NodeKind): "generated" | "native" | "physical" | "application" | null {
+  switch (kind) {
+    case "testSignal":
+    case "audioFile":
+    case "soundboard":
+      return "generated";
+    case "instrument":
+    case "endpointLoopback":
+    case "virtualRenderSource":
+    case "networkReceive":
+      return "native";
+    case "physicalInput":
+      return "physical";
+    case "applicationCapture":
+      return "application";
+    case "physicalOutput":
+    case "virtualCaptureSink":
+    case "gain":
+    case "volume":
+    case "bassTreble":
+    case "dehum":
+    case "declick":
+    case "denoise":
+    case "speechDenoise":
+    case "spectralGate":
+    case "funVoiceChanger":
+    case "firFilter":
+    case "timeShift":
+    case "mute":
+    case "meter":
+    case "parametricEq":
+    case "compressor":
+    case "gate":
+    case "limiter":
+    case "delay":
+    case "graphicEq":
+    case "pitch":
+    case "plugin":
+    case "duck":
+    case "mixer":
+    case "recorder":
+    case "inputSwitch":
+    case "outputSwitch":
+    case "networkSend":
+      return null;
+    default: {
+      const unclassified: never = kind;
+      return unclassified;
+    }
+  }
+}
 
 /**
  * Whether the engine accepts this kind in a linear chain before a Mixer input
@@ -706,6 +746,8 @@ export function independentPaths(session: Session): Session["nodes"][] {
  * resolves every device from the node's own saved endpoint.
  */
 export function needsNativePaths(session: Session): boolean {
+  // These sources have no physical capture binding, even on a single path.
+  if (session.nodes.some((node) => node.enabled && routeSourceType(node.kind) === "native")) return true;
   // Network Send/Receive run only on the multi-path worker.
   if (session.nodes.some((node) => node.enabled && (node.kind === "networkSend" || node.kind === "networkReceive")))
     return true;
@@ -768,7 +810,7 @@ export function needsNativePaths(session: Session): boolean {
  * multi-path worker, which accepts every source in every layout.
  */
 function mixesFileOrBoardWithAnotherSource(nodes: Session["nodes"]): boolean {
-  const sources = nodes.filter((node) => node.enabled && ROUTE_SOURCE_KINDS.has(node.kind));
+  const sources = nodes.filter((node) => node.enabled && routeSourceType(node.kind) !== null);
   return (
     sources.length > 1 &&
     sources.some((node) => node.kind === "audioFile" || node.kind === "soundboard" || node.kind === "instrument")
@@ -785,12 +827,10 @@ export function generatedOnlyRoute(session: Session): boolean {
   return (
     paths.length === 1 &&
     (() => {
-      const sources = paths[0].filter((node) => node.enabled && ROUTE_SOURCE_KINDS.has(node.kind));
+      const sources = paths[0].filter((node) => node.enabled && routeSourceType(node.kind) !== null);
       return (
         sources.length > 0 &&
-        sources.every(
-          (node) => node.kind === "testSignal" || node.kind === "audioFile" || node.kind === "soundboard",
-        ) &&
+        sources.every((node) => routeSourceType(node.kind) === "generated" || node.kind === "instrument") &&
         paths[0].some((node) => node.enabled && node.kind === "physicalOutput")
       );
     })()
@@ -812,12 +852,12 @@ export function unboundDeviceNodes(session: Session): Session["nodes"] {
 /** Enabled sources other than the given application node that keep an application route from running on Play. */
 export function mixedApplicationRouteOtherSources(session: Session, applicationNodeId: string): Session["nodes"] {
   return session.nodes.filter(
-    (node) => node.enabled && node.id !== applicationNodeId && ROUTE_SOURCE_KINDS.has(node.kind),
+    (node) => node.enabled && node.id !== applicationNodeId && routeSourceType(node.kind) !== null,
   );
 }
 
 export function applicationOnlyRouteSource(session: Session): Session["nodes"][number] | null {
-  const sources = session.nodes.filter((node) => node.enabled && ROUTE_SOURCE_KINDS.has(node.kind));
+  const sources = session.nodes.filter((node) => node.enabled && routeSourceType(node.kind) !== null);
   const [source] = sources;
   if (sources.length !== 1 || source.kind !== "applicationCapture") return null;
   if (

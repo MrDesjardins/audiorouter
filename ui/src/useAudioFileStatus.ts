@@ -1,13 +1,13 @@
 // Audio File / Test Signal transport status polling (moved from App.tsx).
-import { useEffect, useEffectEvent, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useEffectEvent, type Dispatch, type SetStateAction, type RefObject } from "react";
 import type { Session } from "@audiorouter/contracts";
 import type { UiBackend } from "./backend";
 import { safeErrorName } from "./ErrorBoundary";
 
 type AudioSourceStates = Record<string, "playing" | "paused" | "stopped">;
+export type SourceTransportActivity = Map<string, { version: number; pending: number }>;
 
-/** While the session plays, reads the transport state of up to 16 playing
- * Audio File and Test Signal nodes every 750 ms. */
+/** Discover external playback too. Rotate through all sources in batches of at most 16. */
 export function useAudioFileStatus({
   backend,
   draft,
@@ -16,6 +16,7 @@ export function useAudioFileStatus({
   audioSourceStates,
   setAudioSourceStates,
   recordUiDiagnostic,
+  transportActivity,
 }: {
   backend: UiBackend;
   draft: Session;
@@ -24,55 +25,79 @@ export function useAudioFileStatus({
   audioSourceStates: AudioSourceStates;
   setAudioSourceStates: Dispatch<SetStateAction<AudioSourceStates>>;
   recordUiDiagnostic: (message: string) => void;
+  transportActivity?: RefObject<SourceTransportActivity>;
 }) {
   // Callbacks from the caller: always the latest, never a reason to restart polling.
   const reportFailure = useEffectEvent((message: string) => recordUiDiagnostic(message));
   const updateStates = useEffectEvent((update: SetStateAction<AudioSourceStates>) => setAudioSourceStates(update));
+  const clearStates = useEffectEvent(() => {
+    if (Object.keys(audioSourceStates).length > 0) setAudioSourceStates({});
+  });
+  const sourceIds = JSON.stringify(
+    draft.nodes.filter((node) => node.kind === "audioFile" || node.kind === "testSignal").map((node) => node.id),
+  );
+  const sessionId = session.id;
   useEffect(() => {
-    const playingNodes = draft.nodes
-      .filter(
-        (node) => (node.kind === "audioFile" || node.kind === "testSignal") && audioSourceStates[node.id] === "playing",
-      )
-      .slice(0, 16);
+    const ids = JSON.parse(sourceIds) as string[];
     if (!sessionRunning) {
-      if (Object.keys(audioSourceStates).length > 0) updateStates({});
+      clearStates();
       return;
     }
-    if (!backend.connected || playingNodes.length === 0) return;
+    if (!backend.connected || ids.length === 0) return;
+    let active = true;
+    let offset = 0;
     let polling = false;
     let statusFailing = false;
     const timer = window.setInterval(() => {
       if (polling) return;
       polling = true;
-      void Promise.all(
-        playingNodes.map(
-          async (node) => [node.id, await backend.transportAudioSource(session.id, node.id, "status")] as const,
-        ),
+      const batch = Array.from({ length: Math.min(16, ids.length) }, (_, index) => ids[(offset + index) % ids.length]);
+      offset = (offset + batch.length) % ids.length;
+      void Promise.allSettled(
+        batch.map(async (nodeId) => {
+          const key = JSON.stringify([sessionId, nodeId]);
+          const before = transportActivity?.current.get(key);
+          if (before?.pending) return null;
+          const version = before?.version ?? 0;
+          const result = await backend.transportAudioSource(sessionId, nodeId, "status");
+          return { nodeId, result, key, version };
+        }),
       )
-        .then((states) =>
+        .then((states) => {
+          if (!active) return;
+          const failure = states.find((item) => item.status === "rejected");
+          if (failure?.status === "rejected" && !statusFailing)
+            reportFailure(`Audio file status unavailable (${safeErrorName(failure.reason)})`);
+          statusFailing = Boolean(failure);
           updateStates((current) => {
+            if (!active) return current;
             let changed = false;
             const next = { ...current };
-            for (const [nodeId, result] of states)
+            for (const item of states) {
+              if (item.status !== "fulfilled" || !item.value) continue;
+              const { nodeId, result, key, version } = item.value;
+              const activity = transportActivity?.current.get(key);
+              if (activity?.pending || (activity?.version ?? 0) !== version) continue;
               if (next[nodeId] !== result.state) {
                 next[nodeId] = result.state;
                 changed = true;
               }
+            }
             return changed ? next : current;
-          }),
-        )
-        .then(() => {
-          statusFailing = false;
+          });
         })
         .catch((error: unknown) => {
           // Keep the last states shown; note the first failure of a run.
-          if (!statusFailing) reportFailure(`Audio file status unavailable (${safeErrorName(error)})`);
+          if (active && !statusFailing) reportFailure(`Audio file status unavailable (${safeErrorName(error)})`);
           statusFailing = true;
         })
         .finally(() => {
           polling = false;
         });
     }, 750);
-    return () => window.clearInterval(timer);
-  }, [backend, draft.nodes, session.id, sessionRunning, audioSourceStates]);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [backend, sourceIds, sessionId, sessionRunning, transportActivity]);
 }

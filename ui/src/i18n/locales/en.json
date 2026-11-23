@@ -1691,7 +1691,7 @@
       "kbGroup": "On-screen keyboard",
       "stopTitle": "Silence every note this instrument is playing",
       "stopAll": "Stop all notes",
-      "holdKey": "Hold a key to play. The keyboard is a mouse and touch control; a MIDI keyboard needs no clicking.",
+      "holdKey": "Hold a piano key with the pointer, or focus it and hold Enter or Space. Release or move focus away to end the note. A MIDI keyboard needs no clicking.",
       "pressPlay": "Press Play to hear it. The keyboard works while the route is playing.",
       "sendFail": "The note could not be sent."
     },

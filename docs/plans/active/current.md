@@ -129,6 +129,15 @@ them.
 
 ## Active plan index
 
+Owner-requested UI-only code review (2026-11-22):
+[review findings and evidence](ui-code-review-2026-11-22.md).
+Reviewed latest main `c6f59c195`; seven reproduced findings, including Sound
+Check stop recovery and standalone Instrument playback. All seven now have
+repairs: 1,165 UI tests, three-theme Edge checks, engine combination suites and
+Firefox guide playback pass. The fresh built shell ran on an isolated external
+backend; normal owned-backend save/restart smoke remains open while the owner's
+app holds the default pipe and executable. See the record for its exact scope.
+
 Owner-requested UI language support (2026-11-19):
 [plan](ui-localization.md). Implemented: central per-language JSON catalogs
 with validation/generation for TypeScript keys and native Rust text, live
