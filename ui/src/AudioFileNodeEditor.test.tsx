@@ -43,6 +43,7 @@ function soundCheckFixture() {
     armRecorder: vi.fn(async () => undefined),
     startRecorder: vi.fn(async () => undefined),
     listRecorders: vi.fn(async () => [{ sessionId: demoSession.id, nodeId: recorder.id, lastFrame: 128 }]),
+    stopNodeRecording: vi.fn(async () => ({ state: "stopped" })),
     stopRecorder,
     listRecordings: vi.fn(async () => [{ id: "take-row", recorderId, state: "completed" }]),
     importTemporaryRecording: vi.fn(async () => ({
@@ -51,7 +52,7 @@ function soundCheckFixture() {
       durationMs: 10_000,
     })),
   } as unknown as UiBackend;
-  return { audioNode, recorder, backend, stopRecorder };
+  return { audioNode, recorder, backend, stopRecorder: backend.stopNodeRecording };
 }
 
 describe("Audio File Sound Check", () => {

@@ -383,6 +383,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [recorderFormat, setRecorderFormat] = useState<import("@audiorouter/contracts").RecorderFileFormat>("wavPcm24");
   const [recorderStatuses, setRecorderStatuses] = useState<RecorderStatus[]>([]);
   const [audioSourceStates, setAudioSourceStates] = useState<Record<string, "playing" | "paused" | "stopped">>({});
+  const audioSourceActivity = useRef(new Map<string, { version: number; pending: number }>());
   const [recorderStatusAvailable, setRecorderStatusAvailable] = useState(!backend.connected);
   const [applications, setApplications] = useState<ApplicationRow[]>([]);
   const [devices, setDevices] = useState<DeviceListItem[]>([]);
@@ -1199,6 +1200,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   useReportUnsaved(routeChanged, recordUiDiagnostic);
   useEffect(() => {
     setAudioSourceStates({});
+    audioSourceActivity.current.clear();
   }, [session.id]);
   const refreshApplicationsOnChange = useEffectEvent(() => refreshApplications());
   useEffect(() => {
@@ -1210,6 +1212,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     session,
     sessionRunning,
     audioSourceStates,
+    transportActivity: audioSourceActivity,
     setAudioSourceStates,
     recordUiDiagnostic,
   });
@@ -2502,11 +2505,18 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   }, [sessionRunning, timeShiftNodeIds]);
   const transportAudioSource = async (nodeId: string, action: "play" | "pause" | "stop" | "status") => {
     if (!backend.connected || (staleSnapshot && action === "play")) return;
+    const key = JSON.stringify([session.id, nodeId]);
+    const activity = audioSourceActivity.current.get(key) ?? { version: 0, pending: 0 };
+    activity.version += 1;
+    activity.pending += 1;
+    audioSourceActivity.current.set(key, activity);
+    const requestVersion = activity.version;
     try {
       if (action === "play" && !sessionRunning && !(await startSession())) return;
       if (currentSessionIdRef.current !== session.id) return;
       const result = await backend.transportAudioSource(session.id, nodeId, action);
       if (currentSessionIdRef.current !== session.id) return;
+      if (activity.version !== requestVersion) return;
       setAudioSourceStates((current) => ({ ...current, [nodeId]: result.state }));
       setActionMessage(
         tm("g1.appAudioFileState", {
@@ -2516,6 +2526,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       );
     } catch (error) {
       setActionMessage(formatUiError(error, tm("g1.appTransportFail")));
+    } finally {
+      activity.pending -= 1;
     }
   };
   const startSessionRef = useRef(startSession);
