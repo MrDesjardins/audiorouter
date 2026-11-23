@@ -441,18 +441,10 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
   const allSelected = rules.length > 0 && selectedCount === rules.length;
   const duplicateIds = duplicateTriggerIds(rules);
 
-  useEffect(() => {
-    setSelectedIds((current) => {
-      const live = new Set(rules.map((rule) => rule.id));
-      let changed = false;
-      const next = new Set<string>();
-      for (const id of current) {
-        if (live.has(id)) next.add(id);
-        else changed = true;
-      }
-      return changed ? next : current;
-    });
-  }, [rules]);
+  // The selection is not pruned when the rules change: an effect doing that
+  // could run after a failed delete had already put the rules back, and
+  // clear the restored selection with the optimistic list. Every reader
+  // checks the live rules instead, and a successful delete drops its IDs.
 
   useEffect(() => {
     const onMove = (event: PointerEvent) => {
@@ -567,7 +559,6 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
     setRules((current) => current.map((rule) => (rule.id === id ? { ...rule, name: capped } : rule)));
   };
   const removeRules = async (removeIds: Set<string>) => {
-    const previousSelection = new Set(selectedIds);
     const targets = rulesRef.current.filter((rule) => removeIds.has(rule.id));
     const count = targets.length;
     if (count === 0) return;
@@ -582,11 +573,16 @@ export function GlobalKeybinds({ snapshot }: { snapshot?: UiBackendSnapshot | nu
       destructive: true,
     });
     if (!confirmed) return;
+    // On failure the rules come back and the untouched selection still
+    // names them, so nothing needs restoring.
     if (await persist(rulesRef.current.filter((rule) => !removeIds.has(rule.id)))) {
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        for (const id of removeIds) next.delete(id);
+        return next;
+      });
       setMessage(count === 1 ? tr("g6.kbDeletedOne") : tr("g6.kbDeletedMany", { count }));
       requestAnimationFrame(() => addButtonRef.current?.focus());
-    } else {
-      setSelectedIds(previousSelection);
     }
   };
 

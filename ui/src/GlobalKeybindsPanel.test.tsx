@@ -249,3 +249,57 @@ test("bulk delete uses selected IDs and a failed save retains every binding and 
   await waitFor(() => expect(screen.getAllByRole("checkbox")).toHaveLength(1));
   expect(invoke).toHaveBeenLastCalledWith("keybinds_save", { rules: [rules[1]] });
 });
+
+test("a save that fails right after the optimistic removal paints still restores the selection", async () => {
+  // CI failed the test above intermittently with every binding back but the
+  // selection empty. The save had failed before React ran the effects of the
+  // optimistic render. Reject from a MutationObserver callback, a microtask
+  // straight after that render's DOM commit, so the stale effects run after
+  // the failure every time instead of by chance.
+  let rejectPendingSave: ((reason: string) => void) | undefined;
+  const invoke = vi.fn(async (command: string) => {
+    if (command === "keybinds_list") return rules;
+    if (command === "keybinds_save")
+      return await new Promise<unknown>((_resolve, reject) => {
+        rejectPendingSave = reject;
+      });
+    return undefined;
+  });
+  window.__TAURI_INTERNALS__ = { invoke } as unknown as typeof window.__TAURI_INTERNALS__;
+  const view = render(
+    <>
+      <GlobalKeybinds snapshot={null} />
+      <AppDialogHost />
+    </>,
+  );
+  await screen.findByText("Start or stop the session — F13");
+  fireEvent.click(screen.getByRole("button", { name: "Manage keybindings" }));
+  fireEvent.keyDown(screen.getByRole("checkbox", { name: "Select F13" }), { key: " " });
+  fireEvent.keyDown(screen.getByRole("checkbox", { name: "Select F15" }), { key: " " });
+  let rejected = false;
+  const observer = new MutationObserver(() => {
+    if (!rejected && rejectPendingSave && view.container.querySelectorAll('input[type="checkbox"]').length === 1) {
+      rejected = true;
+      rejectPendingSave("Could not save global keybindings.");
+    }
+  });
+  observer.observe(view.container, { childList: true, subtree: true });
+  try {
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected (2)" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "Delete 2 keybindings?" })).getByRole("button", {
+        name: "Delete 2 keybindings",
+      }),
+    );
+    await screen.findByText("Could not save global keybindings.");
+    await waitFor(() => expect(screen.getAllByRole("checkbox")).toHaveLength(3));
+    // Let any effect still queued from the optimistic render run.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  } finally {
+    observer.disconnect();
+  }
+  expect(rejected).toBe(true);
+  expect((screen.getByRole("checkbox", { name: "Select F13" }) as HTMLInputElement).checked).toBe(true);
+  expect((screen.getByRole("checkbox", { name: "Select F15" }) as HTMLInputElement).checked).toBe(true);
+  expect(screen.getByRole("button", { name: "Delete selected (2)" })).toBeTruthy();
+});
