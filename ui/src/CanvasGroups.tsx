@@ -1,7 +1,7 @@
 import { returnToPropertiesTab } from "./workbenchPanel";
 import { ToolGuideLink } from "./ToolGuideLink";
 import { useEffect, useState, type CSSProperties } from "react";
-import { NodeResizer, useStore, type NodeProps } from "@xyflow/react";
+import { NodeResizer, useViewportStore, type NodeProps } from "@xyflow/react";
 import { NumberField } from "./NumberField";
 import { SliderField } from "./Slider";
 import { TextField } from "./TextField";
@@ -174,7 +174,7 @@ export function CanvasGroupRenderer({ data, selected }: NodeProps) {
   const tr = useMessages();
   const group = data.group as CanvasGroup;
   // Lets the side grab zones keep one screen size at any zoom; re-renders only when the zoom changes.
-  const zoom = useStore((state) => state.transform[2]);
+  const zoom = useViewportStore((state) => state.transform[2]);
   return (
     <div
       className={`canvas-group${group.locked ? " is-locked" : ""}`}
