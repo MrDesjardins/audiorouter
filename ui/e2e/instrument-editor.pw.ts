@@ -26,7 +26,7 @@ const entry: PluginScanEntry = {
 
 const session = appendPluginPlaceholderNode(demoSession, entry);
 
-async function openInstrument(page: Page, theme: string, running: boolean) {
+async function openInstrument(page: Page, theme: string, running: boolean, width = 1500) {
   await page.addInitScript(
     ({ session, theme, running }) => {
       localStorage.setItem("audiorouter.ui.theme", theme);
@@ -34,7 +34,7 @@ async function openInstrument(page: Page, theme: string, running: boolean) {
     },
     { session, theme, running },
   );
-  await page.setViewportSize({ width: 1500, height: 950 });
+  await page.setViewportSize({ width, height: 950 });
   await page.goto("/route-harness.html");
   await fitCanvas(page);
   await page.getByTestId("rf__node-instrument-1").locator(".flow-node-title").click();
@@ -66,10 +66,15 @@ for (const theme of ["dark", "light", "high-contrast"]) {
   });
 }
 
-test("the Instrument keyboard is disabled and keeps its size while the route is stopped", async ({ page }) => {
-  const stopped = await openInstrument(page, "dark", false);
-  await expect(stopped.getByRole("button", { name: "C4" })).toBeDisabled();
-  const height = (await stopped.boundingBox())!.height;
-  const playing = await openInstrument(await page.context().newPage(), "dark", true);
-  expect((await playing.boundingBox())!.height).toBe(height);
-});
+for (const theme of ["dark", "light", "high-contrast"]) {
+  for (const width of [1500, 640]) {
+    test(`the stopped Instrument keeps its playing size in ${theme} at ${width}px`, async ({ page }) => {
+      const stopped = await openInstrument(page, theme, false, width);
+      await expect(stopped.getByRole("button", { name: "C4" })).toBeDisabled();
+      await expect(stopped.getByText("A MIDI keyboard needs no clicking.", { exact: false })).toBeHidden();
+      const height = (await stopped.boundingBox())!.height;
+      const playing = await openInstrument(await page.context().newPage(), theme, true, width);
+      expect((await playing.boundingBox())!.height).toBe(height);
+    });
+  }
+}

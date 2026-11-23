@@ -5,7 +5,6 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import ts from "../../ui/node_modules/typescript/lib/typescript.js";
 import { nodeTypeFor, selectedKinds, guideControlName } from "./tool-guide-guards.mjs";
 import { familyActions } from "./tool-guide-family-actions.mjs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -29,15 +28,6 @@ if (config && (kinds?.length !== 1 || properties))
     "Select exactly one tool (GUIDE_KIND=<kind>, without GUIDE_PROPERTIES) for a configuration capture",
   );
 const demo = !config && (properties || process.env.GUIDE_DEMO === "1");
-const parameterLabels = await import(
-  "data:text/javascript;base64," +
-    Buffer.from(
-      ts.transpileModule(
-        readFileSync(resolve(root, "ui/src/parameterText.ts"), "utf8"),
-        { compilerOptions: { module: ts.ModuleKind.ESNext } },
-      ).outputText,
-    ).toString("base64")
-);
 const voicePresets = publicCatalog.voicePresets;
 const renders = JSON.parse(
   readFileSync(
@@ -433,7 +423,10 @@ for (const { tool, render } of selected) {
         tool.kind === "parametricEq"
           ? eqLabels[render.parameter]
           : properties
-            ? parameterLabels.parameterText(tool.kind, render.parameter).label
+            ? await page.evaluate(async ([kind, parameter]) => {
+                const { parameterText } = await import('/src/parameterText.ts');
+                return parameterText(kind, parameter).label;
+              }, [tool.kind, render.parameter])
             : property.label;
       if (properties && render.parameter === "band0Enabled")
         control = inspector.getByRole("button", {
@@ -625,12 +618,12 @@ for (const { tool, render } of selected) {
         };
         if (frame === 10) await source.scrollIntoViewIfNeeded();
         if (frame === 20) await source.selectOption({ label: "Fixture Keystation" });
-        if (frame === 40) await press("C4");
-        if (frame === 50) await page.mouse.up();
+        if (frame === 40) { await key("C4").focus(); await page.keyboard.down("Enter"); }
+        if (frame === 50) await page.keyboard.up("Enter");
         if (frame === 55) await press("E4");
         if (frame === 65) await page.mouse.up();
-        if (frame === 70) await press("G4");
-        if (frame === 80) await page.mouse.up();
+        if (frame === 70) { await key("G4").focus(); await page.keyboard.down("Space"); }
+        if (frame === 80) await page.keyboard.up("Space");
         if (frame === 90) await key("Stop all notes").click();
         if (frame === 105) await inspector.evaluate((e) => (e.scrollTop = 0));
       } else if (tool.kind === "applicationCapture") {

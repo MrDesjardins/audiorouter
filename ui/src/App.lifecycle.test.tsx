@@ -311,6 +311,41 @@ describe("session refresh and playback regressions", () => {
     expect(backend.rebindNativeEndpoint).not.toHaveBeenCalled();
   });
 
+  it("plays a standalone Instrument through native paths without opening an input, even with a remembered microphone", async () => {
+    const synth = {
+      ...pathNode("synth", "physicalInput"),
+      kind: "instrument" as const,
+      ports: [{ name: "out", direction: "output" as const, channels: 2 as const }],
+    };
+    const { backend } = await fixture({
+      ...demoSession,
+      name: "Synth check",
+      nodes: [synth, pathNode("speakers", "physicalOutput", "focusrite")],
+      edges: [pathEdge("e1", "synth", "speakers")],
+    });
+    window.localStorage.setItem(
+      `audiorouter.ui.endpoint-binding.${demoSession.id}`,
+      JSON.stringify({ captureEndpointId: "remembered-mic", renderEndpointId: "focusrite" }),
+    );
+    const prepareNativePaths = vi.fn(async (sessionId: string) => ({
+      sessionId,
+      generation: 1,
+      state: "configured-stopped" as const,
+      pathCount: 1,
+      sourceNodeIds: ["synth"],
+      branchNodeIds: ["speakers"],
+      renderEndpointIds: ["focusrite"],
+    }));
+    const prepareNativeEndpoint = vi.fn();
+    await renderReady(<App backend={{ ...backend, prepareNativePaths, prepareNativeEndpoint }} />);
+    await screen.findByRole("heading", { name: "Synth check" });
+    start();
+    await waitFor(() => expect(backend.startSession).toHaveBeenCalledWith(demoSession.id, expect.any(String)));
+    expect(prepareNativePaths).toHaveBeenCalledWith(demoSession.id);
+    expect(prepareNativeEndpoint).not.toHaveBeenCalled();
+    expect(backend.rebindNativeEndpoint).not.toHaveBeenCalled();
+  });
+
   it("plays a saved Test Signal route to its chosen output without any input device", async () => {
     const tone = {
       ...pathNode("tone", "physicalInput"),

@@ -8,7 +8,11 @@ import { PanelMessage } from "./PanelMessage";
 import { BooleanField } from "./BooleanField";
 import { useMessages } from "./i18n/useMessages";
 
-export function AudioFileNodeEditor({
+export function AudioFileNodeEditor(props: Parameters<typeof AudioFileNodeEditorContent>[0]) {
+  return <AudioFileNodeEditorContent key={JSON.stringify([props.sessionId, props.node.id])} {...props} />;
+}
+
+function AudioFileNodeEditorContent({
   node,
   backend,
   disabled,
@@ -39,8 +43,9 @@ export function AudioFileNodeEditor({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(() => tr("g2.afChoosePrompt"));
   const [selectedRecorder, setSelectedRecorder] = useState("");
-  const [takeState, setTakeState] = useState<"idle" | "recording" | "importing">("idle");
-  const activeTakeId = useRef<string | null>(null);
+  const [takeState, setTakeState] = useState<"idle" | "recording" | "importing" | "retry">("idle");
+  const activeTake = useRef<{ recorderId: string; nodeId: string; stopped: boolean; stopKey: string } | null>(null);
+  const takeBusy = useRef(false);
   const stopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const status = recorderStatuses.find((item) => item.sessionId === sessionId && item.nodeId === selectedRecorder);
   const recorderNode = recorderNodes.find((item) => item.id === selectedRecorder);
@@ -48,23 +53,24 @@ export function AudioFileNodeEditor({
     if (!recorderNodes.some((item) => item.id === selectedRecorder)) setSelectedRecorder(recorderNodes[0]?.id ?? "");
   }, [recorderNodes, selectedRecorder]);
   const stopAndImportTake = async () => {
-    const recorderId = activeTakeId.current;
-    if (!recorderId || !selectedRecorder || busy) return;
+    const take = activeTake.current;
+    if (!take || takeBusy.current) return;
+    takeBusy.current = true;
     if (stopTimer.current) clearTimeout(stopTimer.current);
     stopTimer.current = null;
     setBusy(true);
     setTakeState("importing");
     try {
-      const liveStatuses = await backend.listRecorders();
-      const liveStatus = liveStatuses.find((item) => item.sessionId === sessionId && item.nodeId === selectedRecorder);
-      if (liveStatus) {
-        const frame = liveStatus.lastFrame ?? status?.lastFrame ?? 0;
-        await backend.stopRecorder(sessionId, frame, uiIdempotencyKey("temporary-take-stop"), selectedRecorder);
+      // Stop at the backend's current frame. No inventory read may delay the deadline.
+      if (!take.stopped) {
+        const result = await backend.stopNodeRecording(sessionId, take.nodeId, take.stopKey);
+        if (result.state === "failed") throw new Error(result.reason ?? tr("g2.afImportFailedTake"));
+        take.stopped = true;
       }
       const recordings = await backend.listRecordings(sessionId);
       const recording = [...recordings]
         .reverse()
-        .find((item) => item.recorderId === recorderId && item.state === "completed");
+        .find((item) => item.recorderId === take.recorderId && item.state === "completed");
       if (!recording) throw new Error(tr("g2.afTakeNotFinal"));
       const media = await backend.importTemporaryRecording(recording.id);
       if (currentSessionIdRef.current === sessionId) {
@@ -72,17 +78,24 @@ export function AudioFileNodeEditor({
         onChange("fileName", media.fileName);
       }
       setMessage(tr("g2.afSoundCheckReady", { sec: Math.round(media.durationMs / 1000) }));
-      activeTakeId.current = null;
+      activeTake.current = null;
       setTakeState("idle");
     } catch (error) {
       setMessage(formatUiError(error, tr("g2.afImportFailedTake")));
-      setTakeState("idle");
+      setTakeState("retry");
+      if (!take.stopped) {
+        // Keep trying to stop the original take even if Properties was left.
+        stopTimer.current = setTimeout(() => void stopAndImportTake(), 1000);
+      }
     } finally {
+      takeBusy.current = false;
       setBusy(false);
     }
   };
   const startTemporaryTake = async () => {
-    if (!selectedRecorder || busy || !backend.connected || !sessionRunning) return;
+    if (!selectedRecorder || busy || takeBusy.current || activeTake.current || !backend.connected || !sessionRunning)
+      return;
+    takeBusy.current = true;
     const recorderId = `audio-file-take-${Date.now().toString(36)}`;
     setBusy(true);
     setMessage(tr("g2.afPreparing"));
@@ -104,7 +117,12 @@ export function AudioFileNodeEditor({
       await backend.armRecorder(sessionId, uiIdempotencyKey("temporary-take-arm"), selectedRecorder);
       const frame = status?.lastFrame ?? 0;
       await backend.startRecorder(sessionId, frame, uiIdempotencyKey("temporary-take-start"), selectedRecorder);
-      activeTakeId.current = recorderId;
+      activeTake.current = {
+        recorderId,
+        nodeId: selectedRecorder,
+        stopped: false,
+        stopKey: uiIdempotencyKey("temporary-take-stop"),
+      };
       setTakeState("recording");
       setMessage(tr("g2.afRecording"));
       stopTimer.current = setTimeout(() => {
@@ -114,6 +132,7 @@ export function AudioFileNodeEditor({
       setMessage(formatUiError(error, tr("g2.afTakeStartFailed")));
       setTakeState("idle");
     } finally {
+      takeBusy.current = false;
       setBusy(false);
     }
   };
@@ -155,7 +174,7 @@ export function AudioFileNodeEditor({
         <input
           type="file"
           accept="audio/wav,audio/mpeg,.wav,.mp3"
-          disabled={disabled || busy || takeState === "recording"}
+          disabled={disabled || busy || takeState !== "idle"}
           onChange={(event) => {
             void importFile(event.target.files?.[0]);
             event.currentTarget.value = "";
@@ -169,7 +188,7 @@ export function AudioFileNodeEditor({
           <select
             aria-label={tr("g2.afRecorderAria")}
             value={selectedRecorder}
-            disabled={!backend.connected || busy || takeState === "recording" || recorderNodes.length === 0}
+            disabled={!backend.connected || busy || takeState !== "idle" || recorderNodes.length === 0}
             onChange={(event) => setSelectedRecorder(event.target.value)}
           >
             <option value="">{tr("g2.afChooseRecorder")}</option>
@@ -180,7 +199,7 @@ export function AudioFileNodeEditor({
             ))}
           </select>
         </label>
-        {takeState === "recording" ? (
+        {takeState === "recording" || takeState === "retry" ? (
           <button type="button" className="secondary" disabled={busy} onClick={() => void stopAndImportTake()}>
             {tr("g2.afStopPrepare")}
           </button>

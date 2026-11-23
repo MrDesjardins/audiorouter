@@ -10808,7 +10808,12 @@ button.danger {
   opacity: 0.45;
 }
 .instrument-status {
+  display: grid;
   min-height: 2.6rem;
+}
+
+.instrument-status > * {
+  grid-area: 1 / 1;
 }
 @media (forced-colors: active) {
   .instrument-key {
