@@ -918,8 +918,8 @@ mod windows_pipe {
     };
     use windows::Win32::System::Pipes::{
         ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, GetNamedPipeClientProcessId,
-        GetNamedPipeServerProcessId, PeekNamedPipe, WaitNamedPipeW, PIPE_READMODE_BYTE,
-        PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
+        GetNamedPipeServerProcessId, PeekNamedPipe, SetNamedPipeHandleState, WaitNamedPipeW,
+        PIPE_NOWAIT, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
     };
     use windows::Win32::System::Threading::{
         CreateMutexW, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
@@ -971,17 +971,114 @@ mod windows_pipe {
     }
 
     pub fn acquire_server_singleton(pipe_name: &str) -> Result<ServerSingleton, TransportError> {
+        acquire_server_singleton_after_guard(pipe_name, || {})
+    }
+
+    /// `after_guard` runs between creating the guard instance and connecting
+    /// to it, so a test can place a client there.
+    fn acquire_server_singleton_after_guard(
+        pipe_name: &str,
+        after_guard: impl FnOnce(),
+    ) -> Result<ServerSingleton, TransportError> {
         let mutex = acquire_singleton(pipe_name)?;
         // Keep the first instance connected to ourselves for the entire server
         // lifetime. It cannot receive real requests, and prevents a gap between
         // ordinary instances from allowing another process to claim the name.
         let guard = create_pipe(pipe_name, true)?;
-        let connection = connect_client(&wide(pipe_name))?;
+        after_guard();
+        let connection = claim_guard(&guard, pipe_name)?;
         Ok(ServerSingleton {
             _mutex: mutex,
             _guard: guard,
             _connection: connection,
         })
+    }
+
+    /// Connect this process to its own guard instance.
+    ///
+    /// A client polling for a starting backend can open the guard in the
+    /// moment between its creation and this connection. It then holds the
+    /// only instance, which never answers, and waiting for a free one would
+    /// fail. Disconnect such a client (its one request fails with a pipe
+    /// error instead of the whole backend failing to start), listen again
+    /// and connect once more. The guard handle stays open throughout, so the
+    /// name is never released.
+    fn claim_guard(guard: &Handle, pipe_name: &str) -> Result<Handle, TransportError> {
+        const ERROR_PIPE_BUSY: i32 = 0x8007_00E7_u32 as i32;
+        const ATTEMPTS: usize = 64;
+        let name = wide(pipe_name);
+        for _ in 0..ATTEMPTS {
+            match open_pipe(&name) {
+                Ok(handle) => {
+                    let mut server_pid = 0;
+                    // SAFETY: `handle.0` is the live connected pipe; Windows
+                    // writes one process ID into the aligned local.
+                    unsafe { GetNamedPipeServerProcessId(handle.0, &mut server_pid) }
+                        .map_err(win_error)?;
+                    if server_pid != std::process::id() {
+                        return Err(TransportError::Windows(
+                            "the guard pipe instance belongs to another process".into(),
+                        ));
+                    }
+                    return Ok(handle);
+                }
+                Err(error) if error.code().0 == ERROR_PIPE_BUSY => {}
+                Err(error) => return Err(win_error(error)),
+            }
+            // SAFETY: `guard.0` is the live server end of the guard instance
+            // created by the caller; disconnecting ends only the stray client.
+            unsafe { DisconnectNamedPipe(guard.0) }.map_err(win_error)?;
+            listen_without_blocking(guard)?;
+        }
+        Err(TransportError::Windows(
+            "other clients kept taking the guard pipe instance".into(),
+        ))
+    }
+
+    /// Put a disconnected server instance back into the listening state.
+    /// `ConnectNamedPipe` blocks in wait mode until a client arrives, so the
+    /// call is made in no-wait mode, which returns at once.
+    fn listen_without_blocking(instance: &Handle) -> Result<(), TransportError> {
+        const ERROR_PIPE_CONNECTED: i32 = 0x8007_0217_u32 as i32;
+        const ERROR_PIPE_LISTENING: i32 = 0x8007_0218_u32 as i32;
+        let no_wait = PIPE_READMODE_BYTE | PIPE_NOWAIT;
+        // SAFETY: `instance.0` is a live server pipe handle; the mode is a
+        // live local read during the call.
+        unsafe { SetNamedPipeHandleState(instance.0, Some(&no_wait), None, None) }
+            .map_err(win_error)?;
+        // SAFETY: as above; in no-wait mode the call returns immediately and
+        // no OVERLAPPED structure is needed.
+        let listened = unsafe { ConnectNamedPipe(instance.0, None) };
+        let wait = PIPE_READMODE_BYTE | PIPE_WAIT;
+        // SAFETY: as above, restoring the mode the instance was created with.
+        unsafe { SetNamedPipeHandleState(instance.0, Some(&wait), None, None) }
+            .map_err(win_error)?;
+        match listened {
+            Ok(()) => Ok(()),
+            Err(error) if matches!(error.code().0, ERROR_PIPE_LISTENING | ERROR_PIPE_CONNECTED) => {
+                Ok(())
+            }
+            Err(error) => Err(win_error(error)),
+        }
+    }
+
+    /// Open one client handle to `name` (NUL-terminated UTF-16), without
+    /// waiting for a free instance.
+    fn open_pipe(name: &[u16]) -> windows::core::Result<Handle> {
+        // SAFETY: `name` is NUL-terminated and outlives the call; the
+        // returned handle is owned by the `Handle` wrapper.
+        unsafe {
+            CreateFileW(
+                PCWSTR(name.as_ptr()),
+                (GENERIC_READ | GENERIC_WRITE).0,
+                FILE_SHARE_NONE,
+                None,
+                OPEN_EXISTING,
+                Default::default(),
+                None,
+            )
+        }
+        .map(Handle)
     }
 
     fn check_name(name: &str) -> Result<(), TransportError> {
@@ -1445,22 +1542,8 @@ mod windows_pipe {
         const ERROR_PIPE_BUSY: i32 = 0x8007_00E7_u32 as i32;
         let started = std::time::Instant::now();
         loop {
-            // SAFETY: `name` is NUL-terminated and outlives the call; the
-            // returned handle is owned by the `Handle` wrapper below.
-            let result = unsafe {
-                CreateFileW(
-                    PCWSTR(name.as_ptr()),
-                    (GENERIC_READ | GENERIC_WRITE).0,
-                    FILE_SHARE_NONE,
-                    None,
-                    OPEN_EXISTING,
-                    Default::default(),
-                    None,
-                )
-            };
-            let error = match result {
+            let error = match open_pipe(name) {
                 Ok(handle) => {
-                    let handle = Handle(handle);
                     let mut server_pid = 0;
                     // SAFETY: handle is the live connected pipe; Windows writes
                     // one process ID into the aligned local before any payload.
@@ -1636,6 +1719,70 @@ mod windows_pipe {
                 create_pipe(&name, true).is_ok(),
                 "clean shutdown releases the name"
             );
+        }
+
+        /// CI run 45122522886: a client polling for a starting backend opened
+        /// the guard instance before the server connected to it. The server
+        /// then waited for a free instance, gave up after two seconds and
+        /// never served, and the client sat on an instance nobody answers.
+        #[test]
+        fn a_client_that_opens_the_guard_first_is_disconnected_and_the_server_starts() {
+            let name = format!(
+                r"\\.\pipe\audiorouter-guard-claim-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            );
+            let wide_name = wide(&name);
+            let mut early_client = None;
+            let started = std::time::Instant::now();
+            let singleton = acquire_server_singleton_after_guard(&name, || {
+                // SAFETY: `wide_name` is NUL-terminated and outlives the call;
+                // the returned handle is owned by `Handle`.
+                let handle = unsafe {
+                    CreateFileW(
+                        PCWSTR(wide_name.as_ptr()),
+                        (GENERIC_READ | GENERIC_WRITE).0,
+                        FILE_SHARE_NONE,
+                        None,
+                        OPEN_EXISTING,
+                        Default::default(),
+                        None,
+                    )
+                }
+                .expect("the guard instance accepts a client before it is claimed");
+                early_client = Some(Handle(handle));
+            })
+            .expect("the server must still start");
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(1),
+                "claiming the guard must not wait for a free instance ({:?})",
+                started.elapsed()
+            );
+            let early_client = early_client.unwrap();
+            let mut written = 0;
+            // SAFETY: `early_client.0` is a live pipe handle; the buffer and
+            // the count are live locals for the duration of the call.
+            let write = unsafe { WriteFile(early_client.0, Some(b"x"), Some(&mut written), None) };
+            assert!(
+                write.is_err(),
+                "the early client must be disconnected, not left on a silent instance"
+            );
+            // The served instances still work beside the claimed guard.
+            let server_name = name.clone();
+            let server = std::thread::spawn(move || {
+                serve_once_with_client(&server_name, |_, frame| echo_handler(frame))
+            });
+            let request = encode_frame(&serde_json::json!({"ping": true})).unwrap();
+            let reply = round_trip(&name, &request).expect("a later client is served");
+            assert_eq!(
+                decode_frame::<serde_json::Value>(&reply).unwrap(),
+                serde_json::json!({"ok": true})
+            );
+            server.join().unwrap().unwrap();
+            drop(singleton);
         }
 
         #[test]
