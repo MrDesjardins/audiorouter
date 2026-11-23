@@ -88,6 +88,28 @@ no product change is justified by that runner setting.
 Next: rebuild clean consolidated candidate inputs, verify artifacts and exact
 shell smoke, then update and push PR #181 once with the final combined result.
 
+Consolidated candidate verification passed from clean source
+`0af71ca715333ae6c08c6e58c809f8b1f7bf514e`. All three original remote branch
+tips are ancestors of this commit. App-only preparation and artifact verifier
+passed for `target/releases/0.0.32-consolidated/release-manifest.json`.
+Installer: `AudioRouter_0.0.32_x64-setup.exe`, 24,472,180 bytes, SHA-256
+`50BCDFC1F16E7CE4C8A04A6A73387C709B0D148D9AA00481CC3C58A86DB7CEED`.
+Shell SHA-256:
+`A68CCA0C27037E73FDE2A9FB9923AC2A2C49D901832AE97B664AE37C36AC8360`.
+Shell timestamp 2026-11-23 18:26:22 UTC is newer than UI index 18:24:51 UTC.
+Exact shell smoke passed: native bridge, save/restart, graceful quit, no
+uncaught UI errors or cleanup failure; evidence
+`target/release-0.0.32-checks/consolidated-smoke/result.json`.
+The original failing shell entry-point regression
+`chosen_save_destination_is_approved_and_exported_through_the_real_pipe`
+also passed on consolidated sources (`consolidated-shell-entry-test.log`).
+Final docs acceptance passed 295 files/1,641 links. This candidate supersedes
+the earlier installer for testing; it remains unsigned, driver-free and
+untagged. No live audio, installer lifecycle or publication is claimed.
+Next: push combined history/evidence to PR #181, monitor current-head CI,
+read its annotations and fix remaining failures. Retain original branch refs
+until delivery to main; no separate PRs are needed for these three branches.
+
 ### PR #181 CI repair and branch reconciliation (2026-11-23)
 
 Observed head `c8f6fbe90`: mergeable, no unresolved review threads, dependency
