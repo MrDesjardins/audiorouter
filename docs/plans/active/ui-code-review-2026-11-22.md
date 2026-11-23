@@ -290,7 +290,11 @@ audio deadline; this repair removes the inventory dependency and retries stop,
 but does not add a new backend recording-duration contract.
 
 Branch `fix/ui-review-seven-findings` was based on pre-existing `c402086eb`
-(the prior API/CLI work), which is preserved. No PR or site publication.
+(the prior API/CLI work), which is preserved. The owner authorized opening
+the UI PR. Before pushing, rebased only the UI repair commit onto current
+main `1266f03d1`, excluding the unrelated API commits; the UI/tool-guide source
+is unchanged by that rebase. Original repair retained locally on
+`backup/ui-review-before-pr`. No site publication.
 Rollback: revert this repair's UI/tests/docs and five refreshed overviews;
 there is no storage migration or API change. Do not replace the running
 owner's executable until it can be closed deliberately.
