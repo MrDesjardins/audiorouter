@@ -2,6 +2,23 @@
 
 ## Where things stand
 
+Owner test-build refresh (2026-11-22): rebuilt local `main`
+`ba34371ad190776193a630626bc27a117372b755` with
+`powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-desktop.ps1`.
+Release shell, matching CLI, x64/x86 VST2/VST3 workers, UI typecheck and UI
+production build passed on Windows. Shell at
+`src-tauri/target/release/audiorouter-shell.exe` has SHA-256
+`F39C926411367131532573B0F0ACD0E868D03CDFAADF53099935370538B621C7`
+and is newer than `ui/dist/index.html`. Packaged smoke passed using
+`node tools/quality/packaged-shell-smoke.mjs --shell src-tauri/target/release/audiorouter-shell.exe --output target/local-test-build-2026-11-22 --timeout-ms 60000`:
+isolated database/WebView profile, native bridge, save/restart and graceful
+quit, with zero uncaught UI errors. Evidence:
+`target/local-test-build-2026-11-22/result.json`. Build warnings: chunks above
+500 kB and bundler handling of the React runtime's `use no memo` directive;
+retained without dependency or code changes in this build-only task. No live
+audio or plugin processing was exercised. No source changes or release/driver
+qualification claimed. Next: owner tests this executable with their routes.
+
 `main` is at `8f42bf8de` (PR #151, global-only keyboard shortcuts). The November 6–16 work
 streams are merged: release-readiness repairs (#155–#159), the three-day code
 review (#158), device-binding recovery (#154), theme-editor preview (#153), the
@@ -93,10 +110,14 @@ reconciling the later handoff against older open-work summaries first.
    evidence: Narrator, real Windows scaling, live-route device-loss messaging,
    a first-time-user walk-through and refreshed guide clips. See
    [UI quality review](ui-quality-review.md).
-5. **Application quality roadmap.** Q3.2 hosted qualification, then Q4–Q6; see
+5. **Application quality roadmap.** Q3.2 is complete (2026-11-23). Next: the
+   two CI-flake repair branches, then Q4–Q6; see
    [application quality](application-quality.md).
-6. **Audio-latency residual owner gates (ARCH-08, CAP-04, NFR-03).** The owner's
-   listening test, a real-session `audioHealth` log and live cable continuity.
+6. **Audio-latency residual owner gates (ARCH-08, CAP-04, NFR-03).** The
+   real-session `audioHealth` log is analysed (55.8 h after the repair,
+   [evidence](evidence/2026-11-23-audio-health-after-latency-repair.md)).
+   Open: the owner's listening test, live cable continuity, and the owner's
+   choice of cushion floor for `voice-to-cable-a`.
 7. **Code-review-fixes residual qualification.** Isolated VB-Cable
    continuity/service-gap runs, large-library service timing and
    latency-changing commercial-plugin continuity; see
@@ -156,7 +177,8 @@ error messages, wrong tool annotations, protocol conformance). All 14 were
 fixed in PR #170. A second review (2026-11-22, same page) found 13 default
 MCP tools that no MCP role can use, a REST path that revokes the window's own
 enrollment, and `sessions.start` reporting a silent route as running. The
-owner chooses the R2-1 option.
+owner chose R2-1 option (b); the repairs merged in #171 and #174. Open owner
+questions: whether assistants may record, and session rename for assistants.
 
 Execution plans that still hold open work:
 
@@ -207,125 +229,36 @@ Each carries an archive banner, and its residual gates are listed above.
 
 ## Next action
 
-### Global keybinding creation UX (owner request, 2026-11-16)
+### Application quality and audio latency gates (owner request, 2026-11-23)
 
-Follow-up deletion UX (owner, 2026-11-16): the bulk minus icon was unclear and
-single deletion required the bulk-name-edit flow. Requirements UI-10/11/17/29.
-Plan: use a trash icon with a labelled bulk action and selection count; expose
-Delete keybinding inside every saved binding; share named destructive
-confirmation and exact-ID removal; preserve unrelated bindings on cancel or
-save failure and restore focus after success. Add component and real-Settings
-browser regressions (single, cancellation, bulk, failure), inspect all themes,
-grade/iterate, then rebuild all desktop companions and smoke the packaged app.
-Prerequisites: installed Windows build tools and browser dependencies; no audio
-or driver access needed. Rollback: revert UI/tests; storage/API unchanged.
-Result: saved bindings expose Delete keybinding with a trash-can icon; Manage
-has a labelled trash-can bulk action with a fixed-width selection count.
-Single confirmation names the binding and chord, bulk confirmation names the
-count, and both are destructive dialogs. Cancel saves nothing. Successful
-deletion announces completion and restores Add focus. A delayed failure
-restores both bindings and the previous selection (regression explicitly waits
-for the optimistic removal before rejecting the write).
+Owner asked to work on priorities 5 and 6. Done so far:
 
-Review iteration: initial visuals showed cramped Manage icon/text and little
-bulk guidance; added spacing, guidance and specific deletion-success feedback.
-Final agent self-review 8.5/10: visible single action, consistent trash icon,
-clear scope/confirmation, keyboard focus, stable count and recoverable failure.
-This is not a participant study. Reviewed single/bulk screenshots in dark,
-light and high contrast at `target/keybinding-ux/delete-{single,bulk}-*.png`.
+- Q3.2 is complete on hosted runners (nightly packaged smoke and its guard
+  qualification pass; see [application quality](application-quality.md)).
+- `main` CI was red after #178/#180. Two of the three failing tests were real
+  defects, each fixed on its own branch with a regression that fails without
+  the fix: `fix/keybind-selection-after-failed-delete` (UI, a failed bulk
+  delete lost the selection) and `fix/pipe-guard-claim-race` (transport, a
+  client could take the backend's guard pipe before it was claimed, so the
+  backend never started). The third (`LogFilesPanel`, one coverage timeout)
+  did not reproduce and is left unchanged.
+- The real-session health log is analysed:
+  [2026-11-23 evidence](evidence/2026-11-23-audio-health-after-latency-repair.md).
+  Output queues fell from about 50 ms to 20 ms median, full-ring drops from
+  about 14,000 to 0, and gaps outside stalls from 14–18 to 0.1–0.4 an hour.
 
-Windows checks: typecheck, lint, format:check and production build pass; full
-UI suite passes 1,126 tests; focused suites pass 19. Six Edge scenarios pass
-creation plus single/cancel/bulk deletion, exact persisted IDs, focus return,
-and unchanged bulk-button bounds as selection changes, in all themes.
-Docs acceptance passes (278 files/1,551 links), complete diff inspected and
-diff check clean. Build retains the main-chunk size advisory and Playwright's
-NO_COLOR/FORCE_COLOR warning documented below; no new application errors.
+Next:
 
-Fresh build: `tools/build-desktop.ps1` passes for shell, CLI, x64/x86 VST2/VST3
-workers. Shell `src-tauri/target/release/audiorouter-shell.exe` SHA-256
-`E02EC3CF1DEA0C70F454729CD79F3DD6568330237F97019965139E9C08ED7317`.
-Packaged smoke passes (`target/keybinding-ux/delete-packaged-smoke/result.json`):
-isolated Windows/WebView2 launch, native bridge, save/restart and graceful quit.
-Deletion itself was exercised through the browser Settings UI with simulated
-shell saves; live hook/audio and Narrator remain unrun. No owner data changed.
-Owner approved the test build and explicitly requested a new PR. Fetched
-origin: latest main is still `a981d3489`, already an ancestor of this work.
-Owner subsequently requested consolidation: `fix/global-keybinding-delete`
-contains creation and deletion together; PR #162 targets main and supersedes
-PR #161. The PR description embeds creation, single-delete and bulk-delete
-screenshots in all three themes. Reviewed the earlier check annotations:
-all ten are GitHub notices about ubuntu-latest migrating to Ubuntu 26, with
-no source diagnostics; retain the notice rather than changing runner policy
-in this UI change. No source changes since the passing checks/build above.
-Next action: review the consolidated PR #162 and test creation/single/bulk
-deletion in the rebuilt desktop app; retain the broader M05 attended gates.
-
-Objective: configure name, shortcut and action together before activating a
-binding (UI-10, UI-11, UI-17, UI-29; M05). Existing shell commands and storage
-remain the authority; no API or audio behavior change is planned.
-
-Prerequisites: Windows UI dependencies are installed. Browser shell invocation
-can be simulated for form checks; this does not qualify the Windows hook.
-Preserve unrelated untracked target-preview directories and tsbuildinfo.
-
-Tasks: expose Add directly; open a local draft with all fields visible; require
-a captured shortcut and valid action target; save once or cancel without writes;
-keep failed drafts; show saved names, keys and actions together. Add regression
-coverage, typecheck immediately, format/lint/build, and visually inspect dark,
-light and high contrast. Grade clarity, efficiency, feedback, accessibility and
-visual consistency; iterate until at least 8/10 and record evidence here.
-
-Risks: shortcut capture must suspend existing hooks and restore them; cancel
-must never save a partial binding. Rollback: revert the UI/test changes; saved
-bindings retain the existing format.
-
-Implementation and review: Add opens an expanded unsaved draft with name,
-action and shortcut; Save validates the name/chord/target and writes once.
-Cancel writes nothing, rejected saves retain the draft, duplicate chords warn
-before saving, and saved names show key/action. Empty soundboard choices guide
-the user to add the tool. No contract or shell-command changes were required.
-
-UX iteration: first visual review scored 7.5/10 (keyboard exit and focus return
-were weak). Added Tab to cancel capture, focus return after Save/Cancel, reserved
-capture-help space and removed the redundant plus button. Final self-review:
-clarity 9, efficiency 9, feedback/recovery 9, keyboard accessibility 8, visual
-consistency 8; average 8.6/10, reported conservatively as 8.5. This is an agent
-review, not a first-time-user study or Narrator qualification.
-
-Windows verification (2026-11-16): `npm --prefix ui run typecheck:all`, lint,
-format:check and production build pass; the full unit suite passed 1,123 tests
-before the final keyboard/help refinement, and the final focused suites pass
-17 tests. `npx playwright test --config=playwright.config.ts
-global-keybinds.pw.ts --workers=1` from ui passes 3 Edge scenarios: real Settings
-entry, form, capture, Tab cancellation, stable Save position, Save/Cancel focus,
-one save and collapsed summary in all three themes. Screenshots reviewed:
-`target/keybinding-ux/draft-{dark,light,high-contrast}.png` and matching saved
-screenshots. Initial browser runs timed out on exact label matching for a
-select (the label includes option text); using its combobox role fixed the
-test locator. The component regression also caught optimistic-save duplicate
-React keys; the rendered draft now excludes its optimistic saved copy.
-
-Docs acceptance passes (278 Markdown files, 1,551 links). Production build
-reports a 645 kB main-chunk advisory; kept visible here because splitting the
-main application bundle is unrelated to this form change. Playwright reports
-the runner's NO_COLOR/FORCE_COLOR conflict, with no application console errors.
-Owner follow-up explicitly authorized a test build followed by a new PR.
-Branch: `feat/global-keybinding-creation`, based on main `a981d3489`.
-`tools/build-desktop.ps1` passed: release shell, matching CLI and x64/x86 VST2
-and VST3 workers. Shell: `src-tauri/target/release/audiorouter-shell.exe`,
-SHA-256 `BCC887131B254514F73B6E7BC4366515F3F99A360BCEF4131B7722B1035D5F6A`;
-its UTC timestamp (2026-11-17 01:41:55) is newer than ui/dist (01:41:27).
-`node tools/quality/packaged-shell-smoke.mjs --shell
-src-tauri/target/release/audiorouter-shell.exe --output
-target/keybinding-ux/packaged-smoke --timeout-ms 60000` passed on Windows 11
-build 26300 with WebView2 157.0.4341.46, Medium/non-admin. Evidence:
-`target/keybinding-ux/packaged-smoke/result.json`; fresh-profile launch,
-native bridge, save/restart and graceful quit passed with zero uncaught UI
-errors. Disposable database and WebView profile left owner settings unchanged.
-No live Windows hook/audio exercised. Next task: owner test of the rebuilt
-desktop shortcut creation/capture/activation and Narrator check; the broader
-M05 attended gates stay open.
+1. Owner: approve PRs for the two repair branches (and this documentation
+   branch, `docs/quality-latency-2026-11-23`).
+2. Owner, tonight: stop the route and free the cables, then the agent runs
+   `live_backend_service_keeps_a_routed_tone_continuous` for the multi-input
+   worker on the owner's cables.
+3. Owner: listening test on the real route, and a decision on the
+   `voice-to-cable-a` cushion floor (10 ms now; 15 ms would make its
+   remaining gaps about six times rarer for 5 ms more delay).
+4. Then Q4.2 restart interleaving and Q5.1–Q5.2 metrics, as listed in
+   [application quality](application-quality.md).
 
 Start with priority 1 or 2 above. Nothing on this page authorizes a pull
 request, a release, a driver install or a change to the owner's live audio or

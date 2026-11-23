@@ -51,9 +51,34 @@ qualification and the full local 343-pass replay succeed; current-head CI remain
 required. The fa15bcc5 nightly passed its default 20-minute soak and all packaged
 gates. See the [transport evidence](evidence/2026-10-25-pr73-ci-repair.md#compiled-fixture-transport-counterexample-and-repair).
 
-Open for delivery: Q3.2 PR review/merge; Q4 items 1–7 beyond
-the storage slice; Q5; Q6 on each release. Hardware and release evidence
-remain separate gates. Existing acceptance targets remain binding.
+**Q3.2 complete (2026-11-23).** The packaged smoke and its 11-case guard
+qualification run in the nightly quality workflow after the exact release
+build and pass on hosted Windows every night. Run 45017043920 (source
+`59ce477e8`, Windows Server 2025 build 26100, WebView2 157.0.4341.46,
+standard-user token, Medium integrity): passed, shell SHA-256
+`86945386…ddee6`, native bridge on both launches with no device grant,
+save/restart, graceful quit of both children, zero uncaught UI errors. UI
+ready 1,203 ms on a fresh profile and 1,867 ms after restart (NFR-14 targets
+8 s / 3 s, reported, not gated until Q5 calibrates runner variance). The
+2026-11-22 nightly failed only in its coverage job (below), not in Q3.2.
+
+**Q5.3 triage of main's red CI (2026-11-23).** After #178 and #180, `main`
+CI and the 2026-11-22 nightly failed on three tests. The last 60 CI runs
+were read; each failure is classified from its retained log:
+
+| Test | Seen | Class | Disposition |
+| --- | --- | --- | --- |
+| `GlobalKeybindsPanel` "bulk delete … failed save retains every binding and selection" | 4 of 60 CI runs + 1 nightly | product | Branch `fix/keybind-selection-after-failed-delete`: a late pruning effect cleared the selection a failed delete had restored. Deterministic regression added. |
+| shell `chosen_save_destination_is_approved_and_exported_through_the_real_pipe` | 1 (run 45122522886) | product (Q4.2) | Branch `fix/pipe-guard-claim-race`: a client could take the backend's guard pipe instance before the server claimed it, so the server never started. Transport regression added. |
+| `LogFilesPanel` "switches verbose logging and counts down the hour" | 1 (nightly 45017043920 coverage, 5 s timeout) | unknown | Not reproduced: the file passed 5 times alone with coverage and in a full local coverage run (1,166 tests). Not changed on a guess; watch the next nightlies. |
+
+Other recent failures were branch work fixed before merge (CLI parity,
+`cargo-deny`, the Dependabot xyflow 13 PR's own run) and are not open.
+
+Open for delivery: the two repair branches above (owner PR approval); Q4
+items 1–7 beyond the storage and guard-pipe slices; Q5; Q6 on each release.
+Hardware and release evidence remain separate gates. Existing acceptance
+targets remain binding.
 
 ## Objective
 
@@ -361,7 +386,21 @@ Plan exit criteria: Q1 gates demonstrated; Q2 failure classes guarded; Q3
 production/packaged smoke enforced; Q4 applicable backend/audio evidence
 present; Q5 failures actionable; Q6 release/rollback evidence complete.
 
-## Next actionable task: Q3.2 hosted CI qualification
+## Next actionable task (2026-11-23)
+
+1. Owner: approve PRs for `fix/keybind-selection-after-failed-delete` and
+   `fix/pipe-guard-claim-race`; `main` stays red until they merge.
+2. Q4.2, next slice: backend restart while the window, tray, HTTP and MCP
+   clients have requests in flight, through the real pipe, with no partial
+   graph commit and no cross-session reply. The guard-pipe repair covered
+   only the moment the server starts.
+3. Q5.1–Q5.2: add first-pass failures and retried tests to the nightly trend
+   table, and take module coverage baselines from the nightly coverage
+   artifacts before setting any floor.
+
+## Completed: Q3.2 hosted CI qualification
+
+(Completed 2026-11-23; see the status above. Kept for its acceptance terms.)
 
 Finish qualifying the implemented packaged-shell acceptance slice against the exact
 release shell binary built by CI, with no installer or live-audio claim. Use a
