@@ -239,7 +239,9 @@ test("bulk delete uses selected IDs and a failed save retains every binding and 
   await waitFor(() => expect(screen.getAllByRole("checkbox")).toHaveLength(1));
   rejectPendingSave!("Could not save global keybindings.");
   await screen.findByText("Could not save global keybindings.");
-  expect((screen.getByRole("checkbox", { name: "Select F13" }) as HTMLInputElement).checked).toBe(true);
+  await waitFor(() =>
+    expect((screen.getByRole("checkbox", { name: "Select F13" }) as HTMLInputElement).checked).toBe(true),
+  );
   expect(screen.getAllByRole("checkbox")).toHaveLength(3);
   rejectSave = false;
   fireEvent.click(screen.getByRole("button", { name: "Delete selected (2)" }));
