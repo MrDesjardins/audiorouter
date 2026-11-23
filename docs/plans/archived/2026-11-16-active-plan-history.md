@@ -6767,3 +6767,125 @@ unconfirmed without the reporter's diagnostics. Not run: Play on a route with a
 plugin through real audio endpoints, the installer on a second PC, and a guide
 video for the new Plugin recovery control (the property coverage manifest lists
 it as pending). Next: owner review of the PR, then the remaining items above.
+
+## Global keybinding creation and deletion UX — 2026-11-16 (merged in PR #162)
+
+Moved from the active plan on 2026-11-23.
+
+Follow-up deletion UX (owner, 2026-11-16): the bulk minus icon was unclear and
+single deletion required the bulk-name-edit flow. Requirements UI-10/11/17/29.
+Plan: use a trash icon with a labelled bulk action and selection count; expose
+Delete keybinding inside every saved binding; share named destructive
+confirmation and exact-ID removal; preserve unrelated bindings on cancel or
+save failure and restore focus after success. Add component and real-Settings
+browser regressions (single, cancellation, bulk, failure), inspect all themes,
+grade/iterate, then rebuild all desktop companions and smoke the packaged app.
+Prerequisites: installed Windows build tools and browser dependencies; no audio
+or driver access needed. Rollback: revert UI/tests; storage/API unchanged.
+Result: saved bindings expose Delete keybinding with a trash-can icon; Manage
+has a labelled trash-can bulk action with a fixed-width selection count.
+Single confirmation names the binding and chord, bulk confirmation names the
+count, and both are destructive dialogs. Cancel saves nothing. Successful
+deletion announces completion and restores Add focus. A delayed failure
+restores both bindings and the previous selection (regression explicitly waits
+for the optimistic removal before rejecting the write).
+
+Review iteration: initial visuals showed cramped Manage icon/text and little
+bulk guidance; added spacing, guidance and specific deletion-success feedback.
+Final agent self-review 8.5/10: visible single action, consistent trash icon,
+clear scope/confirmation, keyboard focus, stable count and recoverable failure.
+This is not a participant study. Reviewed single/bulk screenshots in dark,
+light and high contrast at `target/keybinding-ux/delete-{single,bulk}-*.png`.
+
+Windows checks: typecheck, lint, format:check and production build pass; full
+UI suite passes 1,126 tests; focused suites pass 19. Six Edge scenarios pass
+creation plus single/cancel/bulk deletion, exact persisted IDs, focus return,
+and unchanged bulk-button bounds as selection changes, in all themes.
+Docs acceptance passes (278 files/1,551 links), complete diff inspected and
+diff check clean. Build retains the main-chunk size advisory and Playwright's
+NO_COLOR/FORCE_COLOR warning documented below; no new application errors.
+
+Fresh build: `tools/build-desktop.ps1` passes for shell, CLI, x64/x86 VST2/VST3
+workers. Shell `src-tauri/target/release/audiorouter-shell.exe` SHA-256
+`E02EC3CF1DEA0C70F454729CD79F3DD6568330237F97019965139E9C08ED7317`.
+Packaged smoke passes (`target/keybinding-ux/delete-packaged-smoke/result.json`):
+isolated Windows/WebView2 launch, native bridge, save/restart and graceful quit.
+Deletion itself was exercised through the browser Settings UI with simulated
+shell saves; live hook/audio and Narrator remain unrun. No owner data changed.
+Owner approved the test build and explicitly requested a new PR. Fetched
+origin: latest main is still `a981d3489`, already an ancestor of this work.
+Owner subsequently requested consolidation: `fix/global-keybinding-delete`
+contains creation and deletion together; PR #162 targets main and supersedes
+PR #161. The PR description embeds creation, single-delete and bulk-delete
+screenshots in all three themes. Reviewed the earlier check annotations:
+all ten are GitHub notices about ubuntu-latest migrating to Ubuntu 26, with
+no source diagnostics; retain the notice rather than changing runner policy
+in this UI change. No source changes since the passing checks/build above.
+Next action: review the consolidated PR #162 and test creation/single/bulk
+deletion in the rebuilt desktop app; retain the broader M05 attended gates.
+
+Objective: configure name, shortcut and action together before activating a
+binding (UI-10, UI-11, UI-17, UI-29; M05). Existing shell commands and storage
+remain the authority; no API or audio behavior change is planned.
+
+Prerequisites: Windows UI dependencies are installed. Browser shell invocation
+can be simulated for form checks; this does not qualify the Windows hook.
+Preserve unrelated untracked target-preview directories and tsbuildinfo.
+
+Tasks: expose Add directly; open a local draft with all fields visible; require
+a captured shortcut and valid action target; save once or cancel without writes;
+keep failed drafts; show saved names, keys and actions together. Add regression
+coverage, typecheck immediately, format/lint/build, and visually inspect dark,
+light and high contrast. Grade clarity, efficiency, feedback, accessibility and
+visual consistency; iterate until at least 8/10 and record evidence here.
+
+Risks: shortcut capture must suspend existing hooks and restore them; cancel
+must never save a partial binding. Rollback: revert the UI/test changes; saved
+bindings retain the existing format.
+
+Implementation and review: Add opens an expanded unsaved draft with name,
+action and shortcut; Save validates the name/chord/target and writes once.
+Cancel writes nothing, rejected saves retain the draft, duplicate chords warn
+before saving, and saved names show key/action. Empty soundboard choices guide
+the user to add the tool. No contract or shell-command changes were required.
+
+UX iteration: first visual review scored 7.5/10 (keyboard exit and focus return
+were weak). Added Tab to cancel capture, focus return after Save/Cancel, reserved
+capture-help space and removed the redundant plus button. Final self-review:
+clarity 9, efficiency 9, feedback/recovery 9, keyboard accessibility 8, visual
+consistency 8; average 8.6/10, reported conservatively as 8.5. This is an agent
+review, not a first-time-user study or Narrator qualification.
+
+Windows verification (2026-11-16): `npm --prefix ui run typecheck:all`, lint,
+format:check and production build pass; the full unit suite passed 1,123 tests
+before the final keyboard/help refinement, and the final focused suites pass
+17 tests. `npx playwright test --config=playwright.config.ts
+global-keybinds.pw.ts --workers=1` from ui passes 3 Edge scenarios: real Settings
+entry, form, capture, Tab cancellation, stable Save position, Save/Cancel focus,
+one save and collapsed summary in all three themes. Screenshots reviewed:
+`target/keybinding-ux/draft-{dark,light,high-contrast}.png` and matching saved
+screenshots. Initial browser runs timed out on exact label matching for a
+select (the label includes option text); using its combobox role fixed the
+test locator. The component regression also caught optimistic-save duplicate
+React keys; the rendered draft now excludes its optimistic saved copy.
+
+Docs acceptance passes (278 Markdown files, 1,551 links). Production build
+reports a 645 kB main-chunk advisory; kept visible here because splitting the
+main application bundle is unrelated to this form change. Playwright reports
+the runner's NO_COLOR/FORCE_COLOR conflict, with no application console errors.
+Owner follow-up explicitly authorized a test build followed by a new PR.
+Branch: `feat/global-keybinding-creation`, based on main `a981d3489`.
+`tools/build-desktop.ps1` passed: release shell, matching CLI and x64/x86 VST2
+and VST3 workers. Shell: `src-tauri/target/release/audiorouter-shell.exe`,
+SHA-256 `BCC887131B254514F73B6E7BC4366515F3F99A360BCEF4131B7722B1035D5F6A`;
+its UTC timestamp (2026-11-17 01:41:55) is newer than ui/dist (01:41:27).
+`node tools/quality/packaged-shell-smoke.mjs --shell
+src-tauri/target/release/audiorouter-shell.exe --output
+target/keybinding-ux/packaged-smoke --timeout-ms 60000` passed on Windows 11
+build 26300 with WebView2 157.0.4341.46, Medium/non-admin. Evidence:
+`target/keybinding-ux/packaged-smoke/result.json`; fresh-profile launch,
+native bridge, save/restart and graceful quit passed with zero uncaught UI
+errors. Disposable database and WebView profile left owner settings unchanged.
+No live Windows hook/audio exercised. Next task: owner test of the rebuilt
+desktop shortcut creation/capture/activation and Narrator check; the broader
+M05 attended gates stay open.

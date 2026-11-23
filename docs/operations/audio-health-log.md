@@ -75,6 +75,16 @@ gap, and blocks that are not slipped pass through unchanged.
 - **`trimmedPackets` or `latencyTrims` rise together with an underrun:** the
   route recovered from a stall by discarding the backlog once.
 
+## Summarising a whole log
+
+`node tools/quality/audio-health-summary.mjs backend.previous.jsonl backend.jsonl`
+prints, per output and input, the queue depth, underruns outside and during
+stalls, dropped and trimmed blocks, slips and packet gaps. It also counts
+underruns by the cushion in force at the time. It reads only these records
+and splits them at each Play. The
+[2026-11-23 analysis](../plans/active/evidence/2026-11-23-audio-health-after-latency-repair.md)
+was made with it.
+
 ## History
 
 Before the 2026-11 repair an output's queue grew to the capacity of the
