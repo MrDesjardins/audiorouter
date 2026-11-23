@@ -29,7 +29,7 @@ fn failed_start_rolls_back_running_status_and_can_be_retried() {
         fail_next_session_activation: true,
         ..ControlPlane::default()
     };
-    let original = session();
+    let original = session_without_devices();
     plane.insert_session(original.clone()).unwrap();
     let call = |plane: &mut ControlPlane, method: &str, params: Value| {
         plane.dispatch(JsonRpcRequest {
@@ -772,7 +772,7 @@ fn meter_reset_requires_session_control_and_a_prepared_meter() {
 fn keyed_session_lifecycle_replays_and_conflicts_durably() {
     let storage = Storage::open_memory().unwrap();
     let mut plane = ControlPlane::with_storage("lifecycle-idempotency", storage);
-    let original = session();
+    let original = session_without_devices();
     plane.insert_session(original.clone()).unwrap();
     let start = || JsonRpcRequest {
         jsonrpc: "2.0".into(),
@@ -783,7 +783,7 @@ fn keyed_session_lifecycle_replays_and_conflicts_durably() {
     let first = plane.dispatch(start()).result.unwrap();
     let replay = plane.dispatch(start()).result.unwrap();
     assert_eq!(first, replay);
-    let mut other = session();
+    let mut other = session_without_devices();
     other.id = EntityId::new("other");
     plane.insert_session(other).unwrap();
     let same_key = plane.dispatch(JsonRpcRequest {
@@ -908,4 +908,79 @@ fn session_import_plan_and_commit_are_validated_and_idempotent() {
         params: Some(json!({"session": duplicate_candidate})),
     });
     assert!(duplicate.error.is_some());
+}
+
+/// R2-3: `sessions.start` over the API used to answer "running" for a route
+/// that opens audio devices when none were prepared; nothing played.
+#[test]
+fn api_start_refuses_a_device_route_that_is_not_prepared() {
+    let mut plane = ControlPlane::default();
+    plane.insert_session(session()).unwrap();
+    let start = |plane: &mut ControlPlane, key: &str| {
+        plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "sessions.start".into(),
+            params: Some(json!({ "sessionId": "session", "idempotencyKey": key })),
+        })
+    };
+    let refused = start(&mut plane, "start-unprepared");
+    let error = refused
+        .error
+        .expect("an unprepared device route is refused");
+    assert_eq!(error.data.as_ref().unwrap()["code"], "nodeNotReady");
+    assert!(error.message.contains("Play"), "{}", error.message);
+    // Nothing was started, so the session is not reported as running.
+    let summary = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(3)),
+        method: "sessions.summary".into(),
+        params: Some(json!({ "sessionId": "session" })),
+    });
+    assert_eq!(summary.result.unwrap()["playing"], false);
+}
+
+/// The one-shot CLI (`session start --database`, build id `cli`) simulates a
+/// start by design; the Windows CLI acceptance script depends on it.
+#[test]
+fn one_shot_cli_planes_keep_their_simulated_start() {
+    let mut plane = ControlPlane::new("cli");
+    plane.insert_session(session()).unwrap();
+    let started = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "sessions.start".into(),
+        params: Some(json!({ "sessionId": "session", "idempotencyKey": "cli-start" })),
+    });
+    let result = started.result.expect("the CLI simulation is not refused");
+    assert_eq!(result["state"], "running");
+    assert_eq!(result["runtime"], "fake");
+}
+
+#[test]
+fn api_start_still_runs_routes_without_audio_devices() {
+    let mut plane = ControlPlane::default();
+    // A tone into a Meter opens no audio device.
+    let mut tone = session();
+    for node in &mut tone.nodes {
+        node.kind = match node.kind {
+            NodeKind::PhysicalInput => NodeKind::TestSignal,
+            _ => NodeKind::Meter,
+        };
+    }
+    plane.insert_session(tone).unwrap();
+    let started = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(2)),
+        method: "sessions.start".into(),
+        params: Some(json!({ "sessionId": "session", "idempotencyKey": "start-tone" })),
+    });
+    assert!(started.error.is_none(), "{:?}", started.error);
+}
+
+#[test]
+fn every_node_kind_is_classified_for_device_use() {
+    for kind in NodeKind::ALL {
+        let _ = node_kind_opens_audio_device(kind);
+    }
 }

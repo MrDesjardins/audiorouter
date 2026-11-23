@@ -463,18 +463,17 @@ Only `cargo fmt --check` (both manifests) and `tools/docs/validate.mjs` ran.
 - Tests: `stored_recording_and_plugin_reads_need_only_read_and_writes_keep_their_scope`;
   `plugins_tests` now lists with a read-only grant. Not run.
 
+**Third pass (owner free to build, 2026-11-22), branch `fix/api-mcp-start-and-limits`.** Run and passing: workspace and `src-tauri` tests, Clippy (both), fmt (both), `check:drift`, and the three real-backend browser specs that press Play (46 tests).
+- **R2-3 fixed.** `sessions.start` (REST, MCP `control_session start`) refuses an unprepared route that has an enabled device node (`node_kind_opens_audio_device`, exhaustive match) with `nodeNotReady`; previews, plugin routes (their own message) and device-free routes are unchanged. The window and `sessions.play` prepare first. Four lifecycle tests moved to `session_without_devices()`. Tests: `api_start_refuses_a_device_route_that_is_not_prepared`, `api_start_still_runs_routes_without_audio_devices`, `every_node_kind_is_classified_for_device_use`.
+- **R2-5 fixed.** The shell tags HTTP-forwarded frames `adapter: "http"`; the transport budgets them under `<sid>/http` (rate bucket and idempotency scope), believing the tag only from the hosting process (`adapter_client_id`). Tests: `only_the_hosting_process_can_name_the_http_adapter`, `a_forwarding_adapter_is_named_only_when_asked`.
+- **R2-6 fixed.** Undo retry with a used key explains itself (`retrying_an_undo_with_the_same_key_explains_itself`); the reachability test doc comment is back on its test.
+- **Built exe exercised (2026-11-22).** Release shell built with `custom-protocol` after `npm --prefix ui run build` (exe newer than `ui/dist`); `fresh_install_shell` passed on it. Then a disposable launch (own database and `WEBVIEW2_USER_DATA_FOLDER`, CDP port, output CABLE-A Input and input CABLE Output so nothing audible): window Play went to "Audio running" with no error in the backend log; `sessions.stop` then `sessions.start` returned `native`/`running` (route still prepared, so the guard rightly did not fire); after restarting the shell, `sessions.start` on the unprepared route returned `nodeNotReady` ("Start it with Play…") and the window stayed stopped; `sessions.play` then ran it natively and `sessions.stop` stopped it. Not run: `#[ignore]` hardware/fixture tests beyond `fresh_install_shell`, UI vitest, and the exe was launched with `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1` (the no-variable path is covered only by `fresh_install_shell`).
+
 Still open:
-- A per-client opt-in for recording (option a) if the owner wants assistants
-  to record.
-- **R2-3** (`sessions.start` on an unprepared route): many tests rely on the
-  fake runtime starting, so it needs a build-and-iterate session.
-- **R2-4** session rename: no API method exists (the window commits a draft),
-  so it needs a new method with schemas, contracts and docs.
-- **R2-5** separate rate bucket and idempotency scope for REST calls.
-- **R2-6** the `undo_last_change` retry message, and the misplaced doc comment
-  on `default_mcp_adds_and_removes_verified_vst2_key_by_name`.
+- A per-client opt-in for recording (option a), if assistants should record.
+- Session rename for assistants (needs a new API method with schemas, contracts and docs).
 
 ### Next action
 
-After the build: run the validation matrix above plus the new tests, then
-the owner chooses R2-1.
+Owner: merge, then decide whether assistants may record (option a) and whether
+session rename needs a new API method.

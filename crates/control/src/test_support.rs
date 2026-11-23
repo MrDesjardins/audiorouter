@@ -208,6 +208,20 @@ impl RecorderWorker for HookRecorderWorker {
     }
 }
 
+/// The fixture route with its two device nodes swapped for a tone and a
+/// meter, so lifecycle tests can start it through the API without preparing
+/// audio devices (an unprepared device route is refused, R2-3).
+pub(crate) fn session_without_devices() -> Session {
+    let mut route = session();
+    for node in &mut route.nodes {
+        node.kind = match node.kind {
+            NodeKind::PhysicalInput => NodeKind::TestSignal,
+            _ => NodeKind::Meter,
+        };
+    }
+    route
+}
+
 pub(crate) fn session() -> Session {
     Session {
         id: EntityId::new("session"),

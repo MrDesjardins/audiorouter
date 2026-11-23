@@ -840,9 +840,9 @@ fn device_recovery_silences_the_route_then_gives_up_when_the_device_never_return
 fn the_running_witness_lists_playing_sessions_without_recordings() {
     let witness = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let mut plane = ControlPlane::default();
-    let mut playing = session();
+    let mut playing = session_without_devices();
     playing.id = EntityId::new("playing");
-    let mut recording = session();
+    let mut recording = session_without_devices();
     recording.id = EntityId::new("recording");
     plane.insert_session(playing).unwrap();
     plane.insert_session(recording).unwrap();

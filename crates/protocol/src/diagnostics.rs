@@ -91,6 +91,11 @@ pub struct CorrelatedRequest<'a> {
     pub request: &'a JsonRpcRequest,
     #[serde(rename = "requestId", skip_serializing_if = "Option::is_none")]
     pub request_id: Option<&'a str>,
+    /// Which in-process adapter forwarded the call (for example `"http"`), so
+    /// the backend can budget it apart from the window. Only the hosting
+    /// process is believed; see `adapter_client_id` in the transport.
+    #[serde(rename = "adapter", skip_serializing_if = "Option::is_none")]
+    pub adapter: Option<&'a str>,
 }
 
 impl<'a> CorrelatedRequest<'a> {
@@ -99,7 +104,14 @@ impl<'a> CorrelatedRequest<'a> {
         Self {
             request,
             request_id: valid_correlation_id(request_id),
+            adapter: None,
         }
+    }
+
+    /// Name the adapter that forwards this request.
+    pub fn from_adapter(mut self, adapter: &'a str) -> Self {
+        self.adapter = Some(adapter);
+        self
     }
 }
 
@@ -323,6 +335,27 @@ mod tests {
                 .unwrap();
         assert_eq!(incoming.request.id, None);
         assert_eq!(incoming.correlation_id(), None);
+    }
+
+    #[test]
+    fn a_forwarding_adapter_is_named_only_when_asked() {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(serde_json::json!(1)),
+            method: "status.get".into(),
+            params: None,
+        };
+        let plain =
+            serde_json::to_value(CorrelatedRequest::new(&request, Some("AB12CD34"))).unwrap();
+        assert!(plain.get("adapter").is_none());
+        let named = serde_json::to_value(
+            CorrelatedRequest::new(&request, Some("AB12CD34")).from_adapter("http"),
+        )
+        .unwrap();
+        assert_eq!(named["adapter"], "http");
+        // A backend that knows nothing about the member parses the request unchanged.
+        let parsed: JsonRpcRequest = serde_json::from_value(named).unwrap();
+        assert_eq!(parsed, request);
     }
 
     #[test]

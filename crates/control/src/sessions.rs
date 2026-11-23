@@ -102,6 +102,52 @@ fn export_fingerprint(
     }
 }
 
+/// Node kinds that open a Windows audio endpoint or the virtual cable, so a
+/// route holding one plays only after devices are prepared. Exhaustive on
+/// purpose: a new `NodeKind` must be classified here (AGENTS.md).
+pub(crate) fn node_kind_opens_audio_device(kind: NodeKind) -> bool {
+    match kind {
+        NodeKind::PhysicalInput
+        | NodeKind::ApplicationCapture
+        | NodeKind::EndpointLoopback
+        | NodeKind::PhysicalOutput
+        | NodeKind::VirtualRenderSource
+        | NodeKind::VirtualCaptureSink => true,
+        NodeKind::TestSignal
+        | NodeKind::Mixer
+        | NodeKind::Gain
+        | NodeKind::Mute
+        | NodeKind::Meter
+        | NodeKind::ParametricEq
+        | NodeKind::Compressor
+        | NodeKind::Gate
+        | NodeKind::Limiter
+        | NodeKind::Delay
+        | NodeKind::GraphicEq
+        | NodeKind::Pitch
+        | NodeKind::Recorder
+        | NodeKind::Plugin
+        | NodeKind::AudioFile
+        | NodeKind::Volume
+        | NodeKind::BassTreble
+        | NodeKind::Dehum
+        | NodeKind::Declick
+        | NodeKind::InputSwitch
+        | NodeKind::OutputSwitch
+        | NodeKind::Denoise
+        | NodeKind::SpeechDenoise
+        | NodeKind::FirFilter
+        | NodeKind::SpectralGate
+        | NodeKind::TimeShift
+        | NodeKind::NetworkSend
+        | NodeKind::NetworkReceive
+        | NodeKind::Duck
+        | NodeKind::FunVoiceChanger
+        | NodeKind::Soundboard
+        | NodeKind::Instrument => false,
+    }
+}
+
 pub(crate) fn session_runtime_label(native_attached: bool) -> &'static str {
     if native_attached {
         "native"
@@ -1108,6 +1154,9 @@ impl ControlPlane {
         if let Some(previous) = self.lookup_idempotent_result(&operation.0, &operation.1)? {
             return Ok(previous);
         }
+        if candidate.is_none() {
+            self.refuse_unprepared_device_route(&id)?;
+        }
         let mut result = if let Some(candidate) = candidate.as_ref() {
             self.session_preview_start(&id, candidate)?
         } else {
@@ -1118,6 +1167,63 @@ impl ControlPlane {
         }
         self.journal_idempotent_result(&operation.0, "sessions.start", &operation.1, &result)?;
         Ok(result)
+    }
+
+    /// Whether a native worker (endpoint, multi-input, duplex, render source
+    /// or cable route) is attached to this session, so Start would move audio.
+    pub(crate) fn session_has_native_attachment(&self, id: &EntityId) -> bool {
+        let attached = self.native_endpoint_session_is_attached(id);
+        #[cfg(windows)]
+        let attached = attached
+            || (self.native_multi_input_worker_session.as_ref() == Some(id)
+                && self.native_multi_input_worker.is_some())
+            || (self.native_duplex_worker_session.as_ref() == Some(id)
+                && self.native_duplex_worker.is_some())
+            || (self.native_render_source_worker_session.as_ref() == Some(id)
+                && self.native_render_source_worker.is_some())
+            || (self.native_output_fanout_session.as_ref() == Some(id)
+                && self.native_output_fanout.is_some())
+            || self.cable_route_prepared_for(id);
+        attached
+    }
+
+    /// `sessions.start` over the API (REST, MCP) must not report "running"
+    /// for a route that opens audio devices when none are prepared: the
+    /// runtime would start without a worker and nothing would play. The
+    /// window and `sessions.play` prepare first, so they pass.
+    ///
+    /// A one-shot command-line plane (build id `cli`) never keeps a worker
+    /// between commands, so its documented simulated lifecycle stays allowed.
+    fn refuse_unprepared_device_route(&self, id: &EntityId) -> Result<(), ControlError> {
+        if self.build == "cli" {
+            return Ok(());
+        }
+        let session = self.get_session(id)?;
+        // A plugin route has its own, more specific refusal in session_start.
+        if session
+            .nodes
+            .iter()
+            .any(|node| node.enabled && audiorouter_engine::hosts_plugin_worker(node.kind))
+        {
+            return Ok(());
+        }
+        let Some(device_node) = session
+            .nodes
+            .iter()
+            .find(|node| node.enabled && node_kind_opens_audio_device(node.kind))
+        else {
+            return Ok(());
+        };
+        if self.session_has_native_attachment(id) {
+            return Ok(());
+        }
+        Err(ControlError::NodeNotReady {
+            node_id: device_node.id.as_str().to_owned(),
+            message: format!(
+                "The route is not prepared, so nothing would play: {:?} uses an audio device that is not open yet. Start it with Play (the play tool or sessions.play), or press Play in AudioRouter.",
+                device_node.name
+            ),
+        })
     }
 
     /// Task-method rule for session-targeted reads and Play/Stop: an omitted
