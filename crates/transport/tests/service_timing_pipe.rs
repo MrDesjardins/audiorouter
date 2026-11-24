@@ -256,6 +256,9 @@ type HeavyRequest = (String, String, Value);
 /// One scenario to run: its name, the pipe to use and the heavy requests.
 type Plan<'a> = (&'a str, String, Vec<HeavyRequest>);
 
+/// One poll: send offset (ms), latency (ms) and the error text if it failed.
+type Poll = (f64, f64, Option<String>);
+
 /// One heavy request: start and end offsets (ms from the scenario start).
 struct Heavy {
     name: String,
@@ -267,11 +270,7 @@ struct Heavy {
 /// while a poller sends quick requests every 20 ms. Returns the poll
 /// latencies in ms (with their send offsets) and the heavy timings. A 2 s
 /// idle lead-in and lead-out frame the heavy window.
-fn scenario(
-    pipe: &str,
-    pollers: usize,
-    heavy: Vec<HeavyRequest>,
-) -> (Vec<(f64, f64, bool)>, Vec<Heavy>) {
+fn scenario(pipe: &str, pollers: usize, heavy: Vec<HeavyRequest>) -> (Vec<Poll>, Vec<Heavy>) {
     let origin = Instant::now();
     let stop = Arc::new(AtomicBool::new(false));
     let pollers: Vec<_> = (0..pollers)
@@ -283,8 +282,8 @@ fn scenario(
                 while !poller_stop.load(Ordering::Acquire) {
                     let sent = origin.elapsed();
                     let started = Instant::now();
-                    let ok = call(&poller_pipe, "diagnostics.getVerbose", Value::Null).is_ok();
-                    polls.push((millis(sent), millis(started.elapsed()), ok));
+                    let error = call(&poller_pipe, "diagnostics.getVerbose", Value::Null).err();
+                    polls.push((millis(sent), millis(started.elapsed()), error));
                     std::thread::sleep(Duration::from_millis(20));
                 }
                 polls
@@ -504,7 +503,7 @@ fn summarize(
     run: usize,
     name: &str,
     heavy_count: usize,
-    polls: &[(f64, f64, bool)],
+    polls: &[Poll],
     heavy: &[Heavy],
 ) -> String {
     let (window_start, window_end) = if heavy.is_empty() {
@@ -528,7 +527,14 @@ fn summarize(
         .collect();
     during.sort_by(f64::total_cmp);
     idle.sort_by(f64::total_cmp);
-    let failed = polls.iter().filter(|(_, _, ok)| !ok).count();
+    let failed = polls.iter().filter(|(_, _, error)| error.is_some()).count();
+    for (sent, latency, error) in polls {
+        if let Some(error) = error {
+            eprintln!(
+                "run {run} {name}: poll sent at {sent:.0} ms failed after {latency:.0} ms: {error}"
+            );
+        }
+    }
     let over = during.iter().filter(|latency| **latency > 5_000.0).count();
     for item in heavy {
         eprintln!(

@@ -1529,15 +1529,29 @@ mod windows_pipe {
     }
 
     /// Longest wait for a busy pipe (every server instance serving another
-    /// client). Requests are short, so this covers bursts from the window,
-    /// tray, HTTP workers and MCP at once.
+    /// client) for a caller that gave no timeout of its own. This covers
+    /// bursts from the window, tray, HTTP workers and MCP at once. A caller
+    /// with a response timeout waits for an instance up to that timeout
+    /// instead (`round_trip_with_timeout`): the control thread runs one
+    /// request at a time and a bundle export or import holds it for seconds,
+    /// during which the four instances fill up with waiting clients.
     const PIPE_BUSY_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
     /// Longest wait for a pipe that does not exist yet. Kept short so callers
     /// learn quickly that no backend is running.
     const PIPE_MISSING_WAIT: std::time::Duration = std::time::Duration::from_millis(100);
 
-    /// Open a client connection to `name` (NUL-terminated UTF-16).
+    /// Open a client connection to `name` (NUL-terminated UTF-16), waiting at
+    /// most [`PIPE_BUSY_WAIT`] for a free server instance.
     fn connect_client(name: &[u16]) -> Result<Handle, TransportError> {
+        connect_client_waiting(name, PIPE_BUSY_WAIT)
+    }
+
+    /// Open a client connection, waiting at most `busy_wait` for a free server
+    /// instance (a missing pipe still gets only [`PIPE_MISSING_WAIT`]).
+    fn connect_client_waiting(
+        name: &[u16],
+        busy_wait: std::time::Duration,
+    ) -> Result<Handle, TransportError> {
         const ERROR_FILE_NOT_FOUND: i32 = 0x8007_0002_u32 as i32;
         const ERROR_PIPE_BUSY: i32 = 0x8007_00E7_u32 as i32;
         let started = std::time::Instant::now();
@@ -1560,8 +1574,8 @@ mod windows_pipe {
             };
             let elapsed = started.elapsed();
             match error.code().0 {
-                ERROR_PIPE_BUSY if elapsed < PIPE_BUSY_WAIT => {
-                    let remaining = (PIPE_BUSY_WAIT - elapsed).as_millis().clamp(1, 50) as u32;
+                ERROR_PIPE_BUSY if elapsed < busy_wait => {
+                    let remaining = (busy_wait - elapsed).as_millis().clamp(1, 50) as u32;
                     // SAFETY: as above; this only waits for a free instance.
                     let _ = unsafe { WaitNamedPipeW(PCWSTR(name.as_ptr()), remaining) };
                 }
@@ -1584,7 +1598,10 @@ mod windows_pipe {
     }
 
     /// Bound the complete response, including a peer that drips partial bytes.
-    /// The client owns the only reader of this synchronous pipe handle.
+    /// The client owns the only reader of this synchronous pipe handle. The
+    /// wait for a free server instance has the same budget as the response, so
+    /// a request sent while other clients queue behind a long request is
+    /// served when its turn comes instead of failing after two seconds.
     pub fn round_trip_with_timeout(
         name: &str,
         request: &[u8],
@@ -1600,7 +1617,7 @@ mod windows_pipe {
             return Err(TransportError::Protocol("invalid request frame".into()));
         }
         let name = wide(name);
-        let handle = connect_client(&name)?;
+        let handle = connect_client_waiting(&name, timeout)?;
         write_all(handle.0, request)?;
         let deadline = std::time::Instant::now() + timeout;
         read_frame_with(handle.0, |handle, output| {

@@ -205,7 +205,8 @@ their deadline had they been allowed to wait. Whether the real adapters
 (window, CLI, REST, MCP, Stream Deck) ever have four requests outstanding
 during an export was not measured, so this is a candidate defect, not a
 confirmed one. Reproduction: the last row of the table above, with the pipe
-command in "Commands". Not fixed here.
+command in "Commands". Not fixed here; diagnosed and fixed in the
+[pipe-busy follow-up](#pipe-busy-follow-up-2026-11-24) below.
 
 ### A5. Conclusion and limits
 
@@ -321,3 +322,148 @@ PC), the pipe's four-instance limit (A4), and the methods that need devices
 (stop, setup check, driver provisioning), which still have no measurement. No
 operation-status poll for a mutation whose reply is lost after its deadline
 was added or judged necessary by this data.
+
+## Pipe-busy follow-up (2026-11-24)
+
+Diagnosis of the candidate defect in A4, and its fix. Branch
+`fix/pipe-busy-during-bundle-work`.
+
+### 1. The error text, captured
+
+The pipe harness now keeps each failed poll's error (`Poll` in
+`crates/transport/tests/service_timing_pipe.rs`). One run
+(`AUDIOROUTER_TIMING_RUNS=1`, same command as in "Commands"), scenario
+"export-noise with 6 pollers":
+
+```text
+run 0 export-noise with 6 pollers: poll sent at 2020 ms failed after 2001 ms: Windows("timed out waiting for a free named-pipe instance")
+run 0 export-noise with 6 pollers: poll sent at 2021 ms failed after 2001 ms: Windows("timed out waiting for a free named-pipe instance")
+run 0 export-noise with 6 pollers: poll sent at 2021 ms failed after 2001 ms: Windows("timed out waiting for a free named-pipe instance")
+```
+
+Three failures, all the same text, each after 2.00 s: the pipe-busy hypothesis
+is confirmed. Mechanism: `spawn_control_io` runs four I/O threads, each holding
+one pipe instance while its client waits for the single control thread
+(`crates/transport/src/lib.rs:2022`, instance count `:1380`). The export plus
+three pollers fill all four; the other three pollers get `ERROR_PIPE_BUSY` and
+`connect_client` stopped waiting after the fixed `PIPE_BUSY_WAIT` of 2 s,
+although the export freed an instance 0.5 s later (2.5 s in all). Run data:
+[pipe-busy-before.csv](2026-11-24-pipe-busy-before.csv).
+
+### 2. Which real clients can fill four instances
+
+Every adapter opens **one connection per request** (no persistent
+connection); a connection holds an instance from connect until its reply.
+
+| Adapter | How it connects | Evidence |
+| --- | --- | --- |
+| Window (UI bridge) | One `round_trip_with_timeout` per `rpc_request` call, on a Tauri async thread, so calls run concurrently; the page allows 64 pending requests. Pipe timeout 60 s, except `status.get` and `events.subscribe` (2 s) and `system.quit` (15 s). | `src-tauri/src/main.rs:800-811`, `:1429-1437`; `ui/src/host.ts:61,142` |
+| HTTP API (Stream Deck, scripts) | Four workers, each forwards one request over its own pipe connection (HTTP-adapter work shares the window's identity, with its own budget). Up to 4 more connections. | `src-tauri/src/http_accept.rs:17`, `src-tauri/src/main.rs:637-653` |
+| MCP (`mcp serve`) | One `round_trip` (60 s) per tool call, sequential per process; each assistant session is its own process. | `crates/cli/src/lib.rs:3573` |
+| CLI commands | One `round_trip` each; the "is the app running" probe is one more (`system.describe`). | `crates/cli/src/lib.rs:2457` |
+| Tray | One forward per click or status poll. | `src-tauri/src/main.rs:2543-2960` |
+
+Can four be outstanding during an export? Yes, from the window alone. While an
+export or import holds the control thread, the window has these in flight, each
+holding an instance:
+
+1. the export itself;
+2. `events.subscribe`, polled every 1 s with a guard against overlap
+   (`ui/src/useWorkspaceEvents.ts:198`);
+3. diagnostics refresh every 50 ms while a route runs, one at a time
+   (`ui/src/useDiagnosticsRefresh.ts:9,64`);
+4. native counters pump every 1 s while a route runs, one at a time
+   (`ui/src/useNativeCounters.ts:18,125`);
+5. the 2 s activity refresh, which sends `listClients` and others together
+   without an overlap guard (`ui/src/useWorkbenchStatus.ts:91`);
+6. OBS status polls when OBS is connected (`ui/src/useObsStatus.ts:6`).
+
+A Stream Deck plugin polling over HTTP, or an MCP/CLI call during the export,
+adds more. So four instances are reachable with the window and a playing route
+alone, and the fifth caller fails after 2 s with the error above. It happens
+only while the control thread is held for more than 2 s: a maximum-size bundle
+export or import (2.5 s here, longer on a slower disk). It is not a
+steady-state problem. I did not run the shell (no launching it on this
+machine), so the window-side count above is from code, not from a live
+observation.
+
+User-visible effect: a window request that failed this way fails with "control
+pipe request failed: timed out waiting for a free named-pipe instance"
+(`main.rs:1438`); a failed event poll marks the snapshot stale with an error
+(`useWorkspaceEvents.ts` catch block). The same requests would have been served
+a moment later. HTTP and MCP callers get the error as a failed call.
+
+### 3. Decision and fix
+
+Real, user-reachable, small. Fixed in the owning layer, the pipe client:
+
+- `round_trip_with_timeout` (the primitive behind the window, HTTP adapter,
+  MCP, CLI and tray, via `round_trip`'s 60 s default) now waits for a free
+  instance up to **its own timeout** instead of a fixed 2 s
+  (`connect_client_waiting`, `crates/transport/src/lib.rs:1551`, used at
+  `:1620`). The response deadline is unchanged and starts after connecting.
+  Callers with a short timeout keep a short wait: the shell's `status.get` and
+  `events.subscribe` (2 s) fail as before, so the tray and the event poll
+  still surface "backend busy" promptly rather than hanging.
+- The other client entry points (`round_trip_many`, `round_trip_session*`,
+  `send_oneway`) keep the 2 s `PIPE_BUSY_WAIT`; they have no timeout to scale
+  by, and `send_oneway` is the wake-up that `stop_control_io` repeats.
+- Not changed: `SERVER_PIPE_INSTANCES` stays 4. A higher count would raise
+  memory (each instance has two `MAX_FRAME_BYTES + 4` buffers) and the number
+  of same-user clients the I/O layer holds, and would only move the cliff
+  (the single control thread still serves one request at a time). The 5 s
+  stalled-client read deadline (`PIPE_REQUEST_DEADLINE`) is what bounds an
+  instance held by a stuck client, and it is untouched, so a waiting client
+  cannot be starved past that by a stalled peer.
+- Trade-off: a window request the page already gave up on (5 s UI deadline)
+  can now wait in a Tauri thread up to 60 s for an instance, instead of 2 s,
+  and run late. Read requests are harmless; mutations carry idempotency keys
+  (API-07). It is bounded by the pipe timeout and happens only while the
+  control thread is held.
+- Not helped: `events.subscribe` and `status.get`, whose shell timeout is 2 s.
+  During a bundle export the event poll still reports a stale snapshot; that
+  is the existing UI-13 behaviour, not this defect.
+
+Tests (`crates/transport/tests/busy_pipe_wait.rs`, not ignored, unique pipe
+names, no database or disk; the servers hold their four instances behind a gate
+instead of running a real export):
+
+- `a_client_waits_for_a_free_instance_for_as_long_as_its_timeout`: saturates
+  all four instances, starts a 30 s client, requires it to still be waiting
+  after 2.6 s, then releases the gate and requires it to be served after at
+  least 2.5 s.
+- `a_short_timeout_bounds_the_wait_for_a_free_instance`: a 300 ms client fails
+  with the busy-pipe error within 1.5 s.
+
+Both **fail without the fix** (reverted `connect_client_waiting` call
+temporarily; first: "the client gave up while its 30 s timeout had not run
+out", second: "a 300 ms timeout waited 2.0034439s for an instance") and pass
+with it. The first takes about 2.6 s, so the pair runs in 2.6 s.
+
+End to end, the same harness scenario with the fix
+([pipe-busy-after.csv](2026-11-24-pipe-busy-after.csv)): "export-noise with 6
+pollers" 0 failed polls (before: 3), 6 polls sent during the export and all
+served, longest 2,686 ms.
+
+### 4. Commands and results
+
+All on this PC, Windows 11, Rust 1.96.0, `CARGO_BUILD_JOBS=6`, in the branch's
+own worktree; no shell launched, default control pipe and the owner's database
+untouched.
+
+| Command | Result |
+| --- | --- |
+| harness before fix, `AUDIOROUTER_TIMING_RUNS=1`, release, ignored test | 3 failed polls, error text above |
+| `cargo test -p audiorouter-transport --locked --test busy_pipe_wait` with the fix reverted | 2 failed (messages above) |
+| same, fix restored | 2 passed, 2.61 s |
+| harness after fix, same command as the first row | 0 failed polls; `test result: ok`, 44.8 s |
+| `cargo fmt --all -- --check`, `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` | clean |
+| `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` | clean |
+| `cargo test -p audiorouter-transport -p audiorouter-cli -p audiorouter-control --locked` | all passed (transport lib 41, `busy_pipe_wait` 2, cli lib 58, `mcp_stdio` 5, `security_boundaries` 1, control lib 454; ignored tests not run) |
+| `node tools/quality/verify.mjs --checks docs` | passed: 296 Markdown files, 1652 local links |
+
+Not run: `src-tauri` Clippy and tests (no `src-tauri` file changed; its tests
+need `ui/dist` and open pipes in the shell binary), the other `service_timing`
+ignored harnesses, the three-run harness (one run only), `fresh_install_shell`
+(no installer built), any run against the running app, and a live check with a
+route playing. The window-side instance count is from code reading.

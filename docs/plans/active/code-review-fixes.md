@@ -564,7 +564,9 @@ waited up to about 3 s of its 5 s deadline. Play's device-free steps (decode of
 eight 100 s files 0.6–0.7 s, serviced; compile under 0.3 ms) are fine. One
 candidate defect: with six clients polling during a large export, three of
 nine polls failed after 2 s because the pipe has four instances and
-`PIPE_BUSY_WAIT` is 2 s (reproduction in the evidence, section A4); not fixed.
+`PIPE_BUSY_WAIT` is 2 s (reproduction in the evidence, section A4). Confirmed
+and fixed on `fix/pipe-busy-during-bundle-work`: a client now waits for an
+instance up to its own request timeout (evidence: pipe-busy follow-up).
 Not shown: audio (no devices, so `audioService.lateGaps` was never
 incremented) or the owner's library. Evidence and the `#[ignore]` harnesses:
 [synthetic service timing](evidence/2026-11-24-synthetic-service-timing.md).
