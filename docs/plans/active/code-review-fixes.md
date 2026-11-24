@@ -551,3 +551,18 @@ stands, but they are not isolated evidence, and the failures above cannot be
 attributed to AudioRouter or to the system until the runs are repeated with
 the owner's route stopped. Next action: with the owner's approval, stop the
 main route, repeat three runs per cable, then restart it.
+
+### Synthetic service timing (2026-11-24)
+
+Status: the device-free half of "large-library concurrent Play/export/import
+service timing" is measured; the live half stays open. On a synthetic library
+(~400 MiB media, 100+ sessions, 2,000 recordings; 96 MiB incompressible and
+240 MiB-expanded bundles), a maximum-size export or import holds the control
+thread for 0.4–3.3 s, with no service-closure gap over 8 ms
+(median 1.04 ms, max 2.4 ms) meanwhile, and a quick request sent during one
+waited up to 3.25 s of its 5 s deadline. No defect found. Not shown: audio
+(no devices, so `audioService.lateGaps` was never incremented) or the
+owner's library. Evidence and the three `#[ignore]` harnesses:
+[synthetic service timing](evidence/2026-11-24-synthetic-service-timing.md).
+Still open here: the isolated VB-Cable repeat runs with a route playing and
+the latency-changing commercial-plugin run.
