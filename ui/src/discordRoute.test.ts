@@ -1,5 +1,7 @@
+/** @vitest-environment jsdom */
 import { describe, expect, it } from "vitest";
 import type { DeviceListItem, Session } from "@audiorouter/contracts";
+import { applyLanguage } from "./i18n";
 import { discordCheck, voiceCableOutputs } from "./appUsage";
 import { appendDiscordRoute, discordSetupOptions } from "./discordRoute";
 
@@ -135,5 +137,24 @@ describe("Set up for Discord (D2)", () => {
     expect(() => appendDiscordRoute(done, devices, { microphone: "mic", cable: "cable-a-in", cleanup: false })).toThrow(
       "already sends your voice",
     );
+  });
+
+  it("words its refusals in the chosen language", async () => {
+    await applyLanguage("fr");
+    try {
+      expect(() =>
+        appendDiscordRoute(empty, devices, { microphone: "missing", cable: "cable-a-in", cleanup: false }),
+      ).toThrow("Choisissez un microphone.");
+      const done = appendDiscordRoute(empty, devices, {
+        microphone: "mic",
+        cable: "cable-a-in",
+        cleanup: false,
+      }).session;
+      expect(() =>
+        appendDiscordRoute(done, devices, { microphone: "mic", cable: "cable-a-in", cleanup: false }),
+      ).toThrow(/^Cette session envoie déjà votre voix vers CABLE-A Input/);
+    } finally {
+      await applyLanguage("en");
+    }
   });
 });

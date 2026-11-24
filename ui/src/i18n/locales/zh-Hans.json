@@ -3949,6 +3949,15 @@
       "groupLegend": "此组中的应用",
       "createGroup": "创建应用组",
       "afterAdding": "添加后，请选中该应用的卡片并打开“属性”，以更改其捕获方式。"
+    },
+    "discordRoute": {
+      "chooseMicrophone": "请选择一个麦克风。",
+      "chooseCable": "请选择一个虚拟线缆。",
+      "alreadySends": "此会话已将你的声音发送到 {{name}}。",
+      "cableTaken": "{{taken}} 已在向 {{name}} 播放。请选择另一条线缆。"
+    },
+    "svgHandle": {
+      "hint": "{{label}}：{{value}} {{unit}}。可拖动，或使用方向键（按住 Shift 以加大步进）。"
     }
   }
 }

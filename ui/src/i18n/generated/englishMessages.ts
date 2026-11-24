@@ -3961,5 +3961,14 @@ export const ENGLISH_MESSAGES = {
     "groupLegend": "Applications in this group",
     "createGroup": "Create app group",
     "afterAdding": "After adding it, select the app's card and open Properties to change how it is captured."
+  },
+  "discordRoute": {
+    "chooseMicrophone": "Choose a microphone.",
+    "chooseCable": "Choose a virtual cable.",
+    "alreadySends": "This session already sends your voice to {{name}}.",
+    "cableTaken": "{{taken}} already plays into {{name}}. Choose another cable."
+  },
+  "svgHandle": {
+    "hint": "{{label}}: {{value}} {{unit}}. Drag, or use the arrow keys (Shift for bigger steps)."
   }
 } as const;

@@ -3979,6 +3979,15 @@
       "groupLegend": "Applications de ce groupe",
       "createGroup": "Créer le groupe d’applications",
       "afterAdding": "Après l’ajout, sélectionnez la carte de l’application et ouvrez Propriétés pour modifier la façon dont elle est capturée."
+    },
+    "discordRoute": {
+      "chooseMicrophone": "Choisissez un microphone.",
+      "chooseCable": "Choisissez un câble virtuel.",
+      "alreadySends": "Cette session envoie déjà votre voix vers {{name}}.",
+      "cableTaken": "{{taken}} joue déjà dans {{name}}. Choisissez un autre câble."
+    },
+    "svgHandle": {
+      "hint": "{{label}} : {{value}} {{unit}}. Faites glisser, ou utilisez les flèches (Maj pour des pas plus grands)."
     }
   }
 }

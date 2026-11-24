@@ -1,4 +1,5 @@
 import { useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { useMessages } from "./i18n/useMessages";
 
 type Change = (name: string, value: number) => void;
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
@@ -45,6 +46,7 @@ export function Handle({
   disabled: boolean;
   onChange: Change;
 }) {
+  const tr = useMessages();
   const [dragging, setDragging] = useState(false);
   const commit = (value: number) => {
     const next = clamp(roundTo(value, spec.step), spec.min, spec.max);
@@ -101,7 +103,13 @@ export function Handle({
       onPointerCancel={() => setDragging(false)}
       onKeyDown={disabled ? undefined : key}
     >
-      <title>{`${spec.label}: ${spec.value.toFixed(spec.step < 1 ? 1 : 0)} ${spec.unit}. Drag, or use the arrow keys (Shift for bigger steps).`}</title>
+      <title>
+        {tr("svgHandle.hint", {
+          label: spec.label,
+          value: spec.value.toFixed(spec.step < 1 ? 1 : 0),
+          unit: spec.unit,
+        })}
+      </title>
       <circle cx={spec.cx} cy={spec.cy} r={13} className="dynamics-handle-hit" />
       <circle cx={spec.cx} cy={spec.cy} r={5.5} className="dynamics-handle-dot" />
     </g>
