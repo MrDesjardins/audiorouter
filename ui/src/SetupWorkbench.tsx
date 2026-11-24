@@ -1,6 +1,7 @@
 // Content of the Setup side-panel tab (moved from App.tsx).
 import { useMemo } from "react";
 import type { DeviceListItem, DiagnosticsSnapshot, Session, SetupFinding } from "@audiorouter/contracts";
+import type { UiMessage } from "./actionMessage";
 import type { UiBackend } from "./backend";
 import type { SetupStep } from "./setup";
 import { SetupCheck, SetupCheckPanel } from "./SetupCheck";
@@ -33,7 +34,7 @@ export function SetupWorkbench({
   cableRoute?: DiagnosticsSnapshot["cableRoute"];
   onAddCablePassThrough?: () => void;
   sessions: Session[];
-  onActionMessage?: (text: string) => void;
+  onActionMessage?: (message: UiMessage) => void;
   runningSessionIds?: readonly string[];
   setupCheck?: SetupCheckState;
   onOpenFinding?: (finding: SetupFinding) => void;

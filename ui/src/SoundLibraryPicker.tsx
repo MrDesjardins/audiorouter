@@ -207,7 +207,7 @@ export function SoundLibraryPicker({
               event.currentTarget.value = "";
               if (!file) return;
               const reason = audioUploadProblem(file);
-              if (reason) setProblem(reason);
+              if (reason) setProblem(reason.text);
               else onChooseFile(file);
             }}
           />

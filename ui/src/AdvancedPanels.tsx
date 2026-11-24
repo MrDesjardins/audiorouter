@@ -3,7 +3,8 @@ import { useEffect, useEffectEvent, useRef, useState, type ChangeEvent } from "r
 import type { Node, RecordingRecoveryItem } from "@audiorouter/contracts";
 import { useMessages } from "./i18n/useMessages";
 import type { MessageKey } from "./i18n/generated/messageKeys";
-import { formatUiError, type ClientRow, type UiBackend } from "./backend";
+import { infoMessage, say, type UiMessage } from "./actionMessage";
+import { formatUiError, uiError, type ClientRow, type UiBackend } from "./backend";
 import { backendText } from "./actionText";
 import { uiIdempotencyKey } from "./idempotency";
 import {
@@ -72,7 +73,7 @@ export function StartupPanel({ backend }: { backend: UiBackend }) {
   const tr = useMessages();
   const [status, setStatus] = useState<import("@audiorouter/contracts").StartupStatus | null>(null);
   const [enabled, setEnabled] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<UiMessage | null>(null);
   const [nativeRegistration, setNativeRegistration] = useState<"registered" | "unregistered" | "unavailable">(
     "unavailable",
   );
@@ -88,7 +89,7 @@ export function StartupPanel({ backend }: { backend: UiBackend }) {
         if (clearMessage) setMessage(null);
       })
       .catch((error) => {
-        if (generation === refreshGeneration.current) setMessage(formatUiError(error, tr("g3Adv.startupUnavailable")));
+        if (generation === refreshGeneration.current) setMessage(uiError(error, tr("g3Adv.startupUnavailable")));
       });
     if (backend.startupRegistrationStatus)
       void backend
@@ -115,7 +116,7 @@ export function StartupPanel({ backend }: { backend: UiBackend }) {
   const change = async (next: boolean) => {
     if (busy || !backend.connected) return;
     setBusy(true);
-    setMessage(next ? tr("g3Adv.turningOn") : tr("g3Adv.turningOff"));
+    setMessage(say(next ? "g3Adv.turningOn" : "g3Adv.turningOff"));
     try {
       const plan = await backend.planStartup(next);
       await backend.applyStartup(plan.planId, uiIdempotencyKey("startup-apply"));
@@ -125,17 +126,17 @@ export function StartupPanel({ backend }: { backend: UiBackend }) {
           await backend.registerStartup(planned);
           setNativeRegistration(planned ? "registered" : "unregistered");
           setEnabled(planned);
-          setMessage(planned ? tr("g3Adv.willStart") : tr("g3Adv.willNotStart"));
+          setMessage(say(planned ? "g3Adv.willStart" : "g3Adv.willNotStart"));
         } catch (error) {
-          setMessage(tr("g3Adv.signInFailed", { reason: formatUiError(error, tr("g3Adv.signInSetupFailed")) }));
+          setMessage(say("g3Adv.signInFailed", { reason: formatUiError(error, tr("g3Adv.signInSetupFailed")) }));
         }
       } else {
         setEnabled(planned);
-        setMessage(plan.reason);
+        setMessage(infoMessage(plan.reason));
       }
       refresh(false);
     } catch (error) {
-      setMessage(formatUiError(error, tr("g3Adv.startupChangeFailed")));
+      setMessage(uiError(error, tr("g3Adv.startupChangeFailed")));
     } finally {
       setBusy(false);
     }
@@ -182,7 +183,7 @@ export function StartupPanel({ backend }: { backend: UiBackend }) {
         {tr(backend.registerStartup ? "settingsCopy.startupNative" : "settingsCopy.startupPreview")}
       </p>
       <p className="muted" role="status">
-        {message ?? backendText(status?.reason) ?? " "}
+        {message?.text ?? backendText(status?.reason) ?? " "}
       </p>
     </section>
   );
@@ -191,12 +192,12 @@ export function StartupPanel({ backend }: { backend: UiBackend }) {
 export function OsTransitionPanel({ backend, onRefresh }: { backend: UiBackend; onRefresh: () => void }) {
   const tr = useMessages();
   const [result, setResult] = useState<import("@audiorouter/contracts").OsTransitionResult | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<UiMessage | null>(null);
   const [busy, setBusy] = useState(false);
   const revalidate = async () => {
     if (!backend.connected || !backend.osTransition || busy) return;
     setBusy(true);
-    setMessage(tr("g3Adv.osRefreshing"));
+    setMessage(say("g3Adv.osRefreshing"));
     try {
       const next = await backend.osTransition("resume", uiIdempotencyKey("os-resume"));
       setResult(next);
@@ -204,11 +205,11 @@ export function OsTransitionPanel({ backend, onRefresh }: { backend: UiBackend; 
       const waiting = next.sessionIds.length + next.nativeSessionIds.length;
       setMessage(
         next.action === "revalidateBeforeRestart"
-          ? tr(waiting === 1 ? "g3Adv.osRevalidate" : "g3Adv.osRevalidateOther", { n: waiting })
-          : tr("g3Adv.osNone"),
+          ? say(waiting === 1 ? "g3Adv.osRevalidate" : "g3Adv.osRevalidateOther", { n: waiting })
+          : say("g3Adv.osNone"),
       );
     } catch (error) {
-      setMessage(formatUiError(error, tr("g3Adv.osFailed")));
+      setMessage(uiError(error, tr("g3Adv.osFailed")));
     } finally {
       setBusy(false);
     }
@@ -228,8 +229,8 @@ export function OsTransitionPanel({ backend, onRefresh }: { backend: UiBackend; 
     }
     setMessage(
       failures.length === 0
-        ? tr(started === 1 ? "g3Adv.osRestarted" : "g3Adv.osRestartedOther", { n: started })
-        : tr("g3Adv.osRestartedFailed", { started, failed: failures.length, details: failures.join(" ") }),
+        ? say(started === 1 ? "g3Adv.osRestarted" : "g3Adv.osRestartedOther", { n: started })
+        : say("g3Adv.osRestartedFailed", { started, failed: failures.length, details: failures.join(" ") }),
     );
     onRefresh();
     setBusy(false);
@@ -291,7 +292,7 @@ export function ClientsPanel({ backend, initialClientId }: { backend: UiBackend;
   const tr = useMessages();
   const roleLabel = (role: string) => (role in ROLE_LABELS ? tr(ROLE_LABELS[role as keyof typeof ROLE_LABELS]) : role);
   const [clients, setClients] = useState<ClientRow[]>([]);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<UiMessage | null>(null);
   const [busy, setBusy] = useState(false);
   const [newClientId, setNewClientId] = useState("");
   const [newClientRole, setNewClientRole] = useState<(typeof CLIENT_ROLES)[number]>("observer");
@@ -307,8 +308,7 @@ export function ClientsPanel({ backend, initialClientId }: { backend: UiBackend;
         if (generation === refreshGeneration.current) setClients(result);
       })
       .catch((error) => {
-        if (generation === refreshGeneration.current)
-          setMessage(formatUiError(error, tr("g3Adv.clientListUnavailable")));
+        if (generation === refreshGeneration.current) setMessage(uiError(error, tr("g3Adv.clientListUnavailable")));
       });
   };
   // Refresh when the backend connects or changes, with the latest state.
@@ -322,11 +322,11 @@ export function ClientsPanel({ backend, initialClientId }: { backend: UiBackend;
     setBusy(true);
     try {
       await backend.authorizeClient(clientId, newClientRole, uiIdempotencyKey(`client-authorize-${clientId}`));
-      setMessage(tr("g3Adv.authorized", { id: clientId, role: roleLabel(newClientRole).toLowerCase() }));
+      setMessage(say("g3Adv.authorized", { id: clientId, role: roleLabel(newClientRole).toLowerCase() }));
       setNewClientId("");
       refresh();
     } catch (error) {
-      setMessage(formatUiError(error, tr("g3Adv.authorizeFailed")));
+      setMessage(uiError(error, tr("g3Adv.authorizeFailed")));
     } finally {
       setBusy(false);
     }
@@ -336,10 +336,10 @@ export function ClientsPanel({ backend, initialClientId }: { backend: UiBackend;
     setBusy(true);
     try {
       await backend.revokeClient(clientId, uiIdempotencyKey(`client-revoke-${clientId}`));
-      setMessage(tr("g3Adv.revoked", { id: clientId }));
+      setMessage(say("g3Adv.revoked", { id: clientId }));
       refresh();
     } catch (error) {
-      setMessage(formatUiError(error, tr("g3Adv.revokeFailed")));
+      setMessage(uiError(error, tr("g3Adv.revokeFailed")));
     } finally {
       setBusy(false);
     }
@@ -547,7 +547,7 @@ export function SessionTransferPanel({
   onRecovered?: () => void;
 }) {
   const tr = useMessages();
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<UiMessage | null>(null);
   const [plan, setPlan] = useState<import("@audiorouter/contracts").SessionImportPlanResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
@@ -562,9 +562,9 @@ export function SessionTransferPanel({
       anchor.download = "audiorouter-unavailable-session.txt";
       anchor.click();
       URL.revokeObjectURL(url);
-      setMessage(tr("g3Adv.exportedOriginal"));
+      setMessage(say("g3Adv.exportedOriginal"));
     } catch (error) {
-      setMessage(formatUiError(error, tr("g3Adv.exportOriginalFailed")));
+      setMessage(uiError(error, tr("g3Adv.exportOriginalFailed")));
     } finally {
       setBusy(false);
     }
@@ -574,10 +574,10 @@ export function SessionTransferPanel({
     try {
       await backend.deleteSession(id, uiIdempotencyKey("delete-unavailable"));
       setPendingDelete(null);
-      setMessage(tr("g3Adv.deletedUnavailable"));
+      setMessage(say("g3Adv.deletedUnavailable"));
       onRecovered?.();
     } catch (error) {
-      setMessage(formatUiError(error, tr("g3Adv.deleteUnavailableFailed")));
+      setMessage(uiError(error, tr("g3Adv.deleteUnavailableFailed")));
     } finally {
       setBusy(false);
     }
@@ -593,7 +593,7 @@ export function SessionTransferPanel({
           reader.readAsText(file);
         });
   const exportSession = async () => {
-    setMessage(tr("g3Adv.exporting"));
+    setMessage(say("g3Adv.exporting"));
     try {
       const exported = await backend.exportSession(session.id);
       const blob = new Blob([JSON.stringify(exported, null, 2)], { type: "application/json" });
@@ -603,9 +603,9 @@ export function SessionTransferPanel({
       anchor.download = `${exported.name.replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "") || "audiorouter-session"}.audiorouter.json`;
       anchor.click();
       URL.revokeObjectURL(url);
-      setMessage(tr("g3Adv.exported", { name: exported.name }));
+      setMessage(say("g3Adv.exported", { name: exported.name }));
     } catch (error) {
-      setMessage(formatUiError(error, tr("g3Adv.exportFailed")));
+      setMessage(uiError(error, tr("g3Adv.exportFailed")));
     }
   };
   const inspectImport = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -615,17 +615,17 @@ export function SessionTransferPanel({
     const request = ++importRequest.current;
     setPlan(null);
     setBusy(true);
-    setMessage(tr("g3Adv.validating"));
+    setMessage(say("g3Adv.validating"));
     try {
       const candidate = JSON.parse(await readFileText(file)) as import("@audiorouter/contracts").Session;
       const next = await backend.planSessionImport(candidate);
       if (request !== importRequest.current) return;
       setPlan(next);
-      setMessage(tr("g3Adv.validated", { name: next.session.name }));
+      setMessage(say("g3Adv.validated", { name: next.session.name }));
     } catch (error) {
       if (request === importRequest.current) {
         setPlan(null);
-        setMessage(formatUiError(error, tr("g3Adv.validateFailed")));
+        setMessage(uiError(error, tr("g3Adv.validateFailed")));
       }
     } finally {
       if (request === importRequest.current) setBusy(false);
@@ -634,14 +634,14 @@ export function SessionTransferPanel({
   const commitImport = async () => {
     if (!plan || busy || !backend.connected) return;
     setBusy(true);
-    setMessage(tr("g3Adv.committing"));
+    setMessage(say("g3Adv.committing"));
     try {
       const result = await backend.commitSessionImport(plan.planId, uiIdempotencyKey("session-import"));
       setPlan(null);
       onImported(result.session);
-      setMessage(tr("g3Adv.imported", { name: result.session.name }));
+      setMessage(say("g3Adv.imported", { name: result.session.name }));
     } catch (error) {
-      setMessage(formatUiError(error, tr("g3Adv.commitFailed")));
+      setMessage(uiError(error, tr("g3Adv.commitFailed")));
     } finally {
       setBusy(false);
     }

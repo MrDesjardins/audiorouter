@@ -114,15 +114,21 @@ it("reports an automatic route recovery and its failure", async () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
-    expect(message).toHaveBeenLastCalledWith(expect.stringContaining("restarted the route"));
+    expect(message).toHaveBeenLastCalledWith(
+      expect.objectContaining({ text: expect.stringContaining("restarted the route"), tone: "info" }),
+    );
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000);
     });
-    expect(message).toHaveBeenLastCalledWith(expect.stringContaining("could not restart the route"));
+    expect(message).toHaveBeenLastCalledWith(
+      expect.objectContaining({ text: expect.stringContaining("could not restart the route"), tone: "error" }),
+    );
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000);
     });
-    expect(message).toHaveBeenLastCalledWith(expect.stringContaining("restarted the route"));
+    expect(message).toHaveBeenLastCalledWith(
+      expect.objectContaining({ text: expect.stringContaining("restarted the route"), tone: "info" }),
+    );
   } finally {
     hook.unmount();
     vi.useRealTimers();

@@ -8,7 +8,7 @@ import {
   type UiBackend,
   type UiSnapshotState,
 } from "./backend";
-import { markErrorMessage } from "./actionMessage";
+import { errorMessage, infoMessage, type UiMessage } from "./actionMessage";
 
 /** State categories that can invalidate the workspace snapshot. Meter events
  * are intentionally excluded; diagnostics use the bounded snapshot path. */
@@ -63,7 +63,7 @@ export function useWorkspaceEvents({
   setSnapshotState: Dispatch<SetStateAction<UiSnapshotState>>;
   /** Adopts an active-session change made elsewhere (MCP, Stream Deck). */
   followBackendActiveSession: (sessionId: string) => boolean;
-  setActionMessage: Dispatch<SetStateAction<string | null>>;
+  setActionMessage: Dispatch<SetStateAction<UiMessage | null>>;
   refreshApplications: () => void;
   refreshDevices: (options?: { announce?: boolean }) => void;
   refreshSessions: () => Promise<unknown>;
@@ -77,7 +77,7 @@ export function useWorkspaceEvents({
   // Callbacks from the caller: always the latest, never a reason to restart polling.
   const reconnectRunning = useEffectEvent(() => reconnecting);
   const follow = useEffectEvent((sessionId: string) => followBackendActiveSession(sessionId));
-  const showMessage = useEffectEvent((message: string) => setActionMessage(message));
+  const showMessage = useEffectEvent((message: UiMessage) => setActionMessage(message));
   const updateSnapshot = useEffectEvent((update: SetStateAction<UiSnapshotState>) => setSnapshotState(update));
   const refreshInventories = useEffectEvent(() => {
     refreshApplications();
@@ -132,22 +132,22 @@ export function useWorkspaceEvents({
         // the device change that caused it.
         if (routeOutcome?.category === "runtime.recoveryFailed") {
           showMessage(
-            markErrorMessage(
+            errorMessage(
               "AudioRouter could not restart the route: the device it uses did not come back with the same identity. Check the device in Properties, then press Play.",
             ),
           );
         } else if (routeOutcome?.category === "runtime.recovered") {
-          showMessage("The audio device came back, so AudioRouter restarted the route.");
+          showMessage(infoMessage("The audio device came back, so AudioRouter restarted the route."));
         } else if (routeOutcome?.category === "devices.bindingInvalidated") {
           showMessage(
-            markErrorMessage(
+            errorMessage(
               "An audio device this route uses was disconnected or changed, so audio stopped. AudioRouter restarts the route when the same device is back, for up to two minutes; after that, reconnect it and press Play.",
             ),
           );
         } else if (bridgeEvent) {
           const bus = bridgeEvent.operationId ?? "an affected bus";
           showMessage(
-            markErrorMessage(
+            errorMessage(
               bridgeEvent.category === "virtualBridge.expired"
                 ? `The virtual cable link for ${bus} timed out, so that audio is silent. Press Stop and Play to restart it.`
                 : `The virtual cable link for ${bus} failed, so that audio is silent. Press Stop and Play to restart it.`,

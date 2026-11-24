@@ -1,7 +1,8 @@
 // Recorder and recording-library controls (moved from App.tsx).
 import { useEffect, useState } from "react";
 import { askConfirm } from "./AppDialog";
-import { formatUiError, type RecorderStatus, type UiBackend } from "./backend";
+import { say, type UiMessage } from "./actionMessage";
+import { uiError, type RecorderStatus, type UiBackend } from "./backend";
 import { uiIdempotencyKey } from "./idempotency";
 import { PanelMessage } from "./PanelMessage";
 import { BooleanField } from "./BooleanField";
@@ -70,7 +71,7 @@ export function RecorderActions({
   const [state, setState] = useState("idle");
   const [lastFrame, setLastFrame] = useState<number | null>(null);
   const [nodeId, setNodeId] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<UiMessage | null>(null);
   const [recorderId, setRecorderId] = useState("voice-recording");
   const [channels, setChannels] = useState<1 | 2>(2);
   const [sampleRate, setSampleRate] = useState<44100 | 48000>(48000);
@@ -99,12 +100,12 @@ export function RecorderActions({
   }, [recorderStatuses, recorderStatusAvailable, sessionId]);
   const create = async () => {
     if (!recorderId.trim()) {
-      setMessage(tr("recordingUi.provideId"));
+      setMessage(say("recordingUi.provideId"));
       return;
     }
     if (busy || !connected) return;
     setBusy(true);
-    setMessage(tr("recordingUi.creating"));
+    setMessage(say("recordingUi.creating"));
     try {
       const result = await backend.createRecorder({
         sessionId,
@@ -120,9 +121,9 @@ export function RecorderActions({
         idempotencyKey: uiIdempotencyKey("recorder-create"),
       });
       setState(result.state);
-      setMessage(tr("recordingUi.created", { id: result.recorderId, path: result.path }));
+      setMessage(say("recordingUi.created", { id: result.recorderId, path: result.path }));
     } catch (error) {
-      setMessage(formatUiError(error, tr("recordingUi.createError")));
+      setMessage(uiError(error, tr("recordingUi.createError")));
     } finally {
       setBusy(false);
     }
@@ -130,15 +131,15 @@ export function RecorderActions({
   const run = async (operation: () => Promise<{ state: string; lastFrame?: number | null }>) => {
     if (busy || !connected) return;
     setBusy(true);
-    setMessage(tr("recordingUi.applying"));
+    setMessage(say("recordingUi.applying"));
     try {
       const result = await operation();
       setState(result.state);
       if (result.lastFrame !== undefined) setLastFrame(result.lastFrame ?? null);
-      setMessage(tr("recordingUi.updated", { state: recordingStateLabel(result.state), frame }));
+      setMessage(say("recordingUi.updated", { state: recordingStateLabel(result.state), frame }));
     } catch (error) {
       setState("failed");
-      setMessage(formatUiError(error, tr("recordingUi.actionError")));
+      setMessage(uiError(error, tr("recordingUi.actionError")));
     } finally {
       setBusy(false);
     }

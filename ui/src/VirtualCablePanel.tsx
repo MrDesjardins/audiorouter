@@ -7,7 +7,7 @@ import { useMessages } from "./i18n/useMessages";
 import type { MessageKey } from "./i18n/generated/messageKeys";
 import type { DeviceListItem, DiagnosticsSnapshot, VirtualCableStatus } from "@audiorouter/contracts";
 import type { CableManagementRequest } from "./backend";
-import { markErrorMessage } from "./actionMessage";
+import { errorMessage, say, type UiMessage } from "./actionMessage";
 import { BooleanField } from "./BooleanField";
 import {
   cableLabel,
@@ -80,7 +80,7 @@ export function VirtualCablePanel({
   /** Shell probe; without it a provided manageVirtualCable is assumed usable. */
   virtualCableManagementAvailable?: () => Promise<boolean>;
   /** Shows an outcome in the workspace notification area. */
-  onActionMessage?: (text: string) => void;
+  onActionMessage?: (message: UiMessage) => void;
 }) {
   const tr = useMessages();
   const status = useVirtualCableStatus();
@@ -128,7 +128,7 @@ export function VirtualCablePanel({
     ["g3Cable.dropped", route?.dropped ?? null],
     ["g3Cable.trimmed", route?.trimmed ?? null],
   ];
-  const runManagement = async (request: CableManagementRequest, successText: string) => {
+  const runManagement = async (request: CableManagementRequest, success: UiMessage) => {
     if (!manageVirtualCable || busy) return;
     setBusy(true);
     setMessage(tr("g3Cable.working"));
@@ -142,18 +142,18 @@ export function VirtualCablePanel({
       setPendingCount(null);
       if (onActionMessage) {
         setMessage(" ");
-        onActionMessage(successText);
-      } else setMessage(successText);
+        onActionMessage(success);
+      } else setMessage(success.text);
     } catch (error) {
-      const text = markErrorMessage(
+      const failure = errorMessage(
         error instanceof Error && error.message
           ? tr("g3Cable.opFailedWith", { message: error.message })
           : tr("g3Cable.opFailed"),
       );
       if (onActionMessage) {
         setMessage(" ");
-        onActionMessage(text);
-      } else setMessage(text);
+        onActionMessage(failure);
+      } else setMessage(failure.text);
     } finally {
       setBusy(false);
     }
@@ -255,7 +255,7 @@ export function VirtualCablePanel({
             type="button"
             className="secondary"
             disabled={!managementAvailable || !canInstall || busy}
-            onClick={() => void runManagement({ operation: "install" }, tr("g3Cable.installDone"))}
+            onClick={() => void runManagement({ operation: "install" }, say("g3Cable.installDone"))}
           >
             {tr("g3Cable.install")}
           </button>
@@ -263,7 +263,7 @@ export function VirtualCablePanel({
             type="button"
             className="secondary"
             disabled={!managementAvailable || !canUpdate || busy}
-            onClick={() => void runManagement({ operation: "update" }, tr("g3Cable.updateDone"))}
+            onClick={() => void runManagement({ operation: "update" }, say("g3Cable.updateDone"))}
           >
             {tr("g3Cable.update")}
           </button>
@@ -271,7 +271,7 @@ export function VirtualCablePanel({
             type="button"
             className="secondary"
             disabled={!managementAvailable || !canRepair || busy}
-            onClick={() => void runManagement({ operation: "repair" }, tr("g3Cable.repairDone"))}
+            onClick={() => void runManagement({ operation: "repair" }, say("g3Cable.repairDone"))}
           >
             {tr("g3Cable.repair")}
           </button>
@@ -279,7 +279,7 @@ export function VirtualCablePanel({
             type="button"
             className="secondary"
             disabled={!managementAvailable || !canRemove || busy}
-            onClick={() => void runManagement({ operation: "remove" }, tr("g3Cable.removeDone"))}
+            onClick={() => void runManagement({ operation: "remove" }, say("g3Cable.removeDone"))}
           >
             {tr("g3Cable.remove")}
           </button>
@@ -328,7 +328,7 @@ export function VirtualCablePanel({
               onChange={(checked) =>
                 void runManagement(
                   { operation: checked ? "setLowLatencyOn" : "setLowLatencyOff" },
-                  checked ? tr("g3Cable.lowOnDone") : tr("g3Cable.lowOffDone"),
+                  say(checked ? "g3Cable.lowOnDone" : "g3Cable.lowOffDone"),
                 )
               }
               help={
@@ -356,7 +356,7 @@ export function VirtualCablePanel({
               onClick={() => {
                 if (pendingCount !== null && pendingCount < status.cableCount) return;
                 if (pendingCount !== null)
-                  void runManagement({ operation: "setCount", count: pendingCount }, tr("g3Cable.countDone"));
+                  void runManagement({ operation: "setCount", count: pendingCount }, say("g3Cable.countDone"));
               }}
             >
               {tr("g3Cable.applyCount")}
@@ -382,7 +382,7 @@ export function VirtualCablePanel({
                   className="secondary"
                   disabled={!managementAvailable || busy}
                   onClick={() =>
-                    void runManagement({ operation: "setCount", count: pendingCount }, tr("g3Cable.countDone"))
+                    void runManagement({ operation: "setCount", count: pendingCount }, say("g3Cable.countDone"))
                   }
                 >
                   {tr("g3Cable.confirmRemove")}
@@ -418,7 +418,7 @@ export function VirtualCablePanel({
                       const index = cable.busId.charCodeAt(cable.busId.length - 1) - 96;
                       void runManagement(
                         { operation: "configure", names: [[index, nameDrafts[cable.busId] ?? cable.name]] },
-                        tr("g3Cable.renamed", { name: cableLabel(cable.busId) }),
+                        say("g3Cable.renamed", { name: cableLabel(cable.busId) }),
                       );
                     }}
                   >
