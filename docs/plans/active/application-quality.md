@@ -532,8 +532,28 @@ Before the change the first reserved 1 048 580 bytes for a 1 MiB header with no
 data, the second 62 914 564 bytes for a 60 MiB header with 3 MiB sent, and the
 fourth found no retained buffer; all four pass after it.
 `cargo test -p audiorouter-plugin-host --features test-fixtures` passed
-(128 unit, 12 bounded_fuzz, 42 worker_process; ignored tests need installed
-plugins). Not measured: end-to-end audio latency on a live multi-bus route.
+(130 unit including the two tests below, 12 bounded_fuzz, 42 worker_process;
+the 21 ignored worker_process tests and the VST2/VST3 integration tests need
+installed plugins and were not run).
+
+Review fix (same day): the first version of the read loop re-zeroed a whole 64 KiB
+step on every partial read, so a peer trickling one byte at a time cost 64 KiB of
+memset per byte on the host's reader thread. The buffer is now extended, and
+zeroed, only when the previous step is full: each payload byte is zeroed once,
+as before. `worker_frames_larger_than_one_read_step_survive_short_reads` decodes
+a 300 KiB frame through readers returning 4 KiB, 64 KiB − 1 and 64 KiB + 1 bytes
+and reports a stream that ends in a later step as an I/O error. A throwaway
+release-profile benchmark (old reader copied inline against the new one,
+2 000 frames each, not committed) measured the same time per frame within noise:
+3.6 µs for a 2 994-byte, 128-frame stereo block, and 47 µs for a 45 234-byte,
+2 048-frame block, with whole-buffer or 4 KiB reads; JSON decoding dominates.
+`the_largest_process_frame_fits_the_retained_scratch_buffer` encodes the largest
+legal `ProcessBuses` message (8 channels × 2 048 frames of the longest `f32` text
+plus 4 096 parameter events) and requires it to fit
+`WORKER_SCRATCH_RETAIN_BYTES` and to be read twice without reallocating, so the
+retain limit cannot cause per-block churn. Per-frame work is no more than before:
+one zero pass, the same reads, no allocation once the buffer is warm. Not
+measured: end-to-end audio latency on a live multi-bus route.
 
 **Nightly fuzz job.** `quality.yml` (the nightly quality workflow) now has a
 `fuzz` job that runs the six fuzz targets (protocol, plugin-host, engine,

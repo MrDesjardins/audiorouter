@@ -3285,32 +3285,32 @@ fn read_worker_payload<R: Read>(
 ) -> Result<(), WorkerMessageError> {
     let mut filled = 0;
     while filled < declared {
-        let step = (declared - filled).min(WORKER_READ_STEP_BYTES);
-        let needed = filled + step;
-        if payload.capacity() < needed {
-            // Double (so a large frame takes few reallocations) but never
-            // reserve beyond what the header declared.
-            let target = payload
-                .capacity()
-                .saturating_mul(2)
-                .max(needed)
-                .min(declared);
-            payload.reserve_exact(target - payload.len());
+        // Extend (and zero) the buffer only once the previous step is full, so
+        // a peer that trickles one byte at a time cannot make every read
+        // re-zero a whole step.
+        if filled == payload.len() {
+            let step = (declared - filled).min(WORKER_READ_STEP_BYTES);
+            let needed = filled + step;
+            if payload.capacity() < needed {
+                // Double (so a large frame takes few reallocations) but never
+                // reserve beyond what the header declared.
+                let target = payload
+                    .capacity()
+                    .saturating_mul(2)
+                    .max(needed)
+                    .min(declared);
+                payload.reserve_exact(target - payload.len());
+            }
+            payload.resize(needed, 0);
         }
-        payload.resize(needed, 0);
         match reader.read(&mut payload[filled..]) {
             Ok(0) => {
                 return Err(WorkerMessageError::Io(
                     "failed to fill whole buffer".to_owned(),
                 ))
             }
-            Ok(count) => {
-                filled += count;
-                payload.truncate(filled);
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {
-                payload.truncate(filled);
-            }
+            Ok(count) => filled += count,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
             Err(error) => return Err(WorkerMessageError::Io(error.to_string())),
         }
     }
@@ -11391,6 +11391,94 @@ not a fingerprint
             chunk_size: 1,
         };
         assert_eq!(read_worker_message(&mut reader).unwrap(), message);
+    }
+
+    #[test]
+    fn worker_frames_larger_than_one_read_step_survive_short_reads() {
+        // 300 KiB of state: several read steps, so the buffer is extended
+        // between reads. Chunk sizes straddle the 64 KiB step boundary.
+        let bytes: Vec<u8> = (0..300 * 1024)
+            .map(|index| (index * 7 % 251) as u8)
+            .collect();
+        let message = WorkerMessage::StateRestore {
+            asset: PluginStateAsset::new(1, bytes).unwrap(),
+        };
+        let frame = encode_worker_message(&message).unwrap();
+        assert!(frame.len() > 2 * WORKER_READ_STEP_BYTES);
+        for chunk_size in [
+            1_usize << 12,
+            WORKER_READ_STEP_BYTES - 1,
+            WORKER_READ_STEP_BYTES + 1,
+        ] {
+            let mut reader = ChunkedReader {
+                bytes: frame.clone(),
+                offset: 0,
+                chunk_size,
+            };
+            assert_eq!(
+                read_worker_message(&mut reader).unwrap(),
+                message,
+                "chunk size {chunk_size}"
+            );
+        }
+        // A stream that ends inside a later step is a clean error, not a
+        // truncated decode.
+        let mut reader = ChunkedReader {
+            bytes: frame[..frame.len() - 1].to_vec(),
+            offset: 0,
+            chunk_size: 10_000,
+        };
+        assert!(matches!(
+            read_worker_message(&mut reader),
+            Err(WorkerMessageError::Io(message)) if message.contains("fill whole buffer")
+        ));
+    }
+
+    #[test]
+    fn the_largest_process_frame_fits_the_retained_scratch_buffer() {
+        // Eight channels (the bus-layout maximum) of 2048 frames, each sample
+        // the longest shortest-form f32 text, plus the most parameter events.
+        // If this ever exceeds the retained size the reader would free and
+        // reallocate its buffer on every block.
+        let sample = -f32::MIN_POSITIVE;
+        let layout = WorkerAudioBusLayout::new(&[2, 2, 2, 2], &[2, 2, 2, 2]).unwrap();
+        let frames: Vec<WorkerFrame> = (0..4)
+            .map(|_| WorkerFrame::new(u64::MAX, u64::MAX, 2, vec![sample; 2 * MAX_WORKER_FRAMES]))
+            .collect::<Result<_, _>>()
+            .unwrap();
+        let parameters: Vec<ParameterEvent> = (0..MAX_PARAMETER_EVENTS)
+            .map(|index| ParameterEvent {
+                parameter_id: u32::MAX,
+                normalized_value: 0.123_456_79,
+                sample_offset: index % MAX_WORKER_FRAMES,
+            })
+            .collect();
+        let message = WorkerMessage::ProcessBuses {
+            layout,
+            frames,
+            parameters,
+        };
+        let frame = encode_worker_message(&message).unwrap();
+        assert!(
+            frame.len() - 4 <= WORKER_SCRATCH_RETAIN_BYTES,
+            "a legitimate process frame of {} bytes exceeds the {}-byte retained scratch buffer",
+            frame.len() - 4,
+            WORKER_SCRATCH_RETAIN_BYTES
+        );
+        let mut stream = frame.clone();
+        stream.extend_from_slice(&frame);
+        let mut cursor = Cursor::new(stream);
+        let mut scratch = Vec::new();
+        assert_eq!(
+            read_worker_message_into(&mut cursor, &mut scratch).unwrap(),
+            message
+        );
+        let pointer = scratch.as_ptr();
+        assert_eq!(
+            read_worker_message_into(&mut cursor, &mut scratch).unwrap(),
+            message
+        );
+        assert_eq!(scratch.as_ptr(), pointer, "the buffer was reallocated");
     }
 
     #[test]
