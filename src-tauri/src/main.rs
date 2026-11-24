@@ -412,6 +412,40 @@ fn transition_operation_key(sequence: usize) -> String {
     )
 }
 
+/// How long the OS-transition thread waits before its one retry. Windows
+/// gives a sleeping machine only a couple of seconds, so this is short; it is
+/// long enough for a backend that was busy with one request or restarting its
+/// pipe to answer.
+#[cfg_attr(not(windows), allow(dead_code))]
+const OS_TRANSITION_RETRY_PAUSE: std::time::Duration = std::time::Duration::from_millis(300);
+
+/// Send one `system.osTransition` request, retrying once after `pause` when
+/// the backend is unreachable or answers with an error, and log the final
+/// failure once through `log_failure` (`shell.jsonl` in production). A
+/// success logs nothing extra. The request carries an idempotency key, so a
+/// retry after a reply that was lost cannot release the streams twice.
+/// Returns whether the backend accepted the request.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn forward_os_transition_with_retry(
+    request: &JsonRpcRequest,
+    pause: std::time::Duration,
+    mut forward: impl FnMut(&JsonRpcRequest) -> Result<JsonRpcResponse, String>,
+    mut log_failure: impl FnMut(&JsonRpcRequest, &Result<JsonRpcResponse, String>),
+) -> bool {
+    let accepted = |response: &Result<JsonRpcResponse, String>| matches!(response, Ok(value) if value.error.is_none());
+    let first = forward(request);
+    if accepted(&first) {
+        return true;
+    }
+    std::thread::sleep(pause);
+    let second = forward(request);
+    if accepted(&second) {
+        return true;
+    }
+    log_failure(request, &second);
+    false
+}
+
 /// The grant the desktop shell's backend serves with, from the current
 /// user's enrollment (after first-launch enrollment) and the developer
 /// opt-in. An operator gets the desktop grant, which can open audio devices
@@ -2784,7 +2818,7 @@ fn main() {
                                         audiorouter_control::os_transition::OsTransition::Sleep => "sleep",
                                         audiorouter_control::os_transition::OsTransition::Resume => "resume",
                                     };
-                                    let _ = forward_rpc_request(
+                                    forward_os_transition_with_retry(
                                         &JsonRpcRequest {
                                             jsonrpc: "2.0".into(),
                                             id: Some(serde_json::json!(format!(
@@ -2796,7 +2830,9 @@ fn main() {
                                                 "idempotencyKey": operation_key
                                             })),
                                         },
-                                        &transition_pipe,
+                                        OS_TRANSITION_RETRY_PAUSE,
+                                        |request| forward_rpc_request(request, &transition_pipe),
+                                        log_shell_rpc,
                                     );
                                 }
                             })
@@ -3172,6 +3208,120 @@ mod tests {
         assert_ne!(first, second);
         assert!(first.starts_with("shell-os-transition-"));
         assert!(first.len() < 256);
+    }
+
+    fn os_transition_request() -> JsonRpcRequest {
+        JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(serde_json::json!("os-transition-0")),
+            method: "system.osTransition".into(),
+            params: Some(serde_json::json!({
+                "transition": "sleep",
+                "idempotencyKey": "shell-os-transition-test"
+            })),
+        }
+    }
+
+    /// RES-11: the sleep/lock notifier thread used to drop the result of
+    /// `system.osTransition`, so a backend that was busy or restarting when
+    /// Windows announced sleep left the streams open with no trace.
+    #[test]
+    fn os_transition_retries_once_and_logs_one_failure() {
+        let directory = std::env::temp_dir().join(format!(
+            "audiorouter-os-transition-retry-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut attempts = 0;
+        let accepted = forward_os_transition_with_retry(
+            &os_transition_request(),
+            std::time::Duration::ZERO,
+            |_| {
+                attempts += 1;
+                Err("control pipe request failed: pipe is busy".into())
+            },
+            |request, response| write_shell_rpc_log(&directory, request, response),
+        );
+        assert!(!accepted);
+        assert_eq!(attempts, 2, "one try and exactly one retry");
+        let log = std::fs::read_to_string(directory.join("shell.jsonl")).unwrap();
+        let lines = log.lines().collect::<Vec<_>>();
+        assert_eq!(lines.len(), 1, "{log}");
+        let record: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+        assert_eq!(record["method"], "system.osTransition");
+        assert_eq!(record["outcome"], "transportError");
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn os_transition_recovers_on_the_retry_without_logging() {
+        let mut attempts = 0;
+        let mut logged = 0;
+        let accepted = forward_os_transition_with_retry(
+            &os_transition_request(),
+            std::time::Duration::ZERO,
+            |request| {
+                attempts += 1;
+                if attempts == 1 {
+                    Err("control pipe request failed: pipe is busy".into())
+                } else {
+                    Ok(JsonRpcResponse::success(
+                        request.id.clone(),
+                        serde_json::json!({"state": "released"}),
+                    ))
+                }
+            },
+            |_, _| logged += 1,
+        );
+        assert!(accepted);
+        assert_eq!(attempts, 2);
+        assert_eq!(logged, 0, "a recovered transition is not a failure");
+    }
+
+    #[test]
+    fn os_transition_success_sends_once_and_logs_nothing() {
+        let mut attempts = 0;
+        let mut logged = 0;
+        let accepted = forward_os_transition_with_retry(
+            &os_transition_request(),
+            std::time::Duration::ZERO,
+            |request| {
+                attempts += 1;
+                Ok(JsonRpcResponse::success(
+                    request.id.clone(),
+                    serde_json::json!({"state": "released"}),
+                ))
+            },
+            |_, _| logged += 1,
+        );
+        assert!(accepted);
+        assert_eq!(attempts, 1);
+        assert_eq!(logged, 0);
+    }
+
+    #[test]
+    fn os_transition_backend_error_answers_are_retried_and_logged_as_errors() {
+        let mut attempts = 0;
+        let mut failures = Vec::new();
+        let accepted = forward_os_transition_with_retry(
+            &os_transition_request(),
+            std::time::Duration::ZERO,
+            |request| {
+                attempts += 1;
+                Ok(JsonRpcResponse::failure(
+                    request.id.clone(),
+                    -32000,
+                    "backend restarting",
+                ))
+            },
+            |_, response| failures.push(response.clone()),
+        );
+        assert!(!accepted);
+        assert_eq!(attempts, 2);
+        assert_eq!(failures.len(), 1);
     }
 
     #[cfg(windows)]
