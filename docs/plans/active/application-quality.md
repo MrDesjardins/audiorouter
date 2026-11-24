@@ -445,16 +445,18 @@ Defects found and fixed, each with a regression test that failed first:
 7. `audioMedia.delete` without `mediaId` returned `{"deleted": false}`; it is
    now invalid params.
 
-Recorded for the owner, not changed:
+Recorded for the owner (2026-11-24). The first two were closed the same day on
+`fix/rust-small-defects` ([record](evidence/2026-11-24-rust-small-defects.md)):
 
 - `EMPTY_STRING_LENIENT` (7 pairs, e.g. `sessions.get` `sessionId`): an empty
-  string where the schema says `minLength: 1` is accepted and means "the
-  active session" or "all". Tighten the handlers or relax the schemas; the
-  list is a ratchet, so a new pair fails and a fixed one must be removed.
-- MCP `create_session` for an Editor creates the session but cannot open it
-  (`sessions.active.set` needs SessionControl), and reports permissionDenied.
+  string where the schema says `minLength: 1` was accepted and meant "the
+  active session" or "all". Closed: the dispatcher enforces `minLength` and
+  the list is gone.
+- MCP `create_session` for an Editor created the session but could not open it
+  (`sessions.active.set` needs SessionControl), and reported permissionDenied.
+  Closed: the tool refuses before creating anything.
 - `RETRY_ELSEWHERE` lists idempotent methods with no retry scenario yet
-  (each with its reason).
+  (each with its reason). Still open.
 
 Process note: the new code was written with Edit/Write. Two lapses: one
 `cat >>` append to `contract_cases.rs` and one two-line `sed -i` replacing
