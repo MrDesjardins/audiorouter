@@ -275,7 +275,7 @@ mod tests {
         let mut shift = TimeShift::new(1, 2, 48_000);
         let mut produced = Vec::new();
         let mut next_frame = 0usize;
-        let mut block = |shift: &mut TimeShift, produced: &mut Vec<f32>, next_frame: &mut usize| {
+        let block = |shift: &mut TimeShift, produced: &mut Vec<f32>, next_frame: &mut usize| {
             let input: Vec<f32> = (0..BLOCK)
                 .map(|offset| sine(*next_frame + offset))
                 .collect();
