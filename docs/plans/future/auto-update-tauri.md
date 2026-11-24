@@ -238,6 +238,68 @@ Windows qualification (VM first, then a real clean machine):
 - SEC-11 and the M08 upgrade/rollback gates have recorded evidence before the
   feature is described as available to ordinary users.
 
+## Record: inert updater core built (2026-11-24)
+
+The owner asked for signed in-app updates. The decisions above are still open,
+so only the part that does not depend on them was built. This does not start
+the rollout, does not meet SEC-11 and is not an updater.
+
+**What exists.** `src-tauri/src/update_core.rs`, a pure module with its tests,
+declared in `main.rs` behind a narrow `cfg_attr(not(test), expect(dead_code))`
+that warns as soon as something starts calling it. It has no network code, no
+installer launch, no Tauri command, no REST/MCP/UI surface, no endpoint, no
+dependency change and no key of any kind. Because it adds no API method, the
+AUTO-18 rules are not triggered.
+
+- `evaluate_manifest`: policy check, size bound (64 KiB), signature over the
+  raw bytes, and only then parsing; unknown, missing, duplicate or mistyped
+  fields; schema version; kill switch (`withdrawn`); channel; platform match
+  (ambiguous matches refuse); version rules (same or older than installed,
+  replay of a version older than the highest already seen, prerelease unless
+  allowed, installed app below `minAppVersion`); HTTPS URLs on a host the caller
+  passes in, separately for the artifact and the release page.
+- `ArtifactVerification`: streamed size cap, SHA-256 and signature session fed
+  the same chunks; checks size, then hash, then signature; yields a
+  `VerifiedArtifact` that only it can build.
+- `LifecycleState::check_install`: refuses while a recording, driver operation
+  or session is active, and also when any of them is unknown.
+
+**Refuses by default.** The only non-test `SignatureVerifier` is
+`NoTrustedKey`, which refuses everything. No signature crate (minisign,
+ed25519) is in `src-tauri/Cargo.lock` and no dependency may be added here, so
+**there is no real signature verification**. Tests show that with `NoTrustedKey`
+every manifest path refuses and no download can begin, and that the same inputs
+succeed with a test fake. The fake is a checksum label, not a key; no key,
+minisign-shaped fixture or default host is in the repository.
+
+**Mutation checks (each reverted).** Removing the manifest signature check
+failed 5 tests (for example `a_tampered_manifest_fails_its_signature`);
+removing the artifact signature check failed
+`a_download_signed_for_other_bytes_is_refused` and
+`a_failing_signature_check_refuses_even_with_a_correct_size_and_hash`; removing
+the same-or-older check failed `the_same_or_an_older_version_is_never_offered`;
+removing the hash check failed `a_download_with_a_different_hash_is_refused`.
+
+**Waiting on which decision.**
+
+| Piece | Waits on |
+| --- | --- |
+| Manifest schema, size caps, `schemaVersion` | Release pipeline and feed design (provisional) |
+| Real `SignatureVerifier`, what exactly is signed (raw file, prehash, manifest too), key rotation and revocation | Key owner, custody and CI access; format (minisign or Tauri updater) |
+| Allowed hosts (supplied by the caller, no default) and redirect handling (GitHub asset URLs redirect, a downloader concern) | Feed host |
+| `Channel`, prerelease policy, `highest_seen_version` storage | Channels |
+| `minDriverVersion` (parsed only) | Driver compatibility policy |
+| Session handling (refuse only, no offer to stop) and install timing | "Later" and install-on-quit decisions |
+| Stream Deck plugin version | Stream Deck refresh policy |
+| Download start (consent, click) and partial or resumed downloads | Download trigger decision and the downloader itself |
+
+Not built and still required: the downloader, installer launch and ordering,
+the Tauri command, UI, release workflow and manifest generation, rollback and
+backup, and every Windows and VM qualification above.
+
+**Next action.** Decide the key custody and feed host, then add the real
+verifier and the downloader behind a developer preference.
+
 ## References
 
 - [UI-18](../../spec/09-interface.md), [PROD-06](../../spec/01-product.md),

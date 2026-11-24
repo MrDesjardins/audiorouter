@@ -41,6 +41,17 @@ mod support_bundle;
 mod tray_playback;
 mod ui_draft;
 mod ui_language;
+// Inert on purpose: nothing calls the updater core until the open decisions in
+// docs/plans/future/auto-update-tauri.md are made. `expect` warns once it is
+// wired, so this attribute cannot outlive the reason for it.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "inert updater core; wiring waits on the decisions in docs/plans/future/auto-update-tauri.md"
+    )
+)]
+mod update_core;
 mod virtual_cable_shell;
 #[cfg(windows)]
 mod webview_keys;
