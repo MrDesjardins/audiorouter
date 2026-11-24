@@ -272,6 +272,7 @@ $tests = @(
     (T $ctl '--lib' 'discovered_sidechain_port_plans_commit_replay_and_undo_atomically' @{ AUDIOROUTER_TEST_VST2_BUS_FIXTURE = $vst2Bus }),
     (T $ctl '--lib' 'plugins_programs_dispatches_real_vst3_unit_hierarchy' @{ AUDIOROUTER_TEST_VST3_EFFECT = $utf16 }),
     (T $ctl '--lib' 'shell_scan_and_saved_route_bind_the_exact_sub_id' @{ AUDIOROUTER_TEST_VST2_SHELL_FIXTURE = $vst2Shell }),
+    (T $ctl '--lib' 'two_saved_shell_sub_ids_each_restore_their_own_state' @{ AUDIOROUTER_TEST_VST2_SHELL_FIXTURE = $vst2Shell }),
     (T $ctl '--lib' 'an_instrument_node_starts_a_worker_and_plays_midi' @{ AUDIOROUTER_TEST_VST2_INSTRUMENT = $vst2Instrument; AUDIOROUTER_TEST_INSTRUMENT = $vst2Instrument })
 )
 if ($haveDpf) {
