@@ -184,7 +184,7 @@ small {
   font-family: var(--font-small);
 }
 .session-name input {
-  border: 1px solid #384458;
+  border: 1px solid var(--field-border);
   border-radius: var(--radius-sm);
   color: inherit;
   background: #1a2130;
@@ -423,7 +423,7 @@ button:disabled {
 }
 .session-picker select {
   width: 100%;
-  border: 1px solid #384458;
+  border: 1px solid var(--field-border);
   border-radius: var(--radius-sm);
   color: inherit;
   background: #1a2130;
@@ -440,7 +440,7 @@ button:disabled {
 }
 .recording-search input {
   width: 100%;
-  border: 1px solid #384458;
+  border: 1px solid var(--field-border);
   border-radius: var(--radius-sm);
   color: inherit;
   background: #1a2130;
@@ -1031,7 +1031,7 @@ button:disabled {
   font-family: var(--font-small);
 }
 .theme-picker select {
-  border: 1px solid var(--ambient-edge);
+  border: 1px solid var(--field-border);
   border-radius: var(--radius-sm);
   color: inherit;
   background: var(--ambient-surface);
@@ -1057,7 +1057,7 @@ button:disabled {
 .theme-light :is(input, select, textarea) {
   color: #172033;
   background: #f7f9fc;
-  border-color: #8b9ab0;
+  border-color: var(--field-border);
   color-scheme: light;
 }
 .theme-light select :is(option, optgroup) {
@@ -1320,8 +1320,8 @@ button:disabled {
 }
 .flow-node-delete:hover,
 .flow-node-delete:focus-visible {
-  border-color: #ffd45b;
-  outline-color: #ffd45b;
+  border-color: var(--focus-ring);
+  outline-color: var(--focus-ring);
   background: rgb(0 0 0 / 30%);
 }
 .session-flow-canvas .react-flow__edge-path {
@@ -1615,7 +1615,7 @@ button:disabled {
   min-width: 0;
   min-height: 2.4rem;
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--ambient-edge);
+  border: 1px solid var(--field-border);
   border-radius: var(--radius-md);
   box-shadow: none;
   background: var(--ambient-surface);
@@ -1716,7 +1716,7 @@ button:disabled {
   width: 100%;
   min-width: 0;
   min-height: 2.45rem;
-  border: 1px solid var(--ambient-edge);
+  border: 1px solid var(--field-border);
   border-radius: var(--radius-md);
   box-shadow: none;
   background: var(--ambient-surface-hi);
@@ -1815,7 +1815,7 @@ button:disabled {
 }
 .workbench-tool-search input {
   min-height: 2.5rem;
-  border: 1px solid var(--ambient-edge);
+  border: 1px solid var(--field-border);
   border-radius: var(--radius-md);
   padding: 0.5rem 0.75rem;
   background: var(--ambient-surface-hi);
@@ -1938,7 +1938,7 @@ button:disabled {
 .inspector select,
 .connection-editor select {
   min-height: 2.45rem;
-  border: 1px solid var(--ambient-edge);
+  border: 1px solid var(--field-border);
   border-radius: var(--radius-md);
   box-shadow: none;
   background: var(--ambient-surface-hi);
@@ -1969,7 +1969,7 @@ button:disabled {
   width: 100%;
   min-width: 0;
   min-height: 2.45rem;
-  border: 1px solid var(--ambient-edge);
+  border: 1px solid var(--field-border);
   border-radius: var(--radius-md);
   box-shadow: none;
   background: var(--ambient-surface-hi);
@@ -2019,7 +2019,7 @@ button:disabled {
   width: 100%;
   min-width: 0;
   min-height: 2.4rem;
-  border: 1px solid var(--ambient-edge);
+  border: 1px solid var(--field-border);
   border-radius: var(--radius-md);
   box-shadow: none;
   background: var(--ambient-surface);
@@ -2620,7 +2620,7 @@ input[type="checkbox"] {
   flex: 0 0 auto;
   margin: 0;
   padding: 0;
-  border: 1px solid var(--ambient-edge);
+  border: 1px solid var(--field-border);
   border-radius: 999px;
   background: var(--ambient-surface);
   cursor: pointer;
@@ -5808,6 +5808,16 @@ input[aria-invalid="true"]:focus-visible {
   gap: 0.5rem;
   min-width: 0;
 }
+/* UI-17: the address reason has a two-line slot of its own, empty until the address is wrong,
+   so typing a bad address moves nothing below it (e2e/text-field-feedback.pw.ts). */
+.network-node-editor .network-address-note {
+  display: block;
+  min-height: calc(2 * 1.4em);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  color: var(--danger-text);
+  font-family: var(--font-small);
+}
 .network-node-editor .network-pairing-actions {
   display: flex;
   flex-wrap: wrap;
@@ -6412,6 +6422,24 @@ input[aria-invalid="true"]:focus-visible {
 .canvas-layout-actions > button {
   min-height: var(--control-md);
   padding: 0.25rem 0.5rem;
+}
+/* A toggle that is on (Route list, Connect, Map, the assistant and request-format choices) must
+   look on, not only say so through aria-pressed: an accent edge, a second inner edge and a tinted
+   fill, so it is not colour alone. e2e/button-states.pw.ts judges every toggle it can reach. */
+.canvas-layout-actions > button[aria-pressed="true"],
+.mcp-path-options button[aria-pressed="true"],
+.request-builder-formats button[aria-pressed="true"] {
+  border-color: var(--accent-text);
+  box-shadow: inset 0 0 0 1px var(--accent-text);
+  background: color-mix(in srgb, var(--accent-text) 20%, var(--ambient-surface));
+}
+.theme-high-contrast .canvas-layout-actions > button[aria-pressed="true"],
+.theme-high-contrast .mcp-path-options button[aria-pressed="true"],
+.theme-high-contrast .request-builder-formats button[aria-pressed="true"] {
+  border-color: #fff;
+  box-shadow: none;
+  color: #000;
+  background: #fff;
 }
 .help-disclosure {
   margin: 0.25rem 0 0.75rem;

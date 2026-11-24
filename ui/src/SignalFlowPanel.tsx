@@ -81,7 +81,7 @@ export function SignalFlowPanel({
   applicationsError: string | null;
   setApplicationPickerSelection: Dispatch<SetStateAction<string>>;
   addApplicationCaptureFromPicker: (application: ApplicationRow) => void;
-  addApplicationCapturePathFromPicker: (path: string) => void;
+  addApplicationCapturePathFromPicker: (path: string) => string | null;
   /** Returns whether the group was added (the picker then starts empty next time). */
   addApplicationGroupFromPicker: (applications: ApplicationRow[], executablePaths: string[]) => boolean;
 }) {
@@ -91,6 +91,8 @@ export function SignalFlowPanel({
   const [groupExecutablePaths, setGroupExecutablePaths] = useState<string[]>([]);
   const [executablePath, setExecutablePath] = useState("");
   const [pickerMessage, setPickerMessage] = useState("");
+  /** The typed path was refused: the field says so (aria-invalid) and the status says why. */
+  const [pathRefused, setPathRefused] = useState(false);
   return (
     <section id="signal-flow-panel" className="canvas-panel" aria-labelledby="canvas-heading">
       <div className="section-heading">
@@ -196,6 +198,9 @@ export function SignalFlowPanel({
               </select>
             </label>
             <div className="actions">
+              <button type="button" className="secondary" onClick={closeConnectionDialog}>
+                {tr("common.cancel")}
+              </button>
               <button
                 type="button"
                 className="primary"
@@ -204,9 +209,6 @@ export function SignalFlowPanel({
                 }}
               >
                 {tr("canvasUi.addConnection")}
-              </button>
-              <button type="button" className="secondary" onClick={closeConnectionDialog}>
-                {tr("common.cancel")}
               </button>
             </div>
           </section>
@@ -318,7 +320,12 @@ export function SignalFlowPanel({
                     aria-label={tr("signalFlowDialogs.exePathLabel")}
                     value={executablePath}
                     placeholder="C:\Games\game.exe"
-                    onChange={(event) => setExecutablePath(event.target.value)}
+                    aria-invalid={pathRefused}
+                    aria-describedby="application-picker-status"
+                    onChange={(event) => {
+                      setExecutablePath(event.target.value);
+                      setPathRefused(false);
+                    }}
                   />
                 </label>
                 <div className="actions">
@@ -350,6 +357,7 @@ export function SignalFlowPanel({
                         const path = executablePath.trim();
                         if (!path) {
                           setPickerMessage(tr("signalFlowDialogs.pathFirst"));
+                          setPathRefused(true);
                           return;
                         }
                         setGroupExecutablePaths((paths) =>
@@ -359,6 +367,7 @@ export function SignalFlowPanel({
                         );
                         setExecutablePath("");
                         setPickerMessage("");
+                        setPathRefused(false);
                       }}
                     >
                       {tr("signalFlowDialogs.addPathToGroup")}
@@ -369,15 +378,21 @@ export function SignalFlowPanel({
                       className="secondary"
                       disabled={!backend.connected}
                       onClick={() => {
-                        addApplicationCapturePathFromPicker(executablePath);
-                        setPickerMessage("");
+                        const problem = addApplicationCapturePathFromPicker(executablePath);
+                        setPickerMessage(problem ?? "");
+                        setPathRefused(problem !== null);
                       }}
                     >
                       {tr("signalFlowDialogs.addThisAppSource")}
                     </button>
                   )}
                 </div>
-                <p className="muted application-picker-status" role="status" aria-live="polite">
+                <p
+                  id="application-picker-status"
+                  className="muted application-picker-status"
+                  role="status"
+                  aria-live="polite"
+                >
                   <span title={pickerMessage || tr("signalFlowDialogs.pickerHint")}>
                     {pickerMessage || tr("signalFlowDialogs.pickerHint")}
                   </span>

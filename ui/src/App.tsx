@@ -3206,7 +3206,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setActionMessage(errorMessage(error instanceof Error ? error.message : tm("g1.appAppCaptureFail")));
     }
   };
-  const addApplicationCapturePathFromPicker = (path: string) => {
+  /** Returns why the path was refused, so the picker can say so next to the field; null when added. */
+  const addApplicationCapturePathFromPicker = (path: string): string | null => {
     try {
       const next = appendApplicationCapturePathNode(draftRef.current, path);
       const added = next.nodes.at(-1);
@@ -3215,8 +3216,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setSelectedNodeId(added.id);
       setActionMessage(say("g1.appAppSelectorAdded", { executable: String(added.parameters.executable) }));
       closeApplicationPicker();
+      return null;
     } catch (error) {
-      setActionMessage(errorMessage(error instanceof Error ? error.message : tm("g1.appAppCaptureFail")));
+      const message = error instanceof Error ? error.message : tm("g1.appAppCaptureFail");
+      setActionMessage(errorMessage(message));
+      return message;
     }
   };
   const addApplicationGroupFromPicker = (chosen: ApplicationRow[], executablePaths: string[]): boolean => {
