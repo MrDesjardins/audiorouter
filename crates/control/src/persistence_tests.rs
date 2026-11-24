@@ -579,6 +579,137 @@ fn operations_get_returns_durable_commit_outcome() {
     assert_eq!(result["result"]["revision"], 1);
 }
 
+/// `operations.get` as `client`, through the same entry point the pipe uses.
+fn operation_get_as(plane: &mut ControlPlane, client: &str, operation_id: &str) -> JsonRpcResponse {
+    plane.dispatch_authorized_for_client(
+        JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!("get")),
+            method: "operations.get".into(),
+            params: Some(json!({ "operationId": operation_id })),
+        },
+        client,
+        &ClientGrant::for_role(ClientRole::Operator),
+    )
+}
+
+/// STO-6: the journal key embeds the method name, and `operations.get` had a
+/// hand-kept list of 17 methods to guess it from. Every method that journals
+/// a result must be found, so this walks `API_METHODS` rather than a list.
+#[test]
+fn operations_get_finds_a_journaled_operation_of_every_api_method() {
+    let storage = Storage::open_memory().unwrap();
+    let mut plane = ControlPlane::with_storage("operation-every-method", storage);
+    let mut missing = Vec::new();
+    for (index, spec) in API_METHODS.iter().enumerate() {
+        let operation_id = format!("operation-{index}");
+        let key = format!("client-a\0{}\0{operation_id}", spec.name);
+        plane
+            .storage
+            .as_ref()
+            .unwrap()
+            .journal_commit_with_hash(&key, spec.name, "{\"done\":true}", 0, "hash")
+            .unwrap();
+        let response = operation_get_as(&mut plane, "client-a", &operation_id);
+        match response.result {
+            Some(result) if result["status"] == "completed" && result["operation"] == spec.name => {
+            }
+            _ => missing.push(spec.name),
+        }
+        // Another client must still never read it.
+        assert!(
+            operation_get_as(&mut plane, "client-b", &operation_id)
+                .result
+                .is_none(),
+            "{} leaked to another client",
+            spec.name
+        );
+    }
+    assert!(
+        missing.is_empty(),
+        "operations.get cannot find these methods' operations: {missing:?}"
+    );
+}
+
+/// The same defect through real handlers: methods the old list omitted,
+/// dispatched as a client, then looked up by the key the caller sent.
+#[test]
+fn operations_get_finds_what_task_and_lifecycle_methods_just_did() {
+    let storage = Storage::open_memory().unwrap();
+    let mut plane = ControlPlane::with_storage("operation-real-methods", storage);
+    let grant = ClientGrant::for_role(ClientRole::Operator);
+    let original = session();
+    plane.insert_session(original.clone()).unwrap();
+    let calls = [
+        (
+            "sessions.active.set",
+            json!({ "sessionId": original.id.as_str(), "idempotencyKey": "op-active" }),
+        ),
+        (
+            "toolPresets.save",
+            json!({ "kind": "gain", "name": "Quiet", "parameters": {"gainDb": -6.0}, "idempotencyKey": "op-preset" }),
+        ),
+        (
+            "system.osTransition",
+            json!({ "transition": "sleep", "idempotencyKey": "op-sleep" }),
+        ),
+    ];
+    for (method, params) in calls {
+        let key = params["idempotencyKey"].as_str().unwrap().to_owned();
+        let done = plane.dispatch_authorized_for_client(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: Some(params),
+            },
+            "client-a",
+            &grant,
+        );
+        assert!(done.error.is_none(), "{method}: {:?}", done.error);
+        let found = operation_get_as(&mut plane, "client-a", &key);
+        let result = found
+            .result
+            .unwrap_or_else(|| panic!("{method}: operations.get said {:?}", found.error));
+        assert_eq!(result["status"], "completed", "{method}");
+        assert_eq!(result["operation"], method);
+        assert_eq!(result["durable"], true, "{method}");
+    }
+}
+
+#[test]
+fn operations_cancel_recognises_an_operation_of_a_method_the_old_list_missed() {
+    let mut plane = ControlPlane::with_storage("operation-cancel", Storage::open_memory().unwrap());
+    let grant = ClientGrant::for_role(ClientRole::Operator);
+    let send = |plane: &mut ControlPlane, method: &str, params: Value| {
+        plane.dispatch_authorized_for_client(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: Some(params),
+            },
+            "client-a",
+            &grant,
+        )
+    };
+    let sleep = send(
+        &mut plane,
+        "system.osTransition",
+        json!({ "transition": "sleep", "idempotencyKey": "sleep-key" }),
+    );
+    assert!(sleep.error.is_none(), "{:?}", sleep.error);
+    let cancel = send(
+        &mut plane,
+        "operations.cancel",
+        json!({ "operationId": "sleep-key", "idempotencyKey": "cancel-key" }),
+    );
+    assert_eq!(
+        cancel.result.expect("a result")["reason"],
+        "alreadyCompleted"
+    );
+}
+
 #[test]
 fn operations_get_returns_live_memory_outcome_without_claiming_durability() {
     let mut plane = ControlPlane::default();

@@ -488,29 +488,23 @@ impl ControlPlane {
             .unwrap_or_else(|| key.to_owned())
     }
 
+    /// The journal keys `operation_id` can have for the active client. A
+    /// scoped key embeds the method that ran (`client\0method\0id`), and the
+    /// caller names only the ID, so every method the API has is tried. This
+    /// used to be a hand-kept list of 17 methods (STO-6): most completed
+    /// operations, among them `sessions.start`, `sessions.stop` and every
+    /// task method, answered "operation not found". Taking the names from
+    /// `API_METHODS` means a new method is found without being added here.
+    /// A method that does not journal simply has no row; a lookup is one
+    /// primary-key read per method and `operations.get` is rarely called.
     pub(crate) fn operation_lookup_keys(&self, operation_id: &str) -> Vec<String> {
         self.active_idempotency_scope
             .as_ref()
             .map(|client| {
-                vec![
-                    format!("{client}\0graph.commit\0{operation_id}"),
-                    format!("{client}\0virtualDevices.apply\0{operation_id}"),
-                    format!("{client}\0virtualDevices.provision\0{operation_id}"),
-                    format!("{client}\0virtualDevices.remove\0{operation_id}"),
-                    format!("{client}\0virtualRoutes.replace\0{operation_id}"),
-                    format!("{client}\0recordings.setMetadata\0{operation_id}"),
-                    format!("{client}\0recordings.rename\0{operation_id}"),
-                    format!("{client}\0recordings.removeEntry\0{operation_id}"),
-                    format!("{client}\0recordings.recycle\0{operation_id}"),
-                    format!("{client}\0sessions.delete\0{operation_id}"),
-                    format!("{client}\0sessions.create\0{operation_id}"),
-                    format!("{client}\0sessions.duplicate\0{operation_id}"),
-                    format!("{client}\0safety.setPrivacyMute\0{operation_id}"),
-                    format!("{client}\0recovery.clearSafeMode\0{operation_id}"),
-                    format!("{client}\0clients.authorize\0{operation_id}"),
-                    format!("{client}\0clients.revoke\0{operation_id}"),
-                    format!("{client}\0operations.cancel\0{operation_id}"),
-                ]
+                API_METHODS
+                    .iter()
+                    .map(|spec| format!("{client}\0{}\0{operation_id}", spec.name))
+                    .collect()
             })
             .unwrap_or_else(|| vec![operation_id.to_owned()])
     }
