@@ -2164,10 +2164,23 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
             "--database path must be absolute".into(),
         ));
     }
-    if pipe_name.is_none() && is_running_app_database(&database_path) {
-        return Err(CliError::InvalidArguments(format!(
-            "AudioRouter is running and owns this database; add --pipe {APP_CONTROL_PIPE} so MCP works through its backend"
-        )));
+    if pipe_name.is_none() {
+        match is_running_app_database(&database_path) {
+            Ok(true) => {
+                return Err(CliError::InvalidArguments(format!(
+                    "AudioRouter is running and owns this database; add --pipe {APP_CONTROL_PIPE} so MCP works through its backend"
+                )))
+            }
+            Ok(false) => {}
+            // The probe saw something it could not open (for example another
+            // Windows user's server). Starting a second control plane over
+            // this database would race that server, so say what happened.
+            Err(reason) => {
+                return Err(CliError::InvalidArguments(format!(
+                    "AudioRouter's control pipe could not be examined ({reason}); if the app is running, add --pipe {APP_CONTROL_PIPE} so MCP works through its backend"
+                )))
+            }
+        }
     }
     let storage =
         Storage::open(database_path).map_err(|error| CliError::Storage(format!("{error:?}")))?;
@@ -2429,17 +2442,43 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
 /// The desktop app's control pipe (`src-tauri` `DEFAULT_PIPE_NAME`).
 const APP_CONTROL_PIPE: &str = r"\\.\pipe\audiorouter-control";
 
-/// True when `database` is the desktop app's own database and the app's
+/// What the desktop app's control pipe showed.
+#[derive(Debug)]
+enum AppPipeState {
+    /// No server has created the pipe.
+    Missing,
+    /// A server owns the pipe. A busy pipe (every instance serves another
+    /// client, as during a long bundle export) is owned too.
+    Owned,
+    /// The pipe exists but could not be examined (for example a server of
+    /// another Windows user). Carries the reason, so a caller never reports
+    /// this as "the app is not running".
+    Unreadable(String),
+}
+
+/// Probe `name` without sending a request. Only [`AppPipeState::Missing`]
+/// means no app is running.
+fn app_pipe_state(name: &str) -> AppPipeState {
+    match audiorouter_transport::probe_pipe(name) {
+        Ok(probe) if probe.is_owned() => AppPipeState::Owned,
+        Ok(_) => AppPipeState::Missing,
+        Err(error) => AppPipeState::Unreadable(error.to_string()),
+    }
+}
+
+/// `Ok(true)` when `database` is the desktop app's own database and the app's
 /// backend answers on its pipe. An MCP server without `--pipe` would then
 /// run a second control plane over the same data, so its edits and device
-/// actions would race the app's.
-fn is_running_app_database(database: &std::path::Path) -> bool {
+/// actions would race the app's. `Ok(false)` when the database is another
+/// file or nothing owns the pipe; `Err` carries why the pipe could not be
+/// examined.
+fn is_running_app_database(database: &std::path::Path) -> Result<bool, String> {
     let Some(app_database) = std::env::var_os("LOCALAPPDATA").map(|root| {
         std::path::PathBuf::from(root)
             .join("AudioRouter")
             .join("state.sqlite")
     }) else {
-        return false;
+        return Ok(false);
     };
     let same_file = match (
         std::fs::canonicalize(database),
@@ -2448,17 +2487,14 @@ fn is_running_app_database(database: &std::path::Path) -> bool {
         (Ok(left), Ok(right)) => left == right,
         _ => false,
     };
-    same_file && pipe_is_owned_by_a_server(APP_CONTROL_PIPE)
-}
-
-/// True when a backend owns the pipe `name`. A busy pipe (every instance
-/// serves another client, as during a long bundle export) is owned, so only a
-/// missing pipe counts as "no app running". Reading a failed request as "not
-/// running" would let this process open the app's database beside the app.
-/// A probe error (for example a server of another Windows user) is not this
-/// user's app.
-fn pipe_is_owned_by_a_server(name: &str) -> bool {
-    audiorouter_transport::probe_pipe(name).is_ok_and(audiorouter_transport::PipeProbe::is_owned)
+    if !same_file {
+        return Ok(false);
+    }
+    match app_pipe_state(APP_CONTROL_PIPE) {
+        AppPipeState::Owned => Ok(true),
+        AppPipeState::Missing => Ok(false),
+        AppPipeState::Unreadable(reason) => Err(reason),
+    }
 }
 
 fn write_mcp_message(output: &mut impl Write, message: &Value) -> Result<(), CliError> {
@@ -2911,8 +2947,8 @@ fn mcp_tools() -> Value {
         { "name": "prepare_plugin_update", "description": "After the user scans an updated plugin, prepare replacement parameters for its existing node while preserving opaque settings. Does not change the route or play audio. Apply the returned parameters with change_settings while stopped, retaining wiring. resetState=true deliberately ignores saved state and starts from defaults; the old assets remain. Not available to assistants by default: needs the plugin-scan permission, which MCP clients are not given.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "node": { "type": "string", "minLength": 1 }, "resetState": { "type": "boolean" } }, "required": ["node"], "additionalProperties": false } },
         { "name": "get_recipes", "description": "Start here when the user asks for a result rather than a specific step (clean up my voice, lower the game while I talk, record a podcast, use AudioRouter as a Discord microphone). Returns step-by-step recipes using the other tools.", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
         { "name": "list_sessions", "description": "List every saved session (setup) with its ID, name and revision. AudioRouter works on one open session at a time.", "inputSchema": { "type": "object", "properties": { "limit": { "type": "integer", "minimum": 1, "maximum": 100 } }, "required": [], "additionalProperties": false } },
-        { "name": "open_session", "description": "Open (select) a session by ID so later calls without sessionId use it. Does not start audio.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; generated when omitted." } }, "required": ["sessionId"], "additionalProperties": false } },
-        { "name": "create_session", "description": "Create a new empty session with a name and open it; then add_tool and connect_nodes to build it.", "inputSchema": { "type": "object", "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; generated when omitted." } }, "required": ["name"], "additionalProperties": false } },
+        { "name": "open_session", "description": "Open (select) a session by ID so later calls without sessionId use it. Does not start audio. Needs the Operator role; an Editor can read and edit a session only by passing its sessionId.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; generated when omitted." } }, "required": ["sessionId"], "additionalProperties": false } },
+        { "name": "create_session", "description": "Create a new empty session with a name and open it; then add_tool and connect_nodes to build it. Needs the Operator role, because opening the new session is a session control; ask the user to create it in AudioRouter otherwise.", "inputSchema": { "type": "object", "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; generated when omitted." } }, "required": ["name"], "additionalProperties": false } },
         { "name": "get_session_summary", "description": "Read the current audio setup in plain terms: every node with its readable settings, every connection by name, and whether audio is playing or the mic is muted. Call this before changing anything.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." } }, "required": [], "additionalProperties": false } },
         { "name": "list_tool_kinds", "description": "List the tools and devices you can add (kind, plain description, inputs, outputs, settings with ranges and defaults).", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
         { "name": "add_tool", "description": "Add a tool or device by kind, for example compressor, gate, duck, meter or recorder. Use between to insert it into an existing connection, or after to place it after a node. Saved and live.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "kind": { "type": "string", "minLength": 1, "description": "Kind from list_tool_kinds." }, "name": { "type": "string", "minLength": 1, "description": "Optional display name." }, "parameters": { "type": "object", "description": "Optional settings, by name." }, "between": { "type": "object", "properties": { "from": { "type": "string" }, "to": { "type": "string" } }, "required": ["from", "to"], "description": "Insert into the connection from -> to." }, "after": { "type": "string", "minLength": 1, "description": "Place after this node (by name)." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["kind"], "additionalProperties": false } },
@@ -2948,7 +2984,7 @@ fn mcp_tools() -> Value {
         { "name": "save_my_preset", "description": "Save settings for a kind of tool under a name. Saving a name again replaces it. Devices and files are not part of a preset.", "inputSchema": { "type": "object", "properties": { "kind": { "type": "string", "minLength": 1 }, "name": { "type": "string", "minLength": 1, "maxLength": 64 }, "parameters": { "type": "object" }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["kind", "name", "parameters"], "additionalProperties": false } },
         { "name": "delete_my_preset", "description": "Delete a saved preset by its ID from list_my_presets.", "inputSchema": { "type": "object", "properties": { "id": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["id"], "additionalProperties": false } },
         { "name": "list_goals", "description": "List the starting routes for what the user wants to do (clean up a mic, game and voice for Discord, record a podcast, record one app, talk to a guest without echo, or empty). Read this before building such a route by hand.", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
-        { "name": "start_from_goal", "description": "Make a new stopped session from a goal in list_goals and open it. It chooses no devices, starts no audio and arms no recorder; the result says what the user must still choose. Do not pick a microphone without asking the user.", "inputSchema": { "type": "object", "properties": { "goal": { "type": "string", "minLength": 1, "description": "Goal ID from list_goals." }, "name": { "type": "string", "maxLength": 256, "description": "Session name; defaults to the goal's title." }, "application": { "type": "object", "description": "The app for the goal's application source, from list_applications. Leave it out if the user has not chosen one.", "properties": { "executable": { "type": "string", "minLength": 1 }, "executablePath": { "type": "string" } }, "required": ["executable"], "additionalProperties": false }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["goal"], "additionalProperties": false } },
+        { "name": "start_from_goal", "description": "Make a new stopped session from a goal in list_goals and open it. Needs the Operator role, because opening the new session is a session control. It chooses no devices, starts no audio and arms no recorder; the result says what the user must still choose. Do not pick a microphone without asking the user.", "inputSchema": { "type": "object", "properties": { "goal": { "type": "string", "minLength": 1, "description": "Goal ID from list_goals." }, "name": { "type": "string", "maxLength": 256, "description": "Session name; defaults to the goal's title." }, "application": { "type": "object", "description": "The app for the goal's application source, from list_applications. Leave it out if the user has not chosen one.", "properties": { "executable": { "type": "string", "minLength": 1 }, "executablePath": { "type": "string" } }, "required": ["executable"], "additionalProperties": false }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["goal"], "additionalProperties": false } },
         { "name": "duplicate_session", "description": "Copy a saved session under a new name; the copy is not opened.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Session to copy (from list_sessions)." }, "name": { "type": "string", "minLength": 1, "maxLength": 120, "description": "Optional name of the copy." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["sessionId"], "additionalProperties": false } },
         { "name": "delete_session", "description": "Permanently delete a saved session. Ask the user to confirm the exact session first.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Session to delete (from list_sessions)." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["sessionId"], "additionalProperties": false } },
         { "name": "list_presets", "description": "List the built-in processing presets with what each one does.", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
@@ -3348,6 +3384,15 @@ fn mcp_tool_call(
             })),
         ),
         "start_from_goal" => {
+            // A new session is opened as part of the workflow, which needs
+            // SessionControl. Refusing before the creation leaves no session
+            // the caller cannot open (the old code created one, then failed).
+            if !grant.can_control_sessions() {
+                return mcp_role_refusal(
+                    id,
+                    "Making a session from a goal also opens it, which needs the Operator role. Ask the user to do it in AudioRouter, or reconnect as an Operator.",
+                );
+            }
             let key = arguments["idempotencyKey"]
                 .as_str()
                 .filter(|key| !key.is_empty())
@@ -3387,6 +3432,16 @@ fn mcp_tool_call(
             return created;
         }
         "create_session" => {
+            // The tool creates the session and opens it, so the complete
+            // workflow needs SessionControl. Refusing before the creation
+            // leaves no orphan session behind: the old code created one and
+            // then reported permissionDenied.
+            if !grant.can_control_sessions() {
+                return mcp_role_refusal(
+                    id,
+                    "Creating a session also opens it, which needs the Operator role. Ask the user to create the session in AudioRouter, or reconnect as an Operator.",
+                );
+            }
             let name = arguments["name"]
                 .as_str()
                 .map(str::trim)
@@ -3774,6 +3829,32 @@ const NETWORK_PAIRING_RECIPE: &str = "14. Send encrypted audio between computers
 
 fn mcp_tool_error(id: Option<Value>, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "result": { "isError": true, "content": [{ "type": "text", "text": message }] } })
+}
+
+/// A step the caller's role may not take, refused before the tool does any
+/// work. It carries the backend's own `permissionDenied` code so clients and
+/// the role guides treat it like any other permission refusal, instead of a
+/// bare tool error after a half-completed workflow.
+fn mcp_role_refusal(id: Option<Value>, message: &str) -> Value {
+    // The shape `dispatch_authorized_for_client` uses for a role denial
+    // (`-32001` plus `data.code = permissionDenied`), so REST, MCP clients and
+    // the activity log read one refusal however it was reached.
+    mcp_tool_result(
+        id,
+        json!({
+            "error": {
+                "code": -32001,
+                "message": message,
+                "data": {
+                    "code": "permissionDenied",
+                    "fieldPath": Value::Null,
+                    "resourceIds": [],
+                    "retryable": false,
+                    "remediation": "request the required permission scope for the target operation"
+                }
+            }
+        }),
+    )
 }
 
 /// Adapter contract cases shared with the control crate and the HTTP API.
@@ -6342,6 +6423,88 @@ mod tests {
         assert!(!missing.to_string().contains("SessionNotFound"));
     }
 
+    /// `create_session` creates a session and opens it, and opening needs
+    /// `SessionControl` (the Operator role). An Editor used to get the session
+    /// created and then `permissionDenied`, leaving a session it could not
+    /// open. The tool now refuses before creating it; an Operator still
+    /// creates and opens it.
+    #[test]
+    fn create_session_refuses_an_editor_before_creating_a_session() {
+        use audiorouter_control::{ClientGrant, ClientRole};
+
+        let mut plane = ControlPlane::default();
+        // The window already has a session open when the assistant arrives.
+        let mut existing: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        existing.id = audiorouter_domain::EntityId::new("window-session");
+        plane.insert_session(existing).unwrap();
+        let operator = ClientGrant::for_role(ClientRole::Operator);
+        let opened = plane.dispatch_authorized_for_client(
+            audiorouter_protocol::JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(0)),
+                method: "sessions.active.set".into(),
+                params: Some(json!({
+                    "sessionId": "window-session",
+                    "idempotencyKey": "window-open"
+                })),
+            },
+            "window",
+            &operator,
+        );
+        assert!(opened.result.is_some(), "{opened:?}");
+
+        let editor = ClientGrant::for_role(ClientRole::Editor);
+        let refused = mcp_tool_call(
+            &mut plane,
+            "editor",
+            &editor,
+            None,
+            &json!({
+                "id": 1,
+                "params": { "name": "create_session", "arguments": { "name": "Editor session" } }
+            }),
+        );
+        assert_eq!(refused["result"]["isError"], true, "{refused}");
+        let text = refused["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("Operator role"), "{text}");
+        let listed = plane.dispatch(audiorouter_protocol::JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "sessions.list".into(),
+            params: None,
+        });
+        let listed = listed.result.unwrap();
+        assert!(
+            !listed.to_string().contains("Editor session"),
+            "the refused call must not leave a session behind: {listed}"
+        );
+
+        let created = mcp_tool_call(
+            &mut plane,
+            "operator",
+            &operator,
+            None,
+            &json!({
+                "id": 3,
+                "params": { "name": "create_session", "arguments": { "name": "Operator session" } }
+            }),
+        );
+        assert_eq!(created["result"]["isError"], false, "{created}");
+        let active = plane.dispatch(audiorouter_protocol::JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(4)),
+            method: "sessions.active.get".into(),
+            params: None,
+        });
+        assert_eq!(
+            active.result.unwrap()["sessionId"],
+            created["result"]["structuredContent"]["result"]["sessionId"],
+            "an Operator's new session is opened"
+        );
+    }
+
     /// The network recipe was numbered 8 (a second 8, printed after 13).
     #[test]
     fn recipes_are_numbered_once_each_in_order() {
@@ -7544,7 +7707,7 @@ mod tests {
         }
 
         let busy_probe = std::time::Instant::now();
-        let owned = pipe_is_owned_by_a_server(&name);
+        let state = app_pipe_state(&name);
         let busy_probe = busy_probe.elapsed();
 
         *release.lock().unwrap() = true;
@@ -7555,7 +7718,10 @@ mod tests {
         for _ in 0..instances {
             let _ = audiorouter_transport::send_oneway(&name, &0_u32.to_le_bytes());
         }
-        assert!(owned, "a busy pipe must count as a running app");
+        assert!(
+            matches!(state, AppPipeState::Owned),
+            "a busy pipe must count as a running app: {state:?}"
+        );
         assert!(
             busy_probe < std::time::Duration::from_secs(1),
             "the probe waited {busy_probe:?} on a busy pipe"
@@ -7565,7 +7731,19 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn a_missing_pipe_is_not_a_running_app() {
-        assert!(!pipe_is_owned_by_a_server(&unique_probe_pipe("missing")));
+        let state = app_pipe_state(&unique_probe_pipe("missing"));
+        assert!(matches!(state, AppPipeState::Missing), "{state:?}");
+    }
+
+    /// A pipe the probe could not examine (here a name Windows refuses) keeps
+    /// its reason. The old boolean dropped it, so `mcp serve` either reported
+    /// a closed app or opened the app's own database beside it.
+    #[test]
+    fn a_pipe_that_cannot_be_examined_keeps_its_reason() {
+        match app_pipe_state("not-a-pipe-name") {
+            AppPipeState::Unreadable(reason) => assert!(!reason.is_empty(), "{reason}"),
+            other => panic!("expected an unreadable pipe, got {other:?}"),
+        }
     }
 
     #[cfg(windows)]
@@ -7589,7 +7767,7 @@ mod tests {
         // The probe waits only briefly for a pipe that does not exist yet, so
         // wait for the server to create it.
         let started = std::time::Instant::now();
-        while !pipe_is_owned_by_a_server(&name) {
+        while !matches!(app_pipe_state(&name), AppPipeState::Owned) {
             assert!(
                 started.elapsed() < std::time::Duration::from_secs(10),
                 "the probe never saw the pipe"
