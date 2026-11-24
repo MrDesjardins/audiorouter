@@ -344,7 +344,7 @@ run 0 export-noise with 6 pollers: poll sent at 2021 ms failed after 2001 ms: Wi
 Three failures, all the same text, each after 2.00 s: the pipe-busy hypothesis
 is confirmed. Mechanism: `spawn_control_io` runs four I/O threads, each holding
 one pipe instance while its client waits for the single control thread
-(`crates/transport/src/lib.rs:2022`, instance count `:1380`). The export plus
+(`crates/transport/src/lib.rs:2033-2040`, instance count `:1380`). The export plus
 three pollers fill all four; the other three pollers get `ERROR_PIPE_BUSY` and
 `connect_client` stopped waiting after the fixed `PIPE_BUSY_WAIT` of 2 s,
 although the export freed an instance 0.5 s later (2.5 s in all). Run data:
@@ -360,7 +360,7 @@ connection); a connection holds an instance from connect until its reply.
 | Window (UI bridge) | One `round_trip_with_timeout` per `rpc_request` call, on a Tauri async thread, so calls run concurrently; the page allows 64 pending requests. Pipe timeout 60 s, except `status.get` and `events.subscribe` (2 s) and `system.quit` (15 s). | `src-tauri/src/main.rs:800-811`, `:1429-1437`; `ui/src/host.ts:61,142` |
 | HTTP API (Stream Deck, scripts) | Four workers, each forwards one request over its own pipe connection (HTTP-adapter work shares the window's identity, with its own budget). Up to 4 more connections. | `src-tauri/src/http_accept.rs:17`, `src-tauri/src/main.rs:637-653` |
 | MCP (`mcp serve`) | One `round_trip` (60 s) per tool call, sequential per process; each assistant session is its own process. | `crates/cli/src/lib.rs:3573` |
-| CLI commands | One `round_trip` each; the "is the app running" probe is one more (`system.describe`). | `crates/cli/src/lib.rs:2457` |
+| CLI commands | One `round_trip` each; the "is the app running" probe is one more (`system.describe`). The probe treats any error as "the app is not running", so a busy app (all instances held) made it answer "not running" after 2 s, and the CLI could then act on the app's database; with the fix it waits for its turn. A second user-reachable effect of the same defect. | `crates/cli/src/lib.rs:2436-2458` |
 | Tray | One forward per click or status poll. | `src-tauri/src/main.rs:2543-2960` |
 
 Can four be outstanding during an export? Yes, from the window alone. While an
@@ -399,10 +399,13 @@ Real, user-reachable, small. Fixed in the owning layer, the pipe client:
 
 - `round_trip_with_timeout` (the primitive behind the window, HTTP adapter,
   MCP, CLI and tray, via `round_trip`'s 60 s default) now waits for a free
-  instance up to **its own timeout** instead of a fixed 2 s
+  instance within **its own timeout** instead of a fixed 2 s
   (`connect_client_waiting`, `crates/transport/src/lib.rs:1551`, used at
-  `:1620`). The response deadline is unchanged and starts after connecting.
-  Callers with a short timeout keep a short wait: the shell's `status.get` and
+  `:1622`). The deadline is taken before connecting and shared with the
+  response read, so the whole exchange still never exceeds `timeout` (this
+  also keeps the function's "bounded by `timeout`" contract true; an earlier
+  draft started the response clock after connecting, which allowed up to twice
+  the timeout). Callers with a short timeout keep a short wait: the shell's `status.get` and
   `events.subscribe` (2 s) fail as before, so the tray and the event poll
   still surface "backend busy" promptly rather than hanging.
 - The other client entry points (`round_trip_many`, `round_trip_session*`,
@@ -416,8 +419,8 @@ Real, user-reachable, small. Fixed in the owning layer, the pipe client:
   instance held by a stuck client, and it is untouched, so a waiting client
   cannot be starved past that by a stalled peer.
 - Trade-off: a window request the page already gave up on (5 s UI deadline)
-  can now wait in a Tauri thread up to 60 s for an instance, instead of 2 s,
-  and run late. Read requests are harmless; mutations carry idempotency keys
+  can now wait in a Tauri thread for an instance for part of its 60 s pipe
+  budget, instead of 2 s, and run late. Read requests are harmless; mutations carry idempotency keys
   (API-07). It is bounded by the pipe timeout and happens only while the
   control thread is held.
 - Not helped: `events.subscribe` and `status.get`, whose shell timeout is 2 s.
@@ -438,12 +441,23 @@ instead of running a real export):
 Both **fail without the fix** (reverted `connect_client_waiting` call
 temporarily; first: "the client gave up while its 30 s timeout had not run
 out", second: "a 300 ms timeout waited 2.0034439s for an instance") and pass
-with it. The first takes about 2.6 s, so the pair runs in 2.6 s.
+with it. The first takes about 2.6 s, so the pair runs in 2.6 s. A first
+draft of the first test shut the servers down while the waiting client could
+still need them (a race on a slow runner); it now opens the gate, joins the
+client and only then shuts down. The final form was run 10 times in a row
+(10 of 10 passed, 2.61 s each) and re-checked against the reverted fix (both
+failed again, the short-timeout one after 2.014 s).
+
+The shell's own pipe tests (`src-tauri/src/main.rs:3875-3935`, run through
+`forward_rpc_request`) retry on a missing pipe or succeed; none saturates the
+four instances, so none would now wait for a busy one.
 
 End to end, the same harness scenario with the fix
 ([pipe-busy-after.csv](2026-11-24-pipe-busy-after.csv)): "export-noise with 6
 pollers" 0 failed polls (before: 3), 6 polls sent during the export and all
-served, longest 2,686 ms.
+served, longest 3,115 ms (the final code; an earlier run of the first draft
+gave 0 failures and 2,686 ms; the noise export itself took 2.5 s then and
+3.2 s now, so read these as "no failure", not as a timing).
 
 ### 4. Commands and results
 

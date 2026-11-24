@@ -1531,7 +1531,7 @@ mod windows_pipe {
     /// Longest wait for a busy pipe (every server instance serving another
     /// client) for a caller that gave no timeout of its own. This covers
     /// bursts from the window, tray, HTTP workers and MCP at once. A caller
-    /// with a response timeout waits for an instance up to that timeout
+    /// with a response timeout waits for an instance within that timeout
     /// instead (`round_trip_with_timeout`): the control thread runs one
     /// request at a time and a bundle export or import holds it for seconds,
     /// during which the four instances fill up with waiting clients.
@@ -1597,11 +1597,12 @@ mod windows_pipe {
         round_trip_with_timeout(name, request, std::time::Duration::from_secs(60))
     }
 
-    /// Bound the complete response, including a peer that drips partial bytes.
-    /// The client owns the only reader of this synchronous pipe handle. The
-    /// wait for a free server instance has the same budget as the response, so
-    /// a request sent while other clients queue behind a long request is
-    /// served when its turn comes instead of failing after two seconds.
+    /// Bound the whole exchange by `timeout`, including a peer that drips
+    /// partial bytes. The client owns the only reader of this synchronous pipe
+    /// handle. The wait for a free server instance comes out of the same
+    /// budget, so a request sent while other clients queue behind a long
+    /// request is served when its turn comes instead of failing after a fixed
+    /// two seconds, and still never takes longer than `timeout` in all.
     pub fn round_trip_with_timeout(
         name: &str,
         request: &[u8],
@@ -1617,9 +1618,9 @@ mod windows_pipe {
             return Err(TransportError::Protocol("invalid request frame".into()));
         }
         let name = wide(name);
+        let deadline = std::time::Instant::now() + timeout;
         let handle = connect_client_waiting(&name, timeout)?;
         write_all(handle.0, request)?;
-        let deadline = std::time::Instant::now() + timeout;
         read_frame_with(handle.0, |handle, output| {
             read_exact_by(handle, output, deadline)
         })

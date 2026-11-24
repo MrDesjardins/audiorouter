@@ -119,13 +119,20 @@ impl BusyPipe {
         pipe
     }
 
-    /// Let the held requests finish, stop the servers and wake any that wait
-    /// for a client.
-    fn release(self) {
+    /// Let the held requests finish. The servers keep serving, so a client
+    /// that waited for an instance is answered.
+    fn open_gate(&mut self) {
         self.gate.open();
-        for holder in self.holders {
+        for holder in self.holders.drain(..) {
             holder.join().unwrap();
         }
+    }
+
+    /// Stop the servers and wake any that wait for a client. Call this only
+    /// after every client of the test has finished, or it may take the
+    /// instance a waiting client needs.
+    fn shutdown(mut self) {
+        self.open_gate();
         self.stop.store(true, Ordering::Release);
         for _ in 0..SERVER_PIPE_INSTANCES {
             let _ = send_oneway(&self.name, &0_u32.to_le_bytes());
@@ -137,7 +144,7 @@ impl BusyPipe {
 /// client whose timeout is longer waits and is served when an instance frees.
 #[test]
 fn a_client_waits_for_a_free_instance_for_as_long_as_its_timeout() {
-    let pipe = BusyPipe::saturate("waits");
+    let mut pipe = BusyPipe::saturate("waits");
     let name = pipe.name.clone();
     let client = std::thread::spawn(move || {
         let started = Instant::now();
@@ -151,8 +158,10 @@ fn a_client_waits_for_a_free_instance_for_as_long_as_its_timeout() {
         !client.is_finished(),
         "the client gave up while its 30 s timeout had not run out"
     );
-    pipe.release();
+    pipe.open_gate();
+    // The servers are still running, so the waiting client is answered.
     let (result, waited) = client.join().unwrap();
+    pipe.shutdown();
     assert!(
         result.is_ok(),
         "the client was not served once an instance freed: {result:?}"
@@ -181,5 +190,5 @@ fn a_short_timeout_bounds_the_wait_for_a_free_instance() {
         waited < Duration::from_millis(1_500),
         "a 300 ms timeout waited {waited:?} for an instance"
     );
-    pipe.release();
+    pipe.shutdown();
 }
