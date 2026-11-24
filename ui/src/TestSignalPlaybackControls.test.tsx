@@ -22,7 +22,7 @@ describe("Test Signal playback controls", () => {
     };
     const view = render(<TestSignalPlaybackControls {...base} />);
     expect((view.getByRole("button", { name: "Play tone" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(view.getByText("Connect to an enabled physical output.")).toBeTruthy();
+    expect(view.getByText("Connect to an enabled output device.")).toBeTruthy();
     view.rerender(<TestSignalPlaybackControls {...base} routed />);
     expect(view.getByText("Tone off · 1.0 s")).toBeTruthy();
   });
@@ -78,7 +78,7 @@ describe("Test Signal playback controls", () => {
     );
     const play = getByRole("button", { name: "Play tone" }) as HTMLButtonElement;
     expect(play.disabled).toBe(disabled);
-    if (!state.routed) expect(getByText(/Connect to an enabled physical output/)).toBeTruthy();
+    if (!state.routed) expect(getByText(/Connect to an enabled output device/)).toBeTruthy();
     if (state.routed && !state.playbackReady) {
       fireEvent.click(play);
       expect(onStart).toHaveBeenCalledTimes(1);

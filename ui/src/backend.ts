@@ -64,7 +64,7 @@ import type {
 } from "@audiorouter/contracts";
 import type { MethodParams, MethodResult } from "@audiorouter/contracts";
 import { demoSession, demoSessions } from "./fixtures";
-import { markErrorMessage } from "./actionMessage";
+import { errorMessage, type UiMessage } from "./actionMessage";
 
 export type ApplicationRow = ApplicationInfo;
 export type ProcessorResponseParams = NonNullable<MethodParams["processors.response"]>;
@@ -125,13 +125,13 @@ export function notReadyNode(error: unknown): { nodeId: string; message: string 
   return nodeId ? { nodeId, message: error.message } : null;
 }
 
-/** Formats structured backend failures without losing actionable audio guidance. */
-/** Readable text for a caught error; the message is shown with the error tone. */
-export function formatUiError(error: unknown, fallback: string): string {
-  return markErrorMessage(formatUiErrorText(error, fallback));
+/** A caught error as a status message: error severity, whatever its wording. */
+export function uiError(error: unknown, fallback: string): UiMessage {
+  return errorMessage(formatUiError(error, fallback));
 }
 
-function formatUiErrorText(error: unknown, fallback: string): string {
+/** Readable text for a caught error. */
+export function formatUiError(error: unknown, fallback: string): string {
   if (!(error instanceof Error)) return fallback;
   if (
     /native (?:worker|render-source worker|output fan-out) (?:is )?already (?:attached|connected)/i.test(error.message)

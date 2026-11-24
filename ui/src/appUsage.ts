@@ -1,4 +1,5 @@
 import type { ApplicationInfo, DeviceListItem, Node, Session } from "@audiorouter/contracts";
+import { isRouteSource } from "./draft";
 import { tx } from "./i18n";
 
 /**
@@ -297,15 +298,8 @@ export function nodeDeviceUsers(
   return result;
 }
 
-const SOURCES_AND_SILENT_BYPASSES: readonly Node["kind"][] = [
-  "physicalInput",
-  "applicationCapture",
-  "endpointLoopback",
-  "audioFile",
-  "soundboard",
-  "testSignal",
-  "networkReceive",
-  "virtualRenderSource",
+/** Kinds other than sources that silence, rather than pass, when turned off. */
+const SILENT_BYPASSES: readonly Node["kind"][] = [
   "physicalOutput",
   "virtualCaptureSink",
   "mixer",
@@ -318,7 +312,8 @@ const SOURCES_AND_SILENT_BYPASSES: readonly Node["kind"][] = [
  * The backend remains authoritative for runtime readiness and failures.
  */
 function passesSignal(node: Node): boolean {
-  if (SOURCES_AND_SILENT_BYPASSES.includes(node.kind) && (!node.enabled || node.bypass)) return false;
+  const off = !node.enabled || node.bypass;
+  if (off && (isRouteSource(node.kind) || SILENT_BYPASSES.includes(node.kind))) return false;
   return node.kind !== "mute" || !node.enabled || node.bypass || node.parameters.muted !== true;
 }
 

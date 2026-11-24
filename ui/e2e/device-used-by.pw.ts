@@ -116,7 +116,7 @@ test("device nodes name the apps on their device without moving anything", async
   await expect(footer).toHaveText("Heard by Discord");
   await expect(footer).toHaveAttribute(
     "title",
-    "Discord records CABLE-A Output (VB-Audio Virtual Cable A), so it hears what this node sends",
+    "Discord records CABLE-A Output (VB-Audio Virtual Cable A), so it hears what this tool sends",
   );
   // Discord's speaker: it shares the device, it does not hear this node.
   await expect(page.getByTestId("rf__node-headphones").locator(".node-used-by")).toHaveText("Shared with Discord");
@@ -172,7 +172,7 @@ test("device nodes name the apps on their device without moving anything", async
   }
   await expect(section.locator("li").first()).toHaveAttribute(
     "title",
-    "Discord records CABLE-A Output (VB-Audio Virtual Cable A), so it hears what this node sends",
+    "Discord records CABLE-A Output (VB-Audio Virtual Cable A), so it hears what this tool sends",
   );
 
   // Discord moves to the cable's 16ch twin: the footer warns, nothing moves.

@@ -60,8 +60,14 @@ mod audio_service;
 #[cfg(windows)]
 mod audio_thread;
 mod authorization;
+#[cfg(test)]
+mod bounded_fuzz_tests;
 mod cable_routes;
 mod catalog;
+#[cfg(test)]
+mod contract_cases;
+#[cfg(test)]
+mod contract_tests;
 mod dispatch_methods;
 mod graph;
 mod midi;
@@ -78,6 +84,8 @@ mod recorder_workers;
 mod recording;
 mod recording_library;
 mod safety;
+#[cfg(test)]
+mod service_timing_tests;
 mod sessions;
 mod setup_check;
 mod sound_library;

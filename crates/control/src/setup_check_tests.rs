@@ -490,5 +490,12 @@ fn dispatch_reports_through_the_control_plane() {
             json!({ "sessionId": "a".repeat(audiorouter_domain::MAX_ENTITY_ID_BYTES + 1) }),
         ),
     });
-    assert!(oversized.error.unwrap().message.contains("ID limit"));
+    // The dispatcher refuses it from the published maxLength before the handler.
+    assert_eq!(
+        oversized.error.unwrap().message,
+        format!(
+            "sessionId must be at most {} characters",
+            audiorouter_domain::MAX_ENTITY_ID_BYTES
+        )
+    );
 }

@@ -1,6 +1,10 @@
 # MIDI input and instrument plugins: design (phase P8b)
 
-Status: software steps 1-8 built and tested (2026-11-13/14); hardware MIDI and attended shell checks open. Part of the
+Status: software steps 1-8 built and tested (2026-11-13/14) and merged to
+main in PR #164. The x86 instrument path was later exercised with the mda JX10
+control ([completion work plan](vst-completion-work.md)). Still open, owner
+only: hardware MIDI keyboard (including unplug and replug), the audible
+Instrument guide video and the attended shell run (status note, 2026-11-24). Part of the
 [full VST compatibility plan](vst-full-compatibility.md); owner decision D1
 (2026-11-13): instruments and MIDI are in scope. The rules in AGENTS.md (every
 source works in every layout, REST and MCP kept current, guides for new tools)

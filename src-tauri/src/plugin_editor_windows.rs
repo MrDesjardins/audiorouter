@@ -427,6 +427,155 @@ unsafe extern "system" fn window_proc(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use windows::Win32::Foundation::HINSTANCE;
+    use windows::Win32::UI::Input::KeyboardAndMouse::GetFocus;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetWindowRect, SendMessageW, SetWindowLongPtrW, GWL_EXSTYLE, SWP_FRAMECHANGED, SWP_NOSIZE,
+        SW_SHOWNOACTIVATE, WA_ACTIVE, WA_CLICKACTIVE, WA_INACTIVE, WINDOW_EX_STYLE, WS_CHILD,
+        WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_TABSTOP, WS_VISIBLE,
+    };
+
+    /// Places the real host window where nobody can see it: far off every
+    /// monitor, as a tool window (no taskbar button) that never activates.
+    const OFF_SCREEN: i32 = -32_000;
+
+    /// Runs `body(host, editor)` on a fresh thread with a real host window made
+    /// by the production `create_window`/`window_proc` and one child window
+    /// standing in for the plugin editor (an EDIT control, which can take
+    /// focus). The watch timer is never started, so the window shows only when
+    /// `show_off_screen` is set, and then off screen without activation.
+    fn with_host(show_off_screen: bool, body: impl FnOnce(HWND, HWND) + Send + 'static) {
+        thread::spawn(move || {
+            // SAFETY: this thread creates the window, uses it only here and
+            // destroys it before freeing the state, as `run_window` does.
+            unsafe {
+                let (host, state) =
+                    create_window("test host", 300, 200, Arc::new(|| true)).expect("host window");
+                let instance = GetModuleHandleW(None).unwrap();
+                let editor = CreateWindowExW(
+                    WINDOW_EX_STYLE::default(),
+                    w!("EDIT"),
+                    w!(""),
+                    WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                    10,
+                    10,
+                    120,
+                    40,
+                    Some(host),
+                    None,
+                    Some(HINSTANCE(instance.0)),
+                    None,
+                )
+                .expect("editor stand-in");
+                if show_off_screen {
+                    SetWindowLongPtrW(
+                        host,
+                        GWL_EXSTYLE,
+                        (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE).0 as isize,
+                    );
+                    SetWindowPos(
+                        host,
+                        None,
+                        OFF_SCREEN,
+                        OFF_SCREEN,
+                        0,
+                        0,
+                        SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+                    )
+                    .unwrap();
+                    let _ = ShowWindow(host, SW_SHOWNOACTIVATE);
+                }
+                body(host, editor);
+                let _ = DestroyWindow(host);
+                drop(Box::from_raw(state));
+            }
+        })
+        .join()
+        .expect("window test thread");
+    }
+
+    /// SAFETY (callers): `window` belongs to the calling thread.
+    unsafe fn send(window: HWND, message: u32, wparam: usize, lparam: isize) -> isize {
+        SendMessageW(window, message, Some(WPARAM(wparam)), Some(LPARAM(lparam))).0
+    }
+
+    #[test]
+    fn focus_follows_set_focus_and_active_activation_into_the_editor() {
+        // SAFETY: `with_host` runs the closure on the thread that created
+        // both windows and keeps them alive for the whole call.
+        with_host(true, |host, editor| unsafe {
+            // Nothing in this window has focus yet.
+            let _ = SetFocus(None);
+            assert_ne!(GetFocus(), editor);
+
+            assert_eq!(send(host, WM_SETFOCUS, 0, 0), 0);
+            assert_eq!(GetFocus(), editor, "WM_SETFOCUS hands focus to the editor");
+
+            // An inactive activation must leave focus alone ...
+            let _ = SetFocus(None);
+            assert_eq!(send(host, WM_ACTIVATE, WA_INACTIVE as usize, 0), 0);
+            assert_ne!(GetFocus(), editor, "WA_INACTIVE does not take focus");
+            // ... also when the minimized flag sits in the high word.
+            assert_eq!(send(host, WM_ACTIVATE, 0x1_0000, 0), 0);
+            assert_ne!(GetFocus(), editor);
+
+            // Active and click-active activation do.
+            for state in [WA_ACTIVE, WA_CLICKACTIVE] {
+                let _ = SetFocus(None);
+                assert_eq!(send(host, WM_ACTIVATE, state as usize, 0), 0);
+                assert_eq!(GetFocus(), editor, "activation state {state} takes focus");
+            }
+        });
+    }
+
+    #[test]
+    fn a_dpi_change_applies_the_suggested_rectangle_to_the_host() {
+        // SAFETY: `with_host` runs the closure on the thread that created the
+        // window and keeps it alive for the whole call; `suggested` outlives
+        // the synchronous SendMessageW that reads it.
+        with_host(false, |host, _| unsafe {
+            // 150 percent: Windows suggests a new outer rectangle for the window.
+            let suggested = RECT {
+                left: OFF_SCREEN + 120,
+                top: OFF_SCREEN + 80,
+                right: OFF_SCREEN + 120 + 450,
+                bottom: OFF_SCREEN + 80 + 330,
+            };
+            let dpi = 144_usize;
+            let result = send(
+                host,
+                WM_DPICHANGED,
+                (dpi << 16) | dpi,
+                std::ptr::addr_of!(suggested) as isize,
+            );
+            assert_eq!(result, 0);
+            let mut actual = RECT::default();
+            GetWindowRect(host, &mut actual).unwrap();
+            assert_eq!(
+                (actual.left, actual.top, actual.right, actual.bottom),
+                (
+                    suggested.left,
+                    suggested.top,
+                    suggested.right,
+                    suggested.bottom
+                )
+            );
+
+            // A message without a rectangle is ignored and changes nothing.
+            assert_eq!(send(host, WM_DPICHANGED, (dpi << 16) | dpi, 0), 0);
+            let mut unchanged = RECT::default();
+            GetWindowRect(host, &mut unchanged).unwrap();
+            assert_eq!(
+                (
+                    unchanged.left,
+                    unchanged.top,
+                    unchanged.right,
+                    unchanged.bottom
+                ),
+                (actual.left, actual.top, actual.right, actual.bottom)
+            );
+        });
+    }
 
     #[test]
     fn only_active_activation_states_take_focus() {

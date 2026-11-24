@@ -275,6 +275,12 @@ impl Default for LevelFollower {
     }
 }
 
+/// Bounds of a compressor's smoothed detector level. A finite sample cannot
+/// leave this range, and the clamp keeps the envelope finite even if a future
+/// detector change lets a bad value through.
+const ENVELOPE_FLOOR_DB: f32 = -120.0;
+const ENVELOPE_CEILING_DB: f32 = 120.0;
+
 fn finite_or_zero(value: f32) -> f32 {
     if value.is_finite() {
         value
@@ -774,7 +780,7 @@ impl Biquad {
         Ok(())
     }
 
-    /// Schedules a coefficient transition over a fixed number of samples.
+    /// Schedules a coefficient transition over a fixed number of frames.
     /// The transition is prepared on the control thread and applied without
     /// allocation during processing.
     pub fn set_params_ramped(
@@ -834,8 +840,12 @@ impl Biquad {
     /// Non-finite input is repaired to silence and output is kept finite.
     pub fn process_interleaved(&mut self, samples: &mut [f32]) {
         for (index, sample) in samples.iter_mut().enumerate() {
-            self.advance_ramp();
             let channel = index % self.channels;
+            // The ramp is counted in frames: advance on the first channel of
+            // each frame so every channel of a frame shares coefficients.
+            if channel == 0 {
+                self.advance_ramp();
+            }
             let input = if sample.is_finite() {
                 f64::from(*sample)
             } else {
@@ -973,9 +983,12 @@ impl Gate {
         let mut input_peaks = [0.0_f32; 2];
         let mut output_peaks = [0.0_f32; 2];
         for frame in samples.chunks_exact_mut(self.channels) {
+            // A non-finite sample is repaired to silence below, so it must
+            // not reach the detector either: an infinite peak would latch the
+            // envelope (DSP-3).
             let peak = frame
                 .iter()
-                .map(|sample| sample.abs())
+                .map(|sample| finite_or_zero(*sample).abs())
                 .fold(0.0_f32, f32::max);
             let level_db = 20.0 * peak.max(1.0e-6).log10();
             if self.open {
@@ -1196,6 +1209,9 @@ pub struct WindowedSignalMeter {
     rms_values: Vec<[f32; 2]>,
     peak_values: Vec<[f32; 2]>,
     sum_squares: [f64; 2],
+    /// Per channel, how many slots of the RMS window hold a non-zero square.
+    /// The running sum is exactly zero when this is zero (DSP-4).
+    nonzero_squares: [usize; 2],
     clipping: u64,
 }
 
@@ -1247,6 +1263,7 @@ impl WindowedSignalMeter {
             rms_values: vec![[0.0; 2]; rms_window_frames],
             peak_values: vec![[0.0; 2]; peak_hold_frames],
             sum_squares: [0.0; 2],
+            nonzero_squares: [0; 2],
             clipping: 0,
         })
     }
@@ -1267,6 +1284,7 @@ impl WindowedSignalMeter {
         self.rms_values.fill([0.0; 2]);
         self.peak_values.fill([0.0; 2]);
         self.sum_squares = [0.0; 2];
+        self.nonzero_squares = [0; 2];
         self.clipping = 0;
     }
 
@@ -1276,6 +1294,9 @@ impl WindowedSignalMeter {
                 for channel in 0..self.channels {
                     let old = self.rms_values[self.rms_cursor][channel];
                     self.sum_squares[channel] -= f64::from(old);
+                    if old != 0.0 {
+                        self.nonzero_squares[channel] -= 1;
+                    }
                 }
             } else {
                 self.rms_filled += 1;
@@ -1288,8 +1309,19 @@ impl WindowedSignalMeter {
                 rms_slot[channel] = value * value;
                 peak_slot[channel] = magnitude;
                 self.sum_squares[channel] += f64::from(rms_slot[channel]);
+                if rms_slot[channel] != 0.0 {
+                    self.nonzero_squares[channel] += 1;
+                }
                 if magnitude >= 1.0 {
                     self.clipping = self.clipping.saturating_add(1);
+                }
+            }
+            // Subtracting the oldest square leaves a rounding residue of either
+            // sign. A window with no energy has exactly zero sum, whatever the
+            // residue says (a negative one made `sqrt` return NaN).
+            for channel in 0..self.channels {
+                if self.nonzero_squares[channel] == 0 {
+                    self.sum_squares[channel] = 0.0;
                 }
             }
             self.rms_values[self.rms_cursor] = rms_slot;
@@ -1313,7 +1345,8 @@ impl WindowedSignalMeter {
         let mut rms = [0.0_f32; 2];
         if self.rms_filled > 0 {
             for (channel, value) in rms.iter_mut().enumerate().take(self.channels) {
-                *value = (self.sum_squares[channel] / self.rms_filled as f64).sqrt() as f32;
+                *value =
+                    (self.sum_squares[channel].max(0.0) / self.rms_filled as f64).sqrt() as f32;
             }
         }
         MeterSnapshot {
@@ -2093,9 +2126,12 @@ impl Compressor {
         let mut input_peaks = [0.0_f32; 2];
         let mut output_peaks = [0.0_f32; 2];
         for frame in samples.chunks_exact_mut(self.channels) {
+            // A non-finite sample is repaired to silence below, so it must
+            // not reach the detector either: an infinite peak would latch the
+            // envelope (DSP-3).
             let peak = frame
                 .iter()
-                .map(|sample| sample.abs())
+                .map(|sample| finite_or_zero(*sample).abs())
                 .fold(0.0_f32, f32::max);
             let level_db = 20.0 * peak.max(1.0e-6).log10();
             let coefficient = if level_db > self.envelope_db {
@@ -2103,7 +2139,8 @@ impl Compressor {
             } else {
                 release
             };
-            self.envelope_db = coefficient * self.envelope_db + (1.0 - coefficient) * level_db;
+            self.envelope_db = (coefficient * self.envelope_db + (1.0 - coefficient) * level_db)
+                .clamp(ENVELOPE_FLOOR_DB, ENVELOPE_CEILING_DB);
             let reduction_db = compression_reduction(
                 self.envelope_db,
                 self.params.threshold_db,
@@ -3108,6 +3145,40 @@ mod tests {
         assert_eq!(meter.snapshot().clipping, 0);
     }
 
+    /// DSP-4: the running sum of squares keeps a rounding residue of either sign
+    /// after signal followed by a full window of exact zeros; a negative residue
+    /// made `sqrt` return NaN for the linear RMS.
+    #[test]
+    fn windowed_meter_rms_stays_finite_and_zero_after_signal_then_silence() {
+        for seed in 0..50_u64 {
+            let mut state = seed.wrapping_mul(6_364_136_223_846_793_005) ^ 0x9E37_79B9_7F4A_7C15;
+            let mut next_noise = move || {
+                state = state
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                ((state >> 40) as f32 / (1_u64 << 24) as f32 - 0.5) * 0.2
+            };
+            let mut meter = WindowedSignalMeter::new_default(2, 48_000.0).unwrap();
+            let window = meter.window_frames();
+            let mut signal = Vec::with_capacity(48_000 * 2);
+            for frame in 0..48_000 {
+                let tone = (frame as f32 * 0.0731 + seed as f32).sin() * 0.4;
+                signal.push(tone + next_noise());
+                signal.push(tone * 0.5 + next_noise());
+            }
+            meter.process_interleaved(&signal);
+            meter.process_interleaved(&vec![0.0; window * 2]);
+            let quiet = meter.snapshot();
+            assert!(
+                quiet.rms.iter().all(|value| value.is_finite()),
+                "seed {seed}: rms {:?}",
+                quiet.rms
+            );
+            assert_eq!(quiet.rms, [0.0, 0.0], "seed {seed}");
+            assert_eq!(quiet.rms_db, [-120.0, -120.0], "seed {seed}");
+        }
+    }
+
     #[test]
     fn windowed_meter_rejects_unbounded_or_empty_windows() {
         assert!(matches!(
@@ -3445,5 +3516,116 @@ mod tests {
                 .step_by(4_096)
                 .all(|sample| sample.is_finite()));
         }
+    }
+
+    fn sine_block(frequency_hz: f32, amplitude: f32, frames: usize, channels: usize) -> Vec<f32> {
+        let mut block = Vec::with_capacity(frames * channels);
+        for frame in 0..frames {
+            let value = amplitude
+                * (2.0 * std::f32::consts::PI * frequency_hz * frame as f32 / 48_000.0).sin();
+            for _ in 0..channels {
+                block.push(value);
+            }
+        }
+        block
+    }
+
+    // DSP-3: one infinite sample must not latch the interleaved compressor.
+    #[test]
+    fn interleaved_compressor_recovers_after_infinite_samples() {
+        let params = CompressorParams {
+            threshold_db: -18.0,
+            ratio: 4.0,
+            attack_ms: 10.0,
+            release_ms: 150.0,
+            knee_db: 6.0,
+            makeup_db: 0.0,
+            sample_rate: 48_000.0,
+        };
+        for poison in [f32::INFINITY, f32::NEG_INFINITY, f32::NAN] {
+            for channels in [1, 2] {
+                let mut compressor = Compressor::new(params, channels).unwrap();
+                let mut bad = vec![poison; channels];
+                compressor.process_interleaved(&mut bad);
+                assert!(bad.iter().all(|sample| *sample == 0.0));
+                // -20 dBFS sine, which is below the threshold: the gain must
+                // be close to unity again straight away.
+                let mut block = sine_block(1_000.0, 0.1, 1_000, channels);
+                let reference = block.clone();
+                compressor.process_interleaved(&mut block);
+                let energy: f32 = block.iter().map(|sample| sample * sample).sum();
+                let reference_energy: f32 = reference.iter().map(|sample| sample * sample).sum();
+                assert!(
+                    energy > reference_energy * 0.5,
+                    "compressor stayed silent after {poison} ({channels} ch): {energy} vs {reference_energy}"
+                );
+                assert!(compressor.gain_reduction_db().is_finite());
+                assert!(compressor.gain_reduction_db() < 1.0);
+            }
+        }
+    }
+
+    // DSP-3: the same pattern in the gate; an infinite sample is not signal.
+    #[test]
+    fn interleaved_gate_treats_infinite_samples_as_silence() {
+        let params = GateParams {
+            threshold_db: -30.0,
+            hysteresis_db: 3.0,
+            ratio: 4.0,
+            range_db: 60.0,
+            attack_ms: 0.1,
+            hold_ms: 100.0,
+            release_ms: 10.0,
+            sample_rate: 48_000.0,
+        };
+        for poison in [f32::INFINITY, f32::NEG_INFINITY, f32::NAN] {
+            let mut gate = Gate::new(params, 1).unwrap();
+            let mut bad = [poison];
+            gate.process_interleaved(&mut bad);
+            assert_eq!(bad, [0.0]);
+            assert!(
+                !gate.is_open(),
+                "{poison} must not open the gate as if it were loud signal"
+            );
+            let mut loud = sine_block(1_000.0, 0.5, 512, 1);
+            gate.process_interleaved(&mut loud);
+            assert!(gate.is_open());
+            assert!(gate.gain_reduction_db().is_finite());
+        }
+    }
+
+    // DSP-5: a stereo biquad ramp is counted in frames and both channels of a
+    // frame share the same coefficients.
+    #[test]
+    fn stereo_biquad_ramp_counts_frames_and_keeps_channels_identical() {
+        let start = params(FilterKind::Peaking);
+        let target = BiquadParams {
+            gain_db: -6.0,
+            frequency_hz: 3_000.0,
+            ..start
+        };
+        let mut stereo = Biquad::new(start, 2).unwrap();
+        let mut mono = Biquad::new(start, 1).unwrap();
+        stereo.set_params_ramped(target, 64).unwrap();
+        mono.set_params_ramped(target, 64).unwrap();
+        let mono_input = sine_block(2_000.0, 0.5, 64, 1);
+        let mut stereo_block = sine_block(2_000.0, 0.5, 64, 2);
+        let mut mono_block = mono_input.clone();
+        stereo.process_interleaved(&mut stereo_block);
+        mono.process_interleaved(&mut mono_block);
+        for (frame, mono_sample) in stereo_block.chunks_exact(2).zip(mono_block.iter()) {
+            assert_eq!(frame[0], frame[1], "channels diverged inside the ramp");
+            assert!(
+                (frame[0] - mono_sample).abs() < 1.0e-6,
+                "stereo ramp does not match the mono ramp"
+            );
+        }
+        // After exactly 64 frames the ramp is finished.
+        assert_eq!(stereo.ramp_remaining, 0);
+        let (now, goal) = (stereo.coefficients, stereo.target_coefficients);
+        assert_eq!(
+            (now.b0, now.b1, now.b2, now.a1, now.a2),
+            (goal.b0, goal.b1, goal.b2, goal.a1, goal.a2)
+        );
     }
 }

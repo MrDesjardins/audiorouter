@@ -1830,15 +1830,15 @@ describe("keyboard connection dialog", () => {
     expect(document.activeElement).toBe(source);
 
     const close = within(dialog).getByRole("button", { name: "Close keyboard connection dialog" });
-    const cancel = within(dialog).getByRole("button", { name: "Cancel" });
-    cancel.focus();
+    // The confirming button is last (decline first, as in every dialog), so it closes the Tab cycle.
+    const add = within(dialog).getByRole("button", { name: "Add connection" });
+    add.focus();
     fireEvent.keyDown(window, { key: "Tab" });
     expect(document.activeElement).toBe(close);
     close.focus();
     fireEvent.keyDown(window, { key: "Tab", shiftKey: true });
-    expect(document.activeElement).toBe(cancel);
+    expect(document.activeElement).toBe(add);
 
-    const add = within(dialog).getByRole("button", { name: "Add connection" });
     fireEvent.click(add);
     expect(screen.getByRole("dialog", { name: "Keyboard connection" })).toBeTruthy();
     expect(screen.getByText("Choose an output and input port first.")).toBeTruthy();
@@ -1999,6 +1999,41 @@ describe("keyboard connection dialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Replace routes" }));
     await waitFor(() => expect(replaceVirtualRoutes).toHaveBeenCalledWith(2, [], expect.any(String)));
     expect(await screen.findByText("Virtual routes applied at revision 3.")).toBeTruthy();
+  });
+
+  // The backend now answers a stale virtual-route baseRevision with
+  // `revisionConflict` (it was a malformed-request error); the panel must say
+  // another save won and keep what the user typed.
+  it("explains a virtual-route revision conflict and keeps the typed edit", async () => {
+    const replaceVirtualRoutes = vi.fn(async () => {
+      throw new AudioRouterRpcError({
+        code: -32010,
+        message: "Store(RevisionConflict { expected: 2, actual: 5 })",
+        data: {
+          code: "revisionConflict",
+          fieldPath: null,
+          resourceIds: [],
+          retryable: true,
+          remediation: "read the latest session revision and create a new plan",
+        },
+      });
+    });
+    const backend = {
+      ...createDisconnectedBackend(),
+      connected: true,
+      listVirtualRoutes: async () => ({ revision: 2, routes: [] }),
+      replaceVirtualRoutes,
+    };
+    await renderReady(<App backend={backend} />);
+    openTab("Status");
+    const revision = (await screen.findByRole("textbox", {
+      name: "Virtual-route base revision",
+    })) as HTMLInputElement;
+    await waitFor(() => expect(revision.value).toBe("2"));
+    fireEvent.click(screen.getByRole("button", { name: "Replace routes" }));
+    await waitFor(() => expect(replaceVirtualRoutes).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/Another save changed this route, so your save was not applied/)).toBeTruthy();
+    expect(revision.value).toBe("2");
   });
 
   it("refreshes virtual-route inventory when the same backend reconnects", async () => {
@@ -2278,7 +2313,7 @@ describe("keyboard connection dialog", () => {
     openTab("Recording");
     const panel = await screen.findByRole("region", { name: "Recorder" });
     await waitFor(() => expect(within(panel).getByText("recording")).toBeTruthy());
-    expect(within(panel).getByText("Attached recorder node: recorder-node")).toBeTruthy();
+    expect(within(panel).getByText("Attached recorder: recorder-node")).toBeTruthy();
     expect(within(panel).getByText("Backend last frame: 480")).toBeTruthy();
   });
 

@@ -66,6 +66,7 @@ pub struct TimeShift {
     delay: u64,
     paused: bool,
     fade_remaining: usize,
+    pause_fade: bool,
     block_frames: usize,
 }
 
@@ -83,6 +84,7 @@ impl TimeShift {
             delay: 0,
             paused: false,
             fade_remaining: 0,
+            pause_fade: false,
             block_frames: 0,
         }
     }
@@ -127,6 +129,9 @@ impl TimeShift {
         if (self.delay, self.paused) != before && !self.paused {
             self.fade_remaining = JUMP_FADE_FRAMES;
         }
+        // Pausing: this block still reads the audio that was playing, faded
+        // to zero by its last frame, and every later paused block is silent.
+        self.pause_fade = self.paused && !before.1;
         for (channel, input) in inputs.iter().enumerate().take(self.channels) {
             let Some(input) = input else { continue };
             for (offset, sample) in input.iter().enumerate() {
@@ -139,18 +144,23 @@ impl TimeShift {
 
     /// Fill `output` for one channel from the delayed position.
     pub fn read_channel(&self, channel: usize, output: &mut [f32]) {
-        if self.paused || channel >= self.channels {
+        if (self.paused && !self.pause_fade) || channel >= self.channels {
             output.fill(0.0);
             return;
         }
+        let frames = output.len();
         for (offset, sample) in output.iter_mut().enumerate() {
             let position =
                 ((self.written + offset as u64 - self.delay) % self.capacity as u64) as usize;
-            let fade = if offset < self.fade_remaining {
+            let mut fade = if offset < self.fade_remaining {
                 (JUMP_FADE_FRAMES - self.fade_remaining + offset) as f32 / JUMP_FADE_FRAMES as f32
             } else {
                 1.0
             };
+            if self.pause_fade {
+                // Linear fade-out ending at exactly zero on the last frame.
+                fade *= (frames - 1 - offset) as f32 / frames as f32;
+            }
             *sample = self.ring[channel * self.capacity + position] * fade.min(1.0);
         }
     }
@@ -179,6 +189,7 @@ impl TimeShift {
         self.delay = 0;
         self.paused = false;
         self.fade_remaining = 0;
+        self.pause_fade = false;
     }
 
     pub fn status(&self, transport: &TimeShiftTransport) -> TimeShiftStatus {
@@ -247,6 +258,58 @@ mod tests {
         let again = run(&mut shift, &transport, &mut frame, 3);
         assert_eq!(again[99], 3_499.0);
         assert_eq!(shift.status(&transport).delay_seconds, 0.0);
+    }
+
+    // DSP-6: pausing fades the delayed audio out over the pause block instead
+    // of cutting to silence.
+    #[test]
+    fn pause_fades_out_instead_of_clicking() {
+        const BLOCK: usize = 128;
+        const RATE: f32 = 48_000.0;
+        const AMPLITUDE: f32 = 0.5;
+        let sine = |frame: usize| {
+            AMPLITUDE * (2.0 * std::f32::consts::PI * 100.0 * frame as f32 / RATE).sin()
+        };
+        let max_sine_step = AMPLITUDE * 2.0 * std::f32::consts::PI * 100.0 / RATE;
+        let transport = TimeShiftTransport::default();
+        let mut shift = TimeShift::new(1, 2, 48_000);
+        let mut produced = Vec::new();
+        let mut next_frame = 0usize;
+        let block = |shift: &mut TimeShift, produced: &mut Vec<f32>, next_frame: &mut usize| {
+            let input: Vec<f32> = (0..BLOCK)
+                .map(|offset| sine(*next_frame + offset))
+                .collect();
+            let mut output = vec![0.0; BLOCK];
+            shift.begin_block(&transport, [Some(&input), None]);
+            shift.read_channel(0, &mut output);
+            shift.end_block(&transport);
+            *next_frame += BLOCK;
+            produced.extend_from_slice(&output);
+        };
+        // Three live blocks end on a non-zero part of the waveform.
+        for _ in 0..3 {
+            block(&mut shift, &mut produced, &mut next_frame);
+        }
+        assert!(produced[3 * BLOCK - 1].abs() > 0.2 * AMPLITUDE);
+        transport.post(TimeShiftCommand::Pause);
+        block(&mut shift, &mut produced, &mut next_frame);
+        block(&mut shift, &mut produced, &mut next_frame);
+        let pause_block = &produced[3 * BLOCK..4 * BLOCK];
+        assert!(
+            pause_block
+                .iter()
+                .any(|sample| sample.abs() > 0.1 * AMPLITUDE),
+            "the pause block must still carry the fading audio"
+        );
+        assert!(produced[4 * BLOCK..].iter().all(|sample| *sample == 0.0));
+        let largest_step = produced
+            .windows(2)
+            .map(|pair| (pair[1] - pair[0]).abs())
+            .fold(0.0_f32, f32::max);
+        assert!(
+            largest_step <= max_sine_step * 2.0,
+            "pause clicked: step {largest_step} against sine step {max_sine_step}"
+        );
     }
 
     #[test]

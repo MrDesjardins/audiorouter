@@ -1,5 +1,13 @@
 # Active plan — code-review fixes (2026-11-01, owner request)
 
+> **Status (2026-11-24).** Every triage item below is implemented. Only
+> qualification remains, and each piece needs the owner's environment or a
+> decision: three isolated continuity runs per cable with the owner's route
+> stopped, a latency-changing commercial plugin run, and whether CABLE-B's
+> 8-channel format should be supported. The large-library concurrent
+> Play/export/import timing can run on synthetic data and is the one portable
+> item left. Archive this plan when that timing is recorded.
+
 Owner request, 2026-11-01: "do the two code review markdown in the future
 folder. Set them in current and tackle all of them." Sources:
 [code review 2026-11-01](../archived/2026-11-01-repository-code-review.md) and the items
@@ -551,3 +559,24 @@ stands, but they are not isolated evidence, and the failures above cannot be
 attributed to AudioRouter or to the system until the runs are repeated with
 the owner's route stopped. Next action: with the owner's approval, stop the
 main route, repeat three runs per cable, then restart it.
+
+### Synthetic service timing (2026-11-24)
+
+Status: the device-free half of "large-library concurrent Play/export/import
+service timing" is measured; the live half stays open. On a synthetic library
+(~400 MiB media, 100+ sessions, 2,000 recordings; 96 MiB incompressible and
+240 MiB-expanded bundles), a maximum-size export or import holds the control
+thread for 0.4–2.7 s, with no service-closure gap over 8 ms
+(median 1.04 ms, max 2.4 ms) meanwhile, and a quick request sent during one
+waited up to about 3 s of its 5 s deadline. Play's device-free steps (decode of
+eight 100 s files 0.6–0.7 s, serviced; compile under 0.3 ms) are fine. One
+candidate defect: with six clients polling during a large export, three of
+nine polls failed after 2 s because the pipe has four instances and
+`PIPE_BUSY_WAIT` is 2 s (reproduction in the evidence, section A4). Confirmed
+and fixed on `fix/pipe-busy-during-bundle-work`: a client now waits for an
+instance up to its own request timeout (evidence: pipe-busy follow-up).
+Not shown: audio (no devices, so `audioService.lateGaps` was never
+incremented) or the owner's library. Evidence and the `#[ignore]` harnesses:
+[synthetic service timing](evidence/2026-11-24-synthetic-service-timing.md).
+Still open here: the isolated VB-Cable repeat runs with a route playing and
+the latency-changing commercial-plugin run.

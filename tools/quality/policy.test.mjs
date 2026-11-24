@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { classifyChanges, expectedJobs, areas } from './policy.mjs';
 import { evaluateGate } from './gate.mjs';
 import { spawnSync, execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, readdirSync, unlinkSync, rmdirSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, readdirSync, unlinkSync, rmdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -242,6 +242,37 @@ test('daily quality collection retains cumulative history outside the cache', ()
   const workflow = readFileSync(new URL('../../.github/workflows/quality.yml', import.meta.url), 'utf8');
   assert.match(workflow, /cron: "17 3 \* \* \*"/);
   assert.match(workflow, /name: quality-history-collected\s+path: quality-history.csv\s+if-no-files-found: error\s+retention-days: 90/);
+});
+
+test('nightly quality runs the bounded fuzz targets at a bounded scale', () => {
+  const workflow = readFileSync(new URL('../../.github/workflows/quality.yml', import.meta.url), 'utf8');
+  const job = workflow.match(/\n  fuzz:\n[\s\S]*?(?=\n  # NFR-14|\n  startup:)/)?.[0] ?? '';
+  assert.ok(job, 'quality.yml has a fuzz job');
+  assert.match(job, /timeout-minutes: 60\n/);
+  assert.match(job, /AUDIOROUTER_FUZZ_SCALE: \$\{\{ inputs\.fuzz_scale \|\| '10' \}\}/);
+  assert.match(job, /\$scale -lt 1 -or \$scale -gt 50\) \{/);
+  assert.match(workflow, /fuzz_scale:\s+description: [^\n]+\s+required: false\s+default: "10"/);
+  // Every fuzz test file in the repository is run by the job, so a new target
+  // cannot be added without the nightly covering it.
+  const covered = [
+    ['audiorouter-protocol', 'bounded_fuzz'], ['audiorouter-protocol', 'network_fuzz'],
+    ['audiorouter-plugin-host', 'bounded_fuzz'], ['audiorouter-engine', 'bounded_fuzz'],
+    ['audiorouter-storage', 'bounded_fuzz'], ['audiorouter-recording', 'bounded_fuzz'],
+  ];
+  for (const [crate, test] of covered) {
+    assert.match(job, new RegExp(`'-p', '${crate}'[^}]*'--test', '${test}'`), `${crate} ${test}`);
+  }
+  assert.match(job, /'-p', 'audiorouter-control', '--lib', 'bounded_fuzz_tests'/);
+  const crates = new URL('../../crates/', import.meta.url);
+  for (const crate of readdirSync(crates)) {
+    const tests = new URL(`${crate}/tests/`, crates);
+    if (!existsSync(tests)) continue;
+    for (const file of readdirSync(tests).filter(name => /fuzz\.rs$/.test(name))) {
+      const name = file.replace(/\.rs$/, '');
+      assert.ok(covered.some(([c, t]) => c === `audiorouter-${crate}` && t === name), `${crate}/tests/${file} is not run by the nightly fuzz job`);
+    }
+  }
+  assert.doesNotMatch(job, /contents: write|git push|git commit/);
 });
 
 test('nightly packaged shell smoke uses the built release binary and retains failure evidence', () => {

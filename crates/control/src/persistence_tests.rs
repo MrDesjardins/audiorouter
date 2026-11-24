@@ -362,38 +362,43 @@ fn ephemeral_plan_maps_bound_pending_entries_and_prune_expired_entries() {
 
 #[test]
 fn graph_plan_persistence_failure_rolls_back_the_in_memory_plan() {
-    let storage = Storage::open_memory().unwrap();
-    let original = session();
-    let mut plane = ControlPlane::with_storage("plan-rollback", storage);
-    plane.insert_session(original.clone()).unwrap();
-    for index in 0..audiorouter_domain::MAX_PENDING_GRAPH_PLANS {
-        plane
-            .storage
-            .as_ref()
+    let path = std::env::temp_dir().join(format!(
+        "audiorouter-plan-rollback-{}-{}.sqlite",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .save_graph_plan(&GraphPlanRecord {
-                id: format!("filled-plan-{index}"),
-                session_id: original.id.as_str().into(),
-                base_revision: 0,
-                candidate: original.clone(),
-                expires_at: i64::MAX,
-            })
-            .unwrap();
-    }
+            .as_nanos()
+    ));
+    let original = session();
+    let mut plane = ControlPlane::with_storage("plan-rollback", Storage::open(&path).unwrap());
+    plane.insert_session(original.clone()).unwrap();
+    // A full inventory now drops its oldest plan, so make the write itself
+    // fail the way a full or broken disk would.
+    let injector = rusqlite::Connection::open(&path).unwrap();
+    injector
+        .execute_batch(
+            "CREATE TRIGGER reject_plan_writes BEFORE INSERT ON graph_plans
+             BEGIN SELECT RAISE(ABORT, 'injected plan write failure'); END;",
+        )
+        .unwrap();
     let mut candidate = original.clone();
     candidate.name = "must-not-survive".into();
 
     let result = plane.plan_graph(&original.id, 0, candidate);
     assert!(
-        matches!(result, Err(ControlError::InvalidRequest(_))),
+        matches!(result, Err(ref error) if !matches!(error, ControlError::Store(_))),
         "{result:?}"
     );
     assert!(matches!(
-        plane.commit_graph(&EntityId::new("plan-2"), 0, "rollback-check"),
+        plane.commit_graph(&EntityId::new("plan-1"), 0, "rollback-check"),
         Err(ControlError::Store(
             audiorouter_domain::StoreError::PlanNotFound
         ))
     ));
+    drop(injector);
+    drop(plane);
+    let _ = std::fs::remove_file(&path);
 }
 
 #[test]
@@ -577,6 +582,257 @@ fn operations_get_returns_durable_commit_outcome() {
     assert_eq!(result["durable"], true);
     assert_eq!(result["revision"], 1);
     assert_eq!(result["result"]["revision"], 1);
+}
+
+/// `operations.get` as `client`, through the same entry point the pipe uses.
+fn operation_get_as(plane: &mut ControlPlane, client: &str, operation_id: &str) -> JsonRpcResponse {
+    plane.dispatch_authorized_for_client(
+        JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!("get")),
+            method: "operations.get".into(),
+            params: Some(json!({ "operationId": operation_id })),
+        },
+        client,
+        &ClientGrant::for_role(ClientRole::Operator),
+    )
+}
+
+/// STO-6: the journal key embeds the method name, and `operations.get` had a
+/// hand-kept list of 17 methods to guess it from. Every method that journals
+/// a result must be found, so this walks `API_METHODS` rather than a list.
+#[test]
+fn operations_get_finds_a_journaled_operation_of_every_api_method() {
+    let storage = Storage::open_memory().unwrap();
+    let mut plane = ControlPlane::with_storage("operation-every-method", storage);
+    let mut missing = Vec::new();
+    for (index, spec) in API_METHODS.iter().enumerate() {
+        let operation_id = format!("operation-{index}");
+        let key = format!("client-a\0{}\0{operation_id}", spec.name);
+        plane
+            .storage
+            .as_ref()
+            .unwrap()
+            .journal_commit_with_hash(&key, spec.name, "{\"done\":true}", 0, "hash")
+            .unwrap();
+        let response = operation_get_as(&mut plane, "client-a", &operation_id);
+        match response.result {
+            Some(result) if result["status"] == "completed" && result["operation"] == spec.name => {
+            }
+            _ => missing.push(spec.name),
+        }
+        // Another client must still never read it.
+        assert!(
+            operation_get_as(&mut plane, "client-b", &operation_id)
+                .result
+                .is_none(),
+            "{} leaked to another client",
+            spec.name
+        );
+    }
+    assert!(
+        missing.is_empty(),
+        "operations.get cannot find these methods' operations: {missing:?}"
+    );
+}
+
+/// A long operation ID that fits the journal limit under a short method name
+/// must not fail because a longer method name makes its candidate key too
+/// long for storage to even look up: that candidate is hashed (Q4.1), as it
+/// would be if it had been stored, so the lookup is never an error.
+#[test]
+fn operations_get_finds_an_exact_limit_key_and_hashes_longer_candidates() {
+    let mut plane = ControlPlane::with_storage("operation-long", Storage::open_memory().unwrap());
+    let limit = audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES;
+    let prefix = "client-a\0sessions.stop\0";
+    let operation_id = "k".repeat(limit - prefix.len());
+    let key = format!("{prefix}{operation_id}");
+    assert_eq!(key.len(), limit);
+    let longest = API_METHODS
+        .iter()
+        .map(|spec| spec.name.len())
+        .max()
+        .unwrap();
+    assert!(
+        "client-a\0".len() + longest + 1 + operation_id.len() > limit,
+        "the longest method name must overflow for this test to mean anything"
+    );
+    plane
+        .storage
+        .as_ref()
+        .unwrap()
+        .journal_commit_with_hash(&key, "sessions.stop", "{}", 0, "hash")
+        .unwrap();
+    let response = operation_get_as(&mut plane, "client-a", &operation_id);
+    assert_eq!(
+        response.result.expect("found")["operation"],
+        "sessions.stop"
+    );
+    // An ID that no method could have journaled is simply not found.
+    let missing = operation_get_as(&mut plane, "client-a", &"z".repeat(limit));
+    assert_eq!(missing.error.expect("not found").code, -32602);
+}
+
+/// Q4.1 hashes a scoped key whose readable form passes the journal limit, and
+/// STO-6 built `operations.get`/`operations.cancel` candidates without that
+/// rule and skipped the over-long ones, so a completed operation with a long
+/// key was "not found". Both ends go through `ControlPlane::dispatch`.
+#[test]
+fn operations_get_and_cancel_find_an_operation_stored_under_a_hashed_key() {
+    let mut plane = ControlPlane::with_storage("operation-hashed", Storage::open_memory().unwrap());
+    let grant = ClientGrant::for_role(ClientRole::Operator);
+    let send = |plane: &mut ControlPlane, client: &str, method: &str, params: Value| {
+        plane.dispatch_authorized_for_client(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: Some(params),
+            },
+            client,
+            &grant,
+        )
+    };
+    let limit = audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES;
+    // The longest key the schemas allow: with the client and method scope in
+    // front it cannot be stored readable, so it is stored as a digest.
+    let long_key = "h".repeat(limit);
+    assert!(
+        format!("client-a\0toolPresets.save\0{long_key}").len() > limit,
+        "the scoped key must exceed the journal limit for this test to mean anything"
+    );
+    let saved = send(
+        &mut plane,
+        "client-a",
+        "toolPresets.save",
+        json!({
+            "kind": "gain",
+            "name": "Quiet",
+            "parameters": {"gainDb": -6.0},
+            "idempotencyKey": long_key
+        }),
+    );
+    assert!(saved.error.is_none(), "{:?}", saved.error);
+
+    let found = send(
+        &mut plane,
+        "client-a",
+        "operations.get",
+        json!({ "operationId": long_key }),
+    );
+    let found = found
+        .result
+        .unwrap_or_else(|| panic!("operations.get said {:?}", found.error));
+    assert_eq!(found["status"], "completed");
+    assert_eq!(found["operation"], "toolPresets.save");
+    assert_eq!(found["durable"], true);
+
+    // Another client must still never read it, hashed or not.
+    assert!(send(
+        &mut plane,
+        "client-b",
+        "operations.get",
+        json!({ "operationId": long_key })
+    )
+    .result
+    .is_none());
+
+    let cancel = send(
+        &mut plane,
+        "client-a",
+        "operations.cancel",
+        json!({ "operationId": long_key, "idempotencyKey": "cancel-hashed" }),
+    );
+    assert_eq!(
+        cancel.result.expect("cancel found the operation")["reason"],
+        "alreadyCompleted"
+    );
+    let unknown = send(
+        &mut plane,
+        "client-a",
+        "operations.cancel",
+        json!({ "operationId": "n".repeat(limit), "idempotencyKey": "cancel-unknown" }),
+    );
+    assert_eq!(unknown.error.expect("not found").code, -32602);
+}
+
+/// The same defect through real handlers: methods the old list omitted,
+/// dispatched as a client, then looked up by the key the caller sent.
+#[test]
+fn operations_get_finds_what_task_and_lifecycle_methods_just_did() {
+    let storage = Storage::open_memory().unwrap();
+    let mut plane = ControlPlane::with_storage("operation-real-methods", storage);
+    let grant = ClientGrant::for_role(ClientRole::Operator);
+    let original = session();
+    plane.insert_session(original.clone()).unwrap();
+    let calls = [
+        (
+            "sessions.active.set",
+            json!({ "sessionId": original.id.as_str(), "idempotencyKey": "op-active" }),
+        ),
+        (
+            "toolPresets.save",
+            json!({ "kind": "gain", "name": "Quiet", "parameters": {"gainDb": -6.0}, "idempotencyKey": "op-preset" }),
+        ),
+        (
+            "system.osTransition",
+            json!({ "transition": "sleep", "idempotencyKey": "op-sleep" }),
+        ),
+    ];
+    for (method, params) in calls {
+        let key = params["idempotencyKey"].as_str().unwrap().to_owned();
+        let done = plane.dispatch_authorized_for_client(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: Some(params),
+            },
+            "client-a",
+            &grant,
+        );
+        assert!(done.error.is_none(), "{method}: {:?}", done.error);
+        let found = operation_get_as(&mut plane, "client-a", &key);
+        let result = found
+            .result
+            .unwrap_or_else(|| panic!("{method}: operations.get said {:?}", found.error));
+        assert_eq!(result["status"], "completed", "{method}");
+        assert_eq!(result["operation"], method);
+        assert_eq!(result["durable"], true, "{method}");
+    }
+}
+
+#[test]
+fn operations_cancel_recognises_an_operation_of_a_method_the_old_list_missed() {
+    let mut plane = ControlPlane::with_storage("operation-cancel", Storage::open_memory().unwrap());
+    let grant = ClientGrant::for_role(ClientRole::Operator);
+    let send = |plane: &mut ControlPlane, method: &str, params: Value| {
+        plane.dispatch_authorized_for_client(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: Some(params),
+            },
+            "client-a",
+            &grant,
+        )
+    };
+    let sleep = send(
+        &mut plane,
+        "system.osTransition",
+        json!({ "transition": "sleep", "idempotencyKey": "sleep-key" }),
+    );
+    assert!(sleep.error.is_none(), "{:?}", sleep.error);
+    let cancel = send(
+        &mut plane,
+        "operations.cancel",
+        json!({ "operationId": "sleep-key", "idempotencyKey": "cancel-key" }),
+    );
+    assert_eq!(
+        cancel.result.expect("a result")["reason"],
+        "alreadyCompleted"
+    );
 }
 
 #[test]

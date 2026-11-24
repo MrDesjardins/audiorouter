@@ -89,7 +89,13 @@ describe("NetworkNodeEditor", () => {
     fireEvent.change(address, { target: { value: "gaming-pc" } });
     expect(onChange).not.toHaveBeenCalled();
     expect(screen.getByRole("alert").textContent).toContain("numeric IP address");
+    // The reason is tied to the field, and its slot exists (empty) while the address is fine (UI-17).
+    const note = document.getElementById(address.getAttribute("aria-describedby")!)!;
+    expect(note.textContent).toContain("numeric IP address");
     fireEvent.change(address, { target: { value: "192.168.1.20" } });
+    expect(note.isConnected).toBe(true);
+    expect(note.textContent).toBe("");
+    expect(note.getAttribute("role")).toBeNull();
     expect(onChange).toHaveBeenLastCalledWith("host", "192.168.1.20");
     fireEvent.change(screen.getByLabelText("Port"), { target: { value: "70000" } });
     expect(onChange).toHaveBeenCalledTimes(1);
@@ -128,7 +134,7 @@ describe("NetworkNodeEditor", () => {
         onChange={() => {}}
       />,
     );
-    const help = screen.getByText(/add a Network Send node/);
+    const help = screen.getByText(/add a Network Send tool/);
     expect(help.textContent).toContain("this computer's address 192.168.1.30 and port");
     expect(help.textContent).not.toContain("ipconfig");
     view.unmount();
@@ -147,7 +153,7 @@ describe("NetworkNodeEditor", () => {
         onChange={() => {}}
       />,
     );
-    expect(screen.getByText(/add a Network Receive node/).textContent).toContain(
+    expect(screen.getByText(/add a Network Receive tool/).textContent).toContain(
       "this computer's address 10.0.0.7 as the sender",
     );
     expect(screen.getByRole("status").textContent).toContain(

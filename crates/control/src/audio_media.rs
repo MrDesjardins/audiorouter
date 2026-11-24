@@ -645,7 +645,8 @@ impl ControlPlane {
             .as_ref()
             .and_then(|value| value.get("mediaId"))
             .and_then(Value::as_str)
-            .unwrap_or("");
+            .filter(|media_id| !media_id.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("mediaId is required".into()))?;
         let referenced = self
             .store
             .sessions(audiorouter_domain::MAX_SESSIONS_GLOBAL)

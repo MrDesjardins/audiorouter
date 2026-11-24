@@ -501,6 +501,322 @@ then rerun the same opt-in capture.
 Rollback: remove the two locale files and regenerate native resources. Older
 builds resolve a saved unsupported locale through the usual fallback.
 
+### 2026-11-24 — Status messages carry their own severity (L10N-06)
+
+Requirements: L10N-06 (never match English prose to decide severity),
+L10N-03 (hold keys plus explicit severity), UI-04/05/17. Branch
+`feat/l10n-structured-action-messages`, local commits only, not pushed.
+
+What changed:
+
+- `ui/src/actionMessage.ts` now defines `UiMessage` (`text`, `tone`,
+  `progress`, optional `actions`, `key`). `say(key, args)` builds one from a
+  catalog key; `errorMessage(text)` and `infoMessage(text)` cover text that is
+  not a catalog message (a caught backend error, a backend `reason`, the four
+  literal recovery notices in `useWorkspaceEvents.ts`). `BLANK_MESSAGE` keeps
+  the Virtual Cable status line's reserved space (UI-17).
+- `ui/src/actionMessageTones.ts` is the typed table (`MESSAGE_TONES`, 260
+  keys, `satisfies Partial<Record<MessageKey, …>>`). `say` accepts only keys in
+  it, so a new status message without a declared severity does not compile.
+  The table was derived by running the old English rules over each English
+  message once, so English severity, expiry and buttons are unchanged:
+  `progress` is the old trailing-ellipsis rule, and `actions` replaces the
+  `englishOf(...).includes("Troubleshoot")` checks that chose which buttons
+  App shows (a message can offer more than one: two keys offer both "go to the
+  tool" and "open Status").
+- The English regexes, `markErrorMessage` registry, and `englishOf` memory in
+  `actionText.ts` are deleted. `formatUiError` stays a plain string function;
+  `uiError(error, fallback)` is the status-message form. `actionMessage` state
+  in `App.tsx`, `PanelMessage`, the panel `message` states, `onActionMessage`
+  (cable panel), `announce`/`onMessage` (Soundboard), the canvas layout and
+  connection callbacks, `QuitButton` and `audioUploadProblem` all take
+  `UiMessage`; TypeScript listed every site. The lifetime effect is keyed on the
+  message text, so showing the same message again does not restart its timer,
+  as before.
+- Backend codes: `AudioRouterRpcError.data.code` exists, but every caught
+  error already shows as an error whatever its code, and no code changes
+  severity, so no code→tone mapping was added (it would be dead code). Backend
+  `reason` strings are classified by the structured field next to them where
+  one exists (`availability.status`), otherwise as information.
+- `plainWords.test.ts` also scans `en.json` now (placeholders such as
+  `{{node}}` ignored; keys used by the developer panels, and the API's "node
+  ID" terms, are listed exceptions). It found 29 English messages with
+  "node", "draft" or "physical output"; their English wording was changed to
+  tool, unsaved edits and output device. `fr.json` and `zh-Hans.json` were not
+  touched, so their wording for these keys is the old meaning and needs
+  reviewer follow-up: `workspaceAudit.notChosen`, `recordingUi.attached`,
+  `workflowUi.{startNode,working,readyHelp,fileMissing_one,fileMissing_other,
+  fileCheck}`, `parameterUi.help.mute.muted`, `canvasUi.disabled`,
+  `toolCatalog.audio-file.help`, `settings.liveAutosave.offHelp`,
+  `g2.{nwFooterSend,nwFooterRecv}`, `g1.toneNotRouted`, `g5.{meterPressPlay,
+  appChangeHelp}`, `g4Canvas.recNone`, `h1.{detailHears,detailPlaysInto,
+  spkYourNode}`.
+
+Deliberate differences from the old English behavior (all in the direction of
+the structured fact; none hides a message):
+
+- A caught error whose own text matched no pattern ("Invalid JSON", the
+  plugin and application-capture failures in `App.tsx`, the cable and Native
+  Binding panels) is now an error: red, announced assertively, kept until
+  dismissed. Before it depended on its wording. The virtual-device plan reason
+  is an error because the contract only ever returns `unavailable`.
+- A name or reason placed inside a message can no longer change its severity
+  (a node called "failed" used to turn a success red). The old rules judged the
+  rendered sentence, so a failure wrapped in a message was often red. The table
+  was built from templates, so I checked every `say` call that interpolates an
+  error, reason, message, details or state: `g3Adv.signInFailed` and
+  `quit.refusedMessage` (both in a `catch`) are now errors, a recorder that
+  reports `failed` shows as an error (`withTone`), and an audio file that
+  reports `stopped` keeps its green check. The vd* reasons ("requires M03 managed
+  virtual driver") and `g1.appSavedNotApplied` stay information and success, as
+  their real reasons never matched an old pattern.
+- `g1.appGoalMade` keeps its key's severity when the list of tools still to
+  choose is appended.
+
+Messages whose English severity looks wrong but was kept identical, for the
+owner to decide (change the entry in `MESSAGE_TONES`):
+`h1.importUnavailable`, `g2.neNoVbCapture`, `g2.neNoVbPair`,
+`g1.appFindingSessionGone`, `g1.appFindingToolGone`, and
+`g1.appOlderEdits` (success tone, green check, because the old rule matched
+"saved").
+
+Still English-prose based (not severity; recovery decisions on English
+backend text, so they only work while the backend speaks English):
+`backend.ts` error friendliness patterns, `DeviceAccess.tsx`,
+`App.tsx` "session to be stopped", `PluginPanels.tsx` scan-error filters, and
+`backendText`'s fixed-sentence map. A structured error code from the backend
+(AUTO-18 change) is the real fix. The four recovery notices in
+`useWorkspaceEvents.ts` and the plugin-scan/plug-in recovery notices are
+still literal English, not catalog messages.
+
+Checks (Windows 11, from `ui/`, 2026-11-24):
+
+- `npm run i18n:generate`, `npm run i18n:check`: 3 language files, 3,666
+  messages, generated TypeScript and Rust resources current.
+- `npm run typecheck:all`: pass. `npm run lint`: pass, 0 warnings.
+  `npm run format:check`: pass.
+- `npm test`: 133 files, 1,175 tests pass.
+  New tests in `actionMessage.test.ts`: severity per key, buttons, lifetimes,
+  a warning still in progress, the blank message, French and Simplified
+  Chinese messages keeping severity/expiry/buttons, names inside text not
+  changing severity, and table consistency with the English catalog. Changed
+  tests that asserted bare strings now assert `UiMessage` objects.
+- Playwright (Edge, `--workers=1`, own `--output`): `copy-error`,
+  `banner-layout`, `device-access-consent`, `application-sources`,
+  `audio-tools`, `canvas-layout`, `compact-workspace`,
+  `header-canvas-usability`, `live-controls`, `live-bypass-draft` and
+  `device-used-by` pass (three themes where the specs cover them). Two
+  runs with two workers or a shared output folder failed with trace-file
+  ENOENT and stale-generated-catalog errors, and passed when rerun alone.
+- `node tools/docs/validate.mjs`: 295 Markdown files, 1,641 links, pass.
+
+Not run: specs that import `real-backend` (need a rebuilt `e2e_backend`; no
+Rust build was done), including `goals-and-tour`, `canvas-copy-paste`,
+`media-and-routing`, `canvas-layout-review`, `inspector-stability`; the
+packaged shell or tray; Narrator; a fluent-reviewer pass of French and
+Chinese; the website guide videos (no tool or control changed). The English
+wording edits above change only catalog text, so no website guide copy was
+regenerated: the site guides are written from the Rust parameter catalog and
+hand-written content (`tools/site/export-tool-guide-catalog.mjs` reads Rust
+sources), none of the reworded strings appears under `site/`, and
+`node tools/site/check-tool-guide-catalog.mjs` passes. Rollback: revert the
+commits on the branch.
+
+Deviation from "never a patch script": about 250 call sites were renamed with perl
+(`setActionMessage(tm(…))`, `setMessage(tr(…))` → `say(…)`, `formatUiError` →
+`uiError`), state-type and import lines were changed with perl or sed, three
+files were written with heredocs, and `actionMessageTones.ts` was generated
+once from the old rules by a script. Everything was verified by TypeScript, a
+read of the diff and the full unit run; the table is reviewed by test. The
+remaining changes used the Edit and Write tools.
+
+### Independent verification (2026-11-24)
+
+Branch `feat/l10n-structured-action-messages-verified`, from
+`feat/l10n-structured-action-messages` (7777bc7cf, based on origin/main
+0fb41911b). A second reviewer redid the severity work without the author's
+generation script, because the rename was done with perl and sed.
+
+Method and findings:
+
+- Recomputed the old regex severity (`actionMessageTone`, progress and
+  expiry rules from origin/main) over the old English text of all 260 keys in
+  `MESSAGE_TONES` (placeholders blanked) and compared it with the table: 258
+  agree; the two differences are the documented `g3Adv.signInFailed` and
+  `quit.refusedMessage`. The old button rules (`No audio started`,
+  `Troubleshoot`, `Open Session`, the two fixed sentences) reproduce the table's
+  `actions` exactly. The 29 English rewordings change no old-rule severity.
+- Per file, the multiset of catalog keys removed and added in the diff is
+  identical for every non-test source file, so no call site got a wrong key. A
+  normalised diff (old wrappers renamed to the new ones) shows no lost
+  interpolation argument; every remaining difference is one the plan above
+  describes. Test and e2e hunks were read: no assertion was removed or loosened
+  beyond the rename to `UiMessage` objects.
+- Defects found and fixed (the earlier check blanked placeholders, so it could
+  not see tones that depend on a value the backend returns):
+  1. `g2.neRebound` and `g2.vrReplaced` were `INFO`. The backend's only values
+     are `configured-stopped` and `applied`, which the old rules read as
+     success ("Rebound configured-stopped", "Virtual routes applied"), so both
+     lost their green check. Now `SUCCESS`.
+  2. A take that stopped saving early used `infoMessage(result.reason)` when
+     the backend sent a reason and the `SUCCESS` key `g1.appRecordingEarly`
+     when it did not, so one event had two colours. The backend text
+     ("Recording stopped saving after ...") read as success under the old
+     rules. `recordingStoppedEarly()` now gives both the key's tone.
+  3. `actionMessageTones.ts` named a test file that did not exist. The new
+     `actionMessageLegacyParity.test.ts` keeps the old rules and checks every
+     table entry against them, including every value a closed-set placeholder
+     can take, and lists the two deliberate exceptions. It fails without fix 1
+     (`g2.neRebound with state=configured-stopped: expected 'info' to be
+     'success'`). Fix 2 is covered by a test that compares both forms; it
+     cannot fail on the old inline code because the function is new.
+- Suspicious but kept, for the owner (the same wrongness existed before):
+  a recording take that stopped early shows a green check (the old rules read
+  "stopped"; a warning or error would fit the `failed` state next to it);
+  `PluginPanels` shows `disabledReason` as information (its only source,
+  `g4Panel.recoveryBlocked`, never matched an old pattern); the owner list in
+  the entry above still applies.
+
+Checks (Windows 11, from `ui/`, own worktree, 2026-11-24):
+
+- `npm ci`; `cargo build -p audiorouter-control --example e2e_backend`
+  (CARGO_BUILD_JOBS=6): pass.
+- `npm test`: 134 files, 1,179 tests pass. `npm run typecheck:all`,
+  `npm run lint` (0 warnings), `npm run format:check`, `npm run i18n:check`
+  (3 languages, 3,666 messages) and `node tools/docs/validate.mjs` (295
+  files, 1,641 links): pass.
+- Playwright, full suite, Edge, `--workers=1`, from a temporary copy of the
+  config with port 4291 and its own output folder (deleted afterwards; this
+  avoids the shared-output ENOENT failures the first author hit): 813 tests,
+  794 passed, 16 skipped, 3 failed in 31.0 minutes. The 3 failures were
+  `canvas-group-resize` drags (top side from inside, 0 zoom-outs; left side from
+  inside, 3 zoom-outs; top side from outside, 3 zoom-outs). My source edits
+  (fixes 1 and 2) reached the running dev server at the same minute, which
+  reloads the page mid-drag. All 22 tests of that spec pass when rerun alone
+  on the final code, so they are classified as caused by that reload, not by the
+  branch; no baseline run was needed, and no baseline worktree was created.
+  After the fixes, 100 tests from `group-recording-states`,
+  `recorder-one-click`, `recording-library`, `recording-workflows`,
+  `session-workflows`, `tool-workflows`, `audio-tools`, `soundboard-editor` and
+  `ui-review-repairs` passed again.
+
+Not run: the packaged shell, tray or Narrator; a fluent-reviewer pass of the
+French and Chinese wording listed above; website guide videos (no tool or
+control changed); a second full Playwright run on the final code (the 3
+failures and the specs near the fixes were rerun instead). Rollback: revert the
+verification commit.
+
+### 2026-11-24 — Extraction pass: recovery notices, refusals and dialogs
+
+Requirements: L10N-01 (app-owned text in the catalogs), L10N-04/06 (no
+behaviour decided from English prose), UI-04/05/11. Branch
+`feat/l10n-extraction-2026-11-24`, from
+`feat/l10n-structured-action-messages-verified` (203a40bee). Local commits only,
+not pushed.
+
+Done (72 new keys in each of `en`, `fr`, `zh-Hans`; 3,666 → 3,738 messages):
+
+- `useWorkspaceEvents.ts`: the four route-recovery notices (recovery failed,
+  recovered, device changed, virtual cable link timed out / failed) are
+  `workspaceEvents.*` catalog messages (7 keys: the bus notices have a named and
+  an unnamed whole-sentence form, so no translated noun is spliced in). Their
+  severity is declared in `MESSAGE_TONES`. The old code marked three of them as
+  errors by hand, which the English-wording parity test cannot see, so
+  `workspaceEvents.{recoveryFailed,deviceChanged,bridgeTimedOut,
+  bridgeTimedOutUnnamed}` are listed in `DELIBERATE` in
+  `actionMessageLegacyParity.test.ts`. Tones are unchanged (error, info, error).
+- `draft.ts` (`draftErrors.*`, 25 keys): the refusals a person can reach
+  (executable path, application group, scan result, self-connection, port
+  choice, duplicate connection, sidechain/output/destination changed, instrument
+  inside a connection, Mixer removal, last tool, tool and session names, volume
+  and gain ranges) are raised through `userError(key)` in the language active at
+  that moment. `App.tsx` decided whether to offer replacing an occupied input
+  by comparing the English sentence `That input already has a connection`; it now
+  tests the new `InputOccupiedError` class (regression in
+  `draft-connection.test.ts`, French message, class still recognised). English
+  wording changed only where `plainWords` requires it: "A node cannot connect to
+  itself" → "A tool …", "already in the draft" → "already in your unsaved
+  edits", "A draft must retain at least one node" → "A route must keep at least
+  one tool", "Node name cannot …" → "Tool name cannot …". Invariant errors
+  (`Unknown draft connection: …`, `Unable to create an inserted …`, plan
+  revision checks) stay English: they are diagnostics, not user text.
+- `App.tsx`: the `Go to {name}` button and the session Revision line
+  (`appShell.*`, 3 keys).
+- `SignalFlowPanel.tsx`: the whole file (about 45 strings): the application
+  picker (modes, path field, browse, group, hints, status), the plug-in picker
+  heading and help (two whole sentences instead of a sentence around a
+  conditional) and the keyboard connection dialog (`signalFlowDialogs.*`, 32
+  keys; existing `canvasUi`, `common`, `g2.connChannels`, `g5.app*` messages
+  reused). Note: `#signal-flow-panel > .connection-editor` is `display: none`, so
+  the keyboard connection dialog is not reachable from the UI today; its text is
+  translated anyway.
+- `discordRoute.ts` refusals (`discordRoute.*`, 4 keys) and the `SvgHandle` drag
+  hint (`svgHandle.hint`).
+
+Audit queue (`npm run i18n:audit`, from `ui/`):
+
+| Command | Before | After |
+|---|---|---|
+| `-- --tsx --by-file` | 136 | 81 |
+| `-- --tsx --by-file --all` | 9,870 | 9,866 |
+| `-- --all` | 13,462 | 13,467 |
+
+The 81 left are units (`Hz`, `dB`, `ms`, `kHz`), product names (`AudioRouter`,
+`Discord`, `OBS Studio`, `VST3`, `UDP`), path and filename examples, preview
+fixtures (`devHarness`, `ThemePreview`), template literals that already wrap
+catalog calls, and values the backend returns. The two `--all` totals are not a
+queue: they list every data literal, and the new `tx("…")` key strings add to
+them. I also searched sentence-like literals in all non-test `.ts/.tsx` files
+(a scratch script, not kept). What remains there is deliberately left:
+diagnostics log lines (`App.tsx` "Graph checkpoint…", `host.ts` Tauri transport
+text, `useWorkbenchStatus`, `clientDiagnostics`), the API request builder's
+validation text (API-page literals), `library.ts` descriptions (already shown
+through `toolCatalog.*`), the GoalDialog/palette English→key maps, node default
+names ("Microphone", "Voice to Discord": persisted entity names, L10N-05), and
+the `recordDraftChange` group keys in `PropertiesPanel` (undo-coalescing keys,
+not text).
+
+Reviewer follow-ups (fr and zh-Hans text was written by the agent, from the
+existing catalog terms, and needs the fluent reviewer): all of
+`workspaceEvents.*` (safety wording: device changed, recovery failed, virtual
+cable link), `draftErrors.*`, `signalFlowDialogs.*`, `discordRoute.*`,
+`svgHandle.hint`, `appShell.*`. Terms reused: Lecture/播放, Arrêter/停止,
+Propriétés/属性, mélangeur/混音器, outil/工具, sidechain/侧链. French now
+says "Aller à {{name}}" for the button and "Connexion au clavier" for the
+keyboard dialog; `fr` "bus" is kept as in the existing catalog.
+Owner decisions still open from earlier entries are unchanged.
+
+Checks (Windows 11, from `ui/`, 2026-11-24, own worktree):
+
+- `npm ci`; `npm run i18n:generate`, `npm run i18n:check`: 3 languages, 3,738
+  messages; `src-tauri/src/ui_language.rs` did not change (no native key added),
+  so no Rust format or Clippy run was needed.
+- `npm run typecheck:all`, `npm run lint` (0 warnings), `npm run format`
+  then `format:check`: pass.
+- `npm test`: 134 files, 1,182 tests pass (new: bridge notices named/unnamed
+  and in French, occupied-input class in French, Discord refusals in French).
+  One earlier partial run of `src/App*` failed one focus/Tab test under load and
+  passed on rerun.
+- Playwright (Edge, `--workers=1`, temporary config on port 4291 with its own
+  output folder, deleted afterwards): 116 passed, covering `ui-language` (new
+  French and Simplified Chinese application-picker spec), `application-sources`,
+  `audio-tools`, `banner-layout`, `device-used-by`, `discord-setup`,
+  `plugin-sidechain`, `setup-check`, `dynamics-editor`, `handle-contrast`,
+  `device-access-consent`, `canvas-layout`, `live-controls`, `copy-error`,
+  `ui-round-20-fixes`, `duck-widget`.
+- `node tools/docs/validate.mjs`: see the handback; run after this entry.
+
+Not run: specs importing `real-backend` (no `e2e_backend` rebuild),
+including `session-workflows`; the full Playwright suite; `chinese-ui-audit`
+(opt-in); the packaged shell, tray, Narrator; any fluent review; website guide
+videos (no tool or control changed, no site copy touched).
+
+Process deviation: one import line in `useWorkspaceEvents.ts` was changed with
+`sed` by mistake; everything else was written with the Edit and Write tools
+(a scratch analysis script outside the repo was written with Write after a
+heredoc dropped a backslash). Rollback: revert the four commits on the branch
+and regenerate the catalog outputs.
+
 ## References
 
 - [M05 visual editor](../../milestones/M05-visual-editor.md),

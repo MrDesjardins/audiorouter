@@ -192,6 +192,104 @@ fn recording_folder_is_chosen_in_the_app_and_unlocks_one_click_recording() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
+/// SES-4: a one-click recording on a stopped session, then the session is
+/// deleted. The file must be finalized and every per-node recorder map must be
+/// cleared, so the dead node no longer counts against `MAX_ACTIVE_RECORDERS`.
+#[test]
+fn deleting_a_session_finalizes_its_one_click_recordings_and_clears_recorder_state() {
+    let root = std::env::temp_dir().join(format!(
+        "audiorouter-delete-rec-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    let mut graph = session();
+    graph.nodes.push(Node {
+        id: EntityId::new("rec"),
+        kind: NodeKind::Recorder,
+        type_version: 1,
+        name: "Recorder".into(),
+        enabled: true,
+        bypass: false,
+        parameters: serde_json::from_value(json!({ "format": "wavPcm16", "splitMinutes": 10 }))
+            .unwrap(),
+        ports: vec![Port {
+            name: "in".into(),
+            direction: PortDirection::Input,
+            channels: 2,
+        }],
+    });
+    let session_id = graph.id.clone();
+    let node_id = EntityId::new("rec");
+    let mut plane = ControlPlane::default();
+    plane.insert_session(graph).unwrap();
+    plane.configure_recording_root(&root).unwrap();
+    let call = |plane: &mut ControlPlane, method: &str, params: Value| {
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: method.into(),
+            params: Some(params),
+        });
+        assert!(response.error.is_none(), "{method}: {:?}", response.error);
+        response.result.unwrap()
+    };
+    let tap = plane
+        .recorder_tap_set_for_node(&session_id, &node_id)
+        .unwrap();
+    let started = call(
+        &mut plane,
+        "recorders.startRecording",
+        json!({ "sessionId": session_id, "nodeId": "rec", "idempotencyKey": "start" }),
+    );
+    assert_eq!(started["state"], "recording");
+    let path = std::path::PathBuf::from(started["path"].as_str().unwrap());
+    let mut block = AudioBlock::new(2, 128).unwrap();
+    block.channel_mut(0).unwrap().fill(0.25);
+    block.channel_mut(1).unwrap().fill(-0.25);
+    let mut frame = 1_000_000_u64;
+    for _ in 0..8 {
+        tap.on_processed_block(frame, &block);
+        frame += 128;
+        plane.drain_attached_recorders().unwrap();
+    }
+
+    call(
+        &mut plane,
+        "sessions.delete",
+        json!({ "sessionId": session_id, "idempotencyKey": "delete" }),
+    );
+
+    assert!(
+        !plane.recorder_node_workers.contains_key(&node_id),
+        "worker dropped"
+    );
+    assert!(
+        !plane.recorder_node_states.contains_key(&node_id),
+        "recorder state left behind: {:?}",
+        plane
+            .recorder_node_states
+            .get(&node_id)
+            .map(RecorderController::state)
+    );
+    assert!(!plane.recorder_node_sessions.contains_key(&node_id));
+    assert!(!plane.recorder_node_failures.contains_key(&node_id));
+    assert!(!plane.recording_splits.contains_key(&node_id));
+    assert_playable_wav(&path);
+    // Quit meets no node whose session is gone.
+    let quit = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(2)),
+        method: "system.quit".into(),
+        params: Some(json!({ "idempotencyKey": "quit" })),
+    });
+    assert!(quit.error.is_none(), "{:?}", quit.error);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 #[test]
 fn one_click_recording_writes_splits_stops_and_never_blocks_stopping_playback() {
     let root = std::env::temp_dir().join(format!(

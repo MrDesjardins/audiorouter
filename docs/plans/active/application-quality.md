@@ -84,6 +84,93 @@ items 1–7 beyond the storage and guard-pipe slices; Q5; Q6 on each release.
 Hardware and release evidence remain separate gates. Existing acceptance
 targets remain binding.
 
+## Q4.2 fault interleavings with fake devices (2026-11-24)
+
+Branch `test/q4-fault-interleavings`, from main `0fb41911b`. Requirements:
+RES-3, STATE-10/11, CAP-11, the microphone-privacy rule in `AGENTS.md`.
+
+**Inventory.** There is no fake endpoint at the `ControlPlane` level; native
+workers need real WASAPI devices. What exists and was reused: the portable
+`FakeRuntime`; `fail_next_session_activation`; the session marker
+`native_multi_input_worker_session` plus `arm_device_loss_recovery()` (what
+`invalidate_changed_native_endpoint_worker` calls after a worker stops); a dead
+`Weak` in `plugin_bridges`, which `session_has_failed_plugin` reads exactly as a
+stopped plugin worker; `RecorderController`; and the `now` argument of
+`service_running_native_audio` as the clock. Elsewhere: `drift_sim_tests.rs`
+(clock drift only), plugin-host process tests (`private_voice.rs`,
+`worker_process.rs`: protected audio is silenced until resume),
+`e2e_backend` (fixture corruption only). Existing control tests covered each
+fault alone, never two at once.
+
+**Added** `crates/control/src/fault_interleaving_tests.rs` (29 tests, about 2 s,
+through `ControlPlane::dispatch` except where noted):
+
+- Device loss while starting (activation failure rolls back; retry plays),
+  while running (silenced on the first pass, bounded attempts, never gives a
+  restart the user did not ask for, saved devices byte-identical), while
+  stopping (Stop, Stop+Start, Start), and during a recording (never armed, the
+  recording is not ended, Stop finalizes). A recording started, a graph commit,
+  or a plugin failure after the loss each drop the stale recovery.
+- Privacy mute against device loss (both orders, every failed attempt, the
+  give-up), against a failed plugin on a protected route (mute on, off, lock,
+  sleep, resume, a tick: nothing revives the route, the mute reads the same
+  from every surface), and across route start/stop/failure. Deliberate
+  recovery is Stop then Play.
+- Plugin failure between `graph.plan` and `graph.commit` (one atomic commit,
+  stale plan refused with `revisionConflict`) and before a live `nodes.set`
+  (saved once, replay-safe, same key with a different value refused).
+- `system.osTransition`: delayed duplicate sleep after resume and Play,
+  key reuse for another transition, lock between sleep and resume, Start or
+  Stop between sleep and resume, a plugin that fails across a sleep, a second
+  suspend while recovery is pending, sleep refused while any route records
+  (no route is touched).
+- A seeded scheduler (xorshift, 120 fixed seeds by default,
+  `AUDIOROUTER_FAULT_SEEDS=<n>` widens it) running 40 random events per seed
+  over a device route, a portable route and recorders, checking after every
+  event: the mute equals the last request; nothing starts that was not
+  started, nothing stopped returns; saved devices and revision change only by
+  explicit commit; the running witness never lists a stopped, failed-plugin or
+  recording route; a pending recovery is bounded and never stale after a pass.
+  A failure prints the seed and the whole trace. 5,000 seeds also pass
+  (134 s, local soak, not part of CI).
+
+**Defect fixed.** `arm_device_loss_recovery` armed recovery for a route the user
+had already stopped. If the stop's worker stop reports an error the worker stays
+"running", and the next device change then armed a restart that started the
+stopped route once the device returned. It now arms only for a playing route.
+Regression `a_device_loss_after_stop_arms_nothing_a_pass_could_restart`
+fails without the guard (verified by disabling it) and passes with it. The
+seeded scheduler found the same path independently (seed 4).
+
+**For owner decision (pinned, not changed):**
+
+1. A recovery dropped early (a graph commit, a recording started, a failed
+   plugin) leaves the runtime marked running with its worker stopped;
+   `devices.bindingInvalidated` tells the UI, but status lists the route as
+   playing until Stop. Stopping would interact with recorder finalization.
+   Tests: `a_graph_commit_during_device_recovery_cancels_the_stale_recovery`,
+   `a_recording_started_after_a_device_loss_cancels_the_recovery`.
+2. `session.start` on a device-lost route (runtime still running) cancels the
+   pending recovery and starts nothing, leaving it silent until Stop and Play.
+   Test: `a_start_on_a_device_lost_route_cancels_its_recovery_and_starts_nothing`.
+3. Two sleeps without a resume replace the first sleep's resume list with an
+   empty one. Fail-closed, but Resume offers nothing. Test:
+   `a_second_sleep_forgets_the_first_sleeps_resume_list`.
+4. The sleep resume list is built without the failed-plugin filter that the
+   witness and recovery use. Its only consumer is the Advanced panel's explicit
+   Restart button, so nothing restarts silently. `record_runtime_crash` has the
+   same gap but is not called outside tests (the shell uses the witness).
+5. `handle_os_transition` counts an Armed recorder as recording while
+   `session_is_recording` does not; sleep is refused for an armed recorder,
+   recovery may still arm. Not changed.
+
+**Not run:** device return (the recovery's prepare resolves real endpoints and
+fails with no device chosen), real endpoint removal, real sleep/resume, real
+plugin worker crashes (plugin-host process tests cover those), recorded file
+validity under device loss (existing recording suites), and the engine
+combination suites (no engine code changed). The Q4.7 hardware evidence stays
+an open gate. Commands and results are recorded under the commit.
+
 ## Objective
 
 Catch regressions before merge and before a user receives a build. No process
@@ -303,6 +390,170 @@ recordings remain valid, protected paths fail silent, and changes touching
 native audio have the applicable real Windows evidence before release. Missing
 hardware evidence is an explicit blocked gate, not a passing mock result.
 
+### Q4.1 execution entry (2026-11-24, contract tests; offline, no hardware)
+
+Scope: item 1 only (invalid input, authorization, stale revision, retries).
+Fault interleavings, fuzzing and the audio items stay open. Branch
+`test/q4-contract-tests`, not pushed, no PR.
+
+Tests added. One shared generator, `crates/control/src/contract_cases.rs`,
+is compiled into three test builds with `#[path]`, so every adapter runs the
+same cases against the same fixtures (a database-backed plane, because an
+in-memory plane never exercises storage's key limits):
+
+- `crates/control/src/contract_tests.rs` (dispatcher, 13 tests),
+  `crates/cli/src/contract_tests.rs` (MCP through `mcp_tool_call`, 8 tests),
+  `src-tauri/src/http_contract_tests.rs` (HTTP on a real listener, 5 tests).
+- Coverage, walking `API_METHODS` and the published input schemas (no
+  hand-kept method list): 156 methods; 1841 generated invalid-input cases per
+  adapter (not-an-object, 40-deep nesting, unknown parameter, omitted params,
+  and per field: missing, wrong type, 4097-byte string, empty string, over
+  `maxLength`); 4 roles (none, Observer, Editor, Operator) x 156 methods x 3
+  adapters for authorization, each compared with dispatch (same category and
+  text); every default MCP tool checked against its caller's role through the
+  backend calls it really makes; the 5 `baseRevision` methods (graph.plan,
+  graph.commit, graph.undoPlan, graph.restorePlan, virtualRoutes.replace) for
+  `revisionConflict` (HTTP 409); 12 retry scenarios (nodes.add/set/toggle/
+  remove, connections.add/remove, sessions.create/duplicate/delete/active.set,
+  safety.togglePrivacyMute/setPrivacyMute, toolPresets.save), each run with a
+  short and a 128-byte key: a retry returns the same result and applies once,
+  a reused key with different input is `idempotencyConflict`, and two clients
+  may use the same key. A test fails if an idempotent method has neither a
+  scenario nor a recorded reason (`RETRY_ELSEWHERE`).
+
+Defects found and fixed, each with a regression test that failed first:
+
+1. Wrong-typed and over-long string/number/boolean parameters were silently
+   ignored by 14 methods. `validate_method_params` now checks scalar types and
+   `maxLength` from the published schema (`authorization.rs`).
+2. `graph.commit` with an empty key was accepted for a named client (MCP,
+   HTTP, CLI) because the key was scoped before it was validated.
+3. A 128-byte key (allowed by every schema) was refused for any named client
+   once the client id was added to it, and for every task edit (`nodes.add`,
+   ...) because of the `{method}:{key}` prefix. Scoped and derived keys longer
+   than the storage limit are now a SHA-256 digest (`persistence.rs`).
+4. Task-edit commit keys collided across clients; a named client now has its
+   own commit key. Compatibility: a retry that spans an upgrade of a named
+   client's task edit is not replayed once.
+5. `virtualRoutes.replace` answered a stale `baseRevision` as a malformed
+   request; it is now `revisionConflict`. (Its text says "session" for a bus
+   route revision.)
+6. `safety.togglePrivacyMute` derived `toggle:{key}`, which failed for a long
+   key; and MCP `create_session` / `start_from_goal` derived `{key}-open`, which
+   made a long key create the session and then report failure. Both are
+   bounded and deterministic (`mcp_open_key`).
+7. `audioMedia.delete` without `mediaId` returned `{"deleted": false}`; it is
+   now invalid params.
+
+Recorded for the owner (2026-11-24). The first two were closed the same day on
+`fix/rust-small-defects` ([record](evidence/2026-11-24-rust-small-defects.md)):
+
+- `EMPTY_STRING_LENIENT` (7 pairs, e.g. `sessions.get` `sessionId`): an empty
+  string where the schema says `minLength: 1` was accepted and meant "the
+  active session" or "all". Closed: the dispatcher enforces `minLength` and
+  the list is gone.
+- MCP `create_session` for an Editor created the session but could not open it
+  (`sessions.active.set` needs SessionControl), and reported permissionDenied.
+  Closed: the tool refuses before creating anything.
+- `RETRY_ELSEWHERE` lists idempotent methods with no retry scenario yet
+  (each with its reason). Still open.
+
+Process note: the new code was written with Edit/Write. Two lapses: one
+`cat >>` append to `contract_cases.rs` and one two-line `sed -i` replacing
+`format!("{key}-open")` in `crates/cli/src/lib.rs`; both results were read back
+and are covered by tests.
+
+Commands (this worktree, `CARGO_BUILD_JOBS=6`): `cargo fmt --all -- --check`
+and `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` clean;
+`cargo clippy --workspace --all-targets --all-features -- -D warnings` and the
+same for `src-tauri/Cargo.toml` clean; `cargo test -p audiorouter-control -p
+audiorouter-cli -p audiorouter-transport`: all targets pass (control 466 passed
+24 ignored, cli lib 66, transport 41 plus integration tests);
+`cargo test --bin audiorouter-shell` in `src-tauri`: 136 passed, 4 ignored
+(the HTTP invalid-input sweep takes about 2 minutes because it respects the
+adapter's rate limit); `npm --prefix contracts run check:drift` passed (156
+methods); `node tools/docs/validate.mjs` passed.
+
+Not run: Playwright real-backend UI tests and the in-repo UI/Stream Deck
+callers beyond a read of the upload path (chunks stay under the new
+`maxLength`); the built exe; any Windows hardware. The UI's handling of the new
+`virtualRoutes.replace` `revisionConflict` was not exercised.
+
+#### Real-backend verification (2026-11-24)
+
+That "Not run" gap was closed in a separate worktree on branch
+`verify/q4-contract-tests` (from `test/q4-contract-tests` at `2951e9b71`, which
+is one merge-base step from `origin/main` `0fb41911b`). No exe, shell, default
+pipe or hardware was involved; Playwright's harness spawns only the
+`e2e_backend` example on a private pipe.
+
+- Rebuilt first (stale binaries hide method failures):
+  `cargo build -p audiorouter-control --example e2e_backend`, then
+  `npx playwright test --workers=1` from `ui/` (Edge, dev server on 4186,
+  screenshots only under the Playwright output directory).
+- Specs importing `./real-backend` (22 files, 144 tests): 133 passed, 11
+  skipped, 0 failed, 7.2 min. The skips are by design: ten
+  `inspector-stability` cases whose tool has no numeric setting ("no numeric
+  settings") and the on-request README screenshot generator.
+- Full suite (136 files, 813 tests): 797 passed, 16 skipped, 0 failed, 32.4
+  min. First-pass, no retries. With nothing failing there was nothing to
+  classify, so no `origin/main` baseline worktree was needed or created.
+- `npm test` (133 files, 1167 tests), `typecheck:all`, `lint`
+  (`--max-warnings 0`) and `format:check` pass.
+
+Caller review (`ui/src/backend.ts` makes 130 `client.request` calls; the
+contracts types are generated from the same schemas the backend now enforces,
+so `typecheck:all` already rejects a wrong scalar type at compile time):
+
+- Every `idempotencyKey` the UI creates is `uiIdempotencyKey()`, `ui-` plus a
+  UUID (39 bytes), far under the 128-byte schema limit and the storage limit;
+  the request builder passes the user's key through and the server bounds it.
+  No UI path sends an empty commit key (`graph.commit` keys come from
+  `uiIdempotencyKey`).
+- The scalar values sent (`sessionId`, `nodeId`, `limit`, `generation`,
+  `slot`, `confirm`, `muted`, `allowed`, `baseRevision`, ...) are always the
+  declared types; optional fields are omitted rather than sent as the wrong
+  type, and `null` is still accepted as "omitted". Paged lists send
+  `limit: 500` (an integer). Upload chunks stay under the new `maxLength`
+  (read earlier, and the upload specs pass on the real backend).
+- `audioMedia.delete` is not called from `ui/src`.
+- Shell (`src-tauri`) callers send fixed requests (status, recordings list,
+  privacy mute, open/close); their tests pass on this branch.
+- `virtualRoutes.replace` (only `NativeDevicePanels.tsx`): every failure goes
+  through `formatUiError`; `revisionConflict` is recognised by its structured
+  code (`isRevisionConflict`) and shown as "Another save changed this route,
+  so your save was not applied. Your edits are kept...". The panel keeps the
+  typed JSON and revision after a failure, and Refresh reloads the latest.
+  Before the branch that case arrived as an invalid-params error, so the
+  conflict wording is an improvement. There is no automated UI path that
+  reaches it through the real backend (the `e2e_backend` allowlist does not
+  serve the bus-route methods), so the dispatcher/HTTP/MCP contract tests own
+  that half.
+
+Result: no branch-caused UI break found; no product code changed. One test
+added for a gap the review found: `explains a virtual-route revision conflict
+and keeps the typed edit` in `ui/src/App.accessibility.test.tsx`. It guards the
+UI side of the new contract and passes with and without the branch's backend
+change, because the UI already handled the code. The Rust tests were not
+rerun here (no Rust change).
+
+Not run: the packaged exe, the Stream Deck plugin callers (`tools/streamdeck`),
+the production-canvas and CI Playwright configs, and anything on Windows
+hardware.
+
+#### Q4.1 owner items closed (2026-11-24)
+
+The three items Q4.1 left to the owner are fixed on
+`fix/rust-small-defects` without changing a role or a published schema: the
+`minLength: 1` empty-string gap (the `EMPTY_STRING_LENIENT` ratchet list is
+gone), `probe_pipe` errors no longer read as "app not running", and the MCP
+`create_session`/`start_from_goal` tools refuse an Editor before creating the
+session it cannot open. Workspace and shell tests, Clippy, both fmt checks, the
+MCP stdio/security integration suites and the full Edge Playwright suite
+(862 passed, 16 skipped) pass. Record:
+[rust small defects](evidence/2026-11-24-rust-small-defects.md). Not run:
+built exe, hosted CI.
+
 ## Q5 - Measure reliability and test quality over time
 
 Priority: build on the existing nightly workflow. Owner: quality maintainer.
@@ -402,6 +653,175 @@ present; Q5 failures actionable; Q6 release/rollback evidence complete.
 3. Q5.1–Q5.2: add first-pass failures and retried tests to the nightly trend
    table, and take module coverage baselines from the nightly coverage
    artifacts before setting any floor.
+
+## Q4.3 execution: bounded fuzzing of untrusted-input parsers (2026-11-24)
+
+Branch `test/q4-bounded-fuzzing`, based on main `0fb41911b`. Not pushed, no PR
+(PR approval rule). This slice adds offline, deterministic checks that run in
+ordinary `cargo test`; it is not live-audio, hardware or installer evidence.
+
+**Inventory first.** No fuzz, property-based or mutation test existed over the
+Rust untrusted-input parsers. Cargo.lock has no proptest/quickcheck, so the
+harness is a 10-line SplitMix64 generator in `tests/support/fuzz.rs`, included
+by each test with `#[path]` (one copy, no new crate, no new dependency). The
+Q2 generated cases (history and presentation persistence, PRs #52/#53) cover
+state, not parsers.
+
+**Harness.** Fixed base seed per target; case `i` is rebuilt exactly by
+`case_rng(seed, i)` and a failing case prints its target, seed and index (no
+panic hook, no `catch_unwind` in tests). Mutators: bit flip, byte overwrite,
+1/2/4-byte integer corruption (little and big endian, edge values and
+length±1), truncation, insertion, deletion, range duplication, repeated-byte
+blocks. A per-thread tracking `#[global_allocator]` records the largest single
+allocation request inside each call, so "no allocation from a declared size" is
+asserted, not assumed. `AUDIOROUTER_FUZZ_SCALE=<n>` multiplies every iteration
+count for longer local or nightly runs; the default keeps each target under
+5 s in a debug build. Wall-clock times below are reported, not asserted (Q5
+forbids timing gates before calibration).
+
+| Target (test file) | Boundary | Seed | Cases (default) | Debug run time |
+| --- | --- | --- | --- | --- |
+| `protocol/tests/bounded_fuzz.rs` | `decode_rpc_frame`/`decode_frame`/`parse_rpc_message`: prefix corruption, nesting to 200 000 levels, batch/method/id limits at each boundary, round trip | `0x50524F544F434F4C` | 4 000 mutated + 2 000 random + 1 000 round trip + boundary sweeps | 0.02 s |
+| `protocol/tests/network_fuzz.rs` | Network Send/Receive datagrams: v2 tag, encrypted v3 open, handshake, replay window; every length of every shape | `0x4E4554574F524B21` | 4 000 + 3 000 + 300 sequences | 0.05 s |
+| `plugin-host/tests/bounded_fuzz.rs` | VST2 `.fxp`/`.fxb` `parse`; worker message frames (`decode_worker_message`, `read_worker_message`) | `0x504C5547494E4658` | 6 000 + 600 + 4 000 + count/size sweeps, every strict prefix | 0.30 s |
+| `engine/tests/bounded_fuzz.rs` | `decode_audio_bytes` (WAV/FLAC/MP3 probe, header-field sweeps, all prefixes); `compile_native_paths_with_plugins_and_audio` on 1 500 generated sessions (all `NodeKind`s through exhaustive `match`, hostile ports/edges/matrices, domain-accepted extreme settings) | `0x454E47494E452121` | 3 000 + 1 500 | 0.75 s |
+| `storage/tests/bounded_fuzz.rs` | `import_session` (byte and structure mutations, size/nesting limits, refusal changes nothing); `stage_session_bundle` (byte-mutated and structurally hostile ZIPs, entry-count/asset-size/understated-size limits, staging always empty) | `0x53544F5241474521` | 1 500 + 250 + 200 + limit cases | 3.7 s |
+| `recording/tests/bounded_fuzz.rs` | `inspect_wav_file`, `inspect_flac_file`, `read_wav_metadata`, `read_flac_metadata`, `inspect_recording`; crash recovery `recover_wav_file`/`recover_streaming_flac_file` (repaired file must inspect with the reported frame count) | `0x5245434F52444552` | 700 + 450 + 250 + truncation sweep + 300 | 2.3 s |
+| `control/src/bounded_fuzz_tests.rs` | upload base64 (only canonical text decodes), `validate_method_params` budgets against an independent oracle, `ControlPlane::dispatch` with mutated `sessions.importPlan`/`get`/`list`/`nodes.*` (no internal error, no partial commit) | `0x434F4E54524F4C21` | 6 000 + 3 000 + 1 200 | 1.6 s |
+
+Dispatch fuzzing is limited to methods with no device, file or process side
+effects; nothing opens the default control pipe or an endpoint.
+
+**Defect found and fixed.** The WAV `fmt ` reader in symphonia 0.6.1
+(`symphonia-format-riff/src/wave/chunks.rs:100`) multiplies the channel count by
+the sample width in `u16`; a header with 32 768 channels panics in a debug
+build ("attempt to multiply with overflow"; release builds wrap and continue,
+so the effect there is silent mis-parsing rather than a panic). The
+`engine/decode-audio` fuzz run and the header-field sweep both hit it. Because the
+decoder is third-party code fed uploaded bytes, the owning layer is
+`engine::decode_audio`: a panic inside the decoder is now reported as
+`AudioFileDecodeError::UnsupportedOrMalformed`. Regression
+`a_wav_whose_channel_count_overflows_the_block_align_is_refused_not_a_panic`
+(inline minimal WAV, four channel counts: 0x8000, 0xFFFF, 0x4001, 0x2AAB)
+covers it; the fuzz run reproduced the debug panic before the `catch_unwind`
+was added, and the regression passes with it. The default panic
+message is still printed to stderr in debug builds; that is expected.
+
+**Harness bug found by the longer run (not a product defect).** At
+`AUDIOROUTER_FUZZ_SCALE=10` the storage session-JSON mutator panicked in
+`serde_json` ("cannot access key in JSON number", cases 3679 and 10385): an
+earlier mutation in the same case had replaced a node with a scalar and a later
+one indexed into it. The mutator now inserts keys only into objects; storage
+passes at scale 1 and 30. Lesson for the next fuzz target: run at scale 10
+before calling a mutator finished, because the default case count did not reach
+this combination.
+
+**No other defect.** No panic, hang, stack overflow, non-structured error or
+over-sized allocation was found in the other targets. Observations, not
+changed:
+
+- `read_worker_message` reserves `4 + declared` bytes (up to
+  `MAX_WORKER_MESSAGE_BYTES`, about 65 MiB) before reading the payload, so a
+  hostile worker process can force one transient 65 MiB allocation per frame
+  by declaring a large size and sending nothing. It is bounded and the worker
+  is sandboxed, so it is recorded here and pinned by the test (allocation
+  must not exceed the cap); reading in bounded steps would be a separate
+  small change if the owner wants it.
+- serde_json skips an unknown field without a depth limit, so a session
+  document with a deeply nested unknown field is accepted (and ignored) up to
+  the 1 MiB document cap, without stack growth. Nesting inside any known
+  value stops at serde_json's 128-level limit.
+
+**Verification (Windows 11, pinned toolchain, `CARGO_BUILD_JOBS=6`).**
+
+| Command | Result |
+| --- | --- |
+| `cargo fmt --all -- --check`; `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` | clean |
+| `cargo clippy --workspace --all-targets --all-features -- -D warnings` | clean (after one `is_none_or` fix in `network_fuzz.rs`) |
+| `cargo test -p audiorouter-protocol -p audiorouter-engine -p audiorouter-storage -p audiorouter-recording -p audiorouter-plugin-host` | all passed, 0 failed (the six new fuzz test binaries are timed in the table above) |
+| `cargo test -p audiorouter-control` | 458 passed, 0 failed, 24 existing ignores |
+| `AUDIOROUTER_FUZZ_SCALE=10` on protocol (both), plugin-host, engine, recording, control | passed (engine 8.5 s, recording 32 s, control 22 s, protocol and plugin-host under 1 s) |
+| `AUDIOROUTER_FUZZ_SCALE=30` on `storage` | passed, 248 s |
+| `node tools/docs/validate.mjs` | passed: 295 Markdown files, 1 641 local links |
+
+**Not run:** `cargo clippy` for `src-tauri` (no `src-tauri` source changed; the
+only production change is `crates/engine/src/audio_file_source.rs`); the
+packaged shell, any live audio, hardware or installer evidence; the UI
+format/lint/tests (no `ui/` change); the nightly workflow did not yet set
+`AUDIOROUTER_FUZZ_SCALE` (added in the follow-up below); the Stream Deck/contracts drift check
+(no API method changed); the `decode_audio` fix has not been exercised with a
+release-profile build (the panic only occurs with overflow checks on).
+
+Rollback: delete the seven test files and the `tests/support/fuzz.rs` harness,
+the `mod bounded_fuzz_tests;` line in `crates/control/src/lib.rs`, and revert
+the `catch_unwind` wrapper in `decode_audio`.
+
+### Q4.3 follow-up: worker frames are read in bounded steps (2026-11-24)
+
+Branch `fix/worker-frame-allocation`, based on `test/q4-bounded-fuzzing`. Not
+pushed, no PR.
+
+The `read_worker_message` observation above is repaired. The payload buffer now
+grows with the bytes that arrive (at most doubling, never past the declared
+length, 64 KiB before any data), so a header that declares
+`MAX_WORKER_MESSAGE_BYTES` and sends nothing costs 64 KiB, not about 65 MiB. The
+frame limit, wire format and decoding rules are unchanged; a short stream still
+reports `Io("failed to fill whole buffer")`. `read_worker_message_into` takes a
+caller-owned scratch buffer, and the three long-lived readers (the host's reader
+thread and the worker's two read loops) keep one, so ordinary control and
+multi-bus audio frames make no per-frame payload allocation; a buffer that grew
+past 1 MiB (`WORKER_SCRATCH_RETAIN_BYTES`) is released after a large state frame.
+These readers run on dedicated threads, never in the audio callback.
+
+Regression tests in `crates/plugin-host/tests/bounded_fuzz.rs`, with the
+tracking allocator: `a_hostile_length_header_with_little_data_does_not_reserve_the_frame`,
+`a_trickled_oversized_frame_allocates_only_what_has_arrived`,
+`a_worst_case_state_frame_still_decodes_through_the_stream_reader` (a 16 MiB
+state of `0xFF` bytes, a frame within a few KiB of the maximum, decodes),
+`the_scratch_buffer_is_reused_across_normal_frames_and_trimmed_after_a_large_one`.
+Before the change the first reserved 1 048 580 bytes for a 1 MiB header with no
+data, the second 62 914 564 bytes for a 60 MiB header with 3 MiB sent, and the
+fourth found no retained buffer; all four pass after it.
+`cargo test -p audiorouter-plugin-host --features test-fixtures` passed
+(130 unit including the two tests below, 12 bounded_fuzz, 42 worker_process;
+the 21 ignored worker_process tests and the VST2/VST3 integration tests need
+installed plugins and were not run).
+
+Review fix (same day): the first version of the read loop re-zeroed a whole 64 KiB
+step on every partial read, so a peer trickling one byte at a time cost 64 KiB of
+memset per byte on the host's reader thread. The buffer is now extended, and
+zeroed, only when the previous step is full: each payload byte is zeroed once,
+as before. `worker_frames_larger_than_one_read_step_survive_short_reads` decodes
+a 300 KiB frame through readers returning 4 KiB, 64 KiB − 1 and 64 KiB + 1 bytes
+and reports a stream that ends in a later step as an I/O error. A throwaway
+release-profile benchmark (old reader copied inline against the new one,
+2 000 frames each, not committed) measured the same time per frame within noise:
+3.6 µs for a 2 994-byte, 128-frame stereo block, and 47 µs for a 45 234-byte,
+2 048-frame block, with whole-buffer or 4 KiB reads; JSON decoding dominates.
+`the_largest_process_frame_fits_the_retained_scratch_buffer` encodes the largest
+legal `ProcessBuses` message (8 channels × 2 048 frames of the longest `f32` text
+plus 4 096 parameter events) and requires it to fit
+`WORKER_SCRATCH_RETAIN_BYTES` and to be read twice without reallocating, so the
+retain limit cannot cause per-block churn. Per-frame work is no more than before:
+one zero pass, the same reads, no allocation once the buffer is warm. Not
+measured: end-to-end audio latency on a live multi-bus route.
+
+**Nightly fuzz job.** `quality.yml` (the nightly quality workflow) now has a
+`fuzz` job that runs the six fuzz targets (protocol, plugin-host, engine,
+storage, recording, control) with `AUDIOROUTER_FUZZ_SCALE` set to 10, in the
+debug profile (the symphonia overflow only panics with overflow checks), with a
+60-minute timeout. A `workflow_dispatch` input `fuzz_scale` overrides the scale;
+the step refuses a value outside 1–50, because the tests silently ignore one
+outside 1–1000. A failure names the failing crate in the step summary and the
+test output prints the seed and case index. The job is outside the trend table
+and does not write to any branch. `tools/quality/policy.test.mjs` pins the
+scale, timeout and bound, and fails if a new `*fuzz.rs` test file in `crates/`
+is not run by the job. The step's PowerShell was run locally (extracted from the
+YAML) at scale 1: all six targets passed, and a scale of 99 is refused. Not run:
+the job on a hosted runner (it takes a push, which this branch has not had);
+scale-10 timings on a hosted runner are unknown. Local debug scale-10 runs took
+8–32 s per crate; storage was measured at scale 30 (248 s), so roughly 80 s at
+scale 10 by extrapolation. All far under the timeout.
 
 ## Completed: Q3.2 hosted CI qualification
 

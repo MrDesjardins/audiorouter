@@ -2228,12 +2228,19 @@ impl<W: Write + Seek> WavWriter<W> {
         let info_chunk = encode_info_chunk(metadata)?;
         let data_size =
             u32::try_from(self.data_bytes).map_err(|_| RecordingError::TooManyFrames)?;
+        // RIFF chunks start on even offsets: an odd-sized data chunk gets one
+        // zero pad byte before the LIST chunk, counted in the RIFF size.
+        let pad = u64::from(!info_chunk.is_empty() && data_size % 2 != 0);
         let riff_size = 36u64
             .checked_add(u64::from(data_size))
+            .and_then(|size| size.checked_add(pad))
             .and_then(|size| size.checked_add(info_chunk.len() as u64))
             .and_then(|size| u32::try_from(size).ok())
             .ok_or(RecordingError::TooManyFrames)?;
         self.output.seek(SeekFrom::End(0))?;
+        if pad != 0 {
+            self.output.write_all(&[0])?;
+        }
         self.output.write_all(&info_chunk)?;
         self.output.seek(SeekFrom::Start(0))?;
         write_header(
@@ -3509,6 +3516,39 @@ mod tests {
         assert!(output.windows(6).any(|window| window == b"Take 1"));
         assert!(output.windows(11).any(|window| window == b"AudioRouter"));
         assert_eq!(u32::from_le_bytes(output[40..44].try_into().unwrap()), 2);
+    }
+
+    // REC-3: an odd-sized data chunk is followed by a pad byte before LIST, so
+    // the crate's own reader (and any RIFF reader) finds the tags.
+    #[test]
+    fn wav_metadata_survives_an_odd_sized_data_chunk() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-odd-data-{}-{:?}.wav",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let file = std::fs::File::create(&path).unwrap();
+        let mut writer = WavWriter::new(file, WavFormat::Pcm24, 1, 48_000, false).unwrap();
+        writer.write_interleaved(&[0.1, -0.2, 0.3]).unwrap();
+        writer
+            .finish_with_metadata(&WavMetadata {
+                title: Some("Odd take".into()),
+                artist: Some("AudioRouter".into()),
+                comment: None,
+            })
+            .unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        let data_bytes = u32::from_le_bytes(bytes[40..44].try_into().unwrap());
+        assert_eq!(data_bytes, 9, "three 24-bit mono frames");
+        assert_eq!(&bytes[44 + 9 + 1..44 + 9 + 1 + 4], b"LIST");
+        let riff_size = u32::from_le_bytes(bytes[4..8].try_into().unwrap());
+        assert_eq!(u64::from(riff_size), bytes.len() as u64 - 8);
+        let info = inspect_wav_file(&path).unwrap();
+        assert_eq!((info.frames, info.data_bytes), (3, 9));
+        let metadata = read_wav_metadata(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(metadata.title.as_deref(), Some("Odd take"));
+        assert_eq!(metadata.artist.as_deref(), Some("AudioRouter"));
     }
 
     #[test]

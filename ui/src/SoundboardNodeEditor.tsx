@@ -1,6 +1,7 @@
 // Properties editor of a Soundboard node: nine sound slots with add, change, delete and play.
 import { useContext, useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 import type { Node } from "@audiorouter/contracts";
+import { say, type UiMessage } from "./actionMessage";
 import type { UiBackend } from "./backend";
 import { PanelMessage } from "./PanelMessage";
 import { SliderField } from "./Slider";
@@ -128,7 +129,7 @@ function SoundboardSlotRow({
   onChange: (name: string, value: boolean | number | string) => void;
   onPick: () => void;
   onDelete: () => void;
-  onMessage: (message: string) => void;
+  onMessage: (message: UiMessage) => void;
 }) {
   const tr = useMessages();
   const drop = useSoundDrop({ nodeId: node.id, slot: slot.slot, freeSlot: null, disabled, onMessage });
@@ -234,14 +235,14 @@ export function SoundboardNodeEditor({
   const free = firstFreeSlot(node);
   // The slot the picker is choosing for; "new" adds to the first free slot.
   const [picking, setPicking] = useState<number | "new" | null>(null);
-  const [message, setMessage] = useState(() => tr("g2.sbIntro"));
+  const [message, setMessage] = useState<UiMessage | null>(() => say("g2.sbIntro"));
   const drop = useSoundDrop({ nodeId: node.id, slot: null, freeSlot: free, disabled, onMessage: setMessage });
   const targetSlot = () => (picking === "new" || picking === null ? free : picking);
   const chooseLibrarySound = (sound: { id: string; title: string }) => {
     const slot = targetSlot();
     if (slot === null) return;
     controller.assign(node.id, slot, { mediaId: sound.id, fileName: sound.title }, picking !== "new");
-    setMessage(tr("g2.sbOnButton", { title: sound.title, slot }));
+    setMessage(say("g2.sbOnButton", { title: sound.title, slot }));
     setPicking(null);
   };
   const chooseFile = async (file: File) => {
@@ -254,7 +255,7 @@ export function SoundboardNodeEditor({
   };
   const remove = (slot: SoundboardSlot) => {
     onRemove(SLOT_FIELDS.map((field) => slotParameter(slot.slot, field)));
-    setMessage(tr("g2.sbRemoved", { slot: slot.slot, label: slot.label }));
+    setMessage(say("g2.sbRemoved", { slot: slot.slot, label: slot.label }));
   };
   const playingNow = (slot: number) => live?.slots.find((item) => item.slot === slot)?.playing === true;
   return (

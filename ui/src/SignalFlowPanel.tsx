@@ -81,7 +81,7 @@ export function SignalFlowPanel({
   applicationsError: string | null;
   setApplicationPickerSelection: Dispatch<SetStateAction<string>>;
   addApplicationCaptureFromPicker: (application: ApplicationRow) => void;
-  addApplicationCapturePathFromPicker: (path: string) => void;
+  addApplicationCapturePathFromPicker: (path: string) => string | null;
   /** Returns whether the group was added (the picker then starts empty next time). */
   addApplicationGroupFromPicker: (applications: ApplicationRow[], executablePaths: string[]) => boolean;
 }) {
@@ -91,6 +91,8 @@ export function SignalFlowPanel({
   const [groupExecutablePaths, setGroupExecutablePaths] = useState<string[]>([]);
   const [executablePath, setExecutablePath] = useState("");
   const [pickerMessage, setPickerMessage] = useState("");
+  /** The typed path was refused: the field says so (aria-invalid) and the status says why. */
+  const [pathRefused, setPathRefused] = useState(false);
   return (
     <section id="signal-flow-panel" className="canvas-panel" aria-labelledby="canvas-heading">
       <div className="section-heading">
@@ -112,7 +114,7 @@ export function SignalFlowPanel({
             <option value="">{tr("canvasUi.chooseSource")}</option>
             {outputPorts.map((port) => (
               <option key={encodePort(port.nodeId, port.portName)} value={encodePort(port.nodeId, port.portName)}>
-                {port.nodeName} · {port.portName} · {port.channels}ch
+                {port.nodeName} · {port.portName} · {tr("g2.connChannels", { n: port.channels })}
               </option>
             ))}
           </select>
@@ -128,16 +130,16 @@ export function SignalFlowPanel({
             <option value="">{tr("canvasUi.chooseDestination")}</option>
             {inputPorts.map((port) => (
               <option key={encodePort(port.nodeId, port.portName)} value={encodePort(port.nodeId, port.portName)}>
-                {port.nodeName} · {port.portName} · {port.channels}ch
+                {port.nodeName} · {port.portName} · {tr("g2.connChannels", { n: port.channels })}
               </option>
             ))}
           </select>
         </label>
         <button type="button" className="secondary" onClick={addConnection}>
-          Add connection
+          {tr("canvasUi.addConnection")}
         </button>
         <button type="button" className="secondary" onClick={openConnectionDialog}>
-          Keyboard connection dialog
+          {tr("signalFlowDialogs.keyboardConnectionOpen")}
         </button>
       </fieldset>
       {connectionDialogOpen && (
@@ -151,51 +153,54 @@ export function SignalFlowPanel({
             aria-describedby="connection-dialog-description"
           >
             <div className="section-heading">
-              <h2 id="connection-dialog-heading">Keyboard connection</h2>
+              <h2 id="connection-dialog-heading">{tr("signalFlowDialogs.keyboardConnection")}</h2>
               <button
                 type="button"
                 className="secondary"
                 onClick={closeConnectionDialog}
-                aria-label="Close keyboard connection dialog"
+                aria-label={tr("signalFlowDialogs.keyboardConnectionClose")}
               >
-                Close
+                {tr("common.close")}
               </button>
             </div>
             <p id="connection-dialog-description" className="muted">
-              Choose an output and input, then add the connection. Press Escape to close.
+              {tr("signalFlowDialogs.keyboardConnectionHelp")}
             </p>
             <label>
-              Output
+              {tr("canvasUi.output")}
               <select
                 ref={connectionDialogSource}
-                aria-label="Keyboard source output port"
+                aria-label={tr("signalFlowDialogs.keyboardSourceAria")}
                 value={connectionSource}
                 onChange={(event) => setConnectionSource(event.target.value)}
               >
-                <option value="">Choose source</option>
+                <option value="">{tr("canvasUi.chooseSource")}</option>
                 {outputPorts.map((port) => (
                   <option key={encodePort(port.nodeId, port.portName)} value={encodePort(port.nodeId, port.portName)}>
-                    {port.nodeName} · {port.portName} · {port.channels}ch
+                    {port.nodeName} · {port.portName} · {tr("g2.connChannels", { n: port.channels })}
                   </option>
                 ))}
               </select>
             </label>
             <label>
-              Input
+              {tr("canvasUi.input")}
               <select
-                aria-label="Keyboard destination input port"
+                aria-label={tr("signalFlowDialogs.keyboardDestinationAria")}
                 value={connectionDestination}
                 onChange={(event) => setConnectionDestination(event.target.value)}
               >
-                <option value="">Choose destination</option>
+                <option value="">{tr("canvasUi.chooseDestination")}</option>
                 {inputPorts.map((port) => (
                   <option key={encodePort(port.nodeId, port.portName)} value={encodePort(port.nodeId, port.portName)}>
-                    {port.nodeName} · {port.portName} · {port.channels}ch
+                    {port.nodeName} · {port.portName} · {tr("g2.connChannels", { n: port.channels })}
                   </option>
                 ))}
               </select>
             </label>
             <div className="actions">
+              <button type="button" className="secondary" onClick={closeConnectionDialog}>
+                {tr("common.cancel")}
+              </button>
               <button
                 type="button"
                 className="primary"
@@ -203,10 +208,7 @@ export function SignalFlowPanel({
                   if (addConnection()) closeConnectionDialog();
                 }}
               >
-                Add connection
-              </button>
-              <button type="button" className="secondary" onClick={closeConnectionDialog}>
-                Cancel
+                {tr("canvasUi.addConnection")}
               </button>
             </div>
           </section>
@@ -224,16 +226,19 @@ export function SignalFlowPanel({
           >
             <div className="section-heading">
               <h2 id="plugin-picker-heading">
-                {pluginInsertEdgeId ? "Insert a VST2/VST3 plugin into this connection" : "Add a VST2/VST3 plugin"}
+                {tr(pluginInsertEdgeId ? "signalFlowDialogs.pluginInsertTitle" : "signalFlowDialogs.pluginAddTitle")}
               </h2>
-              <button type="button" className="secondary" onClick={closePluginPicker} aria-label="Close plugin picker">
-                Close
+              <button
+                type="button"
+                className="secondary"
+                onClick={closePluginPicker}
+                aria-label={tr("signalFlowDialogs.pluginPickerClose")}
+              >
+                {tr("common.close")}
               </button>
             </div>
             <p id="plugin-picker-description" className="muted">
-              Scan an absolute directory on this machine for supported x64 VST2/VST3 binaries, then{" "}
-              {pluginInsertEdgeId ? "insert one directly into the connection" : "add one as a stopped node"}. Press
-              Escape to close.
+              {tr(pluginInsertEdgeId ? "signalFlowDialogs.pluginHelpInsert" : "signalFlowDialogs.pluginHelpAdd")}
             </p>
             <LoadedPluginsPanel
               nodes={draft.nodes}
@@ -273,20 +278,18 @@ export function SignalFlowPanel({
                 aria-describedby="application-picker-description"
               >
                 <div className="section-heading">
-                  <h2 id="application-picker-heading">Add an application capture source</h2>
+                  <h2 id="application-picker-heading">{tr("signalFlowDialogs.appPickerTitle")}</h2>
                   <button
                     type="button"
                     className="secondary"
                     onClick={closeApplicationPicker}
-                    aria-label="Close application picker"
+                    aria-label={tr("signalFlowDialogs.appPickerClose")}
                   >
-                    Close
+                    {tr("common.close")}
                   </button>
                 </div>
                 <p id="application-picker-description" className="muted">
-                  Add a running app or choose its .exe while it is closed. AudioRouter saves the executable identity,
-                  not a process ID, then checks for a verified match when you start the route. App groups create
-                  separate sources feeding a Mixer; avoid selecting an app together with a helper it launches.
+                  {tr("signalFlowDialogs.appPickerHelp")}
                 </p>
                 <div className="actions">
                   <button
@@ -295,7 +298,7 @@ export function SignalFlowPanel({
                     aria-pressed={applicationMode === "single"}
                     onClick={() => setApplicationMode("single")}
                   >
-                    One application
+                    {tr("signalFlowDialogs.oneApplication")}
                   </button>
                   <button
                     type="button"
@@ -303,21 +306,26 @@ export function SignalFlowPanel({
                     aria-pressed={applicationMode === "group"}
                     onClick={() => setApplicationMode("group")}
                   >
-                    App group
+                    {tr("signalFlowDialogs.appGroup")}
                   </button>
                 </div>
                 <div className="actions">
                   <button type="button" className="secondary" onClick={refreshApplications}>
-                    Refresh applications
+                    {tr("g5.appRefresh")}
                   </button>
                 </div>
                 <label>
-                  Application executable path
+                  {tr("signalFlowDialogs.exePathLabel")}
                   <input
-                    aria-label="Application executable path"
+                    aria-label={tr("signalFlowDialogs.exePathLabel")}
                     value={executablePath}
                     placeholder="C:\Games\game.exe"
-                    onChange={(event) => setExecutablePath(event.target.value)}
+                    aria-invalid={pathRefused}
+                    aria-describedby="application-picker-status"
+                    onChange={(event) => {
+                      setExecutablePath(event.target.value);
+                      setPathRefused(false);
+                    }}
                   />
                 </label>
                 <div className="actions">
@@ -327,7 +335,7 @@ export function SignalFlowPanel({
                     onClick={async () => {
                       const invoke = window.__TAURI_INTERNALS__?.invoke;
                       if (!invoke) {
-                        setPickerMessage("Type the full path to the application's .exe file.");
+                        setPickerMessage(tr("signalFlowDialogs.typePath"));
                         return;
                       }
                       try {
@@ -335,11 +343,11 @@ export function SignalFlowPanel({
                         if (typeof path === "string" && path) setExecutablePath(path);
                         setPickerMessage("");
                       } catch (error) {
-                        setPickerMessage(error instanceof Error ? error.message : "Unable to open the file picker.");
+                        setPickerMessage(error instanceof Error ? error.message : tr("signalFlowDialogs.pickerFailed"));
                       }
                     }}
                   >
-                    Browse for .exe
+                    {tr("signalFlowDialogs.browseExe")}
                   </button>
                   {applicationMode === "group" ? (
                     <button
@@ -348,7 +356,8 @@ export function SignalFlowPanel({
                       onClick={() => {
                         const path = executablePath.trim();
                         if (!path) {
-                          setPickerMessage("Choose or type an .exe path first.");
+                          setPickerMessage(tr("signalFlowDialogs.pathFirst"));
+                          setPathRefused(true);
                           return;
                         }
                         setGroupExecutablePaths((paths) =>
@@ -358,9 +367,10 @@ export function SignalFlowPanel({
                         );
                         setExecutablePath("");
                         setPickerMessage("");
+                        setPathRefused(false);
                       }}
                     >
-                      Add path to group
+                      {tr("signalFlowDialogs.addPathToGroup")}
                     </button>
                   ) : (
                     <button
@@ -368,35 +378,41 @@ export function SignalFlowPanel({
                       className="secondary"
                       disabled={!backend.connected}
                       onClick={() => {
-                        addApplicationCapturePathFromPicker(executablePath);
-                        setPickerMessage("");
+                        const problem = addApplicationCapturePathFromPicker(executablePath);
+                        setPickerMessage(problem ?? "");
+                        setPathRefused(problem !== null);
                       }}
                     >
-                      Add this app source
+                      {tr("signalFlowDialogs.addThisAppSource")}
                     </button>
                   )}
                 </div>
-                <p className="muted application-picker-status" role="status" aria-live="polite">
-                  <span title={pickerMessage || "Choose an .exe from disk, or type its full path."}>
-                    {pickerMessage || "Choose an .exe from disk, or type its full path."}
+                <p
+                  id="application-picker-status"
+                  className="muted application-picker-status"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span title={pickerMessage || tr("signalFlowDialogs.pickerHint")}>
+                    {pickerMessage || tr("signalFlowDialogs.pickerHint")}
                   </span>
                 </p>
                 {applicationsError ? (
                   <p className="muted" role="status">
-                    Application inventory unavailable: {applicationsError}
+                    {tr("g5.appInventoryError", { error: applicationsError })}
                   </p>
                 ) : capturable.length === 0 ? (
                   <p className="muted" role="status">
-                    No running applications were found. Refresh to try again.
+                    {tr("signalFlowDialogs.noRunningApps")}
                   </p>
                 ) : (
                   <>
                     {applicationMode === "single" ? (
                       <>
                         <label>
-                          Running application
+                          {tr("signalFlowDialogs.runningApplication")}
                           <select
-                            aria-label="Application to capture"
+                            aria-label={tr("g5.appSelectAria")}
                             value={selected ? applicationKey(selected) : ""}
                             onChange={(event) => setApplicationPickerSelection(event.target.value)}
                           >
@@ -407,8 +423,8 @@ export function SignalFlowPanel({
                           <p className="muted" role="status">
                             {selected.executable} ·{" "}
                             {selected.audioSessionCount > 0
-                              ? "audio active"
-                              : "no audio session yet; capture begins when it plays sound"}
+                              ? tr("signalFlowDialogs.audioActive")
+                              : tr("signalFlowDialogs.noAudioYet")}
                           </p>
                         )}
                         <div className="actions">
@@ -418,13 +434,13 @@ export function SignalFlowPanel({
                             onClick={() => selected && addApplicationCaptureFromPicker(selected)}
                             disabled={!backend.connected || !selected}
                           >
-                            Add running app
+                            {tr("signalFlowDialogs.addRunningApp")}
                           </button>
                         </div>
                       </>
                     ) : (
                       <fieldset className="application-group-options" disabled={!backend.connected}>
-                        <legend>Applications in this group</legend>
+                        <legend>{tr("signalFlowDialogs.groupLegend")}</legend>
                         {capturable.map((application) => {
                           const key = applicationKey(application);
                           return (
@@ -471,12 +487,10 @@ export function SignalFlowPanel({
                       }
                     }}
                   >
-                    Create app group
+                    {tr("signalFlowDialogs.createGroup")}
                   </button>
                 )}
-                <p className="muted">
-                  After adding it, select the app's card and open Properties to change how it is captured.
-                </p>
+                <p className="muted">{tr("signalFlowDialogs.afterAdding")}</p>
               </section>
             </div>
           );

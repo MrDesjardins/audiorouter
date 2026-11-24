@@ -1,5 +1,13 @@
 # UI code review, 2026-11-22
 
+> **Status (2026-11-24).** All seven findings (R1–R7) are repaired and merged
+> to main in PR #176 (`37adfe111`). What remains is not implementation work:
+> the owned-backend packaged save/restart smoke (it needs the owner's app
+> closed, because that app holds the default control pipe and the release
+> executable), and the attended live instrument, physical audio and Narrator
+> checks. Archive this plan once those run or are moved to the UI quality
+> review.
+
 ## Objective and boundary
 
 Owner request: update from main, then review the complete UI codebase only.

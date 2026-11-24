@@ -130,7 +130,7 @@ function renderBoard(initial: Node["parameters"], backend: UiBackend) {
       report: () => {},
       assign: (nodeId, slot, sound, keepCaption) =>
         record(assignSoundboardSlotDraft(draftRef.current, nodeId, slot, sound, keepCaption)),
-      announce: (message) => announced.push(message),
+      announce: (message) => announced.push(message.text),
     });
     const node = draft.nodes[0];
     return (

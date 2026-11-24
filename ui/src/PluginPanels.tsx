@@ -4,7 +4,8 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { MessageKey } from "./i18n/generated/messageKeys";
 import { useMessages } from "./i18n/useMessages";
 import type { MethodResult, Node } from "@audiorouter/contracts";
-import { formatUiError, type UiBackend } from "./backend";
+import { infoMessage, say, type UiMessage } from "./actionMessage";
+import { formatUiError, uiError, type UiBackend } from "./backend";
 import { pluginCatalog, STANDARD_PLUGIN_FOLDERS, SUPPORTED_PLUGIN_COMPATIBILITY } from "./draft";
 import { uiIdempotencyKey } from "./idempotency";
 import { PanelMessage } from "./PanelMessage";
@@ -25,7 +26,7 @@ export function PluginScanPanel({
   const [result, setResult] = useState<import("@audiorouter/contracts").PluginScanResult | null>(null);
   const [inspectionPath, setInspectionPath] = useState("");
   const [inspection, setInspection] = useState<import("@audiorouter/contracts").PluginScanEntry | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<UiMessage | null>(null);
   const [busy, setBusy] = useState(false);
   const requestGeneration = useRef(0);
   const directoryRef = useRef("");
@@ -36,14 +37,14 @@ export function PluginScanPanel({
   }, [directory, inspectionPath]);
   const scan = async (shellPath?: string) => {
     if (!directory.trim()) {
-      setMessage(tr("g3Plug.enterDir"));
+      setMessage(say("g3Plug.enterDir"));
       return;
     }
     if (busy || !backend.connected) return;
     const requestedDirectory = directory.trim();
     const request = ++requestGeneration.current;
     setBusy(true);
-    setMessage(tr("g3Plug.scanning"));
+    setMessage(say("g3Plug.scanning"));
     try {
       const next = shellPath
         ? await backend.scanPlugins(requestedDirectory, shellPath)
@@ -52,14 +53,14 @@ export function PluginScanPanel({
         setResult(next);
         setInspection(null);
         setInspectionPath("");
-        setMessage(shellPath ? tr("g3Plug.shellChecked") : tr("g3Plug.scanDone"));
+        setMessage(say(shellPath ? "g3Plug.shellChecked" : "g3Plug.scanDone"));
       }
     } catch (error) {
       if (request === requestGeneration.current) {
         setResult(null);
         setInspection(null);
         setInspectionPath("");
-        setMessage(formatUiError(error, tr("g3Plug.scanUnavailable")));
+        setMessage(uiError(error, tr("g3Plug.scanUnavailable")));
       }
     } finally {
       if (request === requestGeneration.current) setBusy(false);
@@ -67,28 +68,28 @@ export function PluginScanPanel({
   };
   const list = async () => {
     if (!directory.trim()) {
-      setMessage(tr("g3Plug.enterDir"));
+      setMessage(say("g3Plug.enterDir"));
       return;
     }
     if (busy || !backend.connected) return;
     const requestedDirectory = directory.trim();
     const request = ++requestGeneration.current;
     setBusy(true);
-    setMessage(tr("g3Plug.loadingLast"));
+    setMessage(say("g3Plug.loadingLast"));
     try {
       const next = await backend.listPlugins(requestedDirectory);
       if (request === requestGeneration.current && directoryRef.current.trim() === requestedDirectory) {
         setResult(next);
         setInspection(null);
         setInspectionPath("");
-        setMessage(tr("g3Plug.loadedLast"));
+        setMessage(say("g3Plug.loadedLast"));
       }
     } catch (error) {
       if (request === requestGeneration.current) {
         setResult(null);
         setInspection(null);
         setInspectionPath("");
-        setMessage(formatUiError(error, tr("g3Plug.inventoryUnavailable")));
+        setMessage(uiError(error, tr("g3Plug.inventoryUnavailable")));
       }
     } finally {
       if (request === requestGeneration.current) setBusy(false);
@@ -96,24 +97,24 @@ export function PluginScanPanel({
   };
   const inspect = async () => {
     if (!inspectionPath.trim()) {
-      setMessage(tr("g3Plug.enterPath"));
+      setMessage(say("g3Plug.enterPath"));
       return;
     }
     if (busy || !backend.connected) return;
     const requestedPath = inspectionPath.trim();
     const request = ++requestGeneration.current;
     setBusy(true);
-    setMessage(tr("g3Plug.inspecting"));
+    setMessage(say("g3Plug.inspecting"));
     try {
       const next = await backend.inspectPlugin(requestedPath);
       if (request === requestGeneration.current && inspectionPathRef.current.trim() === requestedPath) {
         setInspection(next);
-        setMessage(tr("g3Plug.inspectDone"));
+        setMessage(say("g3Plug.inspectDone"));
       }
     } catch (error) {
       if (request === requestGeneration.current) {
         setInspection(null);
-        setMessage(formatUiError(error, tr("g3Plug.inspectUnavailable")));
+        setMessage(uiError(error, tr("g3Plug.inspectUnavailable")));
       }
     } finally {
       if (request === requestGeneration.current) setBusy(false);
@@ -121,28 +122,28 @@ export function PluginScanPanel({
   };
   const retry = async () => {
     if (!directory.trim()) {
-      setMessage(tr("g3Plug.enterDir"));
+      setMessage(say("g3Plug.enterDir"));
       return;
     }
     if (busy || !backend.connected) return;
     const requestedDirectory = directory.trim();
     const request = ++requestGeneration.current;
     setBusy(true);
-    setMessage(tr("g3Plug.retrying"));
+    setMessage(say("g3Plug.retrying"));
     try {
       const next = await backend.retryPlugins(requestedDirectory, uiIdempotencyKey("plugins-retry"));
       if (request === requestGeneration.current && directoryRef.current.trim() === requestedDirectory) {
         setResult(next);
         setInspection(null);
         setInspectionPath("");
-        setMessage(tr("g3Plug.retryDone"));
+        setMessage(say("g3Plug.retryDone"));
       }
     } catch (error) {
       if (request === requestGeneration.current) {
         setResult(null);
         setInspection(null);
         setInspectionPath("");
-        setMessage(formatUiError(error, tr("g3Plug.retryUnavailable")));
+        setMessage(uiError(error, tr("g3Plug.retryUnavailable")));
       }
     } finally {
       if (request === requestGeneration.current) setBusy(false);
@@ -151,7 +152,7 @@ export function PluginScanPanel({
   const selectInspectionPath = (path: string) => {
     setInspectionPath(path);
     setInspection(null);
-    setMessage(tr("g3Plug.selectedPath"));
+    setMessage(say("g3Plug.selectedPath"));
   };
   const addToDraft = (entry: import("@audiorouter/contracts").PluginScanEntry) => {
     if (entry.identity && SUPPORTED_PLUGIN_COMPATIBILITY.includes(entry.identity.compatibility) && onAddPlaceholder) {
@@ -309,7 +310,7 @@ export function PluginToolsGroup({
   const tr = useMessages();
   const [inventories, setInventories] = useState<import("@audiorouter/contracts").PluginScanResult[]>([]);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<UiMessage | null>(null);
   const listUnavailable = useEffectEvent(() => tr("g3Plug.listUnavailable"));
   useEffect(() => {
     if (!connected || !backend.pluginInventory) return;
@@ -320,7 +321,7 @@ export function PluginToolsGroup({
         if (active) setInventories(result.inventories);
       })
       .catch((error) => {
-        if (active) setMessage(formatUiError(error, listUnavailable()));
+        if (active) setMessage(uiError(error, listUnavailable()));
       });
     return () => {
       active = false;
@@ -328,16 +329,16 @@ export function PluginToolsGroup({
   }, [backend, connected, refreshKey]);
   const scanStandardFolders = async () => {
     setBusy(true);
-    setMessage(tr("g3Plug.scanningStd"));
+    setMessage(say("g3Plug.scanningStd"));
     const results: import("@audiorouter/contracts").PluginScanResult[] = [];
-    let denied: string | null = null;
+    let denied: UiMessage | null = null;
     const failures: string[] = [];
     for (const folder of STANDARD_PLUGIN_FOLDERS) {
       try {
         results.push(await backend.scanPlugins(folder));
       } catch (error) {
         if (/permission/i.test(error instanceof Error ? error.message : "")) {
-          denied = formatUiError(error, tr("g3Plug.notPermitted"));
+          denied = uiError(error, tr("g3Plug.notPermitted"));
           break;
         }
         // Missing optional standard folders are normal. Other failures must
@@ -355,11 +356,11 @@ export function PluginToolsGroup({
     setMessage(
       denied ??
         (failures.length
-          ? formatUiError(
+          ? uiError(
               new Error(tr("g3Plug.scanFailedFolders", { n: failures.length, failures: failures.join("; "), found })),
               tr("g3Plug.scanFailed"),
             )
-          : tr(
+          : say(
               results.length === 1
                 ? found === 1
                   ? "g3Plug.foundStdOne"
@@ -552,7 +553,7 @@ export function PluginEditorControls({
 }) {
   const tr = useMessages();
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<UiMessage | null>(null);
   const inShell = typeof window !== "undefined" && Boolean(window.__TAURI_INTERNALS__?.invoke);
   const openEditor = async () => {
     const invoke = window.__TAURI_INTERNALS__?.invoke;
@@ -564,11 +565,11 @@ export function PluginEditorControls({
       };
       setMessage(
         response?.error
-          ? tr("g3Plug.editorUnavailable", { reason: response.error.message ?? tr("g3Plug.backendRefused") })
-          : tr("g3Plug.windowOpen"),
+          ? say("g3Plug.editorUnavailable", { reason: response.error.message ?? tr("g3Plug.backendRefused") })
+          : say("g3Plug.windowOpen"),
       );
     } catch (error) {
-      setMessage(formatUiError(error, tr("g3Plug.editorFailed")));
+      setMessage(uiError(error, tr("g3Plug.editorFailed")));
     } finally {
       setBusy(false);
     }
@@ -579,9 +580,9 @@ export function PluginEditorControls({
     try {
       const result = await backend.savePluginState(sessionId, node.id);
       onStateSaved(result.stateId);
-      setMessage(tr("g3Plug.stateSaved", { kb: Math.max(1, Math.round(result.sizeBytes / 1024)) }));
+      setMessage(say("g3Plug.stateSaved", { kb: Math.max(1, Math.round(result.sizeBytes / 1024)) }));
     } catch (error) {
-      setMessage(formatUiError(error, tr("g3Plug.stateSaveFailed")));
+      setMessage(uiError(error, tr("g3Plug.stateSaveFailed")));
     } finally {
       setBusy(false);
     }
@@ -645,7 +646,7 @@ export function PluginRecoveryControls({
 }) {
   const tr = useMessages();
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<UiMessage | null>(null);
   const current = useRef(onPrepared);
   const mounted = useRef(true);
   useEffect(() => {
@@ -659,14 +660,14 @@ export function PluginRecoveryControls({
   }, []);
   async function prepare(reset: boolean) {
     setBusy(true);
-    setMessage(tr("g3Plug.recPreparing"));
+    setMessage(say("g3Plug.recPreparing"));
     try {
       const result = await backend.preparePluginUpdate(node.id, sessionId, reset);
       if (!mounted.current) return;
       if (!current.current(node, result.parameters)) throw new Error(tr("g3Plug.recChanged"));
-      setMessage(reset ? tr("g3Plug.recDefaults") : tr("g3Plug.recScanned"));
+      setMessage(say(reset ? "g3Plug.recDefaults" : "g3Plug.recScanned"));
     } catch (error) {
-      if (mounted.current) setMessage(formatUiError(error, tr("g3Plug.recFailed")));
+      if (mounted.current) setMessage(uiError(error, tr("g3Plug.recFailed")));
     } finally {
       if (mounted.current) setBusy(false);
     }
@@ -688,7 +689,9 @@ export function PluginRecoveryControls({
         </button>
       </div>
       <div style={{ height: "7rem", overflow: "auto" }}>
-        <PanelMessage message={disabledReason ?? (running ? tr("g3Plug.stopFirst") : message)} />
+        <PanelMessage
+          message={disabledReason ? infoMessage(disabledReason) : running ? say("g3Plug.stopFirst") : message}
+        />
       </div>
     </section>
   );

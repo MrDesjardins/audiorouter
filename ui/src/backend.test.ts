@@ -1585,6 +1585,13 @@ describe("plan-only drafts", () => {
 describe("permission errors", () => {
   it("explain which permission is missing and read as an error", async () => {
     const { actionMessageTone } = await import("./actionMessage");
+    const { uiError } = await import("./backend");
+    const failure = uiError(
+      new Error(
+        "permission denied: PluginScan [permissionDenied] request the required permission scope for the target operation",
+      ),
+      "fallback",
+    );
     const message = formatUiError(
       new Error(
         "permission denied: PluginScan [permissionDenied] request the required permission scope for the target operation",
@@ -1594,7 +1601,8 @@ describe("permission errors", () => {
     expect(message).toBe(
       "Permission denied: this app is not granted the PluginScan permission needed for this action, so the backend refused it. Nothing was changed.",
     );
-    expect(actionMessageTone(message)).toBe("error");
+    expect(failure.text).toBe(message);
+    expect(actionMessageTone(failure)).toBe("error");
   });
 });
 

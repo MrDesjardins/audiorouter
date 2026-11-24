@@ -1,6 +1,6 @@
 // Dropping a sound file on a Soundboard slot, on the card or in Properties (SND-19).
 import { useContext, useState, type DragEvent } from "react";
-import { tm } from "./actionText";
+import { say, type UiMessage } from "./actionMessage";
 import { droppedSoundFile, isFileDrag } from "./soundImport";
 import { SoundboardContext } from "./soundboardLive";
 
@@ -21,7 +21,7 @@ export function useSoundDrop({
   slot: number | null;
   freeSlot: number | null;
   disabled: boolean;
-  onMessage?: (message: string) => void;
+  onMessage?: (message: UiMessage) => void;
 }) {
   const controller = useContext(SoundboardContext);
   const [active, setActive] = useState(false);
@@ -55,7 +55,7 @@ export function useSoundDrop({
         setActive(false);
         const report = onMessage ?? controller.announce;
         if (target === null) {
-          report(tm("h1.dropFull"));
+          report(say("h1.dropFull"));
           return;
         }
         const dropped = droppedSoundFile(event.dataTransfer);

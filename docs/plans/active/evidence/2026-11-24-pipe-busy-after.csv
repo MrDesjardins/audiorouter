@@ -1,0 +1,8 @@
+run,scenario,heavyRequests,heavyMs,pollsDuring,pollMedianMs,pollP99Ms,pollMaxMs,pollsOver5s,idlePollMedianMs,idlePollMaxMs,failedPolls
+0,idle,0,1000.0,49,0.2,0.3,0.3,0,0.2,0.2,0
+0,export-compressible,1,560.2,1,548.6,548.6,548.6,0,0.2,0.5,0
+0,export-noise,1,3186.8,1,3171.3,3171.3,3171.3,0,0.2,0.4,0
+0,import-compressible,1,2035.8,1,2019.2,2019.2,2019.2,0,0.2,0.4,0
+0,import-noise,1,746.9,1,745.5,745.5,745.5,0,0.2,2.1,0
+0,export + re-import (media already present),2,2596.2,1,2580.3,2580.3,2580.3,0,0.2,0.3,0
+0,export-noise with 6 pollers,1,3131.7,6,3114.3,3115.4,3115.4,0,0.2,0.5,0

@@ -608,6 +608,177 @@ fn shell_scan_and_saved_route_bind_the_exact_sub_id() {
     assert!(plane.prepare_plugin_stages(&changed, 48_000, None).is_err());
 }
 
+/// A VST2 `.fxp` regular program (`FxCk`) for the shell fixture: one
+/// parameter (its gain), made for the plugin with the given four-character ID.
+#[cfg(windows)]
+fn shell_fixture_program(sub_id: &[u8; 4], gain: f32) -> Vec<u8> {
+    let mut body = 1_u32.to_be_bytes().to_vec();
+    body.extend([0; 28]);
+    body.extend(gain.to_be_bytes());
+    let mut bytes = b"CcnK".to_vec();
+    bytes.extend(((16 + body.len()) as u32).to_be_bytes());
+    bytes.extend(b"FxCk");
+    bytes.extend(1_u32.to_be_bytes());
+    bytes.extend(sub_id);
+    bytes.extend(1_u32.to_be_bytes());
+    bytes.extend(body);
+    bytes
+}
+
+/// Two saved nodes of one shell DLL, each on its own sub-ID, hold different
+/// settings in one session. After the database is reopened and the route is
+/// prepared again, each node gets back its own state and never the other's.
+/// (The sibling test proves that a state is refused on another sub-ID; this
+/// one proves that accepted states do not swap or collapse.)
+#[cfg(windows)]
+#[test]
+#[ignore = "requires the repository VST2 shell fixture and worker"]
+fn two_saved_shell_sub_ids_each_restore_their_own_state() {
+    let fixture_source =
+        std::path::PathBuf::from(std::env::var("AUDIOROUTER_TEST_VST2_SHELL_FIXTURE").unwrap());
+    let profile = std::env::temp_dir().join(format!(
+        "audiorouter-shell-two-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir(&profile).unwrap();
+    let path = profile.join("shell-fixture.dll");
+    std::fs::copy(fixture_source, &path).unwrap();
+    let root = profile.as_path();
+    let database = profile.join("session.sqlite");
+    // (node id, display name, hex sub-ID, four-character preset ID, gain to save)
+    let nodes: [(&str, &str, &str, &[u8; 4], f32); 2] = [
+        ("shell-clean", "Shell Clean node", "53484331", b"SHC1", 0.2),
+        ("shell-drive", "Shell Drive node", "53484432", b"SHD2", 0.9),
+    ];
+    let request = |method: &str, params: Value| JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: method.into(),
+        params: Some(params),
+    };
+
+    let mut plane = ControlPlane::with_storage("shell-two", Storage::open(&database).unwrap());
+    let response = plane.dispatch(request(
+        "plugins.scan",
+        json!({"directory": root, "shellPath": path}),
+    ));
+    assert!(response.error.is_none(), "{:?}", response.error);
+    let inventory = response.result.unwrap();
+    let sha256 = inventory["entries"][0]["identity"]["sha256"].clone();
+
+    let mut saved = session();
+    saved.edges.clear();
+    assert_eq!(saved.nodes.len(), 2);
+    for (node, (id, name, class_id, _, _)) in saved.nodes.iter_mut().zip(nodes) {
+        node.id = EntityId::new(id);
+        node.name = name.into();
+        node.kind = NodeKind::Plugin;
+        node.ports = serde_json::from_value(json!([
+            {"name":"in","direction":"input","channels":2},
+            {"name":"out","direction":"output","channels":2}
+        ]))
+        .unwrap();
+        node.parameters = serde_json::from_value(json!({
+            "path": path, "format": "vst2", "fingerprint": sha256, "classId": class_id
+        }))
+        .unwrap();
+    }
+    plane.insert_session(saved.clone()).unwrap();
+
+    // First run: give each node its own settings and capture them.
+    let mut captured: Vec<(String, String)> = Vec::new(); // (state hash, state id) per node
+    let mut defaults: Vec<String> = Vec::new();
+    {
+        let stages = plane.prepare_plugin_stages(&saved, 48_000, None).unwrap();
+        assert_eq!(
+            stages.stages.len(),
+            2,
+            "both shell nodes get their own stage"
+        );
+        stages.publish(&plane, &saved.id).unwrap();
+        for (id, _, _, sub_id, gain) in nodes {
+            let node_id = EntityId::new(id);
+            let bridge = plane.plugin_live_bridge(&saved.id, &node_id).unwrap();
+            defaults.push(bridge.save_state().unwrap().sha256);
+            let preset = profile.join(format!("{id}.fxp"));
+            std::fs::write(&preset, shell_fixture_program(sub_id, gain)).unwrap();
+            let reply = plane.dispatch(request(
+                "plugins.applyPreset",
+                json!({"sessionId": saved.id, "nodeId": id, "presetPath": preset}),
+            ));
+            assert!(reply.error.is_none(), "{id}: {:?}", reply.error);
+            let hash = bridge.save_state().unwrap().sha256;
+            let reply = plane.dispatch(request(
+                "plugins.saveState",
+                json!({"sessionId": saved.id, "nodeId": id}),
+            ));
+            assert!(reply.error.is_none(), "{id}: {:?}", reply.error);
+            let state_id = reply.result.unwrap()["stateId"]
+                .as_str()
+                .unwrap()
+                .to_owned();
+            captured.push((hash, state_id));
+        }
+        // The two sub-IDs really hold different settings, and each differs
+        // from its own defaults (otherwise the restore check proves nothing).
+        assert_ne!(
+            captured[0].0, captured[1].0,
+            "the nodes must save different state"
+        );
+        assert_ne!(captured[0].0, defaults[0]);
+        assert_ne!(captured[1].0, defaults[1]);
+        assert_ne!(captured[0].1, captured[1].1);
+    }
+    drop(plane);
+
+    // Second run: reopen the database, reload the session and prepare it again.
+    let storage = Storage::open(&database).unwrap();
+    let reloaded = storage.load_session(&saved.id).unwrap().unwrap();
+    assert_eq!(reloaded, saved);
+    for (id, _, _, _, _) in nodes {
+        let latest = storage.plugin_node_state(saved.id.as_str(), id).unwrap();
+        let expected = &captured[nodes.iter().position(|node| node.0 == id).unwrap()].1;
+        assert_eq!(
+            latest.as_deref(),
+            Some(expected.as_str()),
+            "{id} keeps its own latest state"
+        );
+    }
+    let mut plane = ControlPlane::with_storage("shell-two-reopened", storage);
+    plane.insert_plugin_inventory(root.to_string_lossy().into_owned(), inventory);
+    plane.ensure_session_loaded(&reloaded.id).unwrap();
+    let stages = plane
+        .prepare_plugin_stages(&reloaded, 48_000, None)
+        .unwrap();
+    assert_eq!(stages.stages.len(), 2);
+    stages.publish(&plane, &reloaded.id).unwrap();
+    for (index, (id, _, _, _, _)) in nodes.into_iter().enumerate() {
+        let restored = plane
+            .plugin_live_bridge(&reloaded.id, &EntityId::new(id))
+            .unwrap()
+            .save_state()
+            .unwrap()
+            .sha256;
+        assert_eq!(restored, captured[index].0, "{id} restored its own state");
+        assert_ne!(
+            restored, defaults[index],
+            "{id} did not fall back to defaults"
+        );
+        let other = &captured[1 - index].0;
+        assert_ne!(
+            &restored, other,
+            "{id} did not take the other sub-ID's state"
+        );
+    }
+    drop(stages);
+    drop(plane);
+    let _ = std::fs::remove_dir_all(&profile);
+}
+
 #[cfg(windows)]
 #[test]
 #[ignore = "requires SDK AGain and rebuilt native worker overrides"]

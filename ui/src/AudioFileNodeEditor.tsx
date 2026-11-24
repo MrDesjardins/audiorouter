@@ -1,7 +1,8 @@
 // Properties editor of an Audio File node (moved from App.tsx).
 import { useEffect, useRef, useState } from "react";
 import type { Node } from "@audiorouter/contracts";
-import { formatUiError, type RecorderStatus, type UiBackend } from "./backend";
+import { say, type UiMessage } from "./actionMessage";
+import { uiError, type RecorderStatus, type UiBackend } from "./backend";
 import { audioUploadProblem, uploadAudioMedia } from "./audioUpload";
 import { uiIdempotencyKey } from "./idempotency";
 import { PanelMessage } from "./PanelMessage";
@@ -41,7 +42,7 @@ function AudioFileNodeEditorContent({
 }) {
   const tr = useMessages();
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState(() => tr("g2.afChoosePrompt"));
+  const [message, setMessage] = useState<UiMessage | null>(() => say("g2.afChoosePrompt"));
   const [selectedRecorder, setSelectedRecorder] = useState("");
   const [takeState, setTakeState] = useState<"idle" | "recording" | "importing" | "retry">("idle");
   const activeTake = useRef<{ recorderId: string; nodeId: string; stopped: boolean; stopKey: string } | null>(null);
@@ -77,11 +78,11 @@ function AudioFileNodeEditorContent({
         onChange("mediaId", media.mediaId);
         onChange("fileName", media.fileName);
       }
-      setMessage(tr("g2.afSoundCheckReady", { sec: Math.round(media.durationMs / 1000) }));
+      setMessage(say("g2.afSoundCheckReady", { sec: Math.round(media.durationMs / 1000) }));
       activeTake.current = null;
       setTakeState("idle");
     } catch (error) {
-      setMessage(formatUiError(error, tr("g2.afImportFailedTake")));
+      setMessage(uiError(error, tr("g2.afImportFailedTake")));
       setTakeState("retry");
       if (!take.stopped) {
         // Keep trying to stop the original take even if Properties was left.
@@ -98,7 +99,7 @@ function AudioFileNodeEditorContent({
     takeBusy.current = true;
     const recorderId = `audio-file-take-${Date.now().toString(36)}`;
     setBusy(true);
-    setMessage(tr("g2.afPreparing"));
+    setMessage(say("g2.afPreparing"));
     try {
       const channels = recorderNode?.ports.find((port) => port.direction === "input")?.channels ?? 2;
       await backend.createRecorder({
@@ -124,12 +125,12 @@ function AudioFileNodeEditorContent({
         stopKey: uiIdempotencyKey("temporary-take-stop"),
       };
       setTakeState("recording");
-      setMessage(tr("g2.afRecording"));
+      setMessage(say("g2.afRecording"));
       stopTimer.current = setTimeout(() => {
         void stopAndImportTake();
       }, 10_000);
     } catch (error) {
-      setMessage(formatUiError(error, tr("g2.afTakeStartFailed")));
+      setMessage(uiError(error, tr("g2.afTakeStartFailed")));
       setTakeState("idle");
     } finally {
       takeBusy.current = false;
@@ -144,21 +145,21 @@ function AudioFileNodeEditorContent({
       return;
     }
     setBusy(true);
-    setMessage(tr("g2.afImporting", { name: file.name }));
+    setMessage(say("g2.afImporting", { name: file.name }));
     try {
       const media = await uploadAudioMedia(backend, file);
       if (currentSessionIdRef.current !== sessionId) return;
       onChange("mediaId", media.mediaId);
       onChange("fileName", media.fileName);
       setMessage(
-        tr("g2.afImported", {
+        say("g2.afImported", {
           name: media.fileName,
           sec: Math.round(media.durationMs / 1000),
           channels: media.channels === 1 ? tr("g2.afChannelOne") : tr("g2.afChannelMany", { n: media.channels }),
         }),
       );
     } catch (error) {
-      setMessage(formatUiError(error, tr("g2.afImportFailed")));
+      setMessage(uiError(error, tr("g2.afImportFailed")));
     } finally {
       setBusy(false);
     }

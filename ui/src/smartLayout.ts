@@ -1,18 +1,8 @@
 import type { NodeKind, Session } from "@audiorouter/contracts";
+import { isRouteSource } from "./draft";
 import type { LayoutPositions } from "./layout";
 
-/** Sources always sit in the first column. */
-const INPUT_KINDS = new Set<NodeKind>([
-  "physicalInput",
-  "testSignal",
-  "audioFile",
-  "soundboard",
-  "instrument",
-  "applicationCapture",
-  "endpointLoopback",
-  "virtualRenderSource",
-  "networkReceive",
-]);
+/** Sources (`isRouteSource`, classified once in `draft.ts`) always sit in the first column. */
 /** Destinations always sit in the last column (a Recorder too, when nothing follows it). */
 const OUTPUT_KINDS = new Set<NodeKind>(["physicalOutput", "virtualCaptureSink", "networkSend", "recorder"]);
 
@@ -58,7 +48,7 @@ export function smartLayout(
     height: measured[id]?.height || DEFAULT_SIZE.height,
   });
   const isInput = (id: string) =>
-    parents.get(id)!.size === 0 && (INPUT_KINDS.has(kinds.get(id)!) || children.get(id)!.size > 0);
+    parents.get(id)!.size === 0 && (isRouteSource(kinds.get(id)!) || children.get(id)!.size > 0);
   const isOutput = (id: string) =>
     !isInput(id) && children.get(id)!.size === 0 && (OUTPUT_KINDS.has(kinds.get(id)!) || parents.get(id)!.size > 0);
 

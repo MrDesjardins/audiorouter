@@ -81,6 +81,42 @@ describe("plain words in visible text", () => {
     expect(strings).toEqual(["Add this node", "Physical input", "Your draft", "Bad node"]);
   });
 
+  it("the English catalog uses the glossary", () => {
+    // Messages of the developer panels keep the engine's terms, like their source files.
+    const developerKeys = new Set<string>();
+    for (const name of DEVELOPER_FILES) {
+      const source = readFileSync(join(here, name), "utf8");
+      for (const match of source.matchAll(/"([A-Za-z0-9]+(?:\.[A-Za-z0-9-]+)+)"/g)) developerKeys.add(match[1]);
+    }
+    // Where the exact API term is the point: the identifier a script sends is called a node ID.
+    const exact = new Set([
+      "workflowUi.nodeId",
+      "workflowUi.copyNode",
+      "workflowUi.nodeApi",
+      "g6.apiBuilderChooseNode",
+    ]);
+    const catalog = JSON.parse(readFileSync(join(here, "i18n", "locales", "en.json"), "utf8")) as {
+      messages: Record<string, unknown>;
+    };
+    const hits: string[] = [];
+    let scanned = 0;
+    const visit = (value: unknown, path: string) => {
+      if (typeof value === "string") {
+        scanned += 1;
+        const base = path.replace(/_(zero|one|two|few|many|other)$/, "");
+        if (developerKeys.has(base) || exact.has(base)) return;
+        // `{{node}}` names a value the code fills in, not a word the person reads.
+        const words = value.replace(/\{\{[^}]*\}\}/g, " ");
+        for (const [word, advice] of RETIRED) if (word.test(words)) hits.push(`${path}: "${value}" (${advice})`);
+      } else if (value && typeof value === "object") {
+        for (const [key, child] of Object.entries(value)) visit(child, path ? `${path}.${key}` : key);
+      }
+    };
+    visit(catalog.messages, "");
+    expect(scanned).toBeGreaterThan(1000);
+    expect(hits).toEqual([]);
+  });
+
   it("the daily interface uses the glossary", () => {
     const hits: string[] = [];
     const files = readdirSync(here).filter(

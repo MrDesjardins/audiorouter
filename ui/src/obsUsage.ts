@@ -1,7 +1,6 @@
 import type {
   ApplicationInfo,
   DeviceListItem,
-  NodeKind,
   ObsAudioInput,
   ObsChangeRequest,
   ObsStatus,
@@ -19,6 +18,7 @@ import {
   type AppCheck,
   type AppCheckState,
 } from "./appUsage";
+import { isRouteSource } from "./draft";
 import { tx } from "./i18n";
 
 /**
@@ -54,17 +54,6 @@ export interface ObsCheck extends AppCheck {
   sources: ObsSourceRow[];
 }
 
-const SOURCE_KINDS: readonly NodeKind[] = [
-  "physicalInput",
-  "applicationCapture",
-  "endpointLoopback",
-  "audioFile",
-  "soundboard",
-  "testSignal",
-  "networkReceive",
-  "virtualRenderSource",
-];
-
 /** OBS uses the communications default for capture and console for playback. */
 function resolveDevice(
   input: ObsAudioInput,
@@ -89,7 +78,7 @@ function deviceText(input: ObsAudioInput, device: DeviceListItem | null, isDefau
 /** Labels of the session's sources that reach a playback device. */
 function sourcesReaching(session: Session, renderId: string, microphones: readonly string[]): string[] {
   const labels = session.nodes
-    .filter((node) => SOURCE_KINDS.includes(node.kind) && outputsReachedFrom(session, [node.id]).includes(renderId))
+    .filter((node) => isRouteSource(node.kind) && outputsReachedFrom(session, [node.id]).includes(renderId))
     .map((node) => {
       if (microphones.includes(node.id)) return tx("h1.obsVoice");
       if (node.kind === "applicationCapture" && typeof node.parameters.executable === "string")

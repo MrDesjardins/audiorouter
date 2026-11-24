@@ -1,7 +1,7 @@
 name: AudioRouter quality (nightly)
 
 # Code review P2-8: coverage, an engine soak and a startup timing, nightly and
-# on demand. Coverage is reported, never gated. The soak fails on a memory
+# on demand; Q4.3 adds scaled bounded fuzzing. Coverage is reported, never gated. The soak fails on a memory
 # leak or a slow quantum (limits in crates/engine/examples/soak.rs and
 # docs/spec/14-quality.md NFR-04/05/06). Each run adds a row to a small trend
 # table kept in the Actions cache; quality-history.yml publishes the durable
@@ -15,6 +15,11 @@ on:
         description: Engine soak duration in minutes
         required: false
         default: "20"
+        type: string
+      fuzz_scale:
+        description: Bounded fuzzing iteration multiplier (1-50)
+        required: false
+        default: "10"
         type: string
 
 permissions:
@@ -216,6 +221,60 @@ jobs:
           path: ${{ runner.temp }}/metrics
           if-no-files-found: ignore
           retention-days: 14
+
+  # Q4.3: the bounded fuzz targets for untrusted-input parsers (protocol frames,
+  # network datagrams, plugin presets and worker frames, audio files, session
+  # imports, recordings, control dispatch). Pull requests run each target at
+  # scale 1 inside `cargo test`; here every iteration count is multiplied by
+  # AUDIOROUTER_FUZZ_SCALE. The seeds are fixed in the tests, so a failure
+  # prints its target, seed and case index and replays exactly. Debug profile on
+  # purpose: some defects (an arithmetic overflow in a third-party decoder) only
+  # panic with overflow checks. The job reports pass or fail, not timings, and is
+  # not part of the trend table.
+  fuzz:
+    name: Bounded fuzzing (scaled)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      AUDIOROUTER_FUZZ_SCALE: ${{ inputs.fuzz_scale || '10' }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # 2026-07-16 action revision
+        with:
+          toolchain: 1.96.0
+
+      - name: Run the fuzz targets at scale
+        shell: pwsh
+        run: |
+          # The tests ignore a scale outside 1-1000 without saying so; refuse
+          # one outside 1-50 here so a typo cannot make the run unbounded.
+          $scale = 0
+          if (-not [int]::TryParse($env:AUDIOROUTER_FUZZ_SCALE, [ref]$scale) -or $scale -lt 1 -or $scale -gt 50) {
+            throw "fuzz_scale must be a whole number from 1 to 50, got '$($env:AUDIOROUTER_FUZZ_SCALE)'"
+          }
+          $targets = @(
+            @{ Name = 'protocol';    Arguments = @('-p', 'audiorouter-protocol', '--test', 'bounded_fuzz', '--test', 'network_fuzz') },
+            @{ Name = 'plugin-host'; Arguments = @('-p', 'audiorouter-plugin-host', '--test', 'bounded_fuzz') },
+            @{ Name = 'engine';      Arguments = @('-p', 'audiorouter-engine', '--test', 'bounded_fuzz') },
+            @{ Name = 'storage';     Arguments = @('-p', 'audiorouter-storage', '--test', 'bounded_fuzz') },
+            @{ Name = 'recording';   Arguments = @('-p', 'audiorouter-recording', '--test', 'bounded_fuzz') },
+            @{ Name = 'control';     Arguments = @('-p', 'audiorouter-control', '--lib', 'bounded_fuzz_tests') }
+          )
+          $summary = @("## Bounded fuzzing at scale $scale", '', '| Target | Result |', '| --- | --- |')
+          $failed = @()
+          foreach ($target in $targets) {
+            $cargoArguments = $target.Arguments
+            cargo test --locked @cargoArguments
+            $passed = $LASTEXITCODE -eq 0
+            if (-not $passed) { $failed += $target.Name }
+            $summary += "| $($target.Name) | $(if ($passed) { 'pass' } else { '**FAIL**' }) |"
+          }
+          $summary += @('', 'A failure prints its target, seed and case index; `case_rng(seed, index)` in tests/support/fuzz.rs rebuilds that case.')
+          $summary | Add-Content $env:GITHUB_STEP_SUMMARY
+          if ($failed.Count -gt 0) { throw "fuzz targets failed: $($failed -join ', ')" }
 
   # NFR-14, backend part: launch the release shell as a fresh install (the
   # fresh_install_shell test) and time its embedded backend's first answer.

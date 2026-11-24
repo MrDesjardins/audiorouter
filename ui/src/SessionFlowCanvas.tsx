@@ -1,3 +1,4 @@
+import { say, type UiMessage } from "./actionMessage";
 import { optionalLocalStorage, readPresentationJson, writePresentationJson } from "./presentationStorage";
 import { FLOW_GROUPS, humanizeNodeKind, nodeFlowGroup } from "./canvasNodeKinds";
 import { CanvasConnectorMeasurements } from "./CanvasConnectorMeasurements";
@@ -91,7 +92,12 @@ import { CanvasGroupRenderer, type CanvasGroup } from "./CanvasGroups";
 import { FlowActiveLayers, FlowArrow, FlowComets, FlowMotionProvider } from "./flowLine";
 import type { FlowAnimationMode } from "./preferences";
 import { RecordButton } from "./RecorderControls";
-import { appendLibraryNode as appendPreviewNode, appendPluginPlaceholderNode, unfedRouteNodes } from "./draft";
+import {
+  appendLibraryNode as appendPreviewNode,
+  appendPluginPlaceholderNode,
+  rendersOwnAudio,
+  unfedRouteNodes,
+} from "./draft";
 import { nodeAttention, PRIVACY_MUTED_KINDS, type NodeAttention } from "./nodeAttention";
 import {
   draggedLibraryKind,
@@ -184,7 +190,7 @@ type SessionFlowCanvasProps = {
   panelWidth?: number;
   onPanelWidth?: (width: number) => void;
   onLayoutSelection?: (sessionId: string, items: CanvasRect[]) => void;
-  onLayoutMessage?: (message: string) => void;
+  onLayoutMessage?: (message: UiMessage) => void;
   onCopyNode?: (nodeId: string) => void;
   onDuplicateNode?: (nodeId: string) => void;
   onRenameNode?: (nodeId: string) => void;
@@ -232,7 +238,7 @@ type SessionFlowCanvasProps = {
   recordingBusyNodeId?: string | null;
   onOpenPluginPicker?: (edgeId?: string) => void;
   onOpenApplicationPicker?: () => void;
-  onConnectionRejected?: (message: string) => void;
+  onConnectionRejected?: (message: UiMessage) => void;
   canEdit?: boolean;
   /**
    * The apps on each device node's device (D1); null until the first check,
@@ -1006,7 +1012,7 @@ function hasOnlyCaptureSources(session: Session, nodeId: string): boolean {
     visited.add(id);
     const node = session.nodes.find((item) => item.id === id);
     if (!node?.enabled) continue;
-    if (node.kind === "testSignal" || node.kind === "audioFile" || node.kind === "soundboard") return false;
+    if (rendersOwnAudio(node.kind)) return false;
     if (PRIVACY_MUTED_KINDS.includes(node.kind)) foundCapture = true;
     for (const edge of session.edges) if (edge.enabled && edge.destinationNode === id) pending.push(edge.sourceNode);
   }
@@ -2610,7 +2616,7 @@ export function SessionFlowCanvas({
   const restoreLayout = (direction: "undo" | "redo") => {
     const result = restoreCanvasHistory(layoutHistory, captureLayout(), direction);
     if (result.status === "locked") {
-      onLayoutMessage?.(tr("g4Canvas.unlockGroups"));
+      onLayoutMessage?.(say("g4Canvas.unlockGroups"));
       return;
     }
     if (result.status !== "restored") return;
@@ -2623,7 +2629,7 @@ export function SessionFlowCanvas({
     replaceEdgeSides(sides);
     if (restoredWidth !== undefined && restoredWidth !== panelWidth) onPanelWidth?.(restoredWidth);
     onLayoutHistoryStep?.(direction);
-    onLayoutMessage?.(tr(direction === "undo" ? "workflowUi.canvasUndo" : "workflowUi.canvasRedo"));
+    onLayoutMessage?.(say(direction === "undo" ? "workflowUi.canvasUndo" : "workflowUi.canvasRedo"));
   };
   // Escape cancels the drag in progress (Drag/drop criterion, 2026-11-07): a
   // card returns to where the drag began, and a connection is not made.
@@ -3774,7 +3780,7 @@ export function SessionFlowCanvas({
                 connectionState.fromHandle.type === connectionState.toHandle.type
               ) {
                 onConnectionRejected?.(
-                  tr(
+                  say(
                     connectionState.fromHandle.type === "target"
                       ? "g4Canvas.rejectFromTarget"
                       : "g4Canvas.rejectFromSource",

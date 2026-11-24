@@ -301,11 +301,29 @@ fn graph_commit_can_require_its_session_to_be_stopped_for_recovery_edits() {
         ))
         .result
         .unwrap();
-    for (key, value) in [
-        ("null-stopped-guard", Value::Null),
-        ("false-stopped-guard", json!(false)),
-        ("number-stopped-guard", json!(17)),
-        ("empty-stopped-guard", json!("")),
+    // A value of another type, and an empty string, are refused by the dispatcher's
+    // schema check; only `null` reaches the handler's own message.
+    for (key, value, message) in [
+        (
+            "null-stopped-guard",
+            Value::Null,
+            "must be a non-empty session ID",
+        ),
+        (
+            "false-stopped-guard",
+            json!(false),
+            "requireStoppedSessionId must be a string",
+        ),
+        (
+            "number-stopped-guard",
+            json!(17),
+            "requireStoppedSessionId must be a string",
+        ),
+        (
+            "empty-stopped-guard",
+            json!(""),
+            "must be at least 1 character",
+        ),
     ] {
         let invalid = plane.dispatch(request(
             "graph.commit",
@@ -316,11 +334,7 @@ fn graph_commit_can_require_its_session_to_be_stopped_for_recovery_edits() {
                 "requireStoppedSessionId":value
             }),
         ));
-        assert!(invalid
-            .error
-            .unwrap()
-            .message
-            .contains("must be a non-empty session ID"));
+        assert!(invalid.error.unwrap().message.contains(message), "{key}");
     }
     let mismatched = plane.dispatch(request(
         "graph.commit",
@@ -605,6 +619,138 @@ fn dispatch_plan_and_commit_use_json_contracts() {
     let replayed = plane.dispatch(commit_request).result.unwrap();
     assert_eq!(replayed["activation"], committed["activation"]);
     assert_eq!(replayed["revision"], committed["revision"]);
+}
+
+fn plan_through_dispatch(
+    plane: &mut ControlPlane,
+    session_id: &str,
+    name: &str,
+) -> Result<String, String> {
+    let mut candidate = plane
+        .get_session(&EntityId::new(session_id))
+        .unwrap()
+        .clone();
+    candidate.name = name.into();
+    let response = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "graph.plan".into(),
+        params: Some(json!({ "sessionId": session_id, "baseRevision": 0, "candidate": candidate })),
+    });
+    match response.error {
+        Some(error) => Err(error.message),
+        None => Ok(response.result.unwrap()["planId"]
+            .as_str()
+            .unwrap()
+            .to_owned()),
+    }
+}
+
+fn commit_through_dispatch(plane: &mut ControlPlane, plan_id: &str, key: &str) -> JsonRpcResponse {
+    plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(2)),
+        method: "graph.commit".into(),
+        params: Some(json!({ "planId": plan_id, "baseRevision": 0, "idempotencyKey": key })),
+    })
+}
+
+fn plan_exists(plane: &ControlPlane, plan_id: &str) -> (bool, bool) {
+    (
+        plane
+            .store
+            .plan_candidate(&EntityId::new(plan_id))
+            .is_some(),
+        plane
+            .storage
+            .as_ref()
+            .is_some_and(|storage| storage.load_graph_plan(plan_id).unwrap().is_some()),
+    )
+}
+
+/// PLAN-1: an assistant that previews with `graph.plan` and never commits
+/// filled the global cap of 100 for five minutes, and every save then failed
+/// with "Too many plans are waiting". A commit left the other plans of its
+/// session behind although their base revision could no longer match. They
+/// stay (a late commit must still hear `revisionConflict`, "plan again") but
+/// are the first to go when the inventory is full.
+#[test]
+fn abandoned_plans_of_one_session_do_not_block_another_sessions_save() {
+    let mut plane = ControlPlane::with_storage("plan-cap", Storage::open_memory().unwrap());
+    let session_a = session();
+    let mut session_b = session();
+    session_b.id = EntityId::new("session-b");
+    plane.insert_session(session_a).unwrap();
+    plane.insert_session(session_b).unwrap();
+    let mut plans = Vec::new();
+    for index in 0..audiorouter_domain::MAX_PENDING_GRAPH_PLANS {
+        plans.push(
+            plan_through_dispatch(&mut plane, "session", &format!("preview {index}")).unwrap(),
+        );
+    }
+    let committed = commit_through_dispatch(&mut plane, &plans[7], "commit-a");
+    assert!(committed.error.is_none(), "{committed:?}");
+    // The commit moved session A to revision 1, so its other plans are stale,
+    // and a late commit of one keeps the documented "plan again" answer.
+    let late = commit_through_dispatch(&mut plane, &plans[8], "commit-late");
+    let error = late.error.expect("a stale plan cannot commit");
+    assert_eq!(error.data.as_ref().unwrap()["code"], "revisionConflict");
+    let saved = plan_through_dispatch(&mut plane, "session-b", "real save");
+    assert!(saved.is_ok(), "{saved:?}");
+    // With the inventory full of stale plans, saving never fails and the live
+    // plans of session B are kept.
+    let mut live = vec![saved.unwrap()];
+    for index in 0..5 {
+        live.push(
+            plan_through_dispatch(&mut plane, "session-b", &format!("b {index}"))
+                .unwrap_or_else(|message| panic!("{message}")),
+        );
+    }
+    for plan in &live {
+        assert_eq!(plan_exists(&plane, plan), (true, true));
+    }
+    let stale_left = plans
+        .iter()
+        .filter(|plan| plan_exists(&plane, plan) != (false, false))
+        .count();
+    assert!(
+        stale_left <= audiorouter_domain::MAX_PENDING_GRAPH_PLANS - live.len(),
+        "{stale_left} stale plans still hold the shared cap"
+    );
+}
+
+#[test]
+fn a_full_plan_inventory_drops_the_oldest_plan_instead_of_refusing_the_newest() {
+    for storage in [None, Some(Storage::open_memory().unwrap())] {
+        let durable = storage.is_some();
+        let mut plane = match storage {
+            Some(storage) => ControlPlane::with_storage("plan-evict", storage),
+            None => ControlPlane::default(),
+        };
+        plane.insert_session(session()).unwrap();
+        let mut plans = Vec::new();
+        for index in 0..audiorouter_domain::MAX_PENDING_GRAPH_PLANS {
+            plans.push(
+                plan_through_dispatch(&mut plane, "session", &format!("preview {index}")).unwrap(),
+            );
+        }
+        let newest = plan_through_dispatch(&mut plane, "session", "one more")
+            .unwrap_or_else(|message| panic!("durable={durable}: {message}"));
+        assert_eq!(
+            plan_exists(&plane, &plans[0]),
+            (false, false),
+            "durable={durable}: the oldest plan is dropped"
+        );
+        assert!(
+            plan_exists(&plane, &plans[1]).0,
+            "durable={durable}: the next oldest stays"
+        );
+        let committed = commit_through_dispatch(&mut plane, &newest, "commit-newest");
+        assert!(
+            committed.error.is_none(),
+            "durable={durable}: {committed:?}"
+        );
+    }
 }
 
 #[test]

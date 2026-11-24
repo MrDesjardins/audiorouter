@@ -889,10 +889,14 @@ impl ControlPlane {
             return Ok(previous);
         }
         if base_revision != self.virtual_bus_route_revision {
-            return Err(ControlError::InvalidRequest(format!(
-                "baseRevision {base_revision} does not match current revision {}",
-                self.virtual_bus_route_revision
-            )));
+            // The same `revisionConflict` every revision-guarded method gives
+            // (HTTP 409, retryable), not a malformed-request error.
+            return Err(ControlError::Store(
+                audiorouter_domain::StoreError::RevisionConflict {
+                    expected: base_revision,
+                    actual: self.virtual_bus_route_revision,
+                },
+            ));
         }
         let revision = self
             .virtual_bus_route_revision

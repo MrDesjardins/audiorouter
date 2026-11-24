@@ -1,55 +1,75 @@
 /**
- * Classifies a message so errors, warnings, successes and plain progress are
- * visually distinct (red, orange, green, blue). Text produced from a caught
- * error by `formatUiError` is always an error, whatever its wording; other
- * messages are plain strings from many UI paths, so they are classified by
- * their stable phrasing.
+ * Status-line messages carry their own severity (L10N-06). A message is made
+ * from a message key through `say`, whose severity, progress state and button
+ * come from the typed table in `actionMessageTones.ts`, or from an explicit
+ * helper for text that is not a catalog message (a caught backend error, a
+ * text a plugin supplies). Nothing here reads the wording of the text, so a
+ * translated message keeps the same colour, expiry and buttons.
  */
-import { englishOf } from "./actionText";
+import { tx } from "./i18n";
+import type { MessageKey } from "./i18n/generated/messageKeys";
+import { type MessageAction, MESSAGE_TONES, type ToneKey } from "./actionMessageTones";
 
 export type ActionMessageTone = "error" | "warning" | "success" | "info";
+export type { MessageAction, ToneKey };
 
-const ERROR_PATTERNS = [
-  /^no audio (started|played)/i,
-  /^change rejected/i,
-  /^(could not|unable to|cannot)\b/i,
-  /\b(permission denied|not permitted|access denied)\b/i,
-  /\b(failed|rejected|unavailable|cannot play|cannot prepare|is not attached|not changed)\b/i,
-];
-
-const WARNING_PATTERNS = [
-  /\bwarnings?\b/i,
-  /\b(press play again|stop and press play|stop the session|changed while|not measured|is missing)\b/i,
-  /^review\b/i,
-];
-
-const SUCCESS_PATTERNS = [
-  /\b(is running|was saved|route saved|saved\b|started|stopped|prepared|restored|applied|copied|connected|deleted|created)\b/i,
-];
-
-/** Texts produced from caught errors; bounded, most recent kept. */
-const errorTexts: string[] = [];
-const MAX_ERROR_TEXTS = 64;
-
-/** Remember that `text` describes a failure, then return it unchanged. */
-export function markErrorMessage(text: string): string {
-  if (!errorTexts.includes(text)) {
-    errorTexts.push(text);
-    if (errorTexts.length > MAX_ERROR_TEXTS) errorTexts.shift();
-  }
-  return text;
+export interface UiMessage {
+  readonly text: string;
+  readonly tone: ActionMessageTone;
+  /** Work still in progress ("Saving…"): stays until it changes, whatever its tone. */
+  readonly progress: boolean;
+  /** The buttons this message offers beside its text, when it offers any. */
+  readonly actions?: readonly MessageAction[];
+  /** The catalog key the text was made from, when it was made from one. */
+  readonly key?: MessageKey;
 }
 
-export function actionMessageTone(message: string | null | undefined): ActionMessageTone {
-  if (!message) return "info";
-  const text = englishOf(message);
-  if (errorTexts.includes(message) || ERROR_PATTERNS.some((pattern) => pattern.test(text))) return "error";
-  if (WARNING_PATTERNS.some((pattern) => pattern.test(text))) return "warning";
-  // Progress text ("Preparing…", "Starting…") stays informational even when
-  // it names a later outcome.
-  if (/(\.\.\.|…)$/.test(text.trim())) return "info";
-  if (SUCCESS_PATTERNS.some((pattern) => pattern.test(text))) return "success";
-  return "info";
+/** A catalog message with the severity declared for its key. */
+export function say(key: ToneKey, options?: Record<string, unknown>): UiMessage {
+  const declared: { tone: ActionMessageTone; progress?: true; actions?: readonly MessageAction[] } = MESSAGE_TONES[key];
+  return {
+    text: tx(key, options),
+    tone: declared.tone,
+    progress: declared.progress === true,
+    ...(declared.actions ? { actions: declared.actions } : {}),
+    key,
+  };
+}
+
+/**
+ * The same message shown with another severity, for a catalog message whose
+ * tone depends on a structured value it reports (a recorder that `failed`).
+ */
+export function withTone(message: UiMessage, tone: ActionMessageTone): UiMessage {
+  return { ...message, tone };
+}
+
+/** Text that describes a failure, such as a caught backend error. */
+export function errorMessage(text: string): UiMessage {
+  return { text, tone: "error", progress: false };
+}
+
+/** Plain information that is neither a failure, a warning nor a success. */
+export function infoMessage(text: string): UiMessage {
+  return { text, tone: "info", progress: false };
+}
+
+/**
+ * A blank message that reserves the status line's space (UI-17) while the
+ * caller shows the real text somewhere else.
+ */
+export const BLANK_MESSAGE: UiMessage = infoMessage(" ");
+
+/**
+ * A recording take that stopped saving early. The backend may send its own
+ * reason; with or without one the message has the severity declared for
+ * `g1.appRecordingEarly`, so the same event never changes colour depending on
+ * which text the backend supplied. (Success, as the English wording read
+ * before L10N-06; the owner may want a warning here.)
+ */
+export function recordingStoppedEarly(reason: string | null | undefined): UiMessage {
+  const declared = say("g1.appRecordingEarly");
+  return reason ? { text: reason, tone: declared.tone, progress: declared.progress } : declared;
 }
 
 export const INFO_LIFETIME_MS = 8_000;
@@ -60,9 +80,9 @@ export const WARNING_LIFETIME_MS = 30_000;
  * to keep it until dismissed. Errors stay so a failure is never missed;
  * progress text and messages offering a button stay until they change.
  */
-export function actionMessageLifetimeMs(message: string | null | undefined, hasAction: boolean): number | null {
-  if (!message || hasAction || /(\.\.\.|…)$/.test(englishOf(message).trim())) return null;
-  switch (actionMessageTone(message)) {
+export function actionMessageLifetimeMs(message: UiMessage | null | undefined, hasAction: boolean): number | null {
+  if (!message || hasAction || message.progress) return null;
+  switch (message.tone) {
     case "error":
       return null;
     case "warning":
@@ -71,4 +91,14 @@ export function actionMessageLifetimeMs(message: string | null | undefined, hasA
     case "info":
       return INFO_LIFETIME_MS;
   }
+}
+
+/** The tone to draw a message with; no message reads as plain information. */
+export function actionMessageTone(message: UiMessage | null | undefined): ActionMessageTone {
+  return message?.tone ?? "info";
+}
+
+/** Whether a message offers the given button. */
+export function offersAction(message: UiMessage | null | undefined, action: MessageAction): boolean {
+  return message?.actions?.includes(action) === true;
 }

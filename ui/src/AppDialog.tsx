@@ -59,6 +59,7 @@ function QuestionDialog({ question }: { question: Pending }) {
   const tr = useMessages();
   const headingId = useId();
   const descriptionId = useId();
+  const hintId = useId();
   const [text, setText] = useState(question.kind === "text" ? question.initialValue : "");
   const [refused, setRefused] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
@@ -137,6 +138,7 @@ function QuestionDialog({ question }: { question: Pending }) {
                   value={text}
                   maxLength={question.maxLength}
                   aria-invalid={refused && !text.trim()}
+                  aria-describedby={hintId}
                   onChange={(event) => {
                     setText(event.target.value);
                     setRefused(false);
@@ -144,7 +146,7 @@ function QuestionDialog({ question }: { question: Pending }) {
                 />
               </label>
               {/* Reserved so the buttons do not move when the hint appears (UI-17). */}
-              <small className="app-dialog-hint" role="status">
+              <small id={hintId} className="app-dialog-hint" role="status">
                 {refused && !text.trim() ? tr("g1.dialogEnterName") : ""}
               </small>
             </div>

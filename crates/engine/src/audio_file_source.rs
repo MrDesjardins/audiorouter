@@ -71,6 +71,13 @@ impl std::error::Error for AudioFileDecodeError {}
 /// Decode one WAV/MP3 file to bounded interleaved float samples at graph rate.
 /// Call only on a control/worker thread. `Read + Seek` permits both imported
 /// files and bounded upload buffers without exposing arbitrary callback I/O.
+///
+/// The container and codec parsers are third-party code fed attacker-chosen
+/// bytes. A defect in one (found by the Q4.3 fuzz test: an unchecked
+/// `channels * bytes` multiply in the WAV `fmt ` reader that panics in debug
+/// builds) must be an ordinary refusal of the file, not a panic in the control
+/// thread, so a panic inside the decoder is reported as
+/// [`AudioFileDecodeError::UnsupportedOrMalformed`].
 pub fn decode_audio<R: Read + Seek + MediaSource + 'static>(
     reader: R,
     extension: &str,
@@ -79,6 +86,17 @@ pub fn decode_audio<R: Read + Seek + MediaSource + 'static>(
     if !(MIN_GRAPH_SAMPLE_RATE_HZ..=MAX_GRAPH_SAMPLE_RATE_HZ).contains(&target_sample_rate_hz) {
         return Err(AudioFileDecodeError::InvalidTargetRate);
     }
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        decode_checked_audio(reader, extension, target_sample_rate_hz)
+    }))
+    .unwrap_or(Err(AudioFileDecodeError::UnsupportedOrMalformed))
+}
+
+fn decode_checked_audio<R: Read + Seek + MediaSource + 'static>(
+    reader: R,
+    extension: &str,
+    target_sample_rate_hz: u32,
+) -> Result<DecodedAudio, AudioFileDecodeError> {
     let mut hint = Hint::new();
     hint.with_extension(extension.trim_start_matches('.'));
     let source = MediaSourceStream::new(Box::new(reader), Default::default());

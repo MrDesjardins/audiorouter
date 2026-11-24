@@ -1,4 +1,4 @@
-import { tx } from "./i18n";
+import { say, type UiMessage } from "./actionMessage";
 
 /** Local canvas geometry only. No graph identities, routing or parameters change. */
 export type CanvasRect = {
@@ -155,9 +155,9 @@ export function layoutCanvasItems(
   items: CanvasRect[],
   selectedIds: string[],
   action: LayoutAction,
-): { items: CanvasRect[]; message: string } {
+): { items: CanvasRect[]; message: UiMessage } {
   const selected = items.filter((item) => selectedIds.includes(item.id));
-  if (selected.length < 2) return { items, message: tx("g4Canvas.layoutSelectTwo") };
+  if (selected.length < 2) return { items, message: say("g4Canvas.layoutSelectTwo") };
   if (action.startsWith("size-")) {
     const dimension = action.endsWith("width") ? "width" : "height";
     const minimum = dimension === "width" ? "minWidth" : "minHeight";
@@ -172,12 +172,12 @@ export function layoutCanvasItems(
             item[minimum] ?? (item.group ? (dimension === "width" ? 180 : 100) : dimension === "width" ? 218 : 150),
         ),
     );
-    if (target > 10_000) return { items, message: tx("g4Canvas.layoutSizeLimit") };
+    if (target > 10_000) return { items, message: say("g4Canvas.layoutSizeLimit") };
     return {
       items: items.map((item) =>
         selectedIds.includes(item.id) && !item.locked ? { ...item, [dimension]: target } : item,
       ),
-      message: tx("g4Canvas.layoutSizesUpdated"),
+      message: say("g4Canvas.layoutSizesUpdated"),
     };
   }
   const owners = canvasOwners(items);
@@ -185,7 +185,7 @@ export function layoutCanvasItems(
   const fixed = roots.filter((item) => movementLocked(item.id, items, owners));
   const targets = new Map<string, { x: number; y: number }>();
   if (action.startsWith("distribute-")) {
-    if (roots.length < 3) return { items, message: tx("g4Canvas.layoutSelectThree") };
+    if (roots.length < 3) return { items, message: say("g4Canvas.layoutSelectThree") };
     const horizontal = action === "distribute-horizontal";
     const axis = horizontal ? "x" : "y";
     const dimension = horizontal ? "width" : "height";
@@ -202,7 +202,7 @@ export function layoutCanvasItems(
         sorted[start][axis] -
         sorted[start][dimension] -
         inner.reduce((sum, item) => sum + item[dimension], 0);
-      if (available < -0.001) return { items, message: tx("g4Canvas.layoutNoRoom") };
+      if (available < -0.001) return { items, message: say("g4Canvas.layoutNoRoom") };
       const gap = Math.max(0, available) / (end - start);
       let cursor = sorted[start][axis] + sorted[start][dimension] + gap;
       for (const item of inner) {
@@ -238,5 +238,5 @@ export function layoutCanvasItems(
       });
     }
   }
-  return { items: moveCanvasItems(items, targets), message: tx("g4Canvas.layoutUpdated") };
+  return { items: moveCanvasItems(items, targets), message: say("g4Canvas.layoutUpdated") };
 }

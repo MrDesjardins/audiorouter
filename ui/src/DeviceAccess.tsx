@@ -25,6 +25,7 @@ export function DeviceAccessDialog({
 }) {
   const tr = useMessages();
   const allow = useRef<HTMLButtonElement>(null);
+  const dialog = useRef<HTMLElement>(null);
   useEffect(() => allow.current?.focus(), []);
   return (
     <div
@@ -32,9 +33,23 @@ export function DeviceAccessDialog({
       role="presentation"
       onKeyDown={(event) => {
         if (event.key === "Escape" && !busy) onCancel();
+        if (event.key !== "Tab") return;
+        // A modal keeps Tab and Shift+Tab inside itself; while it is busy nothing is enabled.
+        const buttons = [...(dialog.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [])];
+        const first = buttons[0];
+        const last = buttons[buttons.length - 1];
+        if (!first || !last) event.preventDefault();
+        else if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }}
     >
       <section
+        ref={dialog}
         className="connection-dialog device-access-dialog"
         role="dialog"
         aria-modal="true"
@@ -49,11 +64,13 @@ export function DeviceAccessDialog({
           </p>
         )}
         <div className="actions">
-          <button ref={allow} type="button" className="primary" disabled={busy} onClick={onAllow}>
-            {busy ? tr("settings.deviceAccess.allowing") : tr("settings.deviceAccess.allowAndPlay")}
-          </button>
+          {/* The decline comes first, the confirming button last, as in every other dialog. Focus still
+              starts on the confirming button. */}
           <button type="button" className="secondary" disabled={busy} onClick={onCancel}>
             {tr("settings.deviceAccess.notNow")}
+          </button>
+          <button ref={allow} type="button" className="primary" disabled={busy} onClick={onAllow}>
+            {busy ? tr("settings.deviceAccess.allowing") : tr("settings.deviceAccess.allowAndPlay")}
           </button>
         </div>
       </section>

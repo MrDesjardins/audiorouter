@@ -3,8 +3,9 @@
 // the Properties editor that show it subscribe.
 import { createContext, useContext, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from "react";
 import type { Session } from "@audiorouter/contracts";
+import { say, type UiMessage } from "./actionMessage";
 import { tm } from "./actionText";
-import { formatUiError, type UiBackend } from "./backend";
+import { type UiBackend, uiError } from "./backend";
 import { importSoundFile, type ImportedSound } from "./soundImport";
 
 export type SoundboardSlotLive = { slot: number; loaded: boolean; playing: boolean; progress: number };
@@ -51,9 +52,9 @@ export type SoundboardController = {
     slot: number,
     file: File,
     keepCaption: boolean,
-  ) => Promise<{ ok: boolean; message: string }>;
+  ) => Promise<{ ok: boolean; message: UiMessage }>;
   /** Shows a message to the owner in the app's status line. */
-  announce: (message: string) => void;
+  announce: (message: UiMessage) => void;
   /** Puts a sound on a slot of the draft as one change, clearing the slot's random set. */
   assign: (nodeId: string, slot: number, sound: { mediaId: string; fileName: string }, keepCaption: boolean) => void;
 };
@@ -65,7 +66,7 @@ const idleController: SoundboardController = {
   trigger: () => {},
   stop: () => {},
   importing: false,
-  importFile: async () => ({ ok: false, message: tm("h1.importUnavailable") }),
+  importFile: async () => ({ ok: false, message: say("h1.importUnavailable") }),
   announce: () => {},
   assign: () => {},
 };
@@ -109,7 +110,7 @@ export function useSoundboardController({
     sound: Pick<ImportedSound, "mediaId" | "fileName">,
     keepCaption: boolean,
   ) => void;
-  announce?: (message: string) => void;
+  announce?: (message: UiMessage) => void;
 }): SoundboardController {
   const [store] = useState(createSoundboardStore);
   const [importing, setImporting] = useState(false);
@@ -118,7 +119,7 @@ export function useSoundboardController({
   // The ref closes the gap between a second drop and the re-render that disables it.
   const importBusy = useRef(false);
   const importFile = async (nodeId: string, slot: number, file: File, keepCaption: boolean) => {
-    if (importBusy.current) return { ok: false, message: tm("h1.importBusy") };
+    if (importBusy.current) return { ok: false, message: say("h1.importBusy") };
     importBusy.current = true;
     setImporting(true);
     try {
@@ -126,14 +127,14 @@ export function useSoundboardController({
       assign(nodeId, slot, sound, keepCaption);
       return {
         ok: true,
-        message: tm("h1.importDone", {
+        message: say("h1.importDone", {
           file: sound.fileName,
           slot,
           seconds: Math.round(sound.durationMs / 1000),
         }),
       };
     } catch (error) {
-      return { ok: false, message: formatUiError(error, tm("h1.importFailed")) };
+      return { ok: false, message: uiError(error, tm("h1.importFailed")) };
     } finally {
       importBusy.current = false;
       setImporting(false);
