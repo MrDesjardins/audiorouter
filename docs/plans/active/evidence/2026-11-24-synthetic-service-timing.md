@@ -481,3 +481,47 @@ need `ui/dist` and open pipes in the shell binary), the other `service_timing`
 ignored harnesses, the three-run harness (one run only), `fresh_install_shell`
 (no installer built), any run against the running app, and a live check with a
 route playing. The window-side instance count is from code reading.
+
+### 5. CLI probe follow-up (branch `fix/cli-probe-busy-pipe`)
+
+Section 2's table row for CLI commands names a second effect of the same busy
+pipe, and reading the code showed the wait fix above does not close it. The
+only caller that branches on "is the app running" is `is_running_app_database`
+(`crates/cli/src/lib.rs`), used once, by `run_mcp_stdio` when `--pipe` is
+absent: if the database is the app's own `%LOCALAPPDATA%\AudioRouter\state.sqlite`
+and the probe says "running", it refuses; otherwise it opens that database with
+`Storage::open` and runs a second `ControlPlane` over it, so its edits, device
+actions and enrollment reads race the app's. The probe sent `system.describe`
+and treated any error as "not running". Busy pipe and missing pipe also share
+one error text ("timed out waiting for a free named-pipe instance"), so no
+text match can tell them apart. With the 2 s wait it failed on a saturated
+pipe; with the wait raised to the caller's 60 s it would stall MCP startup for
+as long as the app is busy, and a probe error from any other cause still read
+as "not running".
+
+Fix: `audiorouter_transport::probe_pipe(name) -> Result<PipeProbe, _>` opens the
+pipe without sending a request or waiting for an instance and returns
+`Missing` (`ERROR_FILE_NOT_FOUND` after the existing 100 ms grace for a pipe
+being created), `Available`, or `Busy` (`ERROR_PIPE_BUSY`, answered at once).
+`PipeProbe::is_owned` is an exhaustive `match`: only `Missing` is "not
+running". The CLI's `pipe_is_owned_by_a_server` uses it; a probe error (a
+server of another Windows user, or an unsupported platform) still reads as "not
+the app", as before. No other caller probes for the app (grep of
+`round_trip`/`connect_client`/`send_oneway` in `crates/cli` and `src-tauri`:
+the other uses are real requests, whose busy-pipe wait section 3 fixed).
+
+Tests, none ignored, unique pipe names, no database:
+`a_busy_pipe_counts_as_a_running_app`, `a_missing_pipe_is_not_a_running_app`,
+`a_pipe_with_a_free_instance_counts_as_a_running_app` (CLI lib) and
+`a_probe_reports_a_busy_pipe_as_owned_and_a_missing_pipe_as_missing`
+(`busy_pipe_wait.rs`, four held instances, returns in under 500 ms). Fail-before:
+with the probe temporarily put back to the old behaviour (a `system.describe`
+round trip with the 2 s busy wait, any error is "not running"), the busy-pipe
+test failed ("a busy pipe must count as a running app") and the free-instance
+test failed; the missing-pipe test passed, as it should. The fix was then
+restored.
+
+Not run for section 5: `src-tauri` tests, `mcp_stdio` against the real default
+pipe, and any check against the running app (the default control pipe and the
+owner's database were not touched, so `run_mcp_stdio`'s refusal itself is
+covered only through the probe it calls).

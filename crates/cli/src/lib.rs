@@ -2448,13 +2448,17 @@ fn is_running_app_database(database: &std::path::Path) -> bool {
         (Ok(left), Ok(right)) => left == right,
         _ => false,
     };
-    if !same_file {
-        return false;
-    }
-    let request = json!({ "jsonrpc": "2.0", "id": 1, "method": "system.describe" });
-    audiorouter_protocol::encode_frame(&request)
-        .ok()
-        .is_some_and(|frame| audiorouter_transport::round_trip(APP_CONTROL_PIPE, &frame).is_ok())
+    same_file && pipe_is_owned_by_a_server(APP_CONTROL_PIPE)
+}
+
+/// True when a backend owns the pipe `name`. A busy pipe (every instance
+/// serves another client, as during a long bundle export) is owned, so only a
+/// missing pipe counts as "no app running". Reading a failed request as "not
+/// running" would let this process open the app's database beside the app.
+/// A probe error (for example a server of another Windows user) is not this
+/// user's app.
+fn pipe_is_owned_by_a_server(name: &str) -> bool {
+    audiorouter_transport::probe_pipe(name).is_ok_and(audiorouter_transport::PipeProbe::is_owned)
 }
 
 fn write_mcp_message(output: &mut impl Write, message: &Value) -> Result<(), CliError> {
@@ -7444,5 +7448,129 @@ mod tests {
         assert_eq!(started["state"], "recording");
         let _ = std::fs::remove_file(database);
         let _ = std::fs::remove_dir_all(recording_root);
+    }
+
+    fn unique_probe_pipe(label: &str) -> String {
+        format!(
+            r"\\.\pipe\audiorouter-cli-probe-{label}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        )
+    }
+
+    /// A busy backend (every server instance serving another client, as
+    /// during a long bundle export) still owns its pipe. The probe used to
+    /// send a request and read any failure, including the busy-pipe timeout,
+    /// as "the app is not running", so `mcp serve` opened the app's own
+    /// database beside it.
+    #[cfg(windows)]
+    #[test]
+    fn a_busy_pipe_counts_as_a_running_app() {
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+        use std::sync::{Arc, Mutex};
+
+        let name = unique_probe_pipe("busy");
+        let frame = audiorouter_protocol::encode_frame(&json!({ "ok": true })).unwrap();
+        let release = Arc::new(Mutex::new(false));
+        let stop = Arc::new(AtomicBool::new(false));
+        let entered = Arc::new(AtomicUsize::new(0));
+        let instances = audiorouter_transport::SERVER_PIPE_INSTANCES as usize;
+        for _ in 0..instances {
+            let (name, release, stop, entered, frame) = (
+                name.clone(),
+                release.clone(),
+                stop.clone(),
+                entered.clone(),
+                frame.clone(),
+            );
+            std::thread::spawn(move || {
+                while !stop.load(Ordering::Acquire) {
+                    let _ = audiorouter_transport::serve_once_with_client(&name, |_, _| {
+                        entered.fetch_add(1, Ordering::AcqRel);
+                        while !*release.lock().unwrap() {
+                            std::thread::sleep(std::time::Duration::from_millis(5));
+                        }
+                        Ok(frame.clone())
+                    });
+                }
+            });
+        }
+        let holders: Vec<_> = (0..instances)
+            .map(|_| {
+                let (name, frame) = (name.clone(), frame.clone());
+                std::thread::spawn(move || {
+                    audiorouter_transport::round_trip(&name, &frame).unwrap();
+                })
+            })
+            .collect();
+        let started = std::time::Instant::now();
+        while entered.load(Ordering::Acquire) < instances {
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(10),
+                "the holders did not occupy every instance"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+
+        let busy_probe = std::time::Instant::now();
+        let owned = pipe_is_owned_by_a_server(&name);
+        let busy_probe = busy_probe.elapsed();
+
+        *release.lock().unwrap() = true;
+        for holder in holders {
+            holder.join().unwrap();
+        }
+        stop.store(true, Ordering::Release);
+        for _ in 0..instances {
+            let _ = audiorouter_transport::send_oneway(&name, &0_u32.to_le_bytes());
+        }
+        assert!(owned, "a busy pipe must count as a running app");
+        assert!(
+            busy_probe < std::time::Duration::from_secs(1),
+            "the probe waited {busy_probe:?} on a busy pipe"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_missing_pipe_is_not_a_running_app() {
+        assert!(!pipe_is_owned_by_a_server(&unique_probe_pipe("missing")));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_pipe_with_a_free_instance_counts_as_a_running_app() {
+        let name = unique_probe_pipe("free");
+        let server = {
+            let name = name.clone();
+            std::thread::spawn(move || {
+                // One client arrives (the probe, which leaves without a
+                // request) and then the wake-up below.
+                for _ in 0..2 {
+                    let _ = audiorouter_transport::serve_once_with_client(&name, |_, _| {
+                        Err(audiorouter_transport::TransportError::Protocol(
+                            "done".into(),
+                        ))
+                    });
+                }
+            })
+        };
+        // The probe waits only briefly for a pipe that does not exist yet, so
+        // wait for the server to create it.
+        let started = std::time::Instant::now();
+        while !pipe_is_owned_by_a_server(&name) {
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(10),
+                "the probe never saw the pipe"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        // Wake the server's second wait so its thread ends; it is not joined,
+        // so a slow wake-up cannot hang the test.
+        let _ = audiorouter_transport::send_oneway(&name, &0_u32.to_le_bytes());
+        drop(server);
     }
 }

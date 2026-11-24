@@ -20,8 +20,8 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use audiorouter_transport::{
-    round_trip, round_trip_with_timeout, send_oneway, serve_once_with_client, TransportError,
-    SERVER_PIPE_INSTANCES,
+    probe_pipe, round_trip, round_trip_with_timeout, send_oneway, serve_once_with_client,
+    PipeProbe, TransportError, SERVER_PIPE_INSTANCES,
 };
 
 /// Opens once; every handler waits for it.
@@ -170,6 +170,39 @@ fn a_client_waits_for_a_free_instance_for_as_long_as_its_timeout() {
         waited >= Duration::from_millis(2_500),
         "the client was served before the instances freed ({waited:?})"
     );
+}
+
+/// A probe asks "does a server own this pipe?". Every instance busy still
+/// means yes, and it answers at once instead of waiting for an instance; only
+/// a pipe nobody created is `Missing`.
+#[test]
+fn a_probe_reports_a_busy_pipe_as_owned_and_a_missing_pipe_as_missing() {
+    let pipe = BusyPipe::saturate("probe");
+    let started = Instant::now();
+    let found = probe_pipe(&pipe.name);
+    let waited = started.elapsed();
+    pipe.shutdown();
+    assert_eq!(found, Ok(PipeProbe::Busy));
+    assert!(
+        found.unwrap().is_owned(),
+        "a busy pipe has a server behind it"
+    );
+    assert!(
+        waited < Duration::from_millis(500),
+        "the probe waited {waited:?} on a busy pipe"
+    );
+
+    let missing = format!(
+        r"\\.\pipe\audiorouter-busy-wait-missing-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let found = probe_pipe(&missing);
+    assert_eq!(found, Ok(PipeProbe::Missing));
+    assert!(!found.unwrap().is_owned());
 }
 
 /// The wait for an instance is bounded by the caller's timeout, not only by

@@ -39,6 +39,29 @@ pub enum TransportError {
     UnexpectedEof,
 }
 
+/// What [`probe_pipe`] found at a control pipe name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PipeProbe {
+    /// No server has created the pipe: nothing owns this name.
+    Missing,
+    /// The pipe exists and a server instance is free to accept a client.
+    Available,
+    /// The pipe exists but every server instance is serving another client
+    /// (for example during a long bundle export). A server owns the name.
+    Busy,
+}
+
+impl PipeProbe {
+    /// True when some server owns the pipe, whether or not it can take
+    /// another client right now. Only a missing pipe means "not running".
+    pub fn is_owned(self) -> bool {
+        match self {
+            Self::Missing => false,
+            Self::Available | Self::Busy => true,
+        }
+    }
+}
+
 /// Maximum number of requests handled on one persistent local control
 /// connection. This keeps subscription/session lifetimes bounded while still
 /// matching the control API's maximum page size.
@@ -896,7 +919,7 @@ impl std::error::Error for TransportError {}
 
 #[cfg(windows)]
 mod windows_pipe {
-    use super::{TransportError, MAX_SESSION_FRAMES};
+    use super::{PipeProbe, TransportError, MAX_SESSION_FRAMES};
     use audiorouter_protocol::{decode_frame, encode_frame, MAX_FRAME_BYTES};
     use std::ffi::OsStr;
     use std::iter::once;
@@ -1592,6 +1615,50 @@ mod windows_pipe {
         }
     }
 
+    /// Find out whether a server owns the pipe `name`, without sending a
+    /// request and without waiting for a free instance.
+    ///
+    /// A busy pipe (`ERROR_PIPE_BUSY`: every instance is serving a client)
+    /// has an owner and is reported as [`PipeProbe::Busy`]. Only a pipe that
+    /// stays missing (`ERROR_FILE_NOT_FOUND`) for [`PIPE_MISSING_WAIT`] is
+    /// [`PipeProbe::Missing`]; that short wait covers a backend that is
+    /// creating its pipe at this moment. A pipe whose server belongs to
+    /// another Windows user is an error, as for every other client call.
+    pub fn probe_pipe(name: &str) -> Result<PipeProbe, TransportError> {
+        const ERROR_FILE_NOT_FOUND: i32 = 0x8007_0002_u32 as i32;
+        const ERROR_PIPE_BUSY: i32 = 0x8007_00E7_u32 as i32;
+        check_name(name)?;
+        let name = wide(name);
+        let started = std::time::Instant::now();
+        loop {
+            match open_pipe(&name) {
+                Ok(handle) => {
+                    let mut server_pid = 0;
+                    // SAFETY: handle is the live connected pipe; Windows writes
+                    // one process ID into the aligned local before any payload.
+                    unsafe { GetNamedPipeServerProcessId(handle.0, &mut server_pid) }
+                        .map_err(win_error)?;
+                    if server_pid == 0 || !client_is_same_user(server_pid)? {
+                        return Err(TransportError::Windows(
+                            "pipe server is not this Windows user and logon".into(),
+                        ));
+                    }
+                    // Dropping the handle closes this connection without a
+                    // request; the server's I/O thread sees the client leave.
+                    return Ok(PipeProbe::Available);
+                }
+                Err(error) => match error.code().0 {
+                    ERROR_PIPE_BUSY => return Ok(PipeProbe::Busy),
+                    ERROR_FILE_NOT_FOUND if started.elapsed() < PIPE_MISSING_WAIT => {
+                        std::thread::sleep(std::time::Duration::from_millis(5));
+                    }
+                    ERROR_FILE_NOT_FOUND => return Ok(PipeProbe::Missing),
+                    _ => return Err(win_error(error)),
+                },
+            }
+        }
+    }
+
     /// Connect to a local named pipe and exchange one framed message.
     pub fn round_trip(name: &str, request: &[u8]) -> Result<Vec<u8>, TransportError> {
         round_trip_with_timeout(name, request, std::time::Duration::from_secs(60))
@@ -1817,7 +1884,7 @@ mod windows_pipe {
 #[cfg(windows)]
 pub use windows_pipe::{
     acquire_server_singleton, client_is_same_user, client_user_sid, current_user_sid, echo_handler,
-    round_trip, round_trip_many, round_trip_session, round_trip_session_many,
+    probe_pipe, round_trip, round_trip_many, round_trip_session, round_trip_session_many,
     round_trip_with_timeout, send_oneway, serve_connections, serve_once, serve_once_with_client,
     serve_once_with_client_optional, serve_session, ServerSingleton, SERVER_PIPE_INSTANCES,
 };
@@ -2263,6 +2330,11 @@ pub fn serve_control_sessions(
     _: audiorouter_control::ControlPlane,
     _: audiorouter_control::ClientGrant,
 ) -> Result<(), TransportError> {
+    Err(TransportError::UnsupportedPlatform)
+}
+
+#[cfg(not(windows))]
+pub fn probe_pipe(_: &str) -> Result<PipeProbe, TransportError> {
     Err(TransportError::UnsupportedPlatform)
 }
 
