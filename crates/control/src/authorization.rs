@@ -136,6 +136,112 @@ impl ClientGrant {
     }
 }
 
+/// A top-level scalar parameter and the JSON types its published schema allows.
+struct ScalarRule {
+    name: String,
+    types: Vec<String>,
+    /// The published `maxLength` of a string parameter, in characters.
+    max_length: Option<usize>,
+}
+
+/// The scalar parameter rules of every method, built once from the same
+/// schemas `system.describe` publishes. Only plain `string`, `integer`,
+/// `number` and `boolean` properties are checked here; objects, arrays and
+/// enums keep their own handler messages.
+fn scalar_param_rules() -> &'static std::collections::HashMap<&'static str, Vec<ScalarRule>> {
+    static RULES: std::sync::OnceLock<std::collections::HashMap<&'static str, Vec<ScalarRule>>> =
+        std::sync::OnceLock::new();
+    RULES.get_or_init(|| {
+        API_METHODS
+            .iter()
+            .map(|spec| {
+                let schema = method_input_schema(spec.name);
+                let rules = schema["properties"]
+                    .as_object()
+                    .into_iter()
+                    .flatten()
+                    .filter(|(_, property)| property.get("enum").is_none())
+                    .filter_map(|(name, property)| {
+                        let declared: Vec<String> = match &property["type"] {
+                            Value::String(kind) => vec![kind.clone()],
+                            Value::Array(kinds) => kinds
+                                .iter()
+                                .filter_map(|kind| kind.as_str().map(str::to_owned))
+                                .collect(),
+                            _ => return None,
+                        };
+                        let types: Vec<String> =
+                            declared.into_iter().filter(|kind| kind != "null").collect();
+                        let scalar = !types.is_empty()
+                            && types.iter().all(|kind| {
+                                matches!(kind.as_str(), "string" | "integer" | "number" | "boolean")
+                            });
+                        scalar.then(|| ScalarRule {
+                            name: name.clone(),
+                            types,
+                            max_length: property["maxLength"]
+                                .as_u64()
+                                .and_then(|max| usize::try_from(max).ok()),
+                        })
+                    })
+                    .collect();
+                (spec.name, rules)
+            })
+            .collect()
+    })
+}
+
+/// Refuse a scalar parameter of the wrong JSON type. Handlers used to read an
+/// optional `sessionId`, `limit` or `kind` with `as_str()`/`as_u64()` and treat
+/// a value of another type as absent, so `sessions.summary` with a numeric
+/// `sessionId` answered about the active session. `null` still means omitted.
+fn validate_scalar_param_types(
+    method: &str,
+    params: &serde_json::Map<String, Value>,
+) -> Result<(), ControlError> {
+    let Some(rules) = scalar_param_rules().get(method) else {
+        return Ok(());
+    };
+    for rule in rules {
+        let Some(value) = params.get(&rule.name).filter(|value| !value.is_null()) else {
+            continue;
+        };
+        let matches = rule.types.iter().any(|kind| match kind.as_str() {
+            "string" => value.is_string(),
+            "integer" => value.is_i64() || value.is_u64(),
+            "number" => value.is_number(),
+            "boolean" => value.is_boolean(),
+            _ => false,
+        });
+        if !matches {
+            let expected = rule
+                .types
+                .iter()
+                .map(|kind| match kind.as_str() {
+                    "integer" => "an integer",
+                    "number" => "a number",
+                    "boolean" => "a boolean",
+                    _ => "a string",
+                })
+                .collect::<Vec<_>>()
+                .join(" or ");
+            return Err(ControlError::InvalidRequest(format!(
+                "{} must be {expected}",
+                rule.name
+            )));
+        }
+        if let (Some(max), Some(text)) = (rule.max_length, value.as_str()) {
+            if text.chars().count() > max {
+                return Err(ControlError::InvalidRequest(format!(
+                    "{} must be at most {max} characters",
+                    rule.name
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn validate_method_params(
     method: &str,
     params: Option<&Value>,
@@ -167,6 +273,7 @@ pub(crate) fn validate_method_params(
             "method params must be an object".into(),
         ));
     };
+    validate_scalar_param_types(method, object)?;
     let allowed: &[&str] = match method {
         "meters.reset" => &["sessionId", "nodeId"],
         "sessions.get" => &["sessionId"],

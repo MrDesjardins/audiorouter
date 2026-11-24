@@ -952,6 +952,15 @@ impl ControlPlane {
             .get("idempotencyKey")
             .and_then(Value::as_str)
             .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        // Check the key the caller sent, not the scoped one: with a client
+        // identity in front of it an empty key looked valid and was answered
+        // as an unknown plan.
+        if key.is_empty() {
+            return Err(audiorouter_domain::StoreError::EmptyIdempotencyKey.into());
+        }
+        if key.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES {
+            return Err(audiorouter_domain::StoreError::IdempotencyKeyTooLong.into());
+        }
         let scoped_key = self.scoped_idempotency_key("graph.commit", key);
         self.commit_graph_scoped(
             &plan_id,

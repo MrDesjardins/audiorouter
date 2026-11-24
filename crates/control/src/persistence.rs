@@ -2,6 +2,39 @@
 
 use super::*;
 
+/// A client's operation key scoped to its identity and method. A key the
+/// schemas allow (up to `MAX_IDEMPOTENCY_KEY_BYTES`) plus that identity can be
+/// longer than the storage limit, which refused the longest valid key from any
+/// named client (MCP, HTTP, CLI). Keys that still fit keep their readable form,
+/// so records journaled earlier are found; longer ones use a SHA-256 digest of
+/// the same text.
+fn scope_idempotency_key(client: &str, method: &str, key: &str) -> String {
+    let scoped = format!("{client}\0{method}\0{key}");
+    if scoped.len() <= audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES {
+        return scoped;
+    }
+    format!(
+        "scoped:{}",
+        audiorouter_storage::lower_hex(&Sha256::digest(scoped.as_bytes()))
+    )
+}
+
+/// A key the backend derives from the caller's key (`toggle:{key}`) for a
+/// second operation it performs on the caller's behalf. The caller's key may be
+/// as long as the schemas allow, so the derived one is hashed when the plain
+/// form would pass the storage limit; it stays deterministic, so a retry finds
+/// the same record.
+pub(crate) fn derived_idempotency_key(prefix: &str, key: &str) -> String {
+    let plain = format!("{prefix}{key}");
+    if plain.len() <= audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES {
+        return plain;
+    }
+    format!(
+        "scoped:{}",
+        audiorouter_storage::lower_hex(&Sha256::digest(plain.as_bytes()))
+    )
+}
+
 pub(crate) fn unix_epoch_seconds() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -484,8 +517,20 @@ impl ControlPlane {
     pub(crate) fn scoped_idempotency_key(&self, method: &str, key: &str) -> String {
         self.active_idempotency_scope
             .as_ref()
-            .map(|client| format!("{client}\0{method}\0{key}"))
+            .map(|client| scope_idempotency_key(client, method, key))
             .unwrap_or_else(|| key.to_owned())
+    }
+
+    /// The key a task-shaped edit (`nodes.add`, `connections.remove`, ...)
+    /// commits its graph plan under. It was `"{method}:{key}"` for everyone:
+    /// the longest key the schemas allow plus that prefix passed the storage
+    /// limit and was refused, and two clients using the same key collided on
+    /// the second one's commit. A named client now gets its own scoped key.
+    pub(crate) fn simple_commit_key(&self, method: &str, key: &str) -> String {
+        if let Some(client) = self.active_idempotency_scope.as_ref() {
+            return scope_idempotency_key(client, &format!("{method}:commit"), key);
+        }
+        derived_idempotency_key(&format!("{method}:"), key)
     }
 
     /// The journal keys `operation_id` can have for the active client. A
@@ -497,19 +542,28 @@ impl ControlPlane {
     /// `API_METHODS` means a new method is found without being added here.
     /// A method that does not journal simply has no row; a lookup is one
     /// primary-key read per method and `operations.get` is rarely called.
-    /// A candidate longer than the journal accepts could never have been
-    /// written, and storage rejects it as an error rather than "no row", so
-    /// it is left out: a key that fit under a short method name must not
-    /// fail because a longer method name was tried first.
+    ///
+    /// Each candidate is derived exactly the way it is stored
+    /// ([`scope_idempotency_key`], and the `method:commit` scope of
+    /// [`Self::simple_commit_key`]): a key whose readable form passes the
+    /// journal limit was stored as a SHA-256 digest (Q4.1), so the same digest
+    /// is the candidate. Skipping such a candidate, as STO-6 first did, made a
+    /// completed operation with a long key answer "operation not found". The
+    /// result is never longer than the limit, so storage does not reject a
+    /// candidate as an error. The plain-method keys come first so a record
+    /// reports the method the caller ran, not its internal commit.
     pub(crate) fn operation_lookup_keys(&self, operation_id: &str) -> Vec<String> {
         self.active_idempotency_scope
             .as_ref()
             .map(|client| {
-                API_METHODS
+                let mut keys: Vec<String> = API_METHODS
                     .iter()
-                    .map(|spec| format!("{client}\0{}\0{operation_id}", spec.name))
-                    .filter(|key| key.len() <= audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES)
-                    .collect()
+                    .map(|spec| scope_idempotency_key(client, spec.name, operation_id))
+                    .collect();
+                keys.extend(API_METHODS.iter().map(|spec| {
+                    scope_idempotency_key(client, &format!("{}:commit", spec.name), operation_id)
+                }));
+                keys
             })
             .unwrap_or_else(|| vec![operation_id.to_owned()])
     }

@@ -3379,7 +3379,7 @@ fn mcp_tool_call(
                 pipe_name,
                 id,
                 "sessions.active.set",
-                Some(json!({ "sessionId": session_id, "idempotencyKey": format!("{key}-open") })),
+                Some(json!({ "sessionId": session_id, "idempotencyKey": mcp_open_key(&key) })),
             );
             if opened["result"]["isError"] == true {
                 return opened;
@@ -3419,7 +3419,7 @@ fn mcp_tool_call(
                 pipe_name,
                 id,
                 "sessions.active.set",
-                Some(json!({ "sessionId": session_id, "idempotencyKey": format!("{key}-open") })),
+                Some(json!({ "sessionId": session_id, "idempotencyKey": mcp_open_key(&key) })),
             );
         }
         "get_recipes" => {
@@ -3713,6 +3713,27 @@ fn mcp_undo_last_change(
     }
 }
 
+/// The key of the "open it" step that follows a session creation, derived from
+/// the creation's key. The schemas allow keys up to 128 bytes and the backend
+/// refuses a longer one, so a long key's derived key is a digest of it: still
+/// deterministic, so a retried tool call replays the same step.
+fn mcp_open_key(key: &str) -> String {
+    let plain = format!("{key}-open");
+    if plain.len() <= 128 {
+        return plain;
+    }
+    let hash = |offset: u64| {
+        plain.bytes().fold(offset, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01B3)
+        })
+    };
+    format!(
+        "open-{:016x}{:016x}",
+        hash(0xcbf2_9ce4_8422_2325),
+        hash(0x8422_2325_cbf2_9ce4)
+    )
+}
+
 /// A session ID determined by the client and its idempotency key (two
 /// FNV-1a 64-bit hashes with different offsets). The backend scopes keys per
 /// client, so the client is part of the input: two assistants that both use
@@ -3754,6 +3775,13 @@ const NETWORK_PAIRING_RECIPE: &str = "14. Send encrypted audio between computers
 fn mcp_tool_error(id: Option<Value>, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "result": { "isError": true, "content": [{ "type": "text", "text": message }] } })
 }
+
+/// Adapter contract cases shared with the control crate and the HTTP API.
+#[cfg(test)]
+#[path = "../../control/src/contract_cases.rs"]
+mod contract_cases;
+#[cfg(test)]
+mod contract_tests;
 
 #[cfg(test)]
 mod tests {

@@ -638,9 +638,10 @@ fn operations_get_finds_a_journaled_operation_of_every_api_method() {
 
 /// A long operation ID that fits the journal limit under a short method name
 /// must not fail because a longer method name makes its candidate key too
-/// long for storage to even look up.
+/// long for storage to even look up: that candidate is hashed (Q4.1), as it
+/// would be if it had been stored, so the lookup is never an error.
 #[test]
-fn operations_get_skips_candidate_keys_too_long_for_the_journal() {
+fn operations_get_finds_an_exact_limit_key_and_hashes_longer_candidates() {
     let mut plane = ControlPlane::with_storage("operation-long", Storage::open_memory().unwrap());
     let limit = audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES;
     let prefix = "client-a\0sessions.stop\0";
@@ -670,6 +671,89 @@ fn operations_get_skips_candidate_keys_too_long_for_the_journal() {
     // An ID that no method could have journaled is simply not found.
     let missing = operation_get_as(&mut plane, "client-a", &"z".repeat(limit));
     assert_eq!(missing.error.expect("not found").code, -32602);
+}
+
+/// Q4.1 hashes a scoped key whose readable form passes the journal limit, and
+/// STO-6 built `operations.get`/`operations.cancel` candidates without that
+/// rule and skipped the over-long ones, so a completed operation with a long
+/// key was "not found". Both ends go through `ControlPlane::dispatch`.
+#[test]
+fn operations_get_and_cancel_find_an_operation_stored_under_a_hashed_key() {
+    let mut plane = ControlPlane::with_storage("operation-hashed", Storage::open_memory().unwrap());
+    let grant = ClientGrant::for_role(ClientRole::Operator);
+    let send = |plane: &mut ControlPlane, client: &str, method: &str, params: Value| {
+        plane.dispatch_authorized_for_client(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: Some(params),
+            },
+            client,
+            &grant,
+        )
+    };
+    let limit = audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES;
+    // The longest key the schemas allow: with the client and method scope in
+    // front it cannot be stored readable, so it is stored as a digest.
+    let long_key = "h".repeat(limit);
+    assert!(
+        format!("client-a\0toolPresets.save\0{long_key}").len() > limit,
+        "the scoped key must exceed the journal limit for this test to mean anything"
+    );
+    let saved = send(
+        &mut plane,
+        "client-a",
+        "toolPresets.save",
+        json!({
+            "kind": "gain",
+            "name": "Quiet",
+            "parameters": {"gainDb": -6.0},
+            "idempotencyKey": long_key
+        }),
+    );
+    assert!(saved.error.is_none(), "{:?}", saved.error);
+
+    let found = send(
+        &mut plane,
+        "client-a",
+        "operations.get",
+        json!({ "operationId": long_key }),
+    );
+    let found = found
+        .result
+        .unwrap_or_else(|| panic!("operations.get said {:?}", found.error));
+    assert_eq!(found["status"], "completed");
+    assert_eq!(found["operation"], "toolPresets.save");
+    assert_eq!(found["durable"], true);
+
+    // Another client must still never read it, hashed or not.
+    assert!(send(
+        &mut plane,
+        "client-b",
+        "operations.get",
+        json!({ "operationId": long_key })
+    )
+    .result
+    .is_none());
+
+    let cancel = send(
+        &mut plane,
+        "client-a",
+        "operations.cancel",
+        json!({ "operationId": long_key, "idempotencyKey": "cancel-hashed" }),
+    );
+    assert_eq!(
+        cancel.result.expect("cancel found the operation")["reason"],
+        "alreadyCompleted"
+    );
+    let unknown = send(
+        &mut plane,
+        "client-a",
+        "operations.cancel",
+        json!({ "operationId": "n".repeat(limit), "idempotencyKey": "cancel-unknown" }),
+    );
+    assert_eq!(unknown.error.expect("not found").code, -32602);
 }
 
 /// The same defect through real handlers: methods the old list omitted,
