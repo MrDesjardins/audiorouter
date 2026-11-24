@@ -9,6 +9,7 @@ import {
   offersAction,
   say,
   type ToneKey,
+  withTone,
 } from "./actionMessage";
 import { MESSAGE_TONES } from "./actionMessageTones";
 import { uiError } from "./backend";
@@ -118,6 +119,14 @@ describe("translated status messages", () => {
       expect(progress.progress).toBe(true);
       expect(actionMessageLifetimeMs(progress, false)).toBeNull();
     }
+  });
+
+  it("shows a failure that wraps a caught error as an error", () => {
+    // The old rules judged the whole sentence, so a reason carrying failure words made these red.
+    expect(say("g3Adv.signInFailed", { reason: "Access is denied" }).tone).toBe("error");
+    expect(say("quit.refusedMessage", { reason: "a recording is still finishing" }).tone).toBe("error");
+    expect(withTone(say("recordingUi.updated", { state: "Failed", frame: 0 }), "error").tone).toBe("error");
+    expect(say("recordingUi.updated", { state: "Failed", frame: 0 }).tone).toBe("info");
   });
 
   it("does not let a name or reason inside the text change the severity", () => {

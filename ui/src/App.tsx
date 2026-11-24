@@ -122,6 +122,7 @@ import {
   say,
   type UiMessage,
   WARNING_LIFETIME_MS,
+  withTone,
 } from "./actionMessage";
 import { unfedRouteNodes } from "./draft";
 import { demoSession, demoSessions } from "./fixtures";
@@ -2528,12 +2529,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (currentSessionIdRef.current !== session.id) return;
       if (activity.version !== requestVersion) return;
       setAudioSourceStates((current) => ({ ...current, [nodeId]: result.state }));
-      setActionMessage(
-        say("g1.appAudioFileState", {
-          name: draft.nodes.find((node) => node.id === nodeId)?.name ?? tm("g1.appAudioFile"),
-          state: result.state,
-        }),
-      );
+      const transport = say("g1.appAudioFileState", {
+        name: draft.nodes.find((node) => node.id === nodeId)?.name ?? tm("g1.appAudioFile"),
+        state: result.state,
+      });
+      // "stopped" read as a success under the old wording rules; keep its green check.
+      setActionMessage(result.state === "stopped" ? withTone(transport, "success") : transport);
     } catch (error) {
       setActionMessage(uiError(error, tm("g1.appTransportFail")));
     } finally {

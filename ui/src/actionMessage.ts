@@ -36,6 +36,14 @@ export function say(key: ToneKey, options?: Record<string, unknown>): UiMessage 
   };
 }
 
+/**
+ * The same message shown with another severity, for a catalog message whose
+ * tone depends on a structured value it reports (a recorder that `failed`).
+ */
+export function withTone(message: UiMessage, tone: ActionMessageTone): UiMessage {
+  return { ...message, tone };
+}
+
 /** Text that describes a failure, such as a caught backend error. */
 export function errorMessage(text: string): UiMessage {
   return { text, tone: "error", progress: false };

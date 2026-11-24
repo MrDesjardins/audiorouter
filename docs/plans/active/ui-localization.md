@@ -505,7 +505,7 @@ builds resolve a saved unsupported locale through the usual fallback.
 
 Requirements: L10N-06 (never match English prose to decide severity),
 L10N-03 (hold keys plus explicit severity), UI-04/05/17. Branch
-`feat/l10n-structured-action-messages`, two local commits, not pushed.
+`feat/l10n-structured-action-messages`, local commits only, not pushed.
 
 What changed:
 
@@ -561,14 +561,20 @@ the structured fact; none hides a message):
   dismissed. Before it depended on its wording. The virtual-device plan reason
   is an error because the contract only ever returns `unavailable`.
 - A name or reason placed inside a message can no longer change its severity
-  (a node called "failed" used to turn a success red).
+  (a node called "failed" used to turn a success red). The old rules judged the
+  rendered sentence, so a failure wrapped in a message was often red. The table
+  was built from templates, so I checked every `say` call that interpolates an
+  error, reason, message, details or state: `g3Adv.signInFailed` and
+  `quit.refusedMessage` (both in a `catch`) are now errors, a recorder that
+  reports `failed` shows as an error (`withTone`), and an audio file that
+  reports `stopped` keeps its green check. The vd* reasons ("requires M03 managed
+  virtual driver") and `g1.appSavedNotApplied` stay information and success, as
+  their real reasons never matched an old pattern.
 - `g1.appGoalMade` keeps its key's severity when the list of tools still to
   choose is appended.
 
 Messages whose English severity looks wrong but was kept identical, for the
-owner to decide (change the entry in `MESSAGE_TONES`): `quit.refusedMessage`
-("Quit refused…", information, closes after 8 s), `g3Adv.signInFailed`
-("Windows could not add AudioRouter to sign-in…", information),
+owner to decide (change the entry in `MESSAGE_TONES`):
 `h1.importUnavailable`, `g2.neNoVbCapture`, `g2.neNoVbPair`,
 `g1.appFindingSessionGone`, `g1.appFindingToolGone`, and
 `g1.appOlderEdits` (success tone, green check, because the old rule matched
@@ -589,7 +595,7 @@ Checks (Windows 11, from `ui/`, 2026-11-24):
   messages, generated TypeScript and Rust resources current.
 - `npm run typecheck:all`: pass. `npm run lint`: pass, 0 warnings.
   `npm run format:check`: pass.
-- `npm test`: 133 files, 1,174 tests pass (1,173 before the glossary test).
+- `npm test`: 133 files, 1,175 tests pass.
   New tests in `actionMessage.test.ts`: severity per key, buttons, lifetimes,
   a warning still in progress, the blank message, French and Simplified
   Chinese messages keeping severity/expiry/buttons, names inside text not
@@ -610,12 +616,19 @@ Rust build was done), including `goals-and-tour`, `canvas-copy-paste`,
 packaged shell or tray; Narrator; a fluent-reviewer pass of French and
 Chinese; the website guide videos (no tool or control changed). The English
 wording edits above change only catalog text, so no website guide copy was
-regenerated. Rollback: revert the two commits.
+regenerated: the site guides are written from the Rust parameter catalog and
+hand-written content (`tools/site/export-tool-guide-catalog.mjs` reads Rust
+sources), none of the reworded strings appears under `site/`, and
+`node tools/site/check-tool-guide-catalog.mjs` passes. Rollback: revert the
+commits on the branch.
 
-Mechanical edit note: `setActionMessage(tm(…))`/`setMessage(tr(…))` →
-`say(…)` and `formatUiError` → `uiError` at those call sites were done with a
-token rename (perl), verified by TypeScript, the diff and the full test run;
-all other changes were made with the Edit and Write tools.
+Deviation from "never a patch script": about 250 call sites were renamed with perl
+(`setActionMessage(tm(…))`, `setMessage(tr(…))` → `say(…)`, `formatUiError` →
+`uiError`), state-type and import lines were changed with perl or sed, three
+files were written with heredocs, and `actionMessageTones.ts` was generated
+once from the old rules by a script. Everything was verified by TypeScript, a
+read of the diff and the full unit run; the table is reviewed by test. The
+remaining changes used the Edit and Write tools.
 
 ## References
 

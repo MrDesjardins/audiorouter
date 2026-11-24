@@ -1,7 +1,7 @@
 // Recorder and recording-library controls (moved from App.tsx).
 import { useEffect, useState } from "react";
 import { askConfirm } from "./AppDialog";
-import { say, type UiMessage } from "./actionMessage";
+import { say, type UiMessage, withTone } from "./actionMessage";
 import { uiError, type RecorderStatus, type UiBackend } from "./backend";
 import { uiIdempotencyKey } from "./idempotency";
 import { PanelMessage } from "./PanelMessage";
@@ -136,7 +136,9 @@ export function RecorderActions({
       const result = await operation();
       setState(result.state);
       if (result.lastFrame !== undefined) setLastFrame(result.lastFrame ?? null);
-      setMessage(say("recordingUi.updated", { state: recordingStateLabel(result.state), frame }));
+      const updated = say("recordingUi.updated", { state: recordingStateLabel(result.state), frame });
+      // A recorder that reports `failed` is a failure, whatever language its label is in.
+      setMessage(result.state === "failed" ? withTone(updated, "error") : updated);
     } catch (error) {
       setState("failed");
       setMessage(uiError(error, tr("recordingUi.actionError")));
