@@ -636,6 +636,42 @@ fn operations_get_finds_a_journaled_operation_of_every_api_method() {
     );
 }
 
+/// A long operation ID that fits the journal limit under a short method name
+/// must not fail because a longer method name makes its candidate key too
+/// long for storage to even look up.
+#[test]
+fn operations_get_skips_candidate_keys_too_long_for_the_journal() {
+    let mut plane = ControlPlane::with_storage("operation-long", Storage::open_memory().unwrap());
+    let limit = audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES;
+    let prefix = "client-a\0sessions.stop\0";
+    let operation_id = "k".repeat(limit - prefix.len());
+    let key = format!("{prefix}{operation_id}");
+    assert_eq!(key.len(), limit);
+    let longest = API_METHODS
+        .iter()
+        .map(|spec| spec.name.len())
+        .max()
+        .unwrap();
+    assert!(
+        "client-a\0".len() + longest + 1 + operation_id.len() > limit,
+        "the longest method name must overflow for this test to mean anything"
+    );
+    plane
+        .storage
+        .as_ref()
+        .unwrap()
+        .journal_commit_with_hash(&key, "sessions.stop", "{}", 0, "hash")
+        .unwrap();
+    let response = operation_get_as(&mut plane, "client-a", &operation_id);
+    assert_eq!(
+        response.result.expect("found")["operation"],
+        "sessions.stop"
+    );
+    // An ID that no method could have journaled is simply not found.
+    let missing = operation_get_as(&mut plane, "client-a", &"z".repeat(limit));
+    assert_eq!(missing.error.expect("not found").code, -32602);
+}
+
 /// The same defect through real handlers: methods the old list omitted,
 /// dispatched as a client, then looked up by the key the caller sent.
 #[test]

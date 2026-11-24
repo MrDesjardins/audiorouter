@@ -3647,14 +3647,26 @@ impl GraphStore {
         self.plan_sequence
     }
 
-    /// Drop expired plans, then the oldest live plans until one more fits.
-    /// The cap is shared by every session and client, and a plan that is
-    /// only previewed is never committed, so refusing the newest plan let one
-    /// script that previews in a loop block every save for the plan lifetime
-    /// (PLAN-1). The oldest plan is the one least likely to be committed.
+    /// Drop expired plans; if the cap is still reached, drop the plans whose
+    /// session has moved past their base revision, then the oldest plans,
+    /// until one more fits. The cap is shared by every session and client,
+    /// and a plan that is only previewed is never committed, so refusing the
+    /// newest plan let one script that previews in a loop block every save
+    /// for the plan lifetime (PLAN-1). A stale plan can only fail with
+    /// `RevisionConflict`, so it goes first; it stays until then so that a
+    /// late commit still gets that "plan again" answer. After that the oldest
+    /// plan is the one least likely to be committed.
     fn make_room_for_plan(&mut self) {
         let now = std::time::Instant::now();
         self.plans.retain(|_, plan| plan.expires_at > now);
+        if self.plans.len() >= MAX_PENDING_GRAPH_PLANS {
+            let sessions = &self.sessions;
+            self.plans.retain(|_, plan| {
+                sessions
+                    .get(&plan.session_id)
+                    .is_some_and(|session| session.revision == plan.base_revision)
+            });
+        }
         while self.plans.len() >= MAX_PENDING_GRAPH_PLANS {
             let oldest = self
                 .plans
@@ -3823,11 +3835,6 @@ impl GraphStore {
             }
         }
         self.sessions.insert(committed.id.clone(), committed);
-        // The session moved to a new revision, so every other plan made for
-        // it has a base revision that can no longer match. Keeping them only
-        // spent the shared plan cap until they expired (PLAN-1).
-        self.plans
-            .retain(|_, other| other.session_id != result.session_id);
         self.committed_keys
             .insert(idempotency_key.into(), (result.clone(), plan_id.clone()));
         self.committed_key_order.push_back(idempotency_key.into());
@@ -5893,7 +5900,7 @@ mod tests {
     }
 
     #[test]
-    fn a_commit_drops_the_other_plans_of_its_session_but_not_other_sessions() {
+    fn a_full_inventory_drops_stale_plans_before_live_ones_and_a_late_commit_still_conflicts() {
         let mut store = GraphStore::default();
         let original = session(
             vec![
@@ -5906,17 +5913,37 @@ mod tests {
         other.id = EntityId::new("other-session");
         store.insert_session(original.clone()).unwrap();
         store.insert_session(other.clone()).unwrap();
-        let committed = store.plan_graph(&original.id, 0, original.clone()).unwrap();
-        let stale = store.plan_graph(&original.id, 0, original.clone()).unwrap();
-        let unrelated = store.plan_graph(&other.id, 0, other.clone()).unwrap();
-        store.commit_graph(&committed, 0, "key").unwrap();
-        assert_eq!(
-            store.commit_graph(&stale, 0, "stale-key"),
-            Err(StoreError::PlanNotFound),
-            "a plan for a revision that no longer exists is gone, not retained"
+        // Older live plans of one session, then newer plans of another that
+        // a commit makes stale.
+        let live: Vec<_> = (0..50)
+            .map(|_| store.plan_graph(&other.id, 0, other.clone()).unwrap())
+            .collect();
+        let later: Vec<_> = (0..50)
+            .map(|_| store.plan_graph(&original.id, 0, original.clone()).unwrap())
+            .collect();
+        store.commit_graph(&later[0], 0, "key").unwrap();
+        // A client holding another old plan still hears "revision conflict".
+        assert!(matches!(
+            store.commit_graph(&later[1], 0, "late-key"),
+            Err(StoreError::RevisionConflict { .. })
+        ));
+        // The commit and the conflicting commit each consumed their plan; the
+        // 48 other stale plans stay until room is needed.
+        assert_eq!(store.plans.len(), 98);
+        assert!(store.plan_candidate(&later[2]).is_some());
+        let mut newest = None;
+        for _ in 0..3 {
+            newest = Some(store.plan_graph(&other.id, 0, other.clone()).unwrap());
+        }
+        for id in &live {
+            assert!(store.plan_candidate(id).is_some(), "older live plans stay");
+        }
+        assert!(store.plan_candidate(&newest.unwrap()).is_some());
+        assert!(
+            store.plan_candidate(&later[2]).is_none(),
+            "stale plans were dropped to make room"
         );
-        assert!(store.plan_candidate(&unrelated).is_some());
-        assert_eq!(store.plans.len(), 1);
+        assert_eq!(store.plans.len(), 53, "50 older + 3 new live plans");
     }
 
     #[test]

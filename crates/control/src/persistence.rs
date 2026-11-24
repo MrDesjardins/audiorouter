@@ -497,6 +497,10 @@ impl ControlPlane {
     /// `API_METHODS` means a new method is found without being added here.
     /// A method that does not journal simply has no row; a lookup is one
     /// primary-key read per method and `operations.get` is rarely called.
+    /// A candidate longer than the journal accepts could never have been
+    /// written, and storage rejects it as an error rather than "no row", so
+    /// it is left out: a key that fit under a short method name must not
+    /// fail because a longer method name was tried first.
     pub(crate) fn operation_lookup_keys(&self, operation_id: &str) -> Vec<String> {
         self.active_idempotency_scope
             .as_ref()
@@ -504,6 +508,7 @@ impl ControlPlane {
                 API_METHODS
                     .iter()
                     .map(|spec| format!("{client}\0{}\0{operation_id}", spec.name))
+                    .filter(|key| key.len() <= audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES)
                     .collect()
             })
             .unwrap_or_else(|| vec![operation_id.to_owned()])

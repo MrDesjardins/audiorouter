@@ -657,7 +657,9 @@ fn plan_exists(plane: &ControlPlane, plan_id: &str) -> (bool, bool) {
 /// PLAN-1: an assistant that previews with `graph.plan` and never commits
 /// filled the global cap of 100 for five minutes, and every save then failed
 /// with "Too many plans are waiting". A commit left the other plans of its
-/// session behind although their base revision could no longer match.
+/// session behind although their base revision could no longer match. They
+/// stay (a late commit must still hear `revisionConflict`, "plan again") but
+/// are the first to go when the inventory is full.
 #[test]
 fn abandoned_plans_of_one_session_do_not_block_another_sessions_save() {
     let mut plane = ControlPlane::with_storage("plan-cap", Storage::open_memory().unwrap());
@@ -674,16 +676,33 @@ fn abandoned_plans_of_one_session_do_not_block_another_sessions_save() {
     }
     let committed = commit_through_dispatch(&mut plane, &plans[7], "commit-a");
     assert!(committed.error.is_none(), "{committed:?}");
-    // The commit moved session A to revision 1, so its other plans are dead.
-    for (index, plan) in plans.iter().enumerate() {
-        assert_eq!(
-            plan_exists(&plane, plan),
-            (false, false),
-            "plan {index} of the committed session stays in memory or storage"
-        );
-    }
+    // The commit moved session A to revision 1, so its other plans are stale,
+    // and a late commit of one keeps the documented "plan again" answer.
+    let late = commit_through_dispatch(&mut plane, &plans[8], "commit-late");
+    let error = late.error.expect("a stale plan cannot commit");
+    assert_eq!(error.data.as_ref().unwrap()["code"], "revisionConflict");
     let saved = plan_through_dispatch(&mut plane, "session-b", "real save");
     assert!(saved.is_ok(), "{saved:?}");
+    // With the inventory full of stale plans, saving never fails and the live
+    // plans of session B are kept.
+    let mut live = vec![saved.unwrap()];
+    for index in 0..5 {
+        live.push(
+            plan_through_dispatch(&mut plane, "session-b", &format!("b {index}"))
+                .unwrap_or_else(|message| panic!("{message}")),
+        );
+    }
+    for plan in &live {
+        assert_eq!(plan_exists(&plane, plan), (true, true));
+    }
+    let stale_left = plans
+        .iter()
+        .filter(|plan| plan_exists(&plane, plan) != (false, false))
+        .count();
+    assert!(
+        stale_left <= audiorouter_domain::MAX_PENDING_GRAPH_PLANS - live.len(),
+        "{stale_left} stale plans still hold the shared cap"
+    );
 }
 
 #[test]

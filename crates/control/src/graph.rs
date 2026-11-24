@@ -627,9 +627,6 @@ impl ControlPlane {
             // leftover plan expires normally and its old base revision
             // prevents another commit; the same key replays the journal.
             let _ = storage.delete_graph_plan(plan_id.as_str());
-            // The other plans of this session can no longer commit (their
-            // base revision is stale); do not let them spend the shared cap.
-            let _ = storage.delete_other_graph_plans(result.session_id.as_str(), plan_id.as_str());
         }
         // Committing runs on the audio service thread; let running audio
         // advance between the durable write and the graph rebuild so a save
