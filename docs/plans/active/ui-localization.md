@@ -706,6 +706,117 @@ control changed); a second full Playwright run on the final code (the 3
 failures and the specs near the fixes were rerun instead). Rollback: revert the
 verification commit.
 
+### 2026-11-24 — Extraction pass: recovery notices, refusals and dialogs
+
+Requirements: L10N-01 (app-owned text in the catalogs), L10N-04/06 (no
+behaviour decided from English prose), UI-04/05/11. Branch
+`feat/l10n-extraction-2026-11-24`, from
+`feat/l10n-structured-action-messages-verified` (203a40bee). Local commits only,
+not pushed.
+
+Done (72 new keys in each of `en`, `fr`, `zh-Hans`; 3,666 → 3,738 messages):
+
+- `useWorkspaceEvents.ts`: the four route-recovery notices (recovery failed,
+  recovered, device changed, virtual cable link timed out / failed) are
+  `workspaceEvents.*` catalog messages (7 keys: the bus notices have a named and
+  an unnamed whole-sentence form, so no translated noun is spliced in). Their
+  severity is declared in `MESSAGE_TONES`. The old code marked three of them as
+  errors by hand, which the English-wording parity test cannot see, so
+  `workspaceEvents.{recoveryFailed,deviceChanged,bridgeTimedOut,
+  bridgeTimedOutUnnamed}` are listed in `DELIBERATE` in
+  `actionMessageLegacyParity.test.ts`. Tones are unchanged (error, info, error).
+- `draft.ts` (`draftErrors.*`, 25 keys): the refusals a person can reach
+  (executable path, application group, scan result, self-connection, port
+  choice, duplicate connection, sidechain/output/destination changed, instrument
+  inside a connection, Mixer removal, last tool, tool and session names, volume
+  and gain ranges) are raised through `userError(key)` in the language active at
+  that moment. `App.tsx` decided whether to offer replacing an occupied input
+  by comparing the English sentence `That input already has a connection`; it now
+  tests the new `InputOccupiedError` class (regression in
+  `draft-connection.test.ts`, French message, class still recognised). English
+  wording changed only where `plainWords` requires it: "A node cannot connect to
+  itself" → "A tool …", "already in the draft" → "already in your unsaved
+  edits", "A draft must retain at least one node" → "A route must keep at least
+  one tool", "Node name cannot …" → "Tool name cannot …". Invariant errors
+  (`Unknown draft connection: …`, `Unable to create an inserted …`, plan
+  revision checks) stay English: they are diagnostics, not user text.
+- `App.tsx`: the `Go to {name}` button and the session Revision line
+  (`appShell.*`, 3 keys).
+- `SignalFlowPanel.tsx`: the whole file (about 45 strings): the application
+  picker (modes, path field, browse, group, hints, status), the plug-in picker
+  heading and help (two whole sentences instead of a sentence around a
+  conditional) and the keyboard connection dialog (`signalFlowDialogs.*`, 32
+  keys; existing `canvasUi`, `common`, `g2.connChannels`, `g5.app*` messages
+  reused). Note: `#signal-flow-panel > .connection-editor` is `display: none`, so
+  the keyboard connection dialog is not reachable from the UI today; its text is
+  translated anyway.
+- `discordRoute.ts` refusals (`discordRoute.*`, 4 keys) and the `SvgHandle` drag
+  hint (`svgHandle.hint`).
+
+Audit queue (`npm run i18n:audit`, from `ui/`):
+
+| Command | Before | After |
+|---|---|---|
+| `-- --tsx --by-file` | 136 | 81 |
+| `-- --tsx --by-file --all` | 9,870 | 9,866 |
+| `-- --all` | 13,462 | 13,467 |
+
+The 81 left are units (`Hz`, `dB`, `ms`, `kHz`), product names (`AudioRouter`,
+`Discord`, `OBS Studio`, `VST3`, `UDP`), path and filename examples, preview
+fixtures (`devHarness`, `ThemePreview`), template literals that already wrap
+catalog calls, and values the backend returns. The two `--all` totals are not a
+queue: they list every data literal, and the new `tx("…")` key strings add to
+them. I also searched sentence-like literals in all non-test `.ts/.tsx` files
+(a scratch script, not kept). What remains there is deliberately left:
+diagnostics log lines (`App.tsx` "Graph checkpoint…", `host.ts` Tauri transport
+text, `useWorkbenchStatus`, `clientDiagnostics`), the API request builder's
+validation text (API-page literals), `library.ts` descriptions (already shown
+through `toolCatalog.*`), the GoalDialog/palette English→key maps, node default
+names ("Microphone", "Voice to Discord": persisted entity names, L10N-05), and
+the `recordDraftChange` group keys in `PropertiesPanel` (undo-coalescing keys,
+not text).
+
+Reviewer follow-ups (fr and zh-Hans text was written by the agent, from the
+existing catalog terms, and needs the fluent reviewer): all of
+`workspaceEvents.*` (safety wording: device changed, recovery failed, virtual
+cable link), `draftErrors.*`, `signalFlowDialogs.*`, `discordRoute.*`,
+`svgHandle.hint`, `appShell.*`. Terms reused: Lecture/播放, Arrêter/停止,
+Propriétés/属性, mélangeur/混音器, outil/工具, sidechain/侧链. French now
+says "Aller à {{name}}" for the button and "Connexion au clavier" for the
+keyboard dialog; `fr` "bus" is kept as in the existing catalog.
+Owner decisions still open from earlier entries are unchanged.
+
+Checks (Windows 11, from `ui/`, 2026-11-24, own worktree):
+
+- `npm ci`; `npm run i18n:generate`, `npm run i18n:check`: 3 languages, 3,738
+  messages; `src-tauri/src/ui_language.rs` did not change (no native key added),
+  so no Rust format or Clippy run was needed.
+- `npm run typecheck:all`, `npm run lint` (0 warnings), `npm run format`
+  then `format:check`: pass.
+- `npm test`: 134 files, 1,182 tests pass (new: bridge notices named/unnamed
+  and in French, occupied-input class in French, Discord refusals in French).
+  One earlier partial run of `src/App*` failed one focus/Tab test under load and
+  passed on rerun.
+- Playwright (Edge, `--workers=1`, temporary config on port 4291 with its own
+  output folder, deleted afterwards): 116 passed, covering `ui-language` (new
+  French and Simplified Chinese application-picker spec), `application-sources`,
+  `audio-tools`, `banner-layout`, `device-used-by`, `discord-setup`,
+  `plugin-sidechain`, `setup-check`, `dynamics-editor`, `handle-contrast`,
+  `device-access-consent`, `canvas-layout`, `live-controls`, `copy-error`,
+  `ui-round-20-fixes`, `duck-widget`.
+- `node tools/docs/validate.mjs`: see the handback; run after this entry.
+
+Not run: specs importing `real-backend` (no `e2e_backend` rebuild),
+including `session-workflows`; the full Playwright suite; `chinese-ui-audit`
+(opt-in); the packaged shell, tray, Narrator; any fluent review; website guide
+videos (no tool or control changed, no site copy touched).
+
+Process deviation: one import line in `useWorkspaceEvents.ts` was changed with
+`sed` by mistake; everything else was written with the Edit and Write tools
+(a scratch analysis script outside the repo was written with Write after a
+heredoc dropped a backslash). Rollback: revert the four commits on the branch
+and regenerate the catalog outputs.
+
 ## References
 
 - [M05 visual editor](../../milestones/M05-visual-editor.md),
