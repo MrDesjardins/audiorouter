@@ -3682,6 +3682,13 @@ export const MESSAGE_KEYS = [
   "workspaceAudit.toolStatus",
   "workspaceAudit.unfed",
   "workspaceAudit.voicemeeter",
+  "workspaceEvents.bridgeFailed",
+  "workspaceEvents.bridgeFailedUnnamed",
+  "workspaceEvents.bridgeTimedOut",
+  "workspaceEvents.bridgeTimedOutUnnamed",
+  "workspaceEvents.deviceChanged",
+  "workspaceEvents.recovered",
+  "workspaceEvents.recoveryFailed",
 ] as const;
 
 export type MessageKey = (typeof MESSAGE_KEYS)[number];

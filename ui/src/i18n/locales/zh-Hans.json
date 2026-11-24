@@ -3874,6 +3874,15 @@
       "backendDisconnected": "控制后端已断开连接。",
       "backendNoProcessorCatalog": "后端已断开连接；无法使用处理器目录。",
       "backendNoPresetCatalog": "后端已断开连接；无法使用预设目录。"
+    },
+    "workspaceEvents": {
+      "recoveryFailed": "AudioRouter 无法重新启动路由：该设备恢复后与原来的标识不一致。请在“属性”中检查该设备，然后点击“播放”。",
+      "recovered": "音频设备已恢复，AudioRouter 已重新启动路由。",
+      "deviceChanged": "此路由使用的音频设备已断开或更改，音频已停止。同一设备恢复后，AudioRouter 会在最长两分钟内自动重新启动路由；超过该时间后，请重新连接该设备并点击“播放”。",
+      "bridgeTimedOut": "{{bus}} 的虚拟线缆链路已超时，相应音频现已静音。请点击“停止”，再点击“播放”重新启动。",
+      "bridgeTimedOutUnnamed": "受影响总线的虚拟线缆链路已超时，相应音频现已静音。请点击“停止”，再点击“播放”重新启动。",
+      "bridgeFailed": "{{bus}} 的虚拟线缆链路已失败，相应音频现已静音。请点击“停止”，再点击“播放”重新启动。",
+      "bridgeFailedUnnamed": "受影响总线的虚拟线缆链路已失败，相应音频现已静音。请点击“停止”，再点击“播放”重新启动。"
     }
   }
 }

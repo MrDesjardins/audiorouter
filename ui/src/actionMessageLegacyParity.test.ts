@@ -51,6 +51,13 @@ const render = (key: string, args: Record<string, string> = {}): string =>
 const DELIBERATE: Partial<Record<ToneKey, ActionMessageTone>> = {
   "g3Adv.signInFailed": "error",
   "quit.refusedMessage": "error",
+  // The four route-recovery notices of useWorkspaceEvents were marked as errors
+  // by hand before (the owner's 2026-11-07 report: "stopped" read as success and
+  // closed itself); their wording alone would have read as information or success.
+  "workspaceEvents.recoveryFailed": "error",
+  "workspaceEvents.deviceChanged": "error",
+  "workspaceEvents.bridgeTimedOut": "error",
+  "workspaceEvents.bridgeTimedOutUnnamed": "error",
 };
 
 /**

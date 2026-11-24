@@ -3889,6 +3889,15 @@
       "backendDisconnected": "The control backend is disconnected.",
       "backendNoProcessorCatalog": "The backend is disconnected; processor catalog is unavailable.",
       "backendNoPresetCatalog": "The backend is disconnected; preset catalog is unavailable."
+    },
+    "workspaceEvents": {
+      "recoveryFailed": "AudioRouter could not restart the route: the device it uses did not come back with the same identity. Check the device in Properties, then press Play.",
+      "recovered": "The audio device came back, so AudioRouter restarted the route.",
+      "deviceChanged": "An audio device this route uses was disconnected or changed, so audio stopped. AudioRouter restarts the route when the same device is back, for up to two minutes; after that, reconnect it and press Play.",
+      "bridgeTimedOut": "The virtual cable link for {{bus}} timed out, so that audio is silent. Press Stop and Play to restart it.",
+      "bridgeTimedOutUnnamed": "The virtual cable link for an affected bus timed out, so that audio is silent. Press Stop and Play to restart it.",
+      "bridgeFailed": "The virtual cable link for {{bus}} failed, so that audio is silent. Press Stop and Play to restart it.",
+      "bridgeFailedUnnamed": "The virtual cable link for an affected bus failed, so that audio is silent. Press Stop and Play to restart it."
     }
   }
 }

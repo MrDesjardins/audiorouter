@@ -3,6 +3,8 @@ import { act, renderHook } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { createDisconnectedBackend, SnapshotCache } from "./backend";
 import { demoSession } from "./fixtures";
+import { applyLanguage } from "./i18n";
+import en from "./i18n/locales/en.json";
 import { useWorkspaceEvents } from "./useWorkspaceEvents";
 
 it("refreshes after a failed subscription even when recovery has no events", async () => {
@@ -130,6 +132,95 @@ it("reports an automatic route recovery and its failure", async () => {
       expect.objectContaining({ text: expect.stringContaining("restarted the route"), tone: "info" }),
     );
   } finally {
+    hook.unmount();
+    vi.useRealTimers();
+  }
+});
+
+it("names the bus in a virtual cable notice, keeps its severity and follows the language", async () => {
+  vi.useFakeTimers();
+  const base = createDisconnectedBackend();
+  const snapshot = await base.snapshot();
+  const event = (category: string, operationId?: string) => ({ sequence: 1, category, revision: 0, operationId });
+  const backend = {
+    ...base,
+    connected: true,
+    snapshot: vi.fn().mockResolvedValue(snapshot),
+    subscribe: vi
+      .fn()
+      .mockResolvedValueOnce({
+        backendEpoch: 1,
+        nextSequence: 2,
+        events: [event("virtualBridge.expired", "voice-bus")],
+        resyncRequired: false,
+      })
+      .mockResolvedValueOnce({
+        backendEpoch: 1,
+        nextSequence: 3,
+        events: [event("virtualBridge.failed")],
+        resyncRequired: false,
+      })
+      .mockResolvedValueOnce({
+        backendEpoch: 1,
+        nextSequence: 4,
+        events: [event("devices.bindingInvalidated")],
+        resyncRequired: false,
+      })
+      .mockResolvedValue({ backendEpoch: 1, nextSequence: 5, events: [], resyncRequired: false }),
+  };
+  const cache = new SnapshotCache();
+  await cache.refresh(backend);
+  const message = vi.fn();
+  const hook = renderHook(() =>
+    useWorkspaceEvents({
+      backend,
+      hasSnapshot: true,
+      session: demoSession,
+      snapshotCache: cache,
+      eventCursor: { current: { backendEpoch: 1, sequence: 0 } },
+      setSnapshotState: vi.fn(),
+      followBackendActiveSession: () => false,
+      setActionMessage: message,
+      refreshApplications: vi.fn(),
+      refreshDevices: vi.fn(),
+      refreshSessions: async () => [],
+      setRecordings: vi.fn(),
+      setRecordingsError: vi.fn(),
+      setRecorderStatuses: vi.fn(),
+      setRecorderStatusAvailable: vi.fn(),
+    }),
+  );
+  try {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(message).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        text: expect.stringContaining("link for voice-bus timed out"),
+        tone: "error",
+        key: "workspaceEvents.bridgeTimedOut",
+      }),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(message).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        text: expect.stringContaining("link for an affected bus failed"),
+        tone: "error",
+        key: "workspaceEvents.bridgeFailedUnnamed",
+      }),
+    );
+    await applyLanguage("fr");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    const device = message.mock.lastCall?.[0] as { text: string; tone: string } | undefined;
+    expect(device?.tone).toBe("error");
+    expect(device?.text).toContain("appuyez sur Lecture");
+    expect(device?.text).not.toBe(en.messages.workspaceEvents.deviceChanged);
+  } finally {
+    await applyLanguage("en");
     hook.unmount();
     vi.useRealTimers();
   }

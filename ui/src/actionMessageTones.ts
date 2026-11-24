@@ -288,6 +288,13 @@ export const MESSAGE_TONES = {
   "workflowActions.sessionDuplicatedStopped": SUCCESS,
   "workflowUi.canvasRedo": INFO,
   "workflowUi.canvasUndo": INFO,
+  "workspaceEvents.bridgeFailed": ERROR,
+  "workspaceEvents.bridgeFailedUnnamed": ERROR,
+  "workspaceEvents.bridgeTimedOut": ERROR,
+  "workspaceEvents.bridgeTimedOutUnnamed": ERROR,
+  "workspaceEvents.deviceChanged": ERROR,
+  "workspaceEvents.recovered": INFO,
+  "workspaceEvents.recoveryFailed": ERROR,
 } as const satisfies Partial<Record<MessageKey, Declared>>;
 
 export type ToneKey = keyof typeof MESSAGE_TONES;

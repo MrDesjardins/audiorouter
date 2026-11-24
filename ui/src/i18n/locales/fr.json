@@ -3904,6 +3904,15 @@
       "backendDisconnected": "Le service de contrôle est déconnecté.",
       "backendNoProcessorCatalog": "Le service est déconnecté ; le catalogue des processeurs est indisponible.",
       "backendNoPresetCatalog": "Le service est déconnecté ; le catalogue des préréglages est indisponible."
+    },
+    "workspaceEvents": {
+      "recoveryFailed": "AudioRouter n’a pas pu redémarrer la route : le périphérique utilisé n’est pas revenu avec la même identité. Vérifiez le périphérique dans Propriétés, puis appuyez sur Lecture.",
+      "recovered": "Le périphérique audio est revenu, AudioRouter a donc redémarré la route.",
+      "deviceChanged": "Un périphérique audio utilisé par cette route a été déconnecté ou modifié, l’audio s’est donc arrêté. AudioRouter redémarre la route lorsque le même périphérique revient, pendant deux minutes au plus ; passé ce délai, reconnectez-le et appuyez sur Lecture.",
+      "bridgeTimedOut": "La liaison du câble virtuel pour {{bus}} a expiré, ce qui coupe le son concerné. Appuyez sur Arrêter, puis sur Lecture pour la relancer.",
+      "bridgeTimedOutUnnamed": "La liaison du câble virtuel d’un bus concerné a expiré, ce qui coupe le son concerné. Appuyez sur Arrêter, puis sur Lecture pour la relancer.",
+      "bridgeFailed": "La liaison du câble virtuel pour {{bus}} a échoué, ce qui coupe le son concerné. Appuyez sur Arrêter, puis sur Lecture pour la relancer.",
+      "bridgeFailedUnnamed": "La liaison du câble virtuel d’un bus concerné a échoué, ce qui coupe le son concerné. Appuyez sur Arrêter, puis sur Lecture pour la relancer."
     }
   }
 }
