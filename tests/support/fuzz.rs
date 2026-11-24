@@ -61,6 +61,12 @@ impl Rng {
     pub fn bytes(&mut self, length: usize) -> Vec<u8> {
         (0..length).map(|_| self.next_u64() as u8).collect()
     }
+
+    /// Random bytes of a random length in `low..=high`.
+    pub fn blob(&mut self, low: usize, high: usize) -> Vec<u8> {
+        let length = self.range(low, high);
+        self.bytes(length)
+    }
 }
 
 /// The generator for one case of a run, rebuildable from `(seed, index)`.
