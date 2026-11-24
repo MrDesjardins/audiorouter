@@ -21,7 +21,10 @@
 //! `AUDIOROUTER_TIMING_RUNS` (default 3), `AUDIOROUTER_TIMING_SCALE` (divides
 //! blob sizes and counts, default 1; use 8 for a smoke run). It uses a pipe
 //! named after the process ID, never the default control pipe, and
-//! temporary databases under `target/`.
+//! temporary databases under `target/service-timing-pipe-<pid>`. The serve
+//! threads keep those databases open until the process exits and have no stop
+//! request, so the test cannot delete them (about 1 to 2 GiB per run): remove
+//! `target/service-timing-pipe-*` afterwards, when no run is in progress.
 #![cfg(windows)]
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -264,22 +267,30 @@ struct Heavy {
 /// while a poller sends quick requests every 20 ms. Returns the poll
 /// latencies in ms (with their send offsets) and the heavy timings. A 2 s
 /// idle lead-in and lead-out frame the heavy window.
-fn scenario(pipe: &str, heavy: Vec<HeavyRequest>) -> (Vec<(f64, f64, bool)>, Vec<Heavy>) {
+fn scenario(
+    pipe: &str,
+    pollers: usize,
+    heavy: Vec<HeavyRequest>,
+) -> (Vec<(f64, f64, bool)>, Vec<Heavy>) {
     let origin = Instant::now();
     let stop = Arc::new(AtomicBool::new(false));
-    let poller_pipe = pipe.to_owned();
-    let poller_stop = stop.clone();
-    let poller = std::thread::spawn(move || {
-        let mut polls = Vec::new();
-        while !poller_stop.load(Ordering::Acquire) {
-            let sent = origin.elapsed();
-            let started = Instant::now();
-            let ok = call(&poller_pipe, "diagnostics.getVerbose", Value::Null).is_ok();
-            polls.push((millis(sent), millis(started.elapsed()), ok));
-            std::thread::sleep(Duration::from_millis(20));
-        }
-        polls
-    });
+    let pollers: Vec<_> = (0..pollers)
+        .map(|_| {
+            let poller_pipe = pipe.to_owned();
+            let poller_stop = stop.clone();
+            std::thread::spawn(move || {
+                let mut polls = Vec::new();
+                while !poller_stop.load(Ordering::Acquire) {
+                    let sent = origin.elapsed();
+                    let started = Instant::now();
+                    let ok = call(&poller_pipe, "diagnostics.getVerbose", Value::Null).is_ok();
+                    polls.push((millis(sent), millis(started.elapsed()), ok));
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                polls
+            })
+        })
+        .collect();
     std::thread::sleep(Duration::from_secs(2));
     let workers: Vec<_> = heavy
         .into_iter()
@@ -310,7 +321,11 @@ fn scenario(pipe: &str, heavy: Vec<HeavyRequest>) -> (Vec<(f64, f64, bool)>, Vec
         .collect();
     std::thread::sleep(Duration::from_secs(2));
     stop.store(true, Ordering::Release);
-    (poller.join().unwrap(), heavy)
+    let polls = pollers
+        .into_iter()
+        .flat_map(|poller| poller.join().unwrap())
+        .collect();
+    (polls, heavy)
 }
 
 fn percentile(sorted: &[f64], fraction: f64) -> f64 {
@@ -440,17 +455,41 @@ fn pipe_quick_requests_wait_behind_bundle_work() {
         }
         for (name, pipe, heavy) in plan {
             let heavy_count = heavy.len();
-            let (polls, heavy) = scenario(&pipe, heavy);
+            let (polls, heavy) = scenario(&pipe, 1, heavy);
             lines.push(summarize(run, name, heavy_count, &polls, &heavy));
         }
-        // Export and import queued together on the mixed backend.
+        // Export and import queued together on the mixed backend. By now
+        // that database already holds `imp-compressible`'s media, so this
+        // second import restores less than the first did.
         let combined = vec![
             export(&mixed_pipe, "mix-noise", &format!("pipe-mix-{run}")),
             import(&bundles[0], "import-c-again"),
         ];
-        let (polls, heavy) = scenario(&mixed_pipe, combined);
-        lines.push(summarize(run, "export+import together", 2, &polls, &heavy));
-        // No shutdown request exists; the serve threads end with the process.
+        let (polls, heavy) = scenario(&mixed_pipe, 1, combined);
+        lines.push(summarize(
+            run,
+            "export + re-import (media already present)",
+            2,
+            &polls,
+            &heavy,
+        ));
+        // Six clients polling at once (the pipe has four instances) while the
+        // slow noise export runs: do the extra clients wait or fail?
+        let crowded = vec![export(
+            &large_pipe,
+            "lib-noise",
+            &format!("pipe-crowd-{run}"),
+        )];
+        let (polls, heavy) = scenario(&large_pipe, 6, crowded);
+        lines.push(summarize(
+            run,
+            "export-noise with 6 pollers",
+            1,
+            &polls,
+            &heavy,
+        ));
+        // The serve threads hold their databases open until the process ends,
+        // so the fixtures under target/ cannot be removed here.
     }
     if let Ok(path) = std::env::var("AUDIOROUTER_TIMING_CSV") {
         std::fs::write(path, format!("{header}\n{}\n", lines.join("\n"))).unwrap();

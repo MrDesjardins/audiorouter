@@ -14,8 +14,13 @@
 //!   inline (not serviced) steps of an import, and how import time scales with
 //!   earlier imports of the same session ID.
 //!
+//! * `play_path_media_load_and_compile`: the device-free steps of Play (decode
+//!   every Audio File, compile the graph) for eight 100 s stereo files (a Mixer takes at most 8 sources).
 //! * `export_of_an_asset_over_the_import_limit`: a small probe that a 20 MiB
 //!   audio asset exports and imports (media entries may be 64 MiB).
+//!
+//! A passing run deletes its `target/service-timing-*` directory; a failing
+//! one leaves it behind for inspection, so remove stale ones by hand.
 //!
 //! The pipe-level question (how long a quick request waits behind a running
 //! export) is `crates/transport/tests/service_timing_pipe.rs`.
@@ -124,6 +129,33 @@ fn wav_with_format(
         let mut noise = vec![0u8; data];
         Xorshift(seed | 1).fill(&mut noise);
         out.extend_from_slice(&noise);
+    }
+    out
+}
+
+/// A stereo 32-bit IEEE-float WAV of `frames` noise frames in [-1, 1).
+fn wav_float32_stereo(frames: usize, sample_rate: u32, seed: u64) -> Vec<u8> {
+    let data = frames * 8;
+    let mut out = Vec::with_capacity(44 + data);
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&((36 + data) as u32).to_le_bytes());
+    out.extend_from_slice(b"WAVEfmt ");
+    out.extend_from_slice(&16u32.to_le_bytes());
+    out.extend_from_slice(&3u16.to_le_bytes()); // IEEE float
+    out.extend_from_slice(&2u16.to_le_bytes());
+    out.extend_from_slice(&sample_rate.to_le_bytes());
+    out.extend_from_slice(&(sample_rate * 8).to_le_bytes());
+    out.extend_from_slice(&8u16.to_le_bytes());
+    out.extend_from_slice(&32u16.to_le_bytes());
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&(data as u32).to_le_bytes());
+    let mut state = seed | 1;
+    for _ in 0..frames * 2 {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        let sample = (state >> 40) as f32 / 8_388_608.0 - 1.0;
+        out.extend_from_slice(&sample.to_le_bytes());
     }
     out
 }
@@ -557,90 +589,104 @@ fn res6_slow_method_timings() {
             drop((source, target, fresh));
         }
 
-        // A near-maximum upload `finishUpload` accepts, chunk by chunk. The
-        // 64 MiB size limit cannot be reached by a WAV: decoding refuses a
-        // file over 120 s, and counts the source frames against that limit
-        // (119 s at 96 kHz was refused), so the heaviest 16-bit file is 119 s
-        // of 44.1 kHz stereo (20 MiB), which also has to be resampled.
+        // Uploads `finishUpload` accepts, chunk by chunk. The decoder takes
+        // one or two channels, at most 120 s, and at most 16 Mi decoded
+        // samples (64 MiB of f32). So the common heavy file is 119 s of
+        // 44.1 kHz stereo 16-bit (20 MiB, resampled to the graph rate), and
+        // the largest file the 64 MiB upload limit allows is high-rate
+        // float32 stereo (83 s at 96 kHz is 61 MiB). 119 s of 96 kHz stereo
+        // 16-bit was refused for exceeding the sample budget.
         let mut source = plane_for(&library.database(), "timing-upload");
         let seconds = (119 / scale).max(2);
-        let upload_bytes = wav_with_format(
-            44 + seconds * 44_100 * 4,
-            false,
-            0xfeed + run as u64,
-            44_100,
-            2,
-        );
-        let (begin, started) = timed(
-            &mut source,
-            "audioMedia.beginUpload",
-            json!({ "fileName": "upload.wav", "sizeBytes": upload_bytes.len() }),
-        );
-        row(
-            &mut rows,
-            run,
-            "upload",
-            "audioMedia.beginUpload",
-            "",
-            begin,
-            upload_bytes.len() as u64,
-        );
-        let started = started.expect("begin upload");
-        let chunk_size = started["chunkBytes"].as_u64().unwrap() as usize;
-        let mut slowest_chunk = Duration::ZERO;
-        let mut chunk_total = Duration::ZERO;
-        let mut chunks = 0usize;
-        for (index, chunk) in upload_bytes.chunks(chunk_size).enumerate() {
-            let encoded = base64(chunk);
-            let (time, result) = timed(
+        let float_frames = 8_000_000 / scale;
+        let upload_cases = [
+            (
+                "upload-16bit-44k-119s",
+                wav_with_format(
+                    44 + seconds * 44_100 * 4,
+                    false,
+                    0xfeed + run as u64,
+                    44_100,
+                    2,
+                ),
+            ),
+            (
+                "upload-float32-96k-83s",
+                wav_float32_stereo(float_frames, 96_000, 0xbeef + run as u64),
+            ),
+        ];
+        for (label, upload_bytes) in upload_cases {
+            let (begin, started) = timed(
                 &mut source,
-                "audioMedia.uploadChunk",
-                json!({ "uploadId": started["uploadId"], "chunkIndex": index, "dataBase64": encoded }),
+                "audioMedia.beginUpload",
+                json!({ "fileName": "upload.wav", "sizeBytes": upload_bytes.len() }),
             );
-            assert!(result.is_some(), "chunk {index} refused");
-            slowest_chunk = slowest_chunk.max(time);
-            chunk_total += time;
-            chunks += 1;
+            row(
+                &mut rows,
+                run,
+                label,
+                "audioMedia.beginUpload",
+                "",
+                begin,
+                upload_bytes.len() as u64,
+            );
+            let started = started.expect("begin upload");
+            let chunk_size = started["chunkBytes"].as_u64().unwrap() as usize;
+            let mut slowest_chunk = Duration::ZERO;
+            let mut chunk_total = Duration::ZERO;
+            let mut chunks = 0usize;
+            for (index, chunk) in upload_bytes.chunks(chunk_size).enumerate() {
+                let encoded = base64(chunk);
+                let (time, result) = timed(
+                    &mut source,
+                    "audioMedia.uploadChunk",
+                    json!({ "uploadId": started["uploadId"], "chunkIndex": index, "dataBase64": encoded }),
+                );
+                assert!(result.is_some(), "chunk {index} refused");
+                slowest_chunk = slowest_chunk.max(time);
+                chunk_total += time;
+                chunks += 1;
+            }
+            row(
+                &mut rows,
+                run,
+                label,
+                "audioMedia.uploadChunk",
+                &format!("slowest of {chunks}"),
+                slowest_chunk,
+                chunk_size as u64,
+            );
+            row(
+                &mut rows,
+                run,
+                label,
+                "audioMedia.uploadChunk",
+                &format!("sum of {chunks}"),
+                chunk_total,
+                upload_bytes.len() as u64,
+            );
+            let (finish, finished) = timed(
+                &mut source,
+                "audioMedia.finishUpload",
+                json!({ "uploadId": started["uploadId"] }),
+            );
+            row(
+                &mut rows,
+                run,
+                label,
+                "audioMedia.finishUpload",
+                "decode and store",
+                finish,
+                upload_bytes.len() as u64,
+            );
+            let finished = finished.expect("finish upload");
+            let (delete, _) = timed(
+                &mut source,
+                "audioMedia.delete",
+                json!({ "mediaId": finished["mediaId"] }),
+            );
+            row(&mut rows, run, label, "audioMedia.delete", "", delete, 0);
         }
-        row(
-            &mut rows,
-            run,
-            "upload",
-            "audioMedia.uploadChunk",
-            &format!("slowest of {chunks}"),
-            slowest_chunk,
-            chunk_size as u64,
-        );
-        row(
-            &mut rows,
-            run,
-            "upload",
-            "audioMedia.uploadChunk",
-            &format!("sum of {chunks}"),
-            chunk_total,
-            upload_bytes.len() as u64,
-        );
-        let (finish, finished) = timed(
-            &mut source,
-            "audioMedia.finishUpload",
-            json!({ "uploadId": started["uploadId"] }),
-        );
-        row(
-            &mut rows,
-            run,
-            "upload",
-            "audioMedia.finishUpload",
-            "decode and store",
-            finish,
-            upload_bytes.len() as u64,
-        );
-        let finished = finished.expect("finish upload");
-        let (delete, _) = timed(
-            &mut source,
-            "audioMedia.delete",
-            json!({ "mediaId": finished["mediaId"] }),
-        );
-        row(&mut rows, run, "upload", "audioMedia.delete", "", delete, 0);
 
         // Listing the recordings library: one page of 500, then every page.
         let (page, _) = timed(&mut source, "recordings.list", json!({ "limit": 500 }));
@@ -957,9 +1003,9 @@ fn service_cadence_while_bundle_work_runs() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// Does an export of a 20 MiB audio asset (above the importer's 16 MiB limit
-/// for non-media entries; media entries may be 64 MiB) succeed and then fail
-/// to import? Prints both outcomes; asserts nothing, so the result is
+/// Do an export and an import of a 20 MiB audio asset both succeed? The
+/// importer limits non-media entries to 16 MiB but media entries to 64 MiB, so
+/// they should. Prints both outcomes; asserts nothing, so the result is
 /// evidence, not a gate.
 #[test]
 #[ignore = "opt-in probe; stores a 20 MiB synthetic asset"]
@@ -998,4 +1044,159 @@ fn export_of_an_asset_over_the_import_limit() {
     eprintln!("import of that bundle: ok={}", imported.is_some());
     drop((source, target));
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// What Play does on the control thread before it touches a device: load and
+/// decode every Audio File (`session_audio_media`, under
+/// `while_servicing_audio`), then compile the graph with that media (inline).
+/// Starting a route needs real endpoints (`nativePaths.prepare`), so this times
+/// those two steps directly, plus a `session.start` on the one-shot "cli" plane
+/// whose simulated lifecycle moves no audio. Eight 100 s stereo 16-bit
+/// files, at the graph rate (48 kHz) and at 44.1 kHz (resampled).
+#[test]
+#[ignore = "opt-in timing harness; stores ~150 MiB of synthetic audio per run"]
+fn play_path_media_load_and_compile() {
+    let scale = env_usize("AUDIOROUTER_TIMING_SCALE", 1);
+    let runs = env_usize("AUDIOROUTER_TIMING_RUNS", 3);
+    let root = unique_root("play");
+    isolate_temp(&root.join("temp"));
+    let mut rows = Rows::new("run,scenario,step,millis,decodedMiB,note");
+    let seconds = (100 / scale).max(2);
+    // A Mixer takes at most `MAX_MIXER_INPUTS` (8) sources.
+    let count = (8 / scale).max(2);
+    for run in 0..runs {
+        let mut cases = [("48k", 48_000u32), ("44.1k", 44_100u32)];
+        if run % 2 == 1 {
+            cases.reverse();
+        }
+        for (label, rate) in cases {
+            let run_root = root.join(format!("run-{run}-{label}"));
+            std::fs::create_dir_all(&run_root).unwrap();
+            let database = run_root.join("play.sqlite");
+            let storage = Storage::open(&database).unwrap();
+            let mut ids = Vec::new();
+            for index in 0..count {
+                let id = format!("play-{index:02}");
+                let frames = seconds * rate as usize;
+                storage
+                    .store_audio_media(
+                        &id,
+                        "fixture.wav",
+                        "wav",
+                        &wav_with_format(44 + frames * 4, false, index as u64 + 3, rate, 2),
+                        None,
+                    )
+                    .unwrap();
+                ids.push(id);
+            }
+            let session = play_session(&ids);
+            storage.save_session(&session).unwrap();
+            drop(storage);
+            let mut plane = plane_for(&database, "cli");
+            plane.audio_media_cache.clear();
+            let start = Instant::now();
+            let media = plane.session_audio_media(&session, 48_000).unwrap();
+            let cold = start.elapsed();
+            let decoded_mib = media
+                .values()
+                .map(|audio| audio.samples.len() * 4)
+                .sum::<usize>() as f64
+                / 1_048_576.0;
+            let start = Instant::now();
+            plane.session_audio_media(&session, 48_000).unwrap();
+            let warm = start.elapsed();
+            let start = Instant::now();
+            // The multi-input compile `prepare_native_path_worker` runs
+            // after `session_audio_media`.
+            audiorouter_engine::compile_native_paths_with_plugins_and_audio(
+                &session,
+                audiorouter_engine::RuntimeGeneration::new(1),
+                &HashMap::new(),
+                &media,
+            )
+            .unwrap();
+            let compile = start.elapsed();
+            let (started, result) = timed(
+                &mut plane,
+                "session.start",
+                json!({ "sessionId": "play", "idempotencyKey": format!("start-{run}-{label}") }),
+            );
+            assert!(result.is_some(), "session.start refused");
+            for (step, time, note) in [
+                ("load and decode (cold cache)", cold, "serviced"),
+                ("load and decode (warm cache)", warm, "serviced"),
+                (
+                    "graph compile with media",
+                    compile,
+                    "control thread; no service passes",
+                ),
+                (
+                    "session.start (simulated runtime)",
+                    started,
+                    "no media and no device",
+                ),
+            ] {
+                rows.push(format!(
+                    "{run},{label},{step},{:.3},{decoded_mib:.1},{note}",
+                    millis(time)
+                ));
+            }
+            drop((plane, media));
+        }
+    }
+    rows.save();
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Audio Files -> Mixer -> Output with real edges, so the graph compiles
+/// (`media_session` has no edges, which is enough to export, not to play).
+fn play_session(media: &[String]) -> Session {
+    let stereo = |name: &str, direction| Port {
+        name: name.into(),
+        direction,
+        channels: 2,
+    };
+    let mut session = media_session("play", media);
+    session
+        .nodes
+        .retain(|node| node.kind == NodeKind::AudioFile);
+    let kind_node = |id: &str, kind, ports| Node {
+        id: EntityId::new(id),
+        kind,
+        type_version: 1,
+        name: id.into(),
+        enabled: true,
+        bypass: false,
+        parameters: Default::default(),
+        ports,
+    };
+    session.nodes.push(kind_node(
+        "mixer",
+        NodeKind::Mixer,
+        vec![
+            stereo("in", PortDirection::Input),
+            stereo("out", PortDirection::Output),
+        ],
+    ));
+    session.nodes.push(kind_node(
+        "out",
+        NodeKind::PhysicalOutput,
+        vec![stereo("in", PortDirection::Input)],
+    ));
+    let edge = |source: String, destination: &str| Edge {
+        id: EntityId::new(format!("{source}->{destination}")),
+        source_node: EntityId::new(source),
+        source_port: "out".into(),
+        destination_node: EntityId::new(destination),
+        destination_port: "in".into(),
+        matrix: vec![1.0, 0.0, 0.0, 1.0],
+        enabled: true,
+    };
+    session.edges = media
+        .iter()
+        .enumerate()
+        .map(|(index, _)| edge(format!("audio-{index}"), "mixer"))
+        .collect();
+    session.edges.push(edge("mixer".into(), "out"));
+    session
 }

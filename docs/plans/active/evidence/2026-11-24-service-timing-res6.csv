@@ -1,73 +1,88 @@
 run,scenario,method,detail,millis,deadlineClass,deadlineMs,fractionOfDeadline,bytes
-0,fixture,build,library,2677.309,none,inf,0.0000,0
-0,compressible,sessions.approveExport,,0.414,long,60000,0.0000,0
-0,compressible,sessions.exportFile,,404.479,long,60000,0.0067,3217030
-0,compressible,sessions.importFile,,1801.570,long,60000,0.0300,3217030
-0,compressible,sessions.get,,0.040,quick,5000,0.0000,0
-0,compressible,sessions.importPlan,,0.137,long,60000,0.0000,0
-0,compressible,sessions.importCommit,,0.326,long,60000,0.0000,0
-0,compressible,sessions.list,100+ sessions,0.805,quick,5000,0.0002,0
-0,noise,sessions.approveExport,,0.513,long,60000,0.0000,0
-0,noise,sessions.exportFile,,1462.793,long,60000,0.0244,100689465
-0,noise,sessions.importFile,,749.259,long,60000,0.0125,100689465
-0,noise,sessions.get,,0.021,quick,5000,0.0000,0
+0,fixture,build,library,2103.780,none,inf,0.0000,0
+0,compressible,sessions.approveExport,,0.436,long,60000,0.0000,0
+0,compressible,sessions.exportFile,,414.880,long,60000,0.0069,3217030
+0,compressible,sessions.importFile,,1760.984,long,60000,0.0293,3217030
+0,compressible,sessions.get,,0.046,quick,5000,0.0000,0
+0,compressible,sessions.importPlan,,0.151,long,60000,0.0000,0
+0,compressible,sessions.importCommit,,0.403,long,60000,0.0000,0
+0,compressible,sessions.list,100+ sessions,1.219,quick,5000,0.0002,0
+0,noise,sessions.approveExport,,0.615,long,60000,0.0000,0
+0,noise,sessions.exportFile,,1731.823,long,60000,0.0289,100689465
+0,noise,sessions.importFile,,864.003,long,60000,0.0144,100689465
+0,noise,sessions.get,,0.017,quick,5000,0.0000,0
 0,noise,sessions.importPlan,,0.058,long,60000,0.0000,0
-0,noise,sessions.importCommit,,0.300,long,60000,0.0000,0
-0,noise,sessions.list,100+ sessions,1.269,quick,5000,0.0003,0
-0,upload,audioMedia.beginUpload,,0.063,long,60000,0.0000,20991644
-0,upload,audioMedia.uploadChunk,slowest of 107,1.872,long,60000,0.0000,196608
-0,upload,audioMedia.uploadChunk,sum of 107,156.265,long,60000,0.0026,20991644
-0,upload,audioMedia.finishUpload,decode and store,201.424,long,60000,0.0034,20991644
-0,upload,audioMedia.delete,,10.813,long,60000,0.0002,0
-0,recordings,recordings.list,one page of 500,4.124,quick,5000,0.0008,0
-0,recordings,recordings.list,2000 rows in 4 pages,14.838,quick,5000,0.0030,0
+0,noise,sessions.importCommit,,0.265,long,60000,0.0000,0
+0,noise,sessions.list,100+ sessions,0.998,quick,5000,0.0002,0
+0,upload-16bit-44k-119s,audioMedia.beginUpload,,0.032,long,60000,0.0000,20991644
+0,upload-16bit-44k-119s,audioMedia.uploadChunk,slowest of 107,3.710,long,60000,0.0001,196608
+0,upload-16bit-44k-119s,audioMedia.uploadChunk,sum of 107,169.431,long,60000,0.0028,20991644
+0,upload-16bit-44k-119s,audioMedia.finishUpload,decode and store,255.235,long,60000,0.0043,20991644
+0,upload-16bit-44k-119s,audioMedia.delete,,25.511,long,60000,0.0004,0
+0,upload-float32-96k-83s,audioMedia.beginUpload,,0.021,long,60000,0.0000,64000044
+0,upload-float32-96k-83s,audioMedia.uploadChunk,slowest of 326,1.860,long,60000,0.0000,196608
+0,upload-float32-96k-83s,audioMedia.uploadChunk,sum of 326,472.898,long,60000,0.0079,64000044
+0,upload-float32-96k-83s,audioMedia.finishUpload,decode and store,537.832,long,60000,0.0090,64000044
+0,upload-float32-96k-83s,audioMedia.delete,,64.030,long,60000,0.0011,0
+0,recordings,recordings.list,one page of 500,7.914,quick,5000,0.0016,0
+0,recordings,recordings.list,2000 rows in 4 pages,27.619,quick,5000,0.0055,0
 0,service-pass,service_running_native_audio,median of 2000,0.000,none,inf,0.0000,0
-0,service-pass,service_running_native_audio,max of 2000,0.008,none,inf,0.0000,0
-1,fixture,build,library,2198.100,none,inf,0.0000,0
-1,noise,sessions.approveExport,,0.337,long,60000,0.0000,0
-1,noise,sessions.exportFile,,1495.913,long,60000,0.0249,100689465
-1,noise,sessions.importFile,,609.224,long,60000,0.0102,100689465
-1,noise,sessions.get,,0.016,quick,5000,0.0000,0
-1,noise,sessions.importPlan,,0.064,long,60000,0.0000,0
-1,noise,sessions.importCommit,,0.313,long,60000,0.0000,0
-1,noise,sessions.list,100+ sessions,1.284,quick,5000,0.0003,0
-1,compressible,sessions.approveExport,,0.545,long,60000,0.0000,0
-1,compressible,sessions.exportFile,,414.184,long,60000,0.0069,3217030
-1,compressible,sessions.importFile,,1597.316,long,60000,0.0266,3217030
-1,compressible,sessions.get,,0.039,quick,5000,0.0000,0
-1,compressible,sessions.importPlan,,0.108,long,60000,0.0000,0
-1,compressible,sessions.importCommit,,0.383,long,60000,0.0000,0
-1,compressible,sessions.list,100+ sessions,1.258,quick,5000,0.0003,0
-1,upload,audioMedia.beginUpload,,0.038,long,60000,0.0000,20991644
-1,upload,audioMedia.uploadChunk,slowest of 107,1.668,long,60000,0.0000,196608
-1,upload,audioMedia.uploadChunk,sum of 107,155.605,long,60000,0.0026,20991644
-1,upload,audioMedia.finishUpload,decode and store,171.000,long,60000,0.0029,20991644
-1,upload,audioMedia.delete,,18.417,long,60000,0.0003,0
-1,recordings,recordings.list,one page of 500,6.401,quick,5000,0.0013,0
-1,recordings,recordings.list,2000 rows in 4 pages,14.940,quick,5000,0.0030,0
+0,service-pass,service_running_native_audio,max of 2000,0.009,none,inf,0.0000,0
+1,fixture,build,library,2702.540,none,inf,0.0000,0
+1,noise,sessions.approveExport,,0.567,long,60000,0.0000,0
+1,noise,sessions.exportFile,,1837.100,long,60000,0.0306,100689465
+1,noise,sessions.importFile,,826.347,long,60000,0.0138,100689465
+1,noise,sessions.get,,0.018,quick,5000,0.0000,0
+1,noise,sessions.importPlan,,0.075,long,60000,0.0000,0
+1,noise,sessions.importCommit,,0.304,long,60000,0.0000,0
+1,noise,sessions.list,100+ sessions,1.251,quick,5000,0.0003,0
+1,compressible,sessions.approveExport,,0.531,long,60000,0.0000,0
+1,compressible,sessions.exportFile,,491.702,long,60000,0.0082,3217030
+1,compressible,sessions.importFile,,1980.984,long,60000,0.0330,3217030
+1,compressible,sessions.get,,0.036,quick,5000,0.0000,0
+1,compressible,sessions.importPlan,,0.100,long,60000,0.0000,0
+1,compressible,sessions.importCommit,,0.363,long,60000,0.0000,0
+1,compressible,sessions.list,100+ sessions,1.232,quick,5000,0.0002,0
+1,upload-16bit-44k-119s,audioMedia.beginUpload,,0.028,long,60000,0.0000,20991644
+1,upload-16bit-44k-119s,audioMedia.uploadChunk,slowest of 107,1.700,long,60000,0.0000,196608
+1,upload-16bit-44k-119s,audioMedia.uploadChunk,sum of 107,149.886,long,60000,0.0025,20991644
+1,upload-16bit-44k-119s,audioMedia.finishUpload,decode and store,226.904,long,60000,0.0038,20991644
+1,upload-16bit-44k-119s,audioMedia.delete,,15.715,long,60000,0.0003,0
+1,upload-float32-96k-83s,audioMedia.beginUpload,,0.026,long,60000,0.0000,64000044
+1,upload-float32-96k-83s,audioMedia.uploadChunk,slowest of 326,1.799,long,60000,0.0000,196608
+1,upload-float32-96k-83s,audioMedia.uploadChunk,sum of 326,447.243,long,60000,0.0075,64000044
+1,upload-float32-96k-83s,audioMedia.finishUpload,decode and store,478.741,long,60000,0.0080,64000044
+1,upload-float32-96k-83s,audioMedia.delete,,60.127,long,60000,0.0010,0
+1,recordings,recordings.list,one page of 500,4.994,quick,5000,0.0010,0
+1,recordings,recordings.list,2000 rows in 4 pages,25.756,quick,5000,0.0052,0
 1,service-pass,service_running_native_audio,median of 2000,0.000,none,inf,0.0000,0
-1,service-pass,service_running_native_audio,max of 2000,0.005,none,inf,0.0000,0
-2,fixture,build,library,1898.378,none,inf,0.0000,0
-2,compressible,sessions.approveExport,,0.331,long,60000,0.0000,0
-2,compressible,sessions.exportFile,,424.377,long,60000,0.0071,3217030
-2,compressible,sessions.importFile,,1623.875,long,60000,0.0271,3217030
-2,compressible,sessions.get,,0.032,quick,5000,0.0000,0
-2,compressible,sessions.importPlan,,0.091,long,60000,0.0000,0
-2,compressible,sessions.importCommit,,0.265,long,60000,0.0000,0
-2,compressible,sessions.list,100+ sessions,0.763,quick,5000,0.0002,0
-2,noise,sessions.approveExport,,0.299,long,60000,0.0000,0
-2,noise,sessions.exportFile,,1569.401,long,60000,0.0262,100689465
-2,noise,sessions.importFile,,579.428,long,60000,0.0097,100689465
-2,noise,sessions.get,,0.017,quick,5000,0.0000,0
-2,noise,sessions.importPlan,,0.052,long,60000,0.0000,0
-2,noise,sessions.importCommit,,0.211,long,60000,0.0000,0
-2,noise,sessions.list,100+ sessions,0.797,quick,5000,0.0002,0
-2,upload,audioMedia.beginUpload,,0.026,long,60000,0.0000,20991644
-2,upload,audioMedia.uploadChunk,slowest of 107,1.575,long,60000,0.0000,196608
-2,upload,audioMedia.uploadChunk,sum of 107,152.895,long,60000,0.0025,20991644
-2,upload,audioMedia.finishUpload,decode and store,179.737,long,60000,0.0030,20991644
-2,upload,audioMedia.delete,,24.428,long,60000,0.0004,0
-2,recordings,recordings.list,one page of 500,11.297,quick,5000,0.0023,0
-2,recordings,recordings.list,2000 rows in 4 pages,23.477,quick,5000,0.0047,0
+1,service-pass,service_running_native_audio,max of 2000,0.006,none,inf,0.0000,0
+2,fixture,build,library,3121.090,none,inf,0.0000,0
+2,compressible,sessions.approveExport,,0.385,long,60000,0.0000,0
+2,compressible,sessions.exportFile,,462.029,long,60000,0.0077,3217030
+2,compressible,sessions.importFile,,1890.994,long,60000,0.0315,3217030
+2,compressible,sessions.get,,0.040,quick,5000,0.0000,0
+2,compressible,sessions.importPlan,,0.122,long,60000,0.0000,0
+2,compressible,sessions.importCommit,,0.367,long,60000,0.0000,0
+2,compressible,sessions.list,100+ sessions,1.317,quick,5000,0.0003,0
+2,noise,sessions.approveExport,,0.604,long,60000,0.0000,0
+2,noise,sessions.exportFile,,1835.461,long,60000,0.0306,100689465
+2,noise,sessions.importFile,,791.637,long,60000,0.0132,100689465
+2,noise,sessions.get,,0.019,quick,5000,0.0000,0
+2,noise,sessions.importPlan,,0.055,long,60000,0.0000,0
+2,noise,sessions.importCommit,,0.195,long,60000,0.0000,0
+2,noise,sessions.list,100+ sessions,0.727,quick,5000,0.0001,0
+2,upload-16bit-44k-119s,audioMedia.beginUpload,,0.023,long,60000,0.0000,20991644
+2,upload-16bit-44k-119s,audioMedia.uploadChunk,slowest of 107,1.727,long,60000,0.0000,196608
+2,upload-16bit-44k-119s,audioMedia.uploadChunk,sum of 107,147.494,long,60000,0.0025,20991644
+2,upload-16bit-44k-119s,audioMedia.finishUpload,decode and store,210.862,long,60000,0.0035,20991644
+2,upload-16bit-44k-119s,audioMedia.delete,,12.898,long,60000,0.0002,0
+2,upload-float32-96k-83s,audioMedia.beginUpload,,0.026,long,60000,0.0000,64000044
+2,upload-float32-96k-83s,audioMedia.uploadChunk,slowest of 326,1.807,long,60000,0.0000,196608
+2,upload-float32-96k-83s,audioMedia.uploadChunk,sum of 326,439.026,long,60000,0.0073,64000044
+2,upload-float32-96k-83s,audioMedia.finishUpload,decode and store,461.841,long,60000,0.0077,64000044
+2,upload-float32-96k-83s,audioMedia.delete,,39.666,long,60000,0.0007,0
+2,recordings,recordings.list,one page of 500,7.080,quick,5000,0.0014,0
+2,recordings,recordings.list,2000 rows in 4 pages,23.360,quick,5000,0.0047,0
 2,service-pass,service_running_native_audio,median of 2000,0.000,none,inf,0.0000,0
 2,service-pass,service_running_native_audio,max of 2000,0.005,none,inf,0.0000,0
