@@ -475,5 +475,7 @@ Still open:
 
 ### Next action
 
-Owner: merge, then decide whether assistants may record (option a) and whether
-session rename needs a new API method.
+PR #171 (`c6f59c195`) and PR #174 (`3ef36a1ff`) are merged (status note,
+2026-11-24). Owner decisions still open: whether assistants may record
+(option a), and whether session rename needs a new API method. Once decided,
+the implementation is portable.

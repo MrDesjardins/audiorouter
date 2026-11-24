@@ -1,5 +1,13 @@
 # Active plan — code-review fixes (2026-11-01, owner request)
 
+> **Status (2026-11-24).** Every triage item below is implemented. Only
+> qualification remains, and each piece needs the owner's environment or a
+> decision: three isolated continuity runs per cable with the owner's route
+> stopped, a latency-changing commercial plugin run, and whether CABLE-B's
+> 8-channel format should be supported. The large-library concurrent
+> Play/export/import timing can run on synthetic data and is the one portable
+> item left. Archive this plan when that timing is recorded.
+
 Owner request, 2026-11-01: "do the two code review markdown in the future
 folder. Set them in current and tackle all of them." Sources:
 [code review 2026-11-01](../archived/2026-11-01-repository-code-review.md) and the items

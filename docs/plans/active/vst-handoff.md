@@ -1,5 +1,15 @@
 # VST work: handoff for the next agent (2026-11-14)
 
+> **Superseded (status note, 2026-11-24).** This handoff is a historical
+> snapshot. The VST branch merged to main in PR #164 (`35ecd8e51`). P2, P3, P5
+> and P6 software work is implemented and tested on main. The current state
+> and the remaining owner-only checks are in the reconciled table of the
+> [completion work plan](vst-completion-work.md) and in
+> [VST owner checks](vst-owner-checks.md): editor focus and DPI by eye,
+> listening, sidechain ducking by ear, hardware MIDI, PolyMAX and signing.
+> The worktree paths, branch heads and "not all work is complete" statements
+> below no longer describe the repository.
+
 Read this page first, then [the plan](vst-full-compatibility.md) (decisions,
 phase definitions, evidence so far), the
 [completion work plan](vst-completion-work.md) (ordered remaining tasks) and
