@@ -902,3 +902,7 @@ impl ControlPlane {
 #[cfg(test)]
 #[path = "safety_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "fault_interleaving_tests.rs"]
+mod fault_interleaving_tests;

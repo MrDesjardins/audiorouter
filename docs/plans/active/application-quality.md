@@ -84,6 +84,93 @@ items 1–7 beyond the storage and guard-pipe slices; Q5; Q6 on each release.
 Hardware and release evidence remain separate gates. Existing acceptance
 targets remain binding.
 
+## Q4.2 fault interleavings with fake devices (2026-11-24)
+
+Branch `test/q4-fault-interleavings`, from main `0fb41911b`. Requirements:
+RES-3, STATE-10/11, CAP-11, the microphone-privacy rule in `AGENTS.md`.
+
+**Inventory.** There is no fake endpoint at the `ControlPlane` level; native
+workers need real WASAPI devices. What exists and was reused: the portable
+`FakeRuntime`; `fail_next_session_activation`; the session marker
+`native_multi_input_worker_session` plus `arm_device_loss_recovery()` (what
+`invalidate_changed_native_endpoint_worker` calls after a worker stops); a dead
+`Weak` in `plugin_bridges`, which `session_has_failed_plugin` reads exactly as a
+stopped plugin worker; `RecorderController`; and the `now` argument of
+`service_running_native_audio` as the clock. Elsewhere: `drift_sim_tests.rs`
+(clock drift only), plugin-host process tests (`private_voice.rs`,
+`worker_process.rs`: protected audio is silenced until resume),
+`e2e_backend` (fixture corruption only). Existing control tests covered each
+fault alone, never two at once.
+
+**Added** `crates/control/src/fault_interleaving_tests.rs` (29 tests, about 2 s,
+through `ControlPlane::dispatch` except where noted):
+
+- Device loss while starting (activation failure rolls back; retry plays),
+  while running (silenced on the first pass, bounded attempts, never gives a
+  restart the user did not ask for, saved devices byte-identical), while
+  stopping (Stop, Stop+Start, Start), and during a recording (never armed, the
+  recording is not ended, Stop finalizes). A recording started, a graph commit,
+  or a plugin failure after the loss each drop the stale recovery.
+- Privacy mute against device loss (both orders, every failed attempt, the
+  give-up), against a failed plugin on a protected route (mute on, off, lock,
+  sleep, resume, a tick: nothing revives the route, the mute reads the same
+  from every surface), and across route start/stop/failure. Deliberate
+  recovery is Stop then Play.
+- Plugin failure between `graph.plan` and `graph.commit` (one atomic commit,
+  stale plan refused with `revisionConflict`) and before a live `nodes.set`
+  (saved once, replay-safe, same key with a different value refused).
+- `system.osTransition`: delayed duplicate sleep after resume and Play,
+  key reuse for another transition, lock between sleep and resume, Start or
+  Stop between sleep and resume, a plugin that fails across a sleep, a second
+  suspend while recovery is pending, sleep refused while any route records
+  (no route is touched).
+- A seeded scheduler (xorshift, 120 fixed seeds by default,
+  `AUDIOROUTER_FAULT_SEEDS=<n>` widens it) running 40 random events per seed
+  over a device route, a portable route and recorders, checking after every
+  event: the mute equals the last request; nothing starts that was not
+  started, nothing stopped returns; saved devices and revision change only by
+  explicit commit; the running witness never lists a stopped, failed-plugin or
+  recording route; a pending recovery is bounded and never stale after a pass.
+  A failure prints the seed and the whole trace. 5,000 seeds also pass
+  (134 s, local soak, not part of CI).
+
+**Defect fixed.** `arm_device_loss_recovery` armed recovery for a route the user
+had already stopped. If the stop's worker stop reports an error the worker stays
+"running", and the next device change then armed a restart that started the
+stopped route once the device returned. It now arms only for a playing route.
+Regression `a_device_loss_after_stop_arms_nothing_a_pass_could_restart`
+fails without the guard (verified by disabling it) and passes with it. The
+seeded scheduler found the same path independently (seed 4).
+
+**For owner decision (pinned, not changed):**
+
+1. A recovery dropped early (a graph commit, a recording started, a failed
+   plugin) leaves the runtime marked running with its worker stopped;
+   `devices.bindingInvalidated` tells the UI, but status lists the route as
+   playing until Stop. Stopping would interact with recorder finalization.
+   Tests: `a_graph_commit_during_device_recovery_cancels_the_stale_recovery`,
+   `a_recording_started_after_a_device_loss_cancels_the_recovery`.
+2. `session.start` on a device-lost route (runtime still running) cancels the
+   pending recovery and starts nothing, leaving it silent until Stop and Play.
+   Test: `a_start_on_a_device_lost_route_cancels_its_recovery_and_starts_nothing`.
+3. Two sleeps without a resume replace the first sleep's resume list with an
+   empty one. Fail-closed, but Resume offers nothing. Test:
+   `a_second_sleep_forgets_the_first_sleeps_resume_list`.
+4. The sleep resume list is built without the failed-plugin filter that the
+   witness and recovery use. Its only consumer is the Advanced panel's explicit
+   Restart button, so nothing restarts silently. `record_runtime_crash` has the
+   same gap but is not called outside tests (the shell uses the witness).
+5. `handle_os_transition` counts an Armed recorder as recording while
+   `session_is_recording` does not; sleep is refused for an armed recorder,
+   recovery may still arm. Not changed.
+
+**Not run:** device return (the recovery's prepare resolves real endpoints and
+fails with no device chosen), real endpoint removal, real sleep/resume, real
+plugin worker crashes (plugin-host process tests cover those), recorded file
+validity under device loss (existing recording suites), and the engine
+combination suites (no engine code changed). The Q4.7 hardware evidence stays
+an open gate. Commands and results are recorded under the commit.
+
 ## Objective
 
 Catch regressions before merge and before a user receives a build. No process

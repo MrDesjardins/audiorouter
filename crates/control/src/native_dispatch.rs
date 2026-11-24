@@ -1424,12 +1424,19 @@ impl ControlPlane {
     /// exact saved route when its devices are back (RES-3). Not armed for a
     /// recording session (recordings never resume) or a route with a failed
     /// plugin: a failed processor stays silent until the user restarts it.
+    /// Nor is it armed for a route the user already stopped: a Stop whose
+    /// worker stop reported an error leaves the worker "running" for the next
+    /// device change, which must not restart what the user stopped.
     #[cfg(windows)]
     pub(crate) fn arm_device_loss_recovery(&mut self) {
         let Some(id) = self.native_multi_input_worker_session.clone() else {
             return;
         };
-        if self.session_is_recording(&id) || self.session_has_failed_plugin(&id) {
+        let playing = self
+            .runtimes
+            .get(&id)
+            .is_some_and(|runtime| runtime.state() == RuntimeState::Running);
+        if !playing || self.session_is_recording(&id) || self.session_has_failed_plugin(&id) {
             return;
         }
         let Ok(revision) = self.get_session(&id).map(|session| session.revision) else {
