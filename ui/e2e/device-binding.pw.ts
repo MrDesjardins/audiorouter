@@ -23,7 +23,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     const picker = page.getByLabel("Output device endpoint");
     await expect(picker).toHaveValue("");
     const binding = page.getByLabel("Output device binding");
-    await expect(binding).toContainText("No device is chosen for this node yet. Choose one, then Save.");
+    await expect(binding).toContainText("No device is chosen for this tool yet. Choose one, then Save.");
     await binding.scrollIntoViewIfNeeded();
     await binding.screenshot({ path: testInfo.outputPath(`device-binding-${theme}.png`) });
 

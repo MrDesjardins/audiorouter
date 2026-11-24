@@ -2278,7 +2278,7 @@ describe("keyboard connection dialog", () => {
     openTab("Recording");
     const panel = await screen.findByRole("region", { name: "Recorder" });
     await waitFor(() => expect(within(panel).getByText("recording")).toBeTruthy());
-    expect(within(panel).getByText("Attached recorder node: recorder-node")).toBeTruthy();
+    expect(within(panel).getByText("Attached recorder: recorder-node")).toBeTruthy();
     expect(within(panel).getByText("Backend last frame: 480")).toBeTruthy();
   });
 

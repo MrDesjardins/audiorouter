@@ -128,7 +128,7 @@ describe("NetworkNodeEditor", () => {
         onChange={() => {}}
       />,
     );
-    const help = screen.getByText(/add a Network Send node/);
+    const help = screen.getByText(/add a Network Send tool/);
     expect(help.textContent).toContain("this computer's address 192.168.1.30 and port");
     expect(help.textContent).not.toContain("ipconfig");
     view.unmount();
@@ -147,7 +147,7 @@ describe("NetworkNodeEditor", () => {
         onChange={() => {}}
       />,
     );
-    expect(screen.getByText(/add a Network Receive node/).textContent).toContain(
+    expect(screen.getByText(/add a Network Receive tool/).textContent).toContain(
       "this computer's address 10.0.0.7 as the sender",
     );
     expect(screen.getByRole("status").textContent).toContain(
