@@ -85,12 +85,7 @@ describe("plain words in visible text", () => {
     // Messages of the developer panels keep the engine's terms, like their source files.
     const developerKeys = new Set<string>();
     for (const name of DEVELOPER_FILES) {
-      let source = "";
-      try {
-        source = readFileSync(join(here, name), "utf8");
-      } catch {
-        continue;
-      }
+      const source = readFileSync(join(here, name), "utf8");
       for (const match of source.matchAll(/"([A-Za-z0-9]+(?:\.[A-Za-z0-9-]+)+)"/g)) developerKeys.add(match[1]);
     }
     // Where the exact API term is the point: the identifier a script sends is called a node ID.
