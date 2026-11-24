@@ -3214,15 +3214,50 @@ pub fn decode_worker_message(frame: &[u8]) -> Result<WorkerMessage, WorkerMessag
     if declared != actual {
         return Err(WorkerMessageError::LengthMismatch { declared, actual });
     }
-    let message: WorkerMessage = serde_json::from_slice(&frame[4..])
+    decode_worker_payload(&frame[4..])
+}
+
+/// Most bytes `read_worker_message_into` asks the stream for in one read, and
+/// the most payload it reserves before any data has arrived.
+const WORKER_READ_STEP_BYTES: usize = 64 * 1024;
+
+/// A scratch buffer that grew past this many bytes (a plugin-state frame can
+/// legitimately reach `MAX_WORKER_MESSAGE_BYTES`) is released after the frame is
+/// decoded, so one large message does not pin tens of megabytes in the reader
+/// thread. Ordinary audio and control frames stay far below it and reuse the
+/// same allocation for every message.
+pub const WORKER_SCRATCH_RETAIN_BYTES: usize = 1024 * 1024;
+
+fn decode_worker_payload(payload: &[u8]) -> Result<WorkerMessage, WorkerMessageError> {
+    let message: WorkerMessage = serde_json::from_slice(payload)
         .map_err(|error| WorkerMessageError::Json(error.to_string()))?;
     validate_worker_message(&message)?;
     Ok(message)
 }
 
 /// Reads one worker frame from a stream, handling partial pipe reads and
-/// rejecting its declared size before allocating the payload buffer.
+/// rejecting its declared size before reading the payload. Allocates a fresh
+/// buffer per call; a reader that handles many frames should keep one buffer
+/// and call [`read_worker_message_into`].
 pub fn read_worker_message<R: Read>(reader: &mut R) -> Result<WorkerMessage, WorkerMessageError> {
+    read_worker_message_into(reader, &mut Vec::new())
+}
+
+/// Like [`read_worker_message`], decoding through a caller-owned scratch buffer
+/// that is reused from frame to frame, so a stream of ordinary frames makes no
+/// per-frame payload allocation.
+///
+/// The declared length is untrusted: the peer may be a hostile plugin worker.
+/// The buffer therefore grows with the bytes that have actually arrived (at
+/// most doubling, never past the declared length) instead of being reserved from
+/// the header, so a header that claims `MAX_WORKER_MESSAGE_BYTES` and then sends
+/// nothing costs one `WORKER_READ_STEP_BYTES` buffer. The maximum frame size,
+/// the wire format and every decoding rule are unchanged. This is control-plane
+/// code on a reader thread; the audio callback never calls it.
+pub fn read_worker_message_into<R: Read>(
+    reader: &mut R,
+    scratch: &mut Vec<u8>,
+) -> Result<WorkerMessage, WorkerMessageError> {
     let mut header = [0u8; 4];
     reader
         .read_exact(&mut header)
@@ -3234,13 +3269,52 @@ pub fn read_worker_message<R: Read>(reader: &mut R) -> Result<WorkerMessage, Wor
             maximum: MAX_WORKER_MESSAGE_BYTES,
         });
     }
-    let mut frame = Vec::with_capacity(4 + declared);
-    frame.extend_from_slice(&header);
-    frame.resize(4 + declared, 0);
-    reader
-        .read_exact(&mut frame[4..])
-        .map_err(|error| WorkerMessageError::Io(error.to_string()))?;
-    decode_worker_message(&frame)
+    scratch.clear();
+    let result = read_worker_payload(reader, declared, scratch)
+        .and_then(|()| decode_worker_payload(scratch));
+    if scratch.capacity() > WORKER_SCRATCH_RETAIN_BYTES {
+        *scratch = Vec::new();
+    }
+    result
+}
+
+fn read_worker_payload<R: Read>(
+    reader: &mut R,
+    declared: usize,
+    payload: &mut Vec<u8>,
+) -> Result<(), WorkerMessageError> {
+    let mut filled = 0;
+    while filled < declared {
+        let step = (declared - filled).min(WORKER_READ_STEP_BYTES);
+        let needed = filled + step;
+        if payload.capacity() < needed {
+            // Double (so a large frame takes few reallocations) but never
+            // reserve beyond what the header declared.
+            let target = payload
+                .capacity()
+                .saturating_mul(2)
+                .max(needed)
+                .min(declared);
+            payload.reserve_exact(target - payload.len());
+        }
+        payload.resize(needed, 0);
+        match reader.read(&mut payload[filled..]) {
+            Ok(0) => {
+                return Err(WorkerMessageError::Io(
+                    "failed to fill whole buffer".to_owned(),
+                ))
+            }
+            Ok(count) => {
+                filled += count;
+                payload.truncate(filled);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {
+                payload.truncate(filled);
+            }
+            Err(error) => return Err(WorkerMessageError::Io(error.to_string())),
+        }
+    }
+    Ok(())
 }
 
 /// Writes one complete worker frame to a stream. This is a control-plane
@@ -7336,8 +7410,9 @@ impl WorkerProcess {
         let (reader_sender, reader) = mpsc::sync_channel(4);
         std::thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
+            let mut scratch = Vec::new();
             loop {
-                let result = read_worker_message(&mut reader);
+                let result = read_worker_message_into(&mut reader, &mut scratch);
                 let finished = result.is_err();
                 if reader_sender.send(result).is_err() || finished {
                     break;

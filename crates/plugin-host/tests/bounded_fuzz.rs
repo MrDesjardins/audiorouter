@@ -10,8 +10,9 @@ use audiorouter_plugin_host::vst2_preset::{
     MAX_VST2_PRESET_PARAMETERS, MAX_VST2_PRESET_PROGRAMS,
 };
 use audiorouter_plugin_host::{
-    decode_worker_message, encode_worker_message, read_worker_message, WorkerFrame, WorkerMessage,
-    WorkerMessageError, MAX_WORKER_MESSAGE_BYTES, WORKER_PROTOCOL_VERSION,
+    decode_worker_message, encode_worker_message, read_worker_message, read_worker_message_into,
+    PluginStateAsset, WorkerFrame, WorkerMessage, WorkerMessageError, MAX_WORKER_MESSAGE_BYTES,
+    MAX_WORKER_STATE_BYTES, WORKER_PROTOCOL_VERSION, WORKER_SCRATCH_RETAIN_BYTES,
 };
 
 #[path = "../../../tests/support/fuzz.rs"]
@@ -525,6 +526,113 @@ fn worker_frame_length_prefix_is_checked_before_the_payload_is_read() {
             "read_worker_message reserved {largest} bytes for declared {declared:#x}"
         );
     }
+}
+
+/// Largest single allocation a hostile header may cause. The reader grows its
+/// buffer with the bytes that arrive, so this is far below the 65 MiB cap.
+const HOSTILE_HEADER_ALLOCATION_LIMIT: usize = 256 * 1024;
+
+#[test]
+fn a_hostile_length_header_with_little_data_does_not_reserve_the_frame() {
+    for declared in [
+        1_u32 << 20,
+        16 << 20,
+        MAX_WORKER_MESSAGE_BYTES as u32 / 2,
+        MAX_WORKER_MESSAGE_BYTES as u32,
+    ] {
+        for sent in [0_usize, 1, 100, 4_096] {
+            let mut frame = declared.to_le_bytes().to_vec();
+            frame.extend(std::iter::repeat_n(b'{', sent));
+            let mut cursor = std::io::Cursor::new(frame);
+            let (result, largest) = fuzz::measure_allocation(|| read_worker_message(&mut cursor));
+            assert!(
+                matches!(result, Err(WorkerMessageError::Io(_))),
+                "declared {declared:#x}, sent {sent}: {result:?}"
+            );
+            assert!(
+                largest <= HOSTILE_HEADER_ALLOCATION_LIMIT,
+                "declared {declared:#x} with {sent} bytes reserved {largest} bytes"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_trickled_oversized_frame_allocates_only_what_has_arrived() {
+    // The peer keeps declaring a 60 MiB frame but delivers 3 MiB of it. The
+    // buffer may follow the data (with doubling slack), never the header.
+    let declared = 60_u32 << 20;
+    let mut frame = declared.to_le_bytes().to_vec();
+    frame.resize(4 + (3 << 20), b' ');
+    let mut cursor = std::io::Cursor::new(frame);
+    let (result, largest) = fuzz::measure_allocation(|| read_worker_message(&mut cursor));
+    assert!(matches!(result, Err(WorkerMessageError::Io(_))));
+    assert!(
+        largest <= 8 << 20,
+        "3 MiB of data reserved {largest} bytes for a 60 MiB header"
+    );
+}
+
+#[test]
+fn a_worst_case_state_frame_still_decodes_through_the_stream_reader() {
+    // 0xFF bytes encode to four JSON characters each, so this frame is within
+    // a few KiB of the protocol maximum.
+    let asset = PluginStateAsset::new(1, vec![0xFF; MAX_WORKER_STATE_BYTES]).unwrap();
+    let message = WorkerMessage::StateRestore { asset };
+    let frame = encode_worker_message(&message).unwrap();
+    assert!(
+        frame.len() > MAX_WORKER_MESSAGE_BYTES * 9 / 10 - 4,
+        "frame of {} bytes is not near the {MAX_WORKER_MESSAGE_BYTES}-byte maximum",
+        frame.len()
+    );
+    let mut cursor = std::io::Cursor::new(frame);
+    let (result, largest) = fuzz::measure_allocation(|| read_worker_message(&mut cursor));
+    assert_eq!(result.unwrap(), message);
+    // Payload buffer (at most doubling slack) plus the decoded state; the
+    // check is that no single request exceeds twice the declared frame.
+    assert!(
+        largest <= 2 * MAX_WORKER_MESSAGE_BYTES,
+        "reserved {largest} bytes"
+    );
+}
+
+#[test]
+fn the_scratch_buffer_is_reused_across_normal_frames_and_trimmed_after_a_large_one() {
+    let first = WorkerMessage::Ready;
+    let mut stream = encode_worker_message(&first).unwrap();
+    stream.extend(encode_worker_message(&first).unwrap());
+    let mut cursor = std::io::Cursor::new(stream);
+    let mut scratch = Vec::new();
+    assert_eq!(
+        read_worker_message_into(&mut cursor, &mut scratch).unwrap(),
+        first
+    );
+    let pointer = scratch.as_ptr();
+    let capacity = scratch.capacity();
+    assert!(capacity > 0, "the scratch buffer should stay allocated");
+    let (second, largest) =
+        fuzz::measure_allocation(|| read_worker_message_into(&mut cursor, &mut scratch));
+    assert_eq!(second.unwrap(), first);
+    assert_eq!(scratch.as_ptr(), pointer, "a normal frame reallocated");
+    assert_eq!(scratch.capacity(), capacity);
+    // The decoded message may allocate small strings, never a payload buffer.
+    assert!(
+        largest < capacity.max(256),
+        "second read allocated {largest}"
+    );
+
+    let asset = PluginStateAsset::new(1, vec![0xFF; 1 << 20]).unwrap();
+    let big = WorkerMessage::StateRestore { asset };
+    let mut cursor = std::io::Cursor::new(encode_worker_message(&big).unwrap());
+    assert_eq!(
+        read_worker_message_into(&mut cursor, &mut scratch).unwrap(),
+        big
+    );
+    assert!(
+        scratch.capacity() <= WORKER_SCRATCH_RETAIN_BYTES,
+        "a {} byte scratch buffer stayed allocated after a large frame",
+        scratch.capacity()
+    );
 }
 
 #[test]

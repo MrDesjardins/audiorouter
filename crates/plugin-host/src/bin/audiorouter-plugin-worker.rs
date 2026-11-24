@@ -3,7 +3,7 @@ use audiorouter_plugin_host::vst2::{Vst2EditorThread, Vst2Library, Vst2Role};
 #[cfg(feature = "test-fixtures")]
 use audiorouter_plugin_host::ParameterDescriptor;
 use audiorouter_plugin_host::{
-    read_worker_message, validate_parameter_events_for_frame, worker_clock_tick,
+    read_worker_message_into, validate_parameter_events_for_frame, worker_clock_tick,
     write_worker_message, PluginStateAsset, SharedAudioLayout, SharedAudioTransport,
     WorkerAudioBusLayout, WorkerFrameGuard, WorkerMessage, WorkerSession,
     DEFAULT_WORKER_SAMPLE_RATE_HZ, MAX_WORKER_SAMPLE_RATE_HZ, MIN_WORKER_SAMPLE_RATE_HZ,
@@ -257,11 +257,14 @@ fn run() -> Result<(), String> {
     let mut reader = BufReader::new(stdin);
     let mut writer = BufWriter::new(stdout);
     let (message_sender, messages) = std::sync::mpsc::sync_channel(4);
-    std::thread::spawn(move || loop {
-        let result = read_worker_message(&mut reader);
-        let finished = result.is_err();
-        if message_sender.send(result).is_err() || finished {
-            break;
+    std::thread::spawn(move || {
+        let mut scratch = Vec::new();
+        loop {
+            let result = read_worker_message_into(&mut reader, &mut scratch);
+            let finished = result.is_err();
+            if message_sender.send(result).is_err() || finished {
+                break;
+            }
         }
     });
 
@@ -894,7 +897,8 @@ fn run_multi_bus(
         },
     )
     .map_err(|error| format!("multi-bus hello write failed: {error:?}"))?;
-    let ready = read_worker_message(&mut reader)
+    let mut scratch = Vec::new();
+    let ready = read_worker_message_into(&mut reader, &mut scratch)
         .map_err(|error| format!("multi-bus ready read failed: {error:?}"))?;
     if ready != WorkerMessage::Ready {
         return Err("multi-bus worker requires Ready after HelloBuses".into());
@@ -906,7 +910,7 @@ fn run_multi_bus(
         }
     }
     loop {
-        let message = read_worker_message(&mut reader)
+        let message = read_worker_message_into(&mut reader, &mut scratch)
             .map_err(|error| format!("multi-bus message read failed: {error:?}"))?;
         match message {
             WorkerMessage::ProcessBuses {

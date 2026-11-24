@@ -506,6 +506,36 @@ Rollback: delete the seven test files and the `tests/support/fuzz.rs` harness,
 the `mod bounded_fuzz_tests;` line in `crates/control/src/lib.rs`, and revert
 the `catch_unwind` wrapper in `decode_audio`.
 
+### Q4.3 follow-up: worker frames are read in bounded steps (2026-11-24)
+
+Branch `fix/worker-frame-allocation`, based on `test/q4-bounded-fuzzing`. Not
+pushed, no PR.
+
+The `read_worker_message` observation above is repaired. The payload buffer now
+grows with the bytes that arrive (at most doubling, never past the declared
+length, 64 KiB before any data), so a header that declares
+`MAX_WORKER_MESSAGE_BYTES` and sends nothing costs 64 KiB, not about 65 MiB. The
+frame limit, wire format and decoding rules are unchanged; a short stream still
+reports `Io("failed to fill whole buffer")`. `read_worker_message_into` takes a
+caller-owned scratch buffer, and the three long-lived readers (the host's reader
+thread and the worker's two read loops) keep one, so ordinary control and
+multi-bus audio frames make no per-frame payload allocation; a buffer that grew
+past 1 MiB (`WORKER_SCRATCH_RETAIN_BYTES`) is released after a large state frame.
+These readers run on dedicated threads, never in the audio callback.
+
+Regression tests in `crates/plugin-host/tests/bounded_fuzz.rs`, with the
+tracking allocator: `a_hostile_length_header_with_little_data_does_not_reserve_the_frame`,
+`a_trickled_oversized_frame_allocates_only_what_has_arrived`,
+`a_worst_case_state_frame_still_decodes_through_the_stream_reader` (a 16 MiB
+state of `0xFF` bytes, a frame within a few KiB of the maximum, decodes),
+`the_scratch_buffer_is_reused_across_normal_frames_and_trimmed_after_a_large_one`.
+Before the change the first reserved 1 048 580 bytes for a 1 MiB header with no
+data, the second 62 914 564 bytes for a 60 MiB header with 3 MiB sent, and the
+fourth found no retained buffer; all four pass after it.
+`cargo test -p audiorouter-plugin-host --features test-fixtures` passed
+(128 unit, 12 bounded_fuzz, 42 worker_process; ignored tests need installed
+plugins). Not measured: end-to-end audio latency on a live multi-bus route.
+
 ## Completed: Q3.2 hosted CI qualification
 
 (Completed 2026-11-23; see the status above. Kept for its acceptance terms.)
