@@ -1,0 +1,25 @@
+run,scenario,step,millis,decodedMiB,note
+0,48k,load and decode (cold cache),733.762,293.0,serviced
+0,48k,load and decode (warm cache),0.008,293.0,serviced
+0,48k,graph compile with media,0.262,293.0,control thread; no service passes
+0,48k,session.start (simulated runtime),0.399,293.0,no media and no device
+0,44.1k,load and decode (cold cache),603.955,293.0,serviced
+0,44.1k,load and decode (warm cache),0.010,293.0,serviced
+0,44.1k,graph compile with media,0.222,293.0,control thread; no service passes
+0,44.1k,session.start (simulated runtime),0.387,293.0,no media and no device
+1,44.1k,load and decode (cold cache),590.127,293.0,serviced
+1,44.1k,load and decode (warm cache),0.006,293.0,serviced
+1,44.1k,graph compile with media,0.174,293.0,control thread; no service passes
+1,44.1k,session.start (simulated runtime),0.344,293.0,no media and no device
+1,48k,load and decode (cold cache),704.678,293.0,serviced
+1,48k,load and decode (warm cache),0.013,293.0,serviced
+1,48k,graph compile with media,0.223,293.0,control thread; no service passes
+1,48k,session.start (simulated runtime),0.320,293.0,no media and no device
+2,48k,load and decode (cold cache),701.054,293.0,serviced
+2,48k,load and decode (warm cache),0.005,293.0,serviced
+2,48k,graph compile with media,0.150,293.0,control thread; no service passes
+2,48k,session.start (simulated runtime),0.280,293.0,no media and no device
+2,44.1k,load and decode (cold cache),600.529,293.0,serviced
+2,44.1k,load and decode (warm cache),0.005,293.0,serviced
+2,44.1k,graph compile with media,0.160,293.0,control thread; no service passes
+2,44.1k,session.start (simulated runtime),0.330,293.0,no media and no device

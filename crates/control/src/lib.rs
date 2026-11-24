@@ -78,6 +78,8 @@ mod recorder_workers;
 mod recording;
 mod recording_library;
 mod safety;
+#[cfg(test)]
+mod service_timing_tests;
 mod sessions;
 mod setup_check;
 mod sound_library;
