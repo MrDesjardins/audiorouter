@@ -4157,14 +4157,28 @@ impl Storage {
         // newest: previewed plans are rarely committed, and refusing blocked
         // every save until they expired (PLAN-1). Validation comes first so a
         // rejected plan never evicts another.
+        // Plans whose session has since moved past their base revision go
+        // first, as in the in-memory store (`GraphStore::make_room_for_plan`),
+        // so both inventories keep the same plans; then the oldest plans.
         let excess = (live_count + 1).saturating_sub(audiorouter_domain::MAX_PENDING_GRAPH_PLANS);
         if excess > 0 {
-            self.connection.execute(
+            let dropped_stale = self.connection.execute(
                 "DELETE FROM graph_plans WHERE id IN (
-                     SELECT id FROM graph_plans WHERE id <> ?1
-                     ORDER BY rowid ASC LIMIT ?2)",
+                     SELECT plan.id FROM graph_plans AS plan
+                     JOIN sessions ON sessions.id = plan.session_id
+                     WHERE plan.id <> ?1 AND sessions.revision <> plan.base_revision
+                     ORDER BY plan.rowid ASC LIMIT ?2)",
                 params![plan.id.as_str(), excess as i64],
             )?;
+            let remaining = excess.saturating_sub(dropped_stale);
+            if remaining > 0 {
+                self.connection.execute(
+                    "DELETE FROM graph_plans WHERE id IN (
+                         SELECT id FROM graph_plans WHERE id <> ?1
+                         ORDER BY rowid ASC LIMIT ?2)",
+                    params![plan.id.as_str(), remaining as i64],
+                )?;
+            }
         }
         self.connection.execute(
             "INSERT OR REPLACE INTO graph_plans(id, session_id, base_revision, candidate, expires_at)
@@ -5285,6 +5299,63 @@ mod tests {
             }),
             Err(StorageError::InvalidPlan(_))
         ));
+    }
+
+    /// PLAN-1 review: the in-memory store drops plans whose session moved past
+    /// their base revision before it drops live ones, and the durable inventory
+    /// must pick the same plans. Dropping only the oldest rows kept every stale
+    /// plan of a committed session and evicted the older live plans of another
+    /// session, which a restart then lost.
+    #[test]
+    fn a_full_durable_inventory_drops_stale_plans_before_live_ones() {
+        let storage = Storage::open_memory().unwrap();
+        let mut other = session();
+        other.id = EntityId::new("other-session");
+        let mut committed = session();
+        storage.save_session(&other).unwrap();
+        storage.save_session(&committed).unwrap();
+        let save = |id: String, candidate: &Session| {
+            storage
+                .save_graph_plan(&GraphPlanRecord {
+                    id,
+                    session_id: candidate.id.as_str().into(),
+                    base_revision: candidate.revision,
+                    candidate: candidate.clone(),
+                    expires_at: i64::MAX,
+                })
+                .unwrap();
+        };
+        // Older live plans of one session, then newer plans of another that
+        // a commit makes stale.
+        for index in 0..50 {
+            save(format!("live-{index}"), &other);
+        }
+        for index in 0..50 {
+            save(format!("stale-{index}"), &committed);
+        }
+        committed.revision += 1;
+        storage.save_session(&committed).unwrap();
+        for index in 0..10 {
+            save(format!("new-{index}"), &other);
+        }
+        for index in 0..50 {
+            assert!(
+                storage
+                    .load_graph_plan(&format!("live-{index}"))
+                    .unwrap()
+                    .is_some(),
+                "live plan {index} was evicted while stale plans remained"
+            );
+        }
+        let stale_left = (0..50)
+            .filter(|index| {
+                storage
+                    .load_graph_plan(&format!("stale-{index}"))
+                    .unwrap()
+                    .is_some()
+            })
+            .count();
+        assert_eq!(stale_left, 40, "only the stale plans make room");
     }
 
     #[test]
