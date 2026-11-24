@@ -86,6 +86,19 @@ run deletes its `target/service-timing-*` directory; a failing one, and every
 pipe run (its serve threads keep the databases open until the process exits),
 leaves it, so remove `target/service-timing-*` by hand afterwards.
 
+## CodeQL follow-up (2026-11-24)
+
+The hosted CodeQL run on PR #187 flagged the harness for "cleartext logging of
+sensitive information": `Rows::push` echoed every row (which carries a fixture
+session ID) to stderr, and one `assert!` message interpolated the ID. Both
+changed: rows are written only to `AUDIOROUTER_TIMING_CSV`, and a run prints a
+row count; the assertion now says "the export wrote no bytes". The measurements
+and the CSVs are unchanged. The same run also flagged three assertion messages
+in `crates/control/src/contract_tests.rs` for printing a whole `Outcome` and a
+key-looking fixture constant in `crates/protocol/tests/network_fuzz.rs`; both
+now assert without interpolating the value, and the fuzz fixture key and nonce
+are derived from the seed and packet shape instead of literals.
+
 ## A. Does a bundle export/import or Play preparation hold the audio service?
 
 ### Background in the code

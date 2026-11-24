@@ -370,10 +370,12 @@ impl Rows {
     }
 
     fn push(&mut self, line: String) {
-        eprintln!("{line}");
         self.lines.push(line);
     }
 
+    /// Write the table to `AUDIOROUTER_TIMING_CSV` and report a row count. The
+    /// rows carry fixture session IDs, so they are written to the named file
+    /// and never echoed to the console (CodeQL: cleartext logging).
     fn save(&self) {
         if let Ok(path) = std::env::var("AUDIOROUTER_TIMING_CSV") {
             let mut text = format!("{}\n", self.header);
@@ -381,7 +383,8 @@ impl Rows {
                 text.push_str(line);
                 text.push('\n');
             }
-            std::fs::write(path, text).unwrap();
+            std::fs::write(&path, text).unwrap();
+            eprintln!("{} timing rows written to the CSV file", self.lines.len());
         }
     }
 }
@@ -521,7 +524,7 @@ fn res6_slow_method_timings() {
                 export,
                 size,
             );
-            assert!(size > 0, "export of {session_id} failed");
+            assert!(size > 0, "the export wrote no bytes");
 
             let target_db = run_root.join(format!("target-{session_id}.sqlite"));
             let mut target = plane_for(&target_db, "timing-target");

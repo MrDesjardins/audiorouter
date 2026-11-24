@@ -88,10 +88,10 @@ impl ClientGrant {
         self.device_consent
     }
 
-/// True when this grant may open a session. A tool whose workflow ends by
-/// opening the session it just created can refuse up front instead of
-/// completing the creation and then failing the open; the Editor role has
-/// `GraphWrite` but not `SessionControl`.
+    /// True when this grant may open a session. A tool whose workflow ends by
+    /// opening the session it just created can refuse up front instead of
+    /// completing the creation and then failing the open; the Editor role has
+    /// `GraphWrite` but not `SessionControl`.
     pub fn can_control_sessions(&self) -> bool {
         self.allows(PermissionScope::SessionControl)
     }

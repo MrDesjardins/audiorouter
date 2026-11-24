@@ -296,6 +296,10 @@ are in the evidence files, not repeated here.
   feed host, assistant recording (R2-1a), `rename_session` for assistants
   (R2-4), RES-10 plugin worker restart, and the unreachable keyboard
   connection dialog (delete or restore).
+- PR #187 is the first hosted run. Its first pass failed only on `rustfmt`
+  (one misindented doc comment) and CodeQL's test-only `cleartext logging` /
+  `hard-coded key` heuristics; both are fixed on the branch, with the timing
+  harness now writing rows only to its CSV file.
 
 Start with priority 1 or 2 above. Nothing on this page authorizes a pull
 request, a release, a driver install or a change to the owner's live audio or
