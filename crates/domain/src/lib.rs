@@ -3433,6 +3433,8 @@ struct GraphPlan {
     base_revision: u64,
     candidate: Session,
     expires_at: std::time::Instant,
+    /// Creation order, oldest first, to pick the plan to drop at the cap.
+    sequence: u64,
 }
 
 /// In-memory revision store used to prove M01 transaction semantics before
@@ -3445,6 +3447,8 @@ pub struct GraphStore {
     committed_keys: HashMap<String, (CommitResult, EntityId)>,
     committed_key_order: VecDeque<String>,
     next_plan: u64,
+    /// Creation order of the pending plans (see `make_room_for_plan`).
+    plan_sequence: u64,
 }
 
 impl GraphStore {
@@ -3636,6 +3640,36 @@ impl GraphStore {
         self.plan_graph(session_id, base_revision, candidate)
     }
 
+    /// A creation order for plans: plan IDs are text and restored plans keep
+    /// their stored IDs, so neither orders them reliably.
+    fn next_plan_sequence(&mut self) -> u64 {
+        self.plan_sequence = self.plan_sequence.wrapping_add(1);
+        self.plan_sequence
+    }
+
+    /// Drop expired plans, then the oldest live plans until one more fits.
+    /// The cap is shared by every session and client, and a plan that is
+    /// only previewed is never committed, so refusing the newest plan let one
+    /// script that previews in a loop block every save for the plan lifetime
+    /// (PLAN-1). The oldest plan is the one least likely to be committed.
+    fn make_room_for_plan(&mut self) {
+        let now = std::time::Instant::now();
+        self.plans.retain(|_, plan| plan.expires_at > now);
+        while self.plans.len() >= MAX_PENDING_GRAPH_PLANS {
+            let oldest = self
+                .plans
+                .iter()
+                .min_by_key(|(_, plan)| plan.sequence)
+                .map(|(id, _)| id.clone());
+            match oldest {
+                Some(id) => {
+                    self.plans.remove(&id);
+                }
+                None => break,
+            }
+        }
+    }
+
     pub fn plan_graph(
         &mut self,
         session_id: &EntityId,
@@ -3666,16 +3700,13 @@ impl GraphStore {
             return Err(StoreError::SessionNotFound);
         }
         validate_session(&candidate).map_err(StoreError::InvalidGraph)?;
-        let now = std::time::Instant::now();
-        self.plans.retain(|_, plan| plan.expires_at > now);
-        if self.plans.len() >= MAX_PENDING_GRAPH_PLANS {
-            return Err(StoreError::PlanLimitReached);
-        }
         if self.next_plan == u64::MAX {
             return Err(StoreError::PlanLimitReached);
         }
+        self.make_room_for_plan();
         self.next_plan += 1;
         let plan_id = EntityId::new(format!("plan-{}", self.next_plan));
+        let sequence = self.next_plan_sequence();
         self.plans.insert(
             plan_id.clone(),
             GraphPlan {
@@ -3683,6 +3714,7 @@ impl GraphStore {
                 base_revision,
                 candidate,
                 expires_at: std::time::Instant::now() + ttl,
+                sequence,
             },
         );
         Ok(plan_id)
@@ -3713,11 +3745,10 @@ impl GraphStore {
             return Err(StoreError::SessionNotFound);
         }
         validate_session(&candidate).map_err(StoreError::InvalidGraph)?;
-        let now = std::time::Instant::now();
-        self.plans.retain(|_, plan| plan.expires_at > now);
-        if self.plans.len() >= MAX_PENDING_GRAPH_PLANS {
-            return Err(StoreError::PlanLimitReached);
+        if !self.plans.contains_key(&plan_id) {
+            self.make_room_for_plan();
         }
+        let sequence = self.next_plan_sequence();
         self.plans.insert(
             plan_id,
             GraphPlan {
@@ -3725,6 +3756,7 @@ impl GraphStore {
                 base_revision,
                 candidate,
                 expires_at: std::time::Instant::now() + ttl,
+                sequence,
             },
         );
         Ok(())
@@ -3791,6 +3823,11 @@ impl GraphStore {
             }
         }
         self.sessions.insert(committed.id.clone(), committed);
+        // The session moved to a new revision, so every other plan made for
+        // it has a base revision that can no longer match. Keeping them only
+        // spent the shared plan cap until they expired (PLAN-1).
+        self.plans
+            .retain(|_, other| other.session_id != result.session_id);
         self.committed_keys
             .insert(idempotency_key.into(), (result.clone(), plan_id.clone()));
         self.committed_key_order.push_back(idempotency_key.into());
@@ -5828,8 +5865,9 @@ mod tests {
             vec![edge("e", "in", "out")],
         );
         store.insert_session(original.clone()).unwrap();
+        let mut first = None;
         for _ in 0..MAX_PENDING_GRAPH_PLANS {
-            store
+            let id = store
                 .plan_graph_with_ttl(
                     &original.id,
                     0,
@@ -5837,11 +5875,13 @@ mod tests {
                     std::time::Duration::from_secs(60),
                 )
                 .unwrap();
+            first.get_or_insert(id);
         }
-        assert_eq!(
-            store.plan_graph(&original.id, 0, original.clone()),
-            Err(StoreError::PlanLimitReached)
-        );
+        // PLAN-1: a full inventory drops its oldest plan, not the new one.
+        let newest = store.plan_graph(&original.id, 0, original.clone()).unwrap();
+        assert_eq!(store.plans.len(), MAX_PENDING_GRAPH_PLANS);
+        assert!(store.plan_candidate(&first.unwrap()).is_none());
+        assert!(store.plan_candidate(&newest).is_some());
 
         let mut expired_store = GraphStore::default();
         expired_store.insert_session(original.clone()).unwrap();
@@ -5850,6 +5890,33 @@ mod tests {
             .unwrap();
         let original_id = original.id.clone();
         assert!(expired_store.plan_graph(&original_id, 0, original).is_ok());
+    }
+
+    #[test]
+    fn a_commit_drops_the_other_plans_of_its_session_but_not_other_sessions() {
+        let mut store = GraphStore::default();
+        let original = session(
+            vec![
+                node("in", NodeKind::PhysicalInput, PortDirection::Output),
+                node("out", NodeKind::PhysicalOutput, PortDirection::Input),
+            ],
+            vec![edge("e", "in", "out")],
+        );
+        let mut other = original.clone();
+        other.id = EntityId::new("other-session");
+        store.insert_session(original.clone()).unwrap();
+        store.insert_session(other.clone()).unwrap();
+        let committed = store.plan_graph(&original.id, 0, original.clone()).unwrap();
+        let stale = store.plan_graph(&original.id, 0, original.clone()).unwrap();
+        let unrelated = store.plan_graph(&other.id, 0, other.clone()).unwrap();
+        store.commit_graph(&committed, 0, "key").unwrap();
+        assert_eq!(
+            store.commit_graph(&stale, 0, "stale-key"),
+            Err(StoreError::PlanNotFound),
+            "a plan for a revision that no longer exists is gone, not retained"
+        );
+        assert!(store.plan_candidate(&unrelated).is_some());
+        assert_eq!(store.plans.len(), 1);
     }
 
     #[test]

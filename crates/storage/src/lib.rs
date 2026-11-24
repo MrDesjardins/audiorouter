@@ -4144,13 +4144,7 @@ impl Storage {
             params![plan.id.as_str()],
             |row| row.get(0),
         )?;
-        if checked_sqlite_count(live_count, "graph plans")?
-            >= audiorouter_domain::MAX_PENDING_GRAPH_PLANS
-        {
-            return Err(StorageError::InvalidPlan(
-                "graph plan inventory exceeds 100 items".into(),
-            ));
-        }
+        let live_count = checked_sqlite_count(live_count, "graph plans")?;
         let base_revision = i64::try_from(plan.base_revision)
             .map_err(|_| StorageError::InvalidPlan("graph plan revision is too large".into()))?;
         let candidate = Self::serialize_validated_session(&plan.candidate)?;
@@ -4158,6 +4152,19 @@ impl Storage {
             return Err(StorageError::InvalidPlan(
                 "graph plan session ID does not match candidate".into(),
             ));
+        }
+        // A full inventory drops its oldest plans rather than refusing the
+        // newest: previewed plans are rarely committed, and refusing blocked
+        // every save until they expired (PLAN-1). Validation comes first so a
+        // rejected plan never evicts another.
+        let excess = (live_count + 1).saturating_sub(audiorouter_domain::MAX_PENDING_GRAPH_PLANS);
+        if excess > 0 {
+            self.connection.execute(
+                "DELETE FROM graph_plans WHERE id IN (
+                     SELECT id FROM graph_plans WHERE id <> ?1
+                     ORDER BY rowid ASC LIMIT ?2)",
+                params![plan.id.as_str(), excess as i64],
+            )?;
         }
         self.connection.execute(
             "INSERT OR REPLACE INTO graph_plans(id, session_id, base_revision, candidate, expires_at)
@@ -4241,6 +4248,23 @@ impl Storage {
             validate_plan_id(id)?;
         }
         Ok(ids)
+    }
+
+    /// Remove every stored plan of `session_id` except `keep_id`. A commit
+    /// advances the session's revision, so its other plans can never commit
+    /// and would only fill the plan inventory until they expire.
+    pub fn delete_other_graph_plans(
+        &self,
+        session_id: &str,
+        keep_id: &str,
+    ) -> Result<(), StorageError> {
+        validate_plan_id(session_id)?;
+        validate_plan_id(keep_id)?;
+        self.connection.execute(
+            "DELETE FROM graph_plans WHERE session_id = ?1 AND id <> ?2",
+            params![session_id, keep_id],
+        )?;
+        Ok(())
     }
 
     pub fn delete_graph_plan(&self, id: &str) -> Result<(), StorageError> {
@@ -5296,29 +5320,83 @@ mod tests {
                 .unwrap();
         }
 
+        // PLAN-1: a full inventory drops its oldest plan, not the new one.
+        let count = |storage: &Storage| -> i64 {
+            storage
+                .connection
+                .query_row("SELECT COUNT(*) FROM graph_plans", [], |row| row.get(0))
+                .unwrap()
+        };
         let candidate = session();
-        assert!(matches!(
-            storage.save_graph_plan(&GraphPlanRecord {
+        storage
+            .save_graph_plan(&GraphPlanRecord {
                 id: "plan-overflow".into(),
                 session_id: candidate.id.as_str().into(),
                 base_revision: candidate.revision,
                 candidate,
                 expires_at: i64::MAX,
-            }),
-            Err(StorageError::InvalidPlan(message))
-                if message == "graph plan inventory exceeds 100 items"
-        ));
+            })
+            .unwrap();
+        assert_eq!(count(&storage), 100);
+        assert!(storage.load_graph_plan("plan-overflow").unwrap().is_some());
+        assert!(storage.load_graph_plan("plan-0").unwrap().is_none());
+        assert!(storage.load_graph_plan("plan-1").unwrap().is_some());
 
+        // Replacing a live plan keeps the inventory at its size.
         let replacement = session();
         storage
             .save_graph_plan(&GraphPlanRecord {
-                id: "plan-0".into(),
+                id: "plan-overflow".into(),
                 session_id: replacement.id.as_str().into(),
                 base_revision: replacement.revision,
                 candidate: replacement,
                 expires_at: i64::MAX,
             })
             .unwrap();
+        assert_eq!(count(&storage), 100);
+        assert!(storage.load_graph_plan("plan-1").unwrap().is_some());
+
+        // A rejected plan evicts nothing.
+        let mut mismatched = session();
+        mismatched.id = EntityId::new("another-session");
+        assert!(storage
+            .save_graph_plan(&GraphPlanRecord {
+                id: "plan-bad".into(),
+                session_id: "session".into(),
+                base_revision: 0,
+                candidate: mismatched,
+                expires_at: i64::MAX,
+            })
+            .is_err());
+        assert_eq!(count(&storage), 100);
+        assert!(storage.load_graph_plan("plan-1").unwrap().is_some());
+    }
+
+    #[test]
+    fn a_commit_can_delete_the_other_plans_of_its_session_only() {
+        let storage = Storage::open_memory().unwrap();
+        let save = |id: &str, session_id: &str| {
+            let mut candidate = session();
+            candidate.id = EntityId::new(session_id);
+            storage
+                .save_graph_plan(&GraphPlanRecord {
+                    id: id.into(),
+                    session_id: session_id.into(),
+                    base_revision: 0,
+                    candidate,
+                    expires_at: i64::MAX,
+                })
+                .unwrap();
+        };
+        save("a-1", "session-a");
+        save("a-2", "session-a");
+        save("b-1", "session-b");
+        storage
+            .delete_other_graph_plans("session-a", "a-1")
+            .unwrap();
+        assert!(storage.load_graph_plan("a-1").unwrap().is_some());
+        assert!(storage.load_graph_plan("a-2").unwrap().is_none());
+        assert!(storage.load_graph_plan("b-1").unwrap().is_some());
     }
 
     #[test]

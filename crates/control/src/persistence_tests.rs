@@ -362,38 +362,43 @@ fn ephemeral_plan_maps_bound_pending_entries_and_prune_expired_entries() {
 
 #[test]
 fn graph_plan_persistence_failure_rolls_back_the_in_memory_plan() {
-    let storage = Storage::open_memory().unwrap();
-    let original = session();
-    let mut plane = ControlPlane::with_storage("plan-rollback", storage);
-    plane.insert_session(original.clone()).unwrap();
-    for index in 0..audiorouter_domain::MAX_PENDING_GRAPH_PLANS {
-        plane
-            .storage
-            .as_ref()
+    let path = std::env::temp_dir().join(format!(
+        "audiorouter-plan-rollback-{}-{}.sqlite",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .save_graph_plan(&GraphPlanRecord {
-                id: format!("filled-plan-{index}"),
-                session_id: original.id.as_str().into(),
-                base_revision: 0,
-                candidate: original.clone(),
-                expires_at: i64::MAX,
-            })
-            .unwrap();
-    }
+            .as_nanos()
+    ));
+    let original = session();
+    let mut plane = ControlPlane::with_storage("plan-rollback", Storage::open(&path).unwrap());
+    plane.insert_session(original.clone()).unwrap();
+    // A full inventory now drops its oldest plan, so make the write itself
+    // fail the way a full or broken disk would.
+    let injector = rusqlite::Connection::open(&path).unwrap();
+    injector
+        .execute_batch(
+            "CREATE TRIGGER reject_plan_writes BEFORE INSERT ON graph_plans
+             BEGIN SELECT RAISE(ABORT, 'injected plan write failure'); END;",
+        )
+        .unwrap();
     let mut candidate = original.clone();
     candidate.name = "must-not-survive".into();
 
     let result = plane.plan_graph(&original.id, 0, candidate);
     assert!(
-        matches!(result, Err(ControlError::InvalidRequest(_))),
+        matches!(result, Err(ref error) if !matches!(error, ControlError::Store(_))),
         "{result:?}"
     );
     assert!(matches!(
-        plane.commit_graph(&EntityId::new("plan-2"), 0, "rollback-check"),
+        plane.commit_graph(&EntityId::new("plan-1"), 0, "rollback-check"),
         Err(ControlError::Store(
             audiorouter_domain::StoreError::PlanNotFound
         ))
     ));
+    drop(injector);
+    drop(plane);
+    let _ = std::fs::remove_file(&path);
 }
 
 #[test]
