@@ -496,9 +496,8 @@ changed:
 **Not run:** `cargo clippy` for `src-tauri` (no `src-tauri` source changed; the
 only production change is `crates/engine/src/audio_file_source.rs`); the
 packaged shell, any live audio, hardware or installer evidence; the UI
-format/lint/tests (no `ui/` change); the nightly workflow does not yet set
-`AUDIOROUTER_FUZZ_SCALE` (a follow-up would add a larger scale to the nightly
-job, which Q4.3 asks to keep out of PRs); the Stream Deck/contracts drift check
+format/lint/tests (no `ui/` change); the nightly workflow did not yet set
+`AUDIOROUTER_FUZZ_SCALE` (added in the follow-up below); the Stream Deck/contracts drift check
 (no API method changed); the `decode_audio` fix has not been exercised with a
 release-profile build (the panic only occurs with overflow checks on).
 
@@ -535,6 +534,23 @@ fourth found no retained buffer; all four pass after it.
 `cargo test -p audiorouter-plugin-host --features test-fixtures` passed
 (128 unit, 12 bounded_fuzz, 42 worker_process; ignored tests need installed
 plugins). Not measured: end-to-end audio latency on a live multi-bus route.
+
+**Nightly fuzz job.** `quality.yml` (the nightly quality workflow) now has a
+`fuzz` job that runs the six fuzz targets (protocol, plugin-host, engine,
+storage, recording, control) with `AUDIOROUTER_FUZZ_SCALE` set to 10, in the
+debug profile (the symphonia overflow only panics with overflow checks), with a
+60-minute timeout. A `workflow_dispatch` input `fuzz_scale` overrides the scale;
+the step refuses a value outside 1–50, because the tests silently ignore one
+outside 1–1000. A failure names the failing crate in the step summary and the
+test output prints the seed and case index. The job is outside the trend table
+and does not write to any branch. `tools/quality/policy.test.mjs` pins the
+scale, timeout and bound, and fails if a new `*fuzz.rs` test file in `crates/`
+is not run by the job. The step's PowerShell was run locally (extracted from the
+YAML) at scale 1: all six targets passed, and a scale of 99 is refused. Not run:
+the job on a hosted runner (it takes a push, which this branch has not had);
+scale-10 timings on a hosted runner are unknown. Local debug scale-10 runs took
+8–32 s per crate; storage was measured at scale 30 (248 s), so roughly 80 s at
+scale 10 by extrapolation. All far under the timeout.
 
 ## Completed: Q3.2 hosted CI qualification
 
