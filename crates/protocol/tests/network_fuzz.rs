@@ -63,8 +63,14 @@ fn v3_packet(frames: usize) -> Vec<u8> {
     // A fixture nonce computed from the packet shape, so the test has no
     // key-shaped literal (CodeQL: hard-coded cryptographic value). It is
     // deterministic, so a failing case still replays.
-    let mut nonce = [0_u8; NONCE_BYTES];
-    nonce[..8].copy_from_slice(&((frames as u64) << 32 | plain as u64).to_le_bytes());
+    let shape = ((frames as u64) << 32) | plain as u64;
+    let nonce: [u8; NONCE_BYTES] = std::array::from_fn(|index| {
+        if index < 8 {
+            (shape >> (8 * index)) as u8
+        } else {
+            (frames as u8).wrapping_add(index as u8)
+        }
+    });
     let length = secure_key()
         .seal(&mut bytes, plain, &[7; CHALLENGE_BYTES], &nonce)
         .unwrap();
