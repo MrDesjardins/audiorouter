@@ -2105,7 +2105,9 @@ fn time_shift_transport_returns_exact_recorded_audio_after_jump_fades() {
                 "{command:?}"
             );
         } else {
-            assert!(segment.iter().all(|sample| *sample == 0.0));
+            // Pause fades the block it lands in to zero (DSP-6), then is silent.
+            assert_eq!(segment[QUANTUM - 1], 0.0, "{command:?}: fade ends silent");
+            assert!(segment[QUANTUM..].iter().all(|sample| *sample == 0.0));
         }
         assert!(
             (state.status().delay_seconds - delay).abs() < 0.01,
