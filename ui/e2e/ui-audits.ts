@@ -3,23 +3,28 @@ import type { Page } from "@playwright/test";
 // Shared page audits used by the target-size, text-contrast, clipped-text and dialog tests.
 // Buttons criterion: WCAG 2.5.8 asks for pointer targets of at least 24 by 24 CSS px.
 // Inline links inside running text are exempt under 2.5.8, as is the canvas mini map.
-export const smallTargets = (page: Page, where: string) =>
-  page.evaluate((label) => {
-    const found: string[] = [];
-    for (const element of document.querySelectorAll<HTMLElement>("button, a[href], [role=button], [role=tab]")) {
-      const box = element.getBoundingClientRect();
-      if (box.width === 0 || box.height === 0) continue;
-      if (getComputedStyle(element).visibility === "hidden") continue;
-      if (element.closest("[aria-hidden=true], .react-flow__minimap")) continue;
-      if (element.tagName === "A" && element.closest("p, li, dd")) continue;
-      if (box.width < 24 || box.height < 24) {
-        const name =
-          element.getAttribute("aria-label") || element.textContent?.trim().slice(0, 30) || element.className;
-        found.push(`${label}: ${name} ${Math.round(box.width)}x${Math.round(box.height)}`);
+// `scope` limits the audit to one container (a modal dialog), so the page behind it is not judged.
+export const smallTargets = (page: Page, where: string, scope = "body") =>
+  page.evaluate(
+    ([label, scopeSelector]) => {
+      const found: string[] = [];
+      const root = document.querySelector(scopeSelector) ?? document.body;
+      for (const element of root.querySelectorAll<HTMLElement>("button, a[href], [role=button], [role=tab]")) {
+        const box = element.getBoundingClientRect();
+        if (box.width === 0 || box.height === 0) continue;
+        if (getComputedStyle(element).visibility === "hidden") continue;
+        if (element.closest("[aria-hidden=true], .react-flow__minimap")) continue;
+        if (element.tagName === "A" && element.closest("p, li, dd")) continue;
+        if (box.width < 24 || box.height < 24) {
+          const name =
+            element.getAttribute("aria-label") || element.textContent?.trim().slice(0, 30) || element.className;
+          found.push(`${label}: ${name} ${Math.round(box.width)}x${Math.round(box.height)}`);
+        }
       }
-    }
-    return found;
-  }, where);
+      return found;
+    },
+    [where, scope] as const,
+  );
 
 // Contrast criterion: WCAG 1.4.3 asks for 4.5:1 text contrast, or 3:1 for large text.
 // Solid fills and opaque gradients (worst stop) are judged; text over a translucent layer or an
@@ -92,27 +97,32 @@ export const lowContrastText = (page: Page, where: string) =>
 
 // Spacing criterion: text that does not fit must stay readable. A clipped label needs a
 // tooltip (title) or an accessible name that carries the full text.
-export const clippedText = (page: Page, where: string) =>
-  page.evaluate((label) => {
-    const found: string[] = [];
-    for (const element of document.querySelectorAll<HTMLElement>("body *")) {
-      if (!element.textContent?.trim() || element.children.length > 0) continue;
-      const box = element.getBoundingClientRect();
-      if (box.width === 0 || box.height === 0 || box.bottom < 0 || box.top > innerHeight) continue;
-      const style = getComputedStyle(element);
-      if (style.visibility === "hidden" || element.closest("[aria-hidden=true], .react-flow__minimap")) continue;
-      if (style.overflowX === "visible" && style.overflowY === "visible") continue;
-      if (/auto|scroll/.test(style.overflowX + style.overflowY)) continue;
-      const clipped = element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 2;
-      if (!clipped) continue;
-      const text = element.textContent.trim();
-      const named = element.closest("[title], [aria-label]");
-      const full = named?.getAttribute("title") ?? named?.getAttribute("aria-label") ?? "";
-      if (full.includes(text) || (full && text.endsWith("…"))) continue;
-      found.push(`${label}: "${text.slice(0, 40)}" ${element.scrollWidth}>${element.clientWidth}`);
-    }
-    return found;
-  }, where);
+export const clippedText = (page: Page, where: string, scope = "body") =>
+  page.evaluate(
+    ([label, scopeSelector]) => {
+      const found: string[] = [];
+      const root = document.querySelector(scopeSelector) ?? document.body;
+      for (const element of root.querySelectorAll<HTMLElement>("*")) {
+        if (!element.textContent?.trim() || element.children.length > 0) continue;
+        const box = element.getBoundingClientRect();
+        if (box.width === 0 || box.height === 0 || box.bottom < 0 || box.top > innerHeight) continue;
+        const style = getComputedStyle(element);
+        if (style.visibility === "hidden" || element.closest("[aria-hidden=true], .react-flow__minimap")) continue;
+        if (style.overflowX === "visible" && style.overflowY === "visible") continue;
+        if (/auto|scroll/.test(style.overflowX + style.overflowY)) continue;
+        const clipped =
+          element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 2;
+        if (!clipped) continue;
+        const text = element.textContent.trim();
+        const named = element.closest("[title], [aria-label]");
+        const full = named?.getAttribute("title") ?? named?.getAttribute("aria-label") ?? "";
+        if (full.includes(text) || (full && text.endsWith("…"))) continue;
+        found.push(`${label}: "${text.slice(0, 40)}" ${element.scrollWidth}>${element.clientWidth}`);
+      }
+      return found;
+    },
+    [where, scope] as const,
+  );
 
 // Inputs criterion: every visible field has an accessible name (label, aria-label or
 // aria-labelledby), so Narrator announces what it is for.

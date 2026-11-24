@@ -1830,15 +1830,15 @@ describe("keyboard connection dialog", () => {
     expect(document.activeElement).toBe(source);
 
     const close = within(dialog).getByRole("button", { name: "Close keyboard connection dialog" });
-    const cancel = within(dialog).getByRole("button", { name: "Cancel" });
-    cancel.focus();
+    // The confirming button is last (decline first, as in every dialog), so it closes the Tab cycle.
+    const add = within(dialog).getByRole("button", { name: "Add connection" });
+    add.focus();
     fireEvent.keyDown(window, { key: "Tab" });
     expect(document.activeElement).toBe(close);
     close.focus();
     fireEvent.keyDown(window, { key: "Tab", shiftKey: true });
-    expect(document.activeElement).toBe(cancel);
+    expect(document.activeElement).toBe(add);
 
-    const add = within(dialog).getByRole("button", { name: "Add connection" });
     fireEvent.click(add);
     expect(screen.getByRole("dialog", { name: "Keyboard connection" })).toBeTruthy();
     expect(screen.getByText("Choose an output and input port first.")).toBeTruthy();

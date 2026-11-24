@@ -82,6 +82,9 @@ describe("app question dialogs", () => {
     fireEvent.submit(dialog.querySelector("form")!);
     expect(await within(dialog).findByText("Enter a name first.")).toBeTruthy();
     expect(screen.getByRole("dialog"), "still open").toBe(dialog);
+    // The reason is reachable from the field (aria-describedby), not only visible beside it.
+    expect(field.getAttribute("aria-invalid")).toBe("true");
+    expect(document.getElementById(field.getAttribute("aria-describedby")!)?.textContent).toBe("Enter a name first.");
 
     fireEvent.change(field, { target: { value: "  Practice  " } });
     expect(within(dialog).queryByText("Enter a name first.")).toBeNull();

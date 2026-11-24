@@ -1,5 +1,116 @@
 # UI quality review — 2026-11-03
 
+## Round 29 — agent audits for the Round 28 portable gaps (2026-11-24)
+
+Agent audits, not a participant study: no score is changed here (scoring stays with the owner).
+Branch `test/ui-quality-audits` from `origin/main` 0fb41911b. Each audit below closes, in the
+portable (browser) part, a gap Round 28 recorded for Contrast, Spacing/alignment, Inputs and
+Buttons. Every audit returns how many elements it judged and the tests require a floor, so an
+audit that looks at nothing cannot pass; every audit has a negative control that proves it can fail.
+
+### Audits added (all in `ui/e2e`, three themes unless noted)
+
+| Spec | Round 28 gap | What it checks |
+|------|--------------|----------------|
+| `contrast-states.pw.ts` (16 tests) | Contrast: text over translucent layers, non-text boundaries, hover | Text composited over translucent layers (and `color-mix()` fills), value and placeholder text of fields (older audits never read them), field edges and icon-only glyphs at 3:1 (WCAG 1.4.11), keyboard focus rings reached with real Tab presses at 3:1, hovered buttons and tabs; controls inject faint layers, faint edges, a missing or blended ring and a fading hover |
+| `button-states.pw.ts` (4) | Buttons: pressed states | Every `aria-pressed` toggle on the route and on every Settings page is clicked and clicked back (pointer moved away so hover cannot stand in): its look must change and the "on" look must be visible (3:1 edge or fill, or a 3:1 change) |
+| `dialog-audits-more.pw.ts` (31) | Spacing and Buttons: connection, plugin and confirmation dialogs | Delete-session confirmation, New-session and Rename prompts, plugin picker, application picker, keyboard connection dialog, Replace-sidechain confirmation, Remove-plugin confirmation, device-access question, plus the toolbar Connect form: target size, clipping, composited text contrast, field edges, focus rings, Tab/Shift+Tab never leaves the modal, decline-before-confirm order, equal gaps and heights in each action row |
+| `text-field-feedback.pw.ts` (12) | Inputs: text-field validation beyond numbers | Inventory of every non-number text field on the panels, Settings and the Properties of every tool (an unclassified new field fails); feedback of the fields that refuse input: `aria-invalid`, a visible reason reachable through `aria-describedby`, nothing below moves (UI-17) |
+
+Helpers: `ui-audits-color.ts` (composited backdrops with gradient stops, canvas fallback for
+colour spaces `getComputedStyle` returns, focus, hover and pressed audits), `audit-pages.ts`
+(walks Properties, Tools, Devices and every Settings page). `ui-audits.ts` gained an optional
+`scope` so a dialog audit does not judge the page behind the modal. Limits: layers are composited
+in ancestor order (not paint order); images and `backdrop-filter` are counted as skipped, not
+passed; the browser's own two-tone focus ring (`outline-style: auto`, used on summaries and
+scrollable regions) is judged as present.
+
+### Defects found and fixed (each is in an audit as regression)
+
+1. **Field borders below 3:1 (WCAG 1.4.11).** Fifteen per-panel rules (inspector, tool search,
+   session name and picker, recording search, theme picker, native endpoint, connection form,
+   recorder fields, `.theme-light` fields, the on/off switch) gave fields `--ambient-edge` or a
+   hard-coded grey instead of the shared `--field-border`. Before: dark 1.47–1.77:1 (Properties,
+   Tools search, API port and "Who can connect", Logs, startup switch), light 1.71–2.86:1 (every
+   Settings field and select). After: they all use `--field-border` (dark 4.49:1 on the panel,
+   light 3.48:1 on white); the audit passes in dark, light and high contrast. Fix is in
+   `ui/src/styles.css`.
+2. **Toggle buttons looked the same pressed and not pressed.** Route list, Connect and Map (all
+   three themes) changed only `aria-pressed`: fill, edge, text and shadow were identical. The
+   assistant choices (MCP page) differed by a cyan edge that measured 1.23:1 against the unpressed
+   look in light. Now an accent edge, an inner edge and a tinted fill (white fill with black text
+   in high contrast) for the toolbar, the assistant choices and the request-format choices.
+3. **Canvas node delete button focus ring 1.23:1 in light.** A fixed yellow `#ffd45b` ring on a
+   pale card; it now uses `--focus-ring` (6.62:1 in light, unchanged in dark).
+4. **Device-access dialog did not keep focus.** `aria-modal` but Tab left the dialog; it also
+   listed the confirming button before "Not now", opposite to every other dialog (Cancel then
+   Delete, Keep then Replace). Tab now wraps inside it; decline first, confirm last; initial focus
+   still on the confirming button. The keyboard connection dialog had the same order and is
+   reordered too.
+5. **Network Send/Receive address reason moved the panel 41.6 px** when a bad address was typed
+   (the `<small>` appeared in the flow) and was not tied to the field. It has a two-line slot of
+   its own (empty until needed) and `aria-describedby`.
+6. **Application picker: a bad .exe path was reported behind the dialog.** The error went to the
+   page's message bar under the modal; the field was not `aria-invalid`. The picker now shows the
+   reason in its own live status next to the field and marks the field invalid.
+7. **Name prompt hint not tied to its field.** The empty-name hint existed (reserved, no shift)
+   but `aria-describedby` was missing; added.
+
+Unit regressions: `DeviceAccessDialog.test.tsx` (new), `AppDialog.test.tsx`,
+`NetworkNodeEditor.test.tsx`; `App.accessibility.test.tsx` follows the new button order.
+
+### Findings recorded, not fixed
+
+- **Keyboard connection dialog is unreachable in the app.** Its opener sits in
+  `#signal-flow-panel > .connection-editor`, which is `display: none` (`styles.css`); only
+  tests (jsdom, and `dispatchEvent` in the audit) open it. The toolbar Connect form is the user
+  path. Decision for the owner: delete the dialog or restore an opener.
+- **Summaries and scrollable regions use the browser's focus ring**, not the app's `--focus-ring`
+  (visible and two-tone, but thin and a different colour). A global `:focus-visible` rule would also
+  ring whole scrolling panels; left as a design decision.
+- **Plug-in path and directory fields** (Settings → Plug-ins, plugin picker) have no
+  `aria-invalid`/`aria-describedby`; their errors arrive in a separate message area. The route
+  harness has no plug-in backend ("The backend is disconnected; plugin inspection is
+  unavailable"), so the refusal wording and layout stay unexercised. Needs a real-backend spec.
+- **Canvas node and connection buttons (Delete, Pause, Remove, Add processor) measure 21×21 px**
+  when the canvas is fitted: their CSS size is 28 px and the canvas zoom scales them. WCAG 2.5.8
+  counts CSS pixels, so this is a zoom effect, but a fitted route is the first view; not fixed.
+- **Hover and focus checks sample** four buttons per page and ten Tab stops per page (60 on the
+  workbench); the full set is not walked.
+- Theme colour hex fields (custom theme editor) and keyboard-shortcut capture are not in the
+  inventory: they only exist after choosing a custom theme or opening a rule.
+
+### Commands (Windows 11, Edge via Playwright, Node 22)
+
+From `ui/` unless noted. Playwright ran with a temporary copy of the config (other port, deleted
+afterwards), 3 workers.
+
+| Command | Result |
+|---------|--------|
+| New specs, each alone, dark + light + high contrast | `contrast-states` 16, `button-states` 4, `dialog-audits-more` 31, `text-field-feedback` 12: all passed |
+| Every browser spec that does not need the backend (all of `e2e/*.pw.ts` except real-backend importers and `readme-screenshots`) | 727 passed, 0 failed (11.1 min) |
+| `cargo build -p audiorouter-control --example e2e_backend`, then every spec that imports `./real-backend` except `readme-screenshots` | 133 passed, 0 failed, 10 skipped (the `inspector-stability` cases for tools with no editable value skip by design) (3.4 min) |
+| `npm test` (vitest) | 134 files, 1169 tests passed |
+| `npm run typecheck:all` | clean |
+| `npm run lint` (`--max-warnings 0`) | clean |
+| `npm run format`, then `npm run format:check` | clean |
+| `node tools/docs/validate.mjs` (repo root) | passed, 295 Markdown files, 1641 local links |
+
+Each audit's negative control fails as intended; the product fixes above each have an audit or
+unit test that fails without them.
+
+### Not run
+
+- Narrator / screen reader pass, real Windows display scaling (125 %, 150 %), and an attended
+  session on the real device: these need the owner. The audits read computed styles in Edge, so
+  they say nothing about what a screen reader announces.
+- `readme-screenshots` (writes into `docs/`, on request only).
+- Rust formatting, Clippy and the Rust test suites: no Rust code changed (only the existing
+  `e2e_backend` example was built to run the real-backend browser specs).
+- The built desktop shell and a fresh-install run: no shell was launched, per the brief.
+- Plug-in path refusal wording (needs a plug-in backend; see findings).
+- Optional pointer: the owner's scores for Contrast, Spacing, Inputs and Buttons are untouched.
+
 ## Round 28 — attended session and scores (2026-11-07)
 
 Evidence: the owner's attended session on the recorded and rebuilt exes

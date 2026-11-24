@@ -247,6 +247,7 @@ export function NetworkNodeEditor({
           value={address}
           disabled={disabled}
           aria-invalid={address.length > 0 && !addressValid}
+          aria-describedby={`${node.id}-address-note`}
           onChange={(event) => {
             const value = event.target.value.trim();
             setAddress(value);
@@ -254,7 +255,14 @@ export function NetworkNodeEditor({
           }}
         />
       </label>
-      {address.length > 0 && !addressValid && <small role="alert">{tr("g2.nwAddrInvalid")}</small>}
+      {/* The slot is always there and keeps its height, so the reason appearing moves nothing (UI-17). */}
+      <small
+        id={`${node.id}-address-note`}
+        className="network-address-note"
+        role={address.length > 0 && !addressValid ? "alert" : undefined}
+      >
+        {address.length > 0 && !addressValid ? tr("g2.nwAddrInvalid") : ""}
+      </small>
       <label>
         {tr("g2.nwPortWord")}
         <input
