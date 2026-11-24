@@ -585,6 +585,75 @@ function routeSourceType(kind: NodeKind): "generated" | "native" | "physical" | 
   }
 }
 
+/** Whether the kind starts audio in a route (a device, an application, a generator or a network feed). */
+export function isRouteSource(kind: NodeKind): boolean {
+  return routeSourceType(kind) !== null;
+}
+
+/**
+ * Whether the kind renders its own audio instead of capturing it (mirrors the
+ * engine's `renders_own_audio`; `sourceKinds.test.ts` compares the two).
+ * Exhaustive on purpose: a new kind fails typecheck until it is classified.
+ */
+export function rendersOwnAudio(kind: NodeKind): boolean {
+  switch (kind) {
+    case "testSignal":
+    case "audioFile":
+    case "soundboard":
+    case "instrument":
+      return true;
+    case "physicalInput":
+    case "applicationCapture":
+    case "endpointLoopback":
+    case "physicalOutput":
+    case "virtualRenderSource":
+    case "virtualCaptureSink":
+    case "networkSend":
+    case "networkReceive":
+    case "mixer":
+    case "gain":
+    case "volume":
+    case "bassTreble":
+    case "dehum":
+    case "declick":
+    case "denoise":
+    case "speechDenoise":
+    case "spectralGate":
+    case "funVoiceChanger":
+    case "firFilter":
+    case "timeShift":
+    case "mute":
+    case "meter":
+    case "parametricEq":
+    case "compressor":
+    case "gate":
+    case "limiter":
+    case "delay":
+    case "graphicEq":
+    case "pitch":
+    case "plugin":
+    case "duck":
+    case "recorder":
+    case "inputSwitch":
+    case "outputSwitch":
+      return false;
+    default: {
+      const unclassified: never = kind;
+      return unclassified;
+    }
+  }
+}
+
+/**
+ * Sources the native application Mixer route accepts beside an application:
+ * input devices, applications and Test Signal / Audio File / Soundboard sound.
+ * Endpoint loopback, virtual and Instrument sources are not supported there.
+ */
+export function supportsApplicationMixerRoute(kind: NodeKind): boolean {
+  const type = routeSourceType(kind);
+  return type === "generated" || type === "physical" || type === "application";
+}
+
 /**
  * Whether the engine accepts this kind in a linear chain before a Mixer input
  * (mirrors `is_chain_processor`). Exhaustive on purpose: a hand-kept set

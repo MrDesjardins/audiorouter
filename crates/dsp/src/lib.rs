@@ -1209,6 +1209,9 @@ pub struct WindowedSignalMeter {
     rms_values: Vec<[f32; 2]>,
     peak_values: Vec<[f32; 2]>,
     sum_squares: [f64; 2],
+    /// Per channel, how many slots of the RMS window hold a non-zero square.
+    /// The running sum is exactly zero when this is zero (DSP-4).
+    nonzero_squares: [usize; 2],
     clipping: u64,
 }
 
@@ -1260,6 +1263,7 @@ impl WindowedSignalMeter {
             rms_values: vec![[0.0; 2]; rms_window_frames],
             peak_values: vec![[0.0; 2]; peak_hold_frames],
             sum_squares: [0.0; 2],
+            nonzero_squares: [0; 2],
             clipping: 0,
         })
     }
@@ -1280,6 +1284,7 @@ impl WindowedSignalMeter {
         self.rms_values.fill([0.0; 2]);
         self.peak_values.fill([0.0; 2]);
         self.sum_squares = [0.0; 2];
+        self.nonzero_squares = [0; 2];
         self.clipping = 0;
     }
 
@@ -1289,6 +1294,9 @@ impl WindowedSignalMeter {
                 for channel in 0..self.channels {
                     let old = self.rms_values[self.rms_cursor][channel];
                     self.sum_squares[channel] -= f64::from(old);
+                    if old != 0.0 {
+                        self.nonzero_squares[channel] -= 1;
+                    }
                 }
             } else {
                 self.rms_filled += 1;
@@ -1301,8 +1309,19 @@ impl WindowedSignalMeter {
                 rms_slot[channel] = value * value;
                 peak_slot[channel] = magnitude;
                 self.sum_squares[channel] += f64::from(rms_slot[channel]);
+                if rms_slot[channel] != 0.0 {
+                    self.nonzero_squares[channel] += 1;
+                }
                 if magnitude >= 1.0 {
                     self.clipping = self.clipping.saturating_add(1);
+                }
+            }
+            // Subtracting the oldest square leaves a rounding residue of either
+            // sign. A window with no energy has exactly zero sum, whatever the
+            // residue says (a negative one made `sqrt` return NaN).
+            for channel in 0..self.channels {
+                if self.nonzero_squares[channel] == 0 {
+                    self.sum_squares[channel] = 0.0;
                 }
             }
             self.rms_values[self.rms_cursor] = rms_slot;
@@ -1326,7 +1345,8 @@ impl WindowedSignalMeter {
         let mut rms = [0.0_f32; 2];
         if self.rms_filled > 0 {
             for (channel, value) in rms.iter_mut().enumerate().take(self.channels) {
-                *value = (self.sum_squares[channel] / self.rms_filled as f64).sqrt() as f32;
+                *value =
+                    (self.sum_squares[channel].max(0.0) / self.rms_filled as f64).sqrt() as f32;
             }
         }
         MeterSnapshot {
@@ -3123,6 +3143,40 @@ mod tests {
         assert_eq!(quiet.rms, [0.0, 0.0]);
         meter.reset();
         assert_eq!(meter.snapshot().clipping, 0);
+    }
+
+    /// DSP-4: the running sum of squares keeps a rounding residue of either sign
+    /// after signal followed by a full window of exact zeros; a negative residue
+    /// made `sqrt` return NaN for the linear RMS.
+    #[test]
+    fn windowed_meter_rms_stays_finite_and_zero_after_signal_then_silence() {
+        for seed in 0..50_u64 {
+            let mut state = seed.wrapping_mul(6_364_136_223_846_793_005) ^ 0x9E37_79B9_7F4A_7C15;
+            let mut next_noise = move || {
+                state = state
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                ((state >> 40) as f32 / (1_u64 << 24) as f32 - 0.5) * 0.2
+            };
+            let mut meter = WindowedSignalMeter::new_default(2, 48_000.0).unwrap();
+            let window = meter.window_frames();
+            let mut signal = Vec::with_capacity(48_000 * 2);
+            for frame in 0..48_000 {
+                let tone = (frame as f32 * 0.0731 + seed as f32).sin() * 0.4;
+                signal.push(tone + next_noise());
+                signal.push(tone * 0.5 + next_noise());
+            }
+            meter.process_interleaved(&signal);
+            meter.process_interleaved(&vec![0.0; window * 2]);
+            let quiet = meter.snapshot();
+            assert!(
+                quiet.rms.iter().all(|value| value.is_finite()),
+                "seed {seed}: rms {:?}",
+                quiet.rms
+            );
+            assert_eq!(quiet.rms, [0.0, 0.0], "seed {seed}");
+            assert_eq!(quiet.rms_db, [-120.0, -120.0], "seed {seed}");
+        }
     }
 
     #[test]

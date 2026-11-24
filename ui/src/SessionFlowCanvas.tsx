@@ -91,7 +91,12 @@ import { CanvasGroupRenderer, type CanvasGroup } from "./CanvasGroups";
 import { FlowActiveLayers, FlowArrow, FlowComets, FlowMotionProvider } from "./flowLine";
 import type { FlowAnimationMode } from "./preferences";
 import { RecordButton } from "./RecorderControls";
-import { appendLibraryNode as appendPreviewNode, appendPluginPlaceholderNode, unfedRouteNodes } from "./draft";
+import {
+  appendLibraryNode as appendPreviewNode,
+  appendPluginPlaceholderNode,
+  rendersOwnAudio,
+  unfedRouteNodes,
+} from "./draft";
 import { nodeAttention, PRIVACY_MUTED_KINDS, type NodeAttention } from "./nodeAttention";
 import {
   draggedLibraryKind,
@@ -1006,7 +1011,7 @@ function hasOnlyCaptureSources(session: Session, nodeId: string): boolean {
     visited.add(id);
     const node = session.nodes.find((item) => item.id === id);
     if (!node?.enabled) continue;
-    if (node.kind === "testSignal" || node.kind === "audioFile" || node.kind === "soundboard") return false;
+    if (rendersOwnAudio(node.kind)) return false;
     if (PRIVACY_MUTED_KINDS.includes(node.kind)) foundCapture = true;
     for (const edge of session.edges) if (edge.enabled && edge.destinationNode === id) pending.push(edge.sourceNode);
   }

@@ -113,7 +113,7 @@ import {
   type VoiceChainPresetId,
 } from "./draft";
 import { actionMessageLifetimeMs, actionMessageTone, WARNING_LIFETIME_MS } from "./actionMessage";
-import { unfedRouteNodes } from "./draft";
+import { rendersOwnAudio, supportsApplicationMixerRoute, unfedRouteNodes } from "./draft";
 import { demoSession, demoSessions } from "./fixtures";
 import {
   recordDraft,
@@ -2217,10 +2217,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         // Mixer, which keeps each application reconnecting after a restart.
         // Test Signal and Audio File are generated inside the Mixer input;
         // endpoint loopback and virtual sources are not supported here yet.
-        const unsupported = mixerSources.filter(
-          (node) =>
-            !["physicalInput", "applicationCapture", "testSignal", "audioFile", "soundboard"].includes(node.kind),
-        );
+        const unsupported = mixerSources.filter((node) => !supportsApplicationMixerRoute(node.kind));
         const microphones = mixerSources.filter((node) => node.kind === "physicalInput");
         if (unsupported.length > 0) {
           setActionMessage(
@@ -2265,7 +2262,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           if (diagnostics.nativeSessionId === session.id && backend.detachNativeEndpoint)
             await backend.detachNativeEndpoint(session.id);
           const bindings = mixerSources.map((node): import("@audiorouter/contracts").NativeMultiInputSourceBinding =>
-            node.kind === "testSignal" || node.kind === "audioFile" || node.kind === "soundboard"
+            rendersOwnAudio(node.kind)
               ? { kind: "generated" }
               : node.kind === "physicalInput"
                 ? { kind: "physical", endpointId: endpoints.captureEndpointId ?? "" }
