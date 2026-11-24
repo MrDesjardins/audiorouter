@@ -71,6 +71,9 @@ pub struct RmsWindow {
     next: usize,
     len: usize,
     sum_squares: f64,
+    /// How many stored samples have a non-zero square. The running sum is
+    /// exactly zero when this is zero (DSP-4).
+    nonzero: usize,
 }
 
 impl RmsWindow {
@@ -83,6 +86,7 @@ impl RmsWindow {
             next: 0,
             len: 0,
             sum_squares: 0.0,
+            nonzero: 0,
         })
     }
 
@@ -104,11 +108,23 @@ impl RmsWindow {
             if self.len == self.samples.len() {
                 let old = self.samples[self.next];
                 self.sum_squares -= f64::from(old) * f64::from(old);
+                if old != 0.0 {
+                    self.nonzero -= 1;
+                }
             } else {
                 self.len += 1;
             }
             self.samples[self.next] = sample;
             self.sum_squares += f64::from(sample) * f64::from(sample);
+            if sample != 0.0 {
+                self.nonzero += 1;
+            }
+            // Subtracting the oldest square leaves a rounding residue of either
+            // sign. A window holding no energy has exactly zero sum, whatever
+            // the residue says (a negative one made `sqrt` return NaN).
+            if self.nonzero == 0 {
+                self.sum_squares = 0.0;
+            }
             self.next = (self.next + 1) % self.samples.len();
         }
     }
@@ -117,7 +133,7 @@ impl RmsWindow {
         if self.len == 0 {
             0.0
         } else {
-            (self.sum_squares / self.len as f64).sqrt() as f32
+            (self.sum_squares.max(0.0) / self.len as f64).sqrt() as f32
         }
     }
 
@@ -126,6 +142,7 @@ impl RmsWindow {
         self.next = 0;
         self.len = 0;
         self.sum_squares = 0.0;
+        self.nonzero = 0;
     }
 }
 
@@ -14198,6 +14215,37 @@ mod tests {
         window.reset();
         assert_eq!(window.len(), 0);
         assert_eq!(window.rms(), 0.0);
+    }
+
+    /// DSP-4: after signal and then a full window of exact zeros the running sum
+    /// holds a rounding residue; a negative one made `rms()` NaN.
+    #[test]
+    fn rolling_rms_window_stays_finite_and_zero_after_signal_then_silence() {
+        const WINDOW: usize = 14_400;
+        for seed in 0..50_u64 {
+            let mut state = seed.wrapping_mul(6_364_136_223_846_793_005) ^ 0x9E37_79B9_7F4A_7C15;
+            let mut window = RmsWindow::new(WINDOW).unwrap();
+            let mut block = AudioBlock::new(1, 128).unwrap();
+            let mut frame = 0_usize;
+            for _ in 0..(48_000 / 128) {
+                for sample in block.channel_mut(0).unwrap() {
+                    state = state
+                        .wrapping_mul(6_364_136_223_846_793_005)
+                        .wrapping_add(1_442_695_040_888_963_407);
+                    let noise = ((state >> 40) as f32 / (1_u64 << 24) as f32 - 0.5) * 0.2;
+                    *sample = (frame as f32 * 0.0731 + seed as f32).sin() * 0.4 + noise;
+                    frame += 1;
+                }
+                window.push_block(&block);
+            }
+            block.channel_mut(0).unwrap().fill(0.0);
+            for _ in 0..(WINDOW / 128 + 1) {
+                window.push_block(&block);
+            }
+            let rms = window.rms();
+            assert!(rms.is_finite(), "seed {seed}: rms {rms}");
+            assert_eq!(rms, 0.0, "seed {seed}");
+        }
     }
 
     #[test]
