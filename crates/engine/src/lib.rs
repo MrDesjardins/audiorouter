@@ -15053,6 +15053,14 @@ mod tests {
         let mut block = AudioBlock::new(1, 128).unwrap();
         block.channel_mut(0).unwrap().fill(0.5);
         second.process(&mut block);
+        // The pause block fades the audio that was playing out to zero rather
+        // than clicking (DSP-6); every later block is silent.
+        let fade = block.channel(0).unwrap();
+        assert!(fade[0] > 0.4 && fade[127] == 0.0, "pause fades out");
+        assert!(fade.windows(2).all(|pair| pair[1] <= pair[0]));
+        let mut block = AudioBlock::new(1, 128).unwrap();
+        block.channel_mut(0).unwrap().fill(0.5);
+        second.process(&mut block);
         assert!(
             block
                 .channel(0)
