@@ -994,13 +994,8 @@ impl ControlPlane {
             _ => return Err(ControlError::InvalidRequest("method not found".into())),
         }
         let plan = self.plan_graph(session_id, current.revision, candidate)?;
-        let commit = self.commit_graph_scoped(
-            &plan,
-            current.revision,
-            &format!("{method}:{key}"),
-            key,
-            None,
-        )?;
+        let commit_key = self.simple_commit_key(method, key);
+        let commit = self.commit_graph_scoped(&plan, current.revision, &commit_key, key, None)?;
         let mut result = detail;
         if let Some(object) = result.as_object_mut() {
             object.insert("sessionId".into(), json!(session_id));

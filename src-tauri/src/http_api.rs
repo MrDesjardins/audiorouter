@@ -798,6 +798,14 @@ fn request_correlation_id(header: Option<&str>) -> String {
         .unwrap_or_else(audiorouter_protocol::diagnostics::new_correlation_id)
 }
 
+/// Adapter contract cases shared with the control crate and the MCP adapter.
+#[cfg(test)]
+#[path = "../../crates/control/src/contract_cases.rs"]
+mod contract_cases;
+#[cfg(test)]
+#[path = "http_contract_tests.rs"]
+mod contract_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;

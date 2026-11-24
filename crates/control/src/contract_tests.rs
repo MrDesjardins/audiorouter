@@ -70,6 +70,45 @@ fn generated_cases_use_the_dispatcher_limits() {
     assert!(DEEP_NESTING < 128);
 }
 
+/// The generated table is large enough to mean something: every method gets
+/// the structural cases, and the schema-driven kinds all occur.
+#[test]
+fn the_generated_cases_cover_every_method_and_every_kind() {
+    let methods = describe_methods(&mut Dispatch::new(None));
+    let mut kinds = std::collections::BTreeMap::<String, usize>::new();
+    let mut total = 0;
+    for method in &methods {
+        let cases = invalid_cases(method);
+        for label in ["params-not-an-object", "deep-nesting", "unknown-parameter"] {
+            assert!(
+                cases.iter().any(|case| case.label == label),
+                "{} has no `{label}` case",
+                method.name
+            );
+        }
+        for case in cases {
+            total += 1;
+            let kind = case.label.split(':').next().unwrap().to_owned();
+            *kinds.entry(kind).or_default() += 1;
+        }
+    }
+    eprintln!(
+        "contract cases: {} methods, {total} cases: {kinds:?}",
+        methods.len()
+    );
+    for kind in [
+        "params-omitted",
+        "missing",
+        "wrong-type",
+        "oversize-string",
+        "empty-string",
+        "over-maxLength",
+    ] {
+        assert!(kinds.contains_key(kind), "no `{kind}` case was generated");
+    }
+    assert!(total > 1000, "only {total} cases were generated");
+}
+
 #[test]
 fn the_published_schemas_describe_every_api_method() {
     let methods = describe_methods(&mut Dispatch::new(None));
@@ -223,9 +262,74 @@ fn a_stale_revision_is_a_revision_conflict_on_every_guarded_method() {
 /// nothing twice; the same key with other content is an idempotency conflict.
 #[test]
 fn a_retried_mutation_is_applied_once_and_a_reused_key_is_refused() {
-    let runs = retry_runs(|| Box::new(Dispatch::new(Some(every_scope()))));
+    let runs = retry_runs(|| Box::new(Dispatch::new(Some(every_scope()))), None);
     let failures = retry_failures(&runs);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Regression: the longest key the schemas allow (128 bytes) was refused by
+/// every task-shaped edit, because the commit key `"{method}:{key}"` passed the
+/// storage limit.
+#[test]
+fn the_longest_operation_key_is_accepted_and_retried() {
+    for grant in [None, Some(every_scope())] {
+        let runs = retry_runs(|| Box::new(Dispatch::new(grant.clone())), Some(LONGEST_KEY));
+        let failures = retry_failures(&runs);
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+}
+
+/// Regression: a named client's empty commit key was answered as an unknown
+/// plan (the client scope made the empty key look valid), unlike a trusted
+/// caller's `The idempotency key must not be empty.`
+#[test]
+fn an_empty_commit_key_is_refused_for_a_named_client_too() {
+    let mut plane = ControlPlane::default();
+    plane.insert_session(fixture_session("contract")).unwrap();
+    let grant = every_scope();
+    let mut ask = |client: Option<&str>| {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "graph.commit".into(),
+            params: Some(json!({ "planId": "none", "baseRevision": 0, "idempotencyKey": "" })),
+        };
+        let response = match client {
+            Some(client) => plane.dispatch_authorized_for_client(request, client, &grant),
+            None => plane.dispatch_authorized(request, &grant),
+        };
+        Outcome::from_response(&response)
+    };
+    let trusted = ask(None);
+    assert_eq!(trusted.category, "invalidRequest", "{trusted:?}");
+    assert_eq!(ask(Some("mcp-client")), trusted);
+}
+
+/// Regression: two clients may use the same operation key for the same task
+/// edit; the second one's commit was refused as an idempotency conflict.
+#[test]
+fn two_clients_can_use_the_same_operation_key() {
+    let mut plane = ControlPlane::default();
+    plane.insert_session(fixture_session("contract")).unwrap();
+    let grant = every_scope();
+    let mut add = |client: &str, kind: &str| {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "nodes.add".into(),
+            params: Some(
+                json!({ "sessionId": "contract", "kind": kind, "idempotencyKey": "shared-key" }),
+            ),
+        };
+        Outcome::from_response(&plane.dispatch_authorized_for_client(request, client, &grant))
+    };
+    let first = add("client-a", "gain");
+    let second = add("client-b", "gate");
+    assert!(first.ok, "{first:?}");
+    assert!(
+        second.ok,
+        "client-b was refused a key client-a used: {second:?}"
+    );
 }
 
 /// The retry scenarios name every method the schemas publish with an

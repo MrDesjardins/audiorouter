@@ -117,6 +117,35 @@ pub trait Adapter {
     fn refuses_before_validation(&self, _method: &str) -> Option<&'static str> {
         None
     }
+
+    /// The parameters as this adapter can express them (HTTP always sends a
+    /// JSON object, so omitted parameters become `{}`).
+    fn normalize_params(&self, params: Option<Value>) -> Option<Value> {
+        params
+    }
+
+    /// Cases this adapter answers itself, with its own message, before the
+    /// backend sees them: still checked for the category, not for the text.
+    fn answers_itself(&self, _case_label: &str) -> bool {
+        false
+    }
+}
+
+/// An [`Adapter`] built from closures, for adapters whose backend lives in the
+/// test (an in-memory `ControlPlane`) or behind a socket.
+pub struct FnAdapter<'a> {
+    pub call_fn: Box<dyn FnMut(&str, Option<Value>) -> Outcome + 'a>,
+    pub refuse_fn: Box<dyn Fn(&str) -> Option<&'static str> + 'a>,
+}
+
+impl Adapter for FnAdapter<'_> {
+    fn call(&mut self, method: &str, params: Option<Value>) -> Outcome {
+        (self.call_fn)(method, params)
+    }
+
+    fn refuses_before_validation(&self, method: &str) -> Option<&'static str> {
+        (self.refuse_fn)(method)
+    }
 }
 
 /// A method as published by `system.describe`.
@@ -410,7 +439,7 @@ pub fn invalid_input_failures(adapter: &mut dyn Adapter, methods: &[Method]) -> 
     for method in methods {
         let refusal = adapter.refuses_before_validation(&method.name);
         for case in invalid_cases(method) {
-            let outcome = adapter.call(&method.name, case.params.clone());
+            let outcome = adapter.call(&method.name, adapter.normalize_params(case.params.clone()));
             let here = format!("{} [{}]", method.name, case.label);
             if outcome.panicked {
                 failures.push(format!("{here}: panicked"));
@@ -522,9 +551,22 @@ pub fn parity_failures(
     let mut failures = Vec::new();
     for method in methods {
         for case in invalid_cases(method) {
-            let expected = reference.call(&method.name, case.params.clone());
-            let actual = adapter.call(&method.name, case.params.clone());
+            let params = adapter.normalize_params(case.params.clone());
+            let expected = reference.call(&method.name, params.clone());
+            let actual = adapter.call(&method.name, params);
             let here = format!("{} [{}]", method.name, case.label);
+            if adapter.answers_itself(&case.label) {
+                if actual.label() != expected.label()
+                    && !(actual.rpc_code == -32602 && expected.rpc_code == -32602)
+                {
+                    failures.push(format!(
+                        "{here}: {name} answered {} but dispatch answered {}",
+                        actual.label(),
+                        expected.label()
+                    ));
+                }
+                continue;
+            }
             if let Some(category) = adapter.refuses_before_validation(&method.name) {
                 if actual.category != category {
                     failures.push(format!("{here}: {name} answered {}", actual.label()));
@@ -780,11 +822,30 @@ pub struct RetryRun {
     pub after_conflict: Value,
 }
 
-/// Run each retry scenario on a fresh backend from `fresh`.
-pub fn retry_runs(mut fresh: impl FnMut() -> Box<dyn Adapter>) -> Vec<RetryRun> {
+/// The longest operation key the schemas allow (`maxLength` of every
+/// `idempotencyKey`), for scenarios that must work at the limit.
+pub const LONGEST_KEY: usize = 128;
+
+fn pad_key(params: &mut Value, length: usize) {
+    if let Some(key) = params["idempotencyKey"].as_str() {
+        let padded = format!("{key:x<length$}");
+        params["idempotencyKey"] = json!(padded);
+    }
+}
+
+/// Run each retry scenario on a fresh backend from `fresh`. With `key_length`,
+/// every operation key is padded to that many bytes first.
+pub fn retry_runs(
+    mut fresh: impl FnMut() -> Box<dyn Adapter>,
+    key_length: Option<usize>,
+) -> Vec<RetryRun> {
     retries()
         .into_iter()
-        .map(|retry| {
+        .map(|mut retry| {
+            if let Some(length) = key_length {
+                pad_key(&mut retry.params, length);
+                pad_key(&mut retry.changed, length);
+            }
             let mut adapter = fresh();
             for (method, params) in retry_setup(retry.method) {
                 let outcome = adapter.call(method, Some(params));

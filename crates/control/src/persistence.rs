@@ -2,6 +2,23 @@
 
 use super::*;
 
+/// A client's operation key scoped to its identity and method. A key the
+/// schemas allow (up to `MAX_IDEMPOTENCY_KEY_BYTES`) plus that identity can be
+/// longer than the storage limit, which refused the longest valid key from any
+/// named client (MCP, HTTP, CLI). Keys that still fit keep their readable form,
+/// so records journaled earlier are found; longer ones use a SHA-256 digest of
+/// the same text.
+fn scope_idempotency_key(client: &str, method: &str, key: &str) -> String {
+    let scoped = format!("{client}\0{method}\0{key}");
+    if scoped.len() <= audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES {
+        return scoped;
+    }
+    format!(
+        "scoped:{}",
+        audiorouter_storage::lower_hex(&Sha256::digest(scoped.as_bytes()))
+    )
+}
+
 pub(crate) fn unix_epoch_seconds() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -484,33 +501,55 @@ impl ControlPlane {
     pub(crate) fn scoped_idempotency_key(&self, method: &str, key: &str) -> String {
         self.active_idempotency_scope
             .as_ref()
-            .map(|client| format!("{client}\0{method}\0{key}"))
+            .map(|client| scope_idempotency_key(client, method, key))
             .unwrap_or_else(|| key.to_owned())
+    }
+
+    /// The key a task-shaped edit (`nodes.add`, `connections.remove`, ...)
+    /// commits its graph plan under. It was `"{method}:{key}"` for everyone:
+    /// the longest key the schemas allow plus that prefix passed the storage
+    /// limit and was refused, and two clients using the same key collided on
+    /// the second one's commit. A named client now gets its own scoped key.
+    pub(crate) fn simple_commit_key(&self, method: &str, key: &str) -> String {
+        if let Some(client) = self.active_idempotency_scope.as_ref() {
+            return scope_idempotency_key(client, &format!("{method}:commit"), key);
+        }
+        let plain = format!("{method}:{key}");
+        if plain.len() <= audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES {
+            return plain;
+        }
+        format!(
+            "scoped:{}",
+            audiorouter_storage::lower_hex(&Sha256::digest(plain.as_bytes()))
+        )
     }
 
     pub(crate) fn operation_lookup_keys(&self, operation_id: &str) -> Vec<String> {
         self.active_idempotency_scope
             .as_ref()
             .map(|client| {
-                vec![
-                    format!("{client}\0graph.commit\0{operation_id}"),
-                    format!("{client}\0virtualDevices.apply\0{operation_id}"),
-                    format!("{client}\0virtualDevices.provision\0{operation_id}"),
-                    format!("{client}\0virtualDevices.remove\0{operation_id}"),
-                    format!("{client}\0virtualRoutes.replace\0{operation_id}"),
-                    format!("{client}\0recordings.setMetadata\0{operation_id}"),
-                    format!("{client}\0recordings.rename\0{operation_id}"),
-                    format!("{client}\0recordings.removeEntry\0{operation_id}"),
-                    format!("{client}\0recordings.recycle\0{operation_id}"),
-                    format!("{client}\0sessions.delete\0{operation_id}"),
-                    format!("{client}\0sessions.create\0{operation_id}"),
-                    format!("{client}\0sessions.duplicate\0{operation_id}"),
-                    format!("{client}\0safety.setPrivacyMute\0{operation_id}"),
-                    format!("{client}\0recovery.clearSafeMode\0{operation_id}"),
-                    format!("{client}\0clients.authorize\0{operation_id}"),
-                    format!("{client}\0clients.revoke\0{operation_id}"),
-                    format!("{client}\0operations.cancel\0{operation_id}"),
+                [
+                    "graph.commit",
+                    "virtualDevices.apply",
+                    "virtualDevices.provision",
+                    "virtualDevices.remove",
+                    "virtualRoutes.replace",
+                    "recordings.setMetadata",
+                    "recordings.rename",
+                    "recordings.removeEntry",
+                    "recordings.recycle",
+                    "sessions.delete",
+                    "sessions.create",
+                    "sessions.duplicate",
+                    "safety.setPrivacyMute",
+                    "recovery.clearSafeMode",
+                    "clients.authorize",
+                    "clients.revoke",
+                    "operations.cancel",
                 ]
+                .iter()
+                .map(|method| scope_idempotency_key(client, method, operation_id))
+                .collect()
             })
             .unwrap_or_else(|| vec![operation_id.to_owned()])
     }

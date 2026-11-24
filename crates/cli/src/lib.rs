@@ -3751,6 +3751,13 @@ fn mcp_tool_error(id: Option<Value>, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "result": { "isError": true, "content": [{ "type": "text", "text": message }] } })
 }
 
+/// Adapter contract cases shared with the control crate and the HTTP API.
+#[cfg(test)]
+#[path = "../../control/src/contract_cases.rs"]
+mod contract_cases;
+#[cfg(test)]
+mod contract_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;
