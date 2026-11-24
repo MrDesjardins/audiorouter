@@ -215,6 +215,20 @@ describe("OBS check", () => {
     ]);
   });
 
+  it("names an Instrument that reaches a device OBS records, unless it is off", () => {
+    const hears = (instrument: object) => {
+      const playing = {
+        ...session,
+        nodes: [...session.nodes, { ...node("Synth", "instrument"), ...instrument }],
+        edges: [...session.edges, edge("Synth", "stream-out")],
+      } as unknown as Session;
+      const inputs = [input("Stream audio", "outputCapture", "cable-b-in")];
+      return obsCheck(playing, status(inputs), [obsRunning], devices).sources[0].hears;
+    };
+    expect(hears({})).toEqual(["Discord", "Synth"]);
+    expect(hears({ enabled: false })).toEqual(["Discord"]);
+  });
+
   it("offers the voice cable instead of the raw microphone", () => {
     const check = obsCheck(session, status([input("Mic/Aux", "inputCapture", "default")]), [obsRunning], devices);
     expect(check.state).toBe("check");
