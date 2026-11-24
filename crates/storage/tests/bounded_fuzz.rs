@@ -111,7 +111,14 @@ fn mutate_document(rng: &mut fuzz::Rng, text: &str) -> String {
                     "ports",
                     "typeVersion",
                 ]);
-                value["nodes"][index][key] = rng.pick(&extremes).clone();
+                // An earlier mutation of this case may have replaced the node
+                // with a scalar; only objects take a key.
+                if let Some(node) = value["nodes"]
+                    .get_mut(index)
+                    .and_then(|n| n.as_object_mut())
+                {
+                    node.insert(key.to_string(), rng.pick(&extremes).clone());
+                }
             }
             2 if edges > 0 => {
                 let index = rng.below(edges);
@@ -124,7 +131,12 @@ fn mutate_document(rng: &mut fuzz::Rng, text: &str) -> String {
                     "matrix",
                     "enabled",
                 ]);
-                value["edges"][index][key] = rng.pick(&extremes).clone();
+                if let Some(edge) = value["edges"]
+                    .get_mut(index)
+                    .and_then(|e| e.as_object_mut())
+                {
+                    edge.insert(key.to_string(), rng.pick(&extremes).clone());
+                }
             }
             3 if nodes > 0 => {
                 // Parameters, valid or not, including deep structures.
@@ -135,7 +147,12 @@ fn mutate_document(rng: &mut fuzz::Rng, text: &str) -> String {
                 } else {
                     rng.pick(&extremes).clone()
                 };
-                value["nodes"][index]["parameters"] = json!({ key: parameter });
+                if let Some(node) = value["nodes"]
+                    .get_mut(index)
+                    .and_then(|n| n.as_object_mut())
+                {
+                    node.insert("parameters".to_string(), json!({ key: parameter }));
+                }
             }
             4 if nodes > 0 => {
                 // Many nodes and edges: the validator's own limits.
@@ -145,7 +162,11 @@ fn mutate_document(rng: &mut fuzz::Rng, text: &str) -> String {
                 for index in 0..copies {
                     let mut copy = node.clone();
                     if rng.one_in(2) {
-                        copy["id"] = json!(format!("copy-{index}"));
+                        // The source node may be a scalar left by an earlier
+                        // mutation of this case.
+                        if let Some(object) = copy.as_object_mut() {
+                            object.insert("id".to_string(), json!(format!("copy-{index}")));
+                        }
                     }
                     list.push(copy);
                 }

@@ -265,7 +265,7 @@ fn replay_window_never_accepts_a_pair_twice_inside_the_window() {
                     "stream {stream_id:#x} sequence {sequence} accepted twice"
                 );
                 accepted.push((stream_id, sequence));
-                let ahead = newest[stream].map_or(true, |newest| {
+                let ahead = newest[stream].is_none_or(|newest| {
                     let step = sequence.wrapping_sub(newest);
                     step != 0 && step < u32::MAX / 2
                 });
