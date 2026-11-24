@@ -92,11 +92,19 @@ permission codes.
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`: clean.
 - `cargo fmt --all -- --check` and `cargo fmt --manifest-path
   src-tauri/Cargo.toml -- --check`: clean.
-- The unit and integration suites were run before the final comment-only edit
-  to `ClientGrant::can_control_sessions`'s doc comment.
+- Shell: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets
+  --all-features -- -D warnings` clean; `cargo test --manifest-path
+  src-tauri/Cargo.toml` 142 passed, 4 ignored.
+- Real backend through the UI: rebuilt the harness first
+  (`cargo build -p audiorouter-control --example e2e_backend`), then
+  `npx playwright test --workers=1` from `ui/` (Edge, dev server on 4186):
+  862 passed, 16 skipped, 0 failed, 33.0 min, first pass. The same count as the
+  integration branch, so the stricter empty-string validation refuses nothing
+  the UI sends.
+- The unit and integration suites above were run before comment-only edits to
+  the two new doc comments.
 
-Not run: browser suites, the built exe, a live app, hosted CI, and the
-`mcp serve` probe against a real app whose pipe belongs to another user (no
-such server was available; the tri-state is covered by the invalid-name case).
-No UI source changed in this slice; the merged `fix/instrument-app-usage` UI
-evidence is in the plan.
+Not run: the built exe, a live app, hosted CI, and `mcp serve` against a real
+app whose pipe belongs to another Windows user (no such server was available;
+the tri-state is covered by the invalid-name case). No UI source changed in
+this slice; the merged `fix/instrument-app-usage` UI evidence is in the plan.

@@ -546,10 +546,11 @@ The three items Q4.1 left to the owner are fixed on
 `minLength: 1` empty-string gap (the `EMPTY_STRING_LENIENT` ratchet list is
 gone), `probe_pipe` errors no longer read as "app not running", and the MCP
 `create_session`/`start_from_goal` tools refuse an Editor before creating the
-session it cannot open. Workspace tests, Clippy, both fmt checks and the MCP
-stdio/security integration suites pass. Record:
+session it cannot open. Workspace and shell tests, Clippy, both fmt checks, the
+MCP stdio/security integration suites and the full Edge Playwright suite
+(862 passed, 16 skipped) pass. Record:
 [rust small defects](evidence/2026-11-24-rust-small-defects.md). Not run:
-browser suites, built exe, hosted CI.
+built exe, hosted CI.
 
 ## Q5 - Measure reliability and test quality over time
 

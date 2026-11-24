@@ -289,7 +289,8 @@ are in the evidence files, not repeated here.
   and `start_from_goal` refuse an Editor before creating a session instead of
   creating one it cannot open. Record:
   [rust small defects](evidence/2026-11-24-rust-small-defects.md).
-  Workspace tests and Clippy pass; not run: browser suites, built exe, hosted
+  Workspace and shell tests, Clippy, both fmt checks and the full Edge
+  Playwright suite (862 passed, 16 skipped) pass; not run: built exe, hosted
   CI.
 - Not started, still owner decisions: the signed updater's key custody and
   feed host, assistant recording (R2-1a), `rename_session` for assistants
