@@ -60,6 +60,8 @@ mod audio_service;
 #[cfg(windows)]
 mod audio_thread;
 mod authorization;
+#[cfg(test)]
+mod bounded_fuzz_tests;
 mod cable_routes;
 mod catalog;
 mod dispatch_methods;
