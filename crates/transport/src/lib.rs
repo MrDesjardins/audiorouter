@@ -597,6 +597,7 @@ pub fn device_inventory_log_summary(result: &serde_json::Value) -> serde_json::V
     })
 }
 
+#[cfg(test)]
 fn log_entry_for_test(method: &str) -> BackendLogRecord {
     BackendLogRecord::Rpc(BackendLogEntry {
         frame: audiorouter_protocol::encode_frame(

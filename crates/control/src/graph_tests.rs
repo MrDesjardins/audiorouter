@@ -708,9 +708,8 @@ fn a_full_plan_inventory_drops_the_oldest_plan_instead_of_refusing_the_newest() 
             (false, false),
             "durable={durable}: the oldest plan is dropped"
         );
-        assert_eq!(
+        assert!(
             plan_exists(&plane, &plans[1]).0,
-            true,
             "durable={durable}: the next oldest stays"
         );
         let committed = commit_through_dispatch(&mut plane, &newest, "commit-newest");
