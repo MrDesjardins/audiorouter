@@ -490,6 +490,175 @@ present; Q5 failures actionable; Q6 release/rollback evidence complete.
    table, and take module coverage baselines from the nightly coverage
    artifacts before setting any floor.
 
+## Q4.3 execution: bounded fuzzing of untrusted-input parsers (2026-11-24)
+
+Branch `test/q4-bounded-fuzzing`, based on main `0fb41911b`. Not pushed, no PR
+(PR approval rule). This slice adds offline, deterministic checks that run in
+ordinary `cargo test`; it is not live-audio, hardware or installer evidence.
+
+**Inventory first.** No fuzz, property-based or mutation test existed over the
+Rust untrusted-input parsers. Cargo.lock has no proptest/quickcheck, so the
+harness is a 10-line SplitMix64 generator in `tests/support/fuzz.rs`, included
+by each test with `#[path]` (one copy, no new crate, no new dependency). The
+Q2 generated cases (history and presentation persistence, PRs #52/#53) cover
+state, not parsers.
+
+**Harness.** Fixed base seed per target; case `i` is rebuilt exactly by
+`case_rng(seed, i)` and a failing case prints its target, seed and index (no
+panic hook, no `catch_unwind` in tests). Mutators: bit flip, byte overwrite,
+1/2/4-byte integer corruption (little and big endian, edge values and
+length±1), truncation, insertion, deletion, range duplication, repeated-byte
+blocks. A per-thread tracking `#[global_allocator]` records the largest single
+allocation request inside each call, so "no allocation from a declared size" is
+asserted, not assumed. `AUDIOROUTER_FUZZ_SCALE=<n>` multiplies every iteration
+count for longer local or nightly runs; the default keeps each target under
+5 s in a debug build. Wall-clock times below are reported, not asserted (Q5
+forbids timing gates before calibration).
+
+| Target (test file) | Boundary | Seed | Cases (default) | Debug run time |
+| --- | --- | --- | --- | --- |
+| `protocol/tests/bounded_fuzz.rs` | `decode_rpc_frame`/`decode_frame`/`parse_rpc_message`: prefix corruption, nesting to 200 000 levels, batch/method/id limits at each boundary, round trip | `0x50524F544F434F4C` | 4 000 mutated + 2 000 random + 1 000 round trip + boundary sweeps | 0.02 s |
+| `protocol/tests/network_fuzz.rs` | Network Send/Receive datagrams: v2 tag, encrypted v3 open, handshake, replay window; every length of every shape | `0x4E4554574F524B21` | 4 000 + 3 000 + 300 sequences | 0.05 s |
+| `plugin-host/tests/bounded_fuzz.rs` | VST2 `.fxp`/`.fxb` `parse`; worker message frames (`decode_worker_message`, `read_worker_message`) | `0x504C5547494E4658` | 6 000 + 600 + 4 000 + count/size sweeps, every strict prefix | 0.30 s |
+| `engine/tests/bounded_fuzz.rs` | `decode_audio_bytes` (WAV/FLAC/MP3 probe, header-field sweeps, all prefixes); `compile_native_paths_with_plugins_and_audio` on 1 500 generated sessions (all `NodeKind`s through exhaustive `match`, hostile ports/edges/matrices, domain-accepted extreme settings) | `0x454E47494E452121` | 3 000 + 1 500 | 0.75 s |
+| `storage/tests/bounded_fuzz.rs` | `import_session` (byte and structure mutations, size/nesting limits, refusal changes nothing); `stage_session_bundle` (byte-mutated and structurally hostile ZIPs, entry-count/asset-size/understated-size limits, staging always empty) | `0x53544F5241474521` | 1 500 + 250 + 200 + limit cases | 3.7 s |
+| `recording/tests/bounded_fuzz.rs` | `inspect_wav_file`, `inspect_flac_file`, `read_wav_metadata`, `read_flac_metadata`, `inspect_recording`; crash recovery `recover_wav_file`/`recover_streaming_flac_file` (repaired file must inspect with the reported frame count) | `0x5245434F52444552` | 700 + 450 + 250 + truncation sweep + 300 | 2.3 s |
+| `control/src/bounded_fuzz_tests.rs` | upload base64 (only canonical text decodes), `validate_method_params` budgets against an independent oracle, `ControlPlane::dispatch` with mutated `sessions.importPlan`/`get`/`list`/`nodes.*` (no internal error, no partial commit) | `0x434F4E54524F4C21` | 6 000 + 3 000 + 1 200 | 1.6 s |
+
+Dispatch fuzzing is limited to methods with no device, file or process side
+effects; nothing opens the default control pipe or an endpoint.
+
+**Defect found and fixed.** The WAV `fmt ` reader in symphonia 0.6.1
+(`symphonia-format-riff/src/wave/chunks.rs:100`) multiplies the channel count by
+the sample width in `u16`; a header with 32 768 channels panics in a debug
+build ("attempt to multiply with overflow"; release builds wrap and continue,
+so the effect there is silent mis-parsing rather than a panic). The
+`engine/decode-audio` fuzz run and the header-field sweep both hit it. Because the
+decoder is third-party code fed uploaded bytes, the owning layer is
+`engine::decode_audio`: a panic inside the decoder is now reported as
+`AudioFileDecodeError::UnsupportedOrMalformed`. Regression
+`a_wav_whose_channel_count_overflows_the_block_align_is_refused_not_a_panic`
+(inline minimal WAV, four channel counts: 0x8000, 0xFFFF, 0x4001, 0x2AAB)
+covers it; the fuzz run reproduced the debug panic before the `catch_unwind`
+was added, and the regression passes with it. The default panic
+message is still printed to stderr in debug builds; that is expected.
+
+**Harness bug found by the longer run (not a product defect).** At
+`AUDIOROUTER_FUZZ_SCALE=10` the storage session-JSON mutator panicked in
+`serde_json` ("cannot access key in JSON number", cases 3679 and 10385): an
+earlier mutation in the same case had replaced a node with a scalar and a later
+one indexed into it. The mutator now inserts keys only into objects; storage
+passes at scale 1 and 30. Lesson for the next fuzz target: run at scale 10
+before calling a mutator finished, because the default case count did not reach
+this combination.
+
+**No other defect.** No panic, hang, stack overflow, non-structured error or
+over-sized allocation was found in the other targets. Observations, not
+changed:
+
+- `read_worker_message` reserves `4 + declared` bytes (up to
+  `MAX_WORKER_MESSAGE_BYTES`, about 65 MiB) before reading the payload, so a
+  hostile worker process can force one transient 65 MiB allocation per frame
+  by declaring a large size and sending nothing. It is bounded and the worker
+  is sandboxed, so it is recorded here and pinned by the test (allocation
+  must not exceed the cap); reading in bounded steps would be a separate
+  small change if the owner wants it.
+- serde_json skips an unknown field without a depth limit, so a session
+  document with a deeply nested unknown field is accepted (and ignored) up to
+  the 1 MiB document cap, without stack growth. Nesting inside any known
+  value stops at serde_json's 128-level limit.
+
+**Verification (Windows 11, pinned toolchain, `CARGO_BUILD_JOBS=6`).**
+
+| Command | Result |
+| --- | --- |
+| `cargo fmt --all -- --check`; `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` | clean |
+| `cargo clippy --workspace --all-targets --all-features -- -D warnings` | clean (after one `is_none_or` fix in `network_fuzz.rs`) |
+| `cargo test -p audiorouter-protocol -p audiorouter-engine -p audiorouter-storage -p audiorouter-recording -p audiorouter-plugin-host` | all passed, 0 failed (the six new fuzz test binaries are timed in the table above) |
+| `cargo test -p audiorouter-control` | 458 passed, 0 failed, 24 existing ignores |
+| `AUDIOROUTER_FUZZ_SCALE=10` on protocol (both), plugin-host, engine, recording, control | passed (engine 8.5 s, recording 32 s, control 22 s, protocol and plugin-host under 1 s) |
+| `AUDIOROUTER_FUZZ_SCALE=30` on `storage` | passed, 248 s |
+| `node tools/docs/validate.mjs` | passed: 295 Markdown files, 1 641 local links |
+
+**Not run:** `cargo clippy` for `src-tauri` (no `src-tauri` source changed; the
+only production change is `crates/engine/src/audio_file_source.rs`); the
+packaged shell, any live audio, hardware or installer evidence; the UI
+format/lint/tests (no `ui/` change); the nightly workflow did not yet set
+`AUDIOROUTER_FUZZ_SCALE` (added in the follow-up below); the Stream Deck/contracts drift check
+(no API method changed); the `decode_audio` fix has not been exercised with a
+release-profile build (the panic only occurs with overflow checks on).
+
+Rollback: delete the seven test files and the `tests/support/fuzz.rs` harness,
+the `mod bounded_fuzz_tests;` line in `crates/control/src/lib.rs`, and revert
+the `catch_unwind` wrapper in `decode_audio`.
+
+### Q4.3 follow-up: worker frames are read in bounded steps (2026-11-24)
+
+Branch `fix/worker-frame-allocation`, based on `test/q4-bounded-fuzzing`. Not
+pushed, no PR.
+
+The `read_worker_message` observation above is repaired. The payload buffer now
+grows with the bytes that arrive (at most doubling, never past the declared
+length, 64 KiB before any data), so a header that declares
+`MAX_WORKER_MESSAGE_BYTES` and sends nothing costs 64 KiB, not about 65 MiB. The
+frame limit, wire format and decoding rules are unchanged; a short stream still
+reports `Io("failed to fill whole buffer")`. `read_worker_message_into` takes a
+caller-owned scratch buffer, and the three long-lived readers (the host's reader
+thread and the worker's two read loops) keep one, so ordinary control and
+multi-bus audio frames make no per-frame payload allocation; a buffer that grew
+past 1 MiB (`WORKER_SCRATCH_RETAIN_BYTES`) is released after a large state frame.
+These readers run on dedicated threads, never in the audio callback.
+
+Regression tests in `crates/plugin-host/tests/bounded_fuzz.rs`, with the
+tracking allocator: `a_hostile_length_header_with_little_data_does_not_reserve_the_frame`,
+`a_trickled_oversized_frame_allocates_only_what_has_arrived`,
+`a_worst_case_state_frame_still_decodes_through_the_stream_reader` (a 16 MiB
+state of `0xFF` bytes, a frame within a few KiB of the maximum, decodes),
+`the_scratch_buffer_is_reused_across_normal_frames_and_trimmed_after_a_large_one`.
+Before the change the first reserved 1 048 580 bytes for a 1 MiB header with no
+data, the second 62 914 564 bytes for a 60 MiB header with 3 MiB sent, and the
+fourth found no retained buffer; all four pass after it.
+`cargo test -p audiorouter-plugin-host --features test-fixtures` passed
+(130 unit including the two tests below, 12 bounded_fuzz, 42 worker_process;
+the 21 ignored worker_process tests and the VST2/VST3 integration tests need
+installed plugins and were not run).
+
+Review fix (same day): the first version of the read loop re-zeroed a whole 64 KiB
+step on every partial read, so a peer trickling one byte at a time cost 64 KiB of
+memset per byte on the host's reader thread. The buffer is now extended, and
+zeroed, only when the previous step is full: each payload byte is zeroed once,
+as before. `worker_frames_larger_than_one_read_step_survive_short_reads` decodes
+a 300 KiB frame through readers returning 4 KiB, 64 KiB − 1 and 64 KiB + 1 bytes
+and reports a stream that ends in a later step as an I/O error. A throwaway
+release-profile benchmark (old reader copied inline against the new one,
+2 000 frames each, not committed) measured the same time per frame within noise:
+3.6 µs for a 2 994-byte, 128-frame stereo block, and 47 µs for a 45 234-byte,
+2 048-frame block, with whole-buffer or 4 KiB reads; JSON decoding dominates.
+`the_largest_process_frame_fits_the_retained_scratch_buffer` encodes the largest
+legal `ProcessBuses` message (8 channels × 2 048 frames of the longest `f32` text
+plus 4 096 parameter events) and requires it to fit
+`WORKER_SCRATCH_RETAIN_BYTES` and to be read twice without reallocating, so the
+retain limit cannot cause per-block churn. Per-frame work is no more than before:
+one zero pass, the same reads, no allocation once the buffer is warm. Not
+measured: end-to-end audio latency on a live multi-bus route.
+
+**Nightly fuzz job.** `quality.yml` (the nightly quality workflow) now has a
+`fuzz` job that runs the six fuzz targets (protocol, plugin-host, engine,
+storage, recording, control) with `AUDIOROUTER_FUZZ_SCALE` set to 10, in the
+debug profile (the symphonia overflow only panics with overflow checks), with a
+60-minute timeout. A `workflow_dispatch` input `fuzz_scale` overrides the scale;
+the step refuses a value outside 1–50, because the tests silently ignore one
+outside 1–1000. A failure names the failing crate in the step summary and the
+test output prints the seed and case index. The job is outside the trend table
+and does not write to any branch. `tools/quality/policy.test.mjs` pins the
+scale, timeout and bound, and fails if a new `*fuzz.rs` test file in `crates/`
+is not run by the job. The step's PowerShell was run locally (extracted from the
+YAML) at scale 1: all six targets passed, and a scale of 99 is refused. Not run:
+the job on a hosted runner (it takes a push, which this branch has not had);
+scale-10 timings on a hosted runner are unknown. Local debug scale-10 runs took
+8–32 s per crate; storage was measured at scale 30 (248 s), so roughly 80 s at
+scale 10 by extrapolation. All far under the timeout.
+
 ## Completed: Q3.2 hosted CI qualification
 
 (Completed 2026-11-23; see the status above. Kept for its acceptance terms.)
