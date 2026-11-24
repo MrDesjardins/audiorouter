@@ -1,7 +1,8 @@
 // Properties editor of an Instrument node: where its notes come from, an on-screen keyboard and a panic button.
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { Node } from "@audiorouter/contracts";
-import { formatUiError, type UiBackend } from "./backend";
+import type { UiMessage } from "./actionMessage";
+import { uiError, type UiBackend } from "./backend";
 import { PanelMessage } from "./PanelMessage";
 import { useMessages } from "./i18n/useMessages";
 
@@ -61,7 +62,7 @@ export function InstrumentNodeEditor({
 }) {
   const tr = useMessages();
   const [devices, setDevices] = useState<string[]>([]);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<UiMessage | null>(null);
   const held = useRef(new Set<number>());
   const requestTail = useRef<Promise<unknown> | null>(null);
   const saved = typeof node.parameters.midiInput === "string" ? node.parameters.midiInput : INSTRUMENT_KEYBOARD_ONLY;
@@ -97,7 +98,7 @@ export function InstrumentNodeEditor({
       await request;
       setMessage(null);
     } catch (error) {
-      setMessage(formatUiError(error, tr("g3Instrument.sendFail")));
+      setMessage(uiError(error, tr("g3Instrument.sendFail")));
     } finally {
       if (requestTail.current === request) requestTail.current = null;
     }

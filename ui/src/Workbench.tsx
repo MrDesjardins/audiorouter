@@ -1,3 +1,4 @@
+import type { UiMessage } from "./actionMessage";
 import { ToolShelf } from "./ToolShelf";
 import type { VerboseLoggingControl } from "./LogFilesPanel";
 import { SessionIdentity } from "./NodeIdentity";
@@ -338,7 +339,7 @@ export function Workbench({
   onCommit?: () => void;
   canCommit?: boolean;
   pendingPlan?: boolean;
-  actionMessage?: string | null;
+  actionMessage?: UiMessage | null;
   sessions: Session[];
   selectedSessionId: string;
   onSelectSession: (id: string) => void;

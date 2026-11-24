@@ -37,7 +37,11 @@ it("disarms after five seconds and reports a refused quit", async () => {
   expect(screen.getByRole("button").textContent).toBe("Quit");
   fireEvent.click(screen.getByRole("button"));
   await act(async () => fireEvent.click(screen.getByRole("button")));
-  expect(onMessage).toHaveBeenCalledWith(expect.stringContaining("Quit refused: a recording is still finishing"));
+  expect(onMessage).toHaveBeenCalledWith(
+    expect.objectContaining({
+      text: expect.stringContaining("Quit refused: a recording is still finishing"),
+    }),
+  );
   expect(screen.getByRole("button").textContent).toBe("Quit");
 });
 
@@ -51,7 +55,9 @@ it("offers Quit anyway only when the backend did not answer", async () => {
   render(<QuitButton onMessage={onMessage} />);
   fireEvent.click(screen.getByRole("button", { name: "Quit AudioRouter" }));
   await act(async () => fireEvent.click(screen.getByRole("button", { name: "Confirm quit AudioRouter" })));
-  expect(onMessage).toHaveBeenCalledWith(expect.stringContaining("did not answer"));
+  expect(onMessage).toHaveBeenCalledWith(
+    expect.objectContaining({ text: expect.stringContaining("did not answer"), tone: "error" }),
+  );
   // One click: the user already confirmed once.
   await act(async () => fireEvent.click(screen.getByRole("button", { name: "Quit AudioRouter anyway" })));
   expect(invoke).toHaveBeenLastCalledWith("quit_app", { force: true });

@@ -8,8 +8,27 @@ import type {
   VirtualCableStatus,
 } from "@audiorouter/contracts";
 import type { UiBackend } from "./backend";
+import { tx } from "./i18n";
+import type { MessageKey } from "./i18n/generated/messageKeys";
 import { sameJsonValue } from "./sessionInventory";
 import { cableEndpointName } from "./virtualCableStatus";
+
+/**
+ * A refusal the person sees, made from a catalog message in the language active
+ * when it is raised. Callers that need to tell one refusal from another test
+ * the error class, never its wording.
+ */
+function userError(key: Extract<MessageKey, `draftErrors.${string}`>, options?: Record<string, unknown>): Error {
+  return new Error(tx(key, options));
+}
+
+/** The destination input already has a connection and is not a Mixer (the caller may offer to replace it). */
+export class InputOccupiedError extends Error {
+  constructor() {
+    super(tx("draftErrors.inputOccupied"));
+    this.name = "InputOccupiedError";
+  }
+}
 
 /** Scan results a plugin can be added from (32-bit ones run in a 32-bit worker). */
 export const SUPPORTED_PLUGIN_COMPATIBILITY: readonly string[] = [
@@ -436,7 +455,7 @@ export function appendLibraryNode(session: Session, kind: LibraryNodeKind): Sess
 
 function applicationIdentityParameters(application: ApplicationInfo): Record<string, boolean | number | string> {
   if (!application.executable || application.processId < 1) {
-    throw new Error("Only a verified running application can be added to the graph");
+    throw userError("draftErrors.runningAppOnly");
   }
   const selectedInstance = application.creationTime100ns !== null;
   const parameters: Record<string, boolean | number | string> = {
@@ -464,15 +483,15 @@ export function applicationExecutableSelector(path: string): ApplicationExecutab
       return code < 32 || code === 127;
     })
   ) {
-    throw new Error("Choose a full Windows path to an .exe file.");
+    throw userError("draftErrors.exePath");
   }
   const executablePath = path.trim();
   if (!executablePath || executablePath.length > 32768 || !/^(?:[a-z]:\\|\\\\)/i.test(executablePath)) {
-    throw new Error("Choose a full Windows path to an .exe file.");
+    throw userError("draftErrors.exePath");
   }
   const executable = executablePath.slice(executablePath.lastIndexOf("\\") + 1);
   if (!/^[^\\/:*?"<>|]+\.exe$/i.test(executable)) {
-    throw new Error("Choose an .exe application file.");
+    throw userError("draftErrors.exeFile");
   }
   return { executable, executablePath };
 }
@@ -480,7 +499,7 @@ export function applicationExecutableSelector(path: string): ApplicationExecutab
 function applicationSelectorParameters(selector: ApplicationExecutableSelector) {
   const normalized = applicationExecutableSelector(selector.executablePath);
   if (normalized.executable.toLowerCase() !== selector.executable.toLowerCase())
-    throw new Error("The executable name does not match its selected path.");
+    throw userError("draftErrors.exeNameMismatch");
   return {
     executable: normalized.executable,
     executablePath: normalized.executablePath,
@@ -1020,7 +1039,7 @@ export function appendApplicationCaptureGroup(
   const selectors = new Map<string, { parameters: Record<string, boolean | number | string>; label: string }>();
   for (const application of applications) {
     if (!application.executablePath)
-      throw new Error(`A full executable path for ${application.executable} is unavailable; choose its .exe file.`);
+      throw userError("draftErrors.exePathUnavailable", { name: application.executable });
     const selector = applicationExecutableSelector(application.executablePath);
     const parameters = applicationSelectorParameters(selector);
     const key = selector.executablePath.toLowerCase();
@@ -1032,7 +1051,7 @@ export function appendApplicationCaptureGroup(
     const key = selector.executablePath.toLowerCase();
     if (!selectors.has(key)) selectors.set(key, { parameters, label: `${selector.executable} capture` });
   }
-  if (selectors.size < 2) throw new Error("Choose at least two different applications for a group.");
+  if (selectors.size < 2) throw userError("draftErrors.groupNeedsTwo");
 
   let next = session;
   const sourceIds: string[] = [];
@@ -1168,7 +1187,7 @@ export function setVirtualBusDraftCable(
 export function appendPluginPlaceholderNode(session: Session, entry: PluginScanEntry): Session {
   const identity = entry.identity;
   if (!identity || !SUPPORTED_PLUGIN_COMPATIBILITY.includes(identity.compatibility)) {
-    throw new Error("Only a supported x64 scan result can be added to the graph");
+    throw userError("draftErrors.scanResultOnly");
   }
   const isInstrument = identity.instrument === true;
   const prefix = isInstrument ? "instrument" : "plugin";
@@ -1299,14 +1318,14 @@ export function appendDraftConnection(
   destinationNodeId: EntityId,
   destinationPortName: string,
 ): Session {
-  if (sourceNodeId === destinationNodeId) throw new Error("A node cannot connect to itself");
+  if (sourceNodeId === destinationNodeId) throw userError("draftErrors.selfConnect");
   const sourceNode = session.nodes.find((node) => node.id === sourceNodeId);
   const destinationNode = session.nodes.find((node) => node.id === destinationNodeId);
   if (!sourceNode || !destinationNode) throw new Error("Both connection nodes are required");
   const sourcePort = sourceNode.ports.find((port) => port.name === sourcePortName);
   const destinationPort = destinationNode.ports.find((port) => port.name === destinationPortName);
-  if (!sourcePort || sourcePort.direction !== "output") throw new Error("Choose an output source port");
-  if (!destinationPort || destinationPort.direction !== "input") throw new Error("Choose an input destination port");
+  if (!sourcePort || sourcePort.direction !== "output") throw userError("draftErrors.chooseOutputPort");
+  if (!destinationPort || destinationPort.direction !== "input") throw userError("draftErrors.chooseInputPort");
   if (
     session.edges.some(
       (edge) =>
@@ -1316,7 +1335,7 @@ export function appendDraftConnection(
         edge.destinationPort === destinationPortName,
     )
   ) {
-    throw new Error("That connection is already in the draft");
+    throw userError("draftErrors.connectionExists");
   }
   if (
     destinationNode.kind !== "mixer" &&
@@ -1324,7 +1343,7 @@ export function appendDraftConnection(
       (edge) => edge.destinationNode === destinationNodeId && edge.destinationPort === destinationPortName,
     )
   ) {
-    throw new Error("That input already has a connection");
+    throw new InputOccupiedError();
   }
   const matrix = defaultChannelMatrix(sourcePort.channels, destinationPort.channels);
   let suffix = 1;
@@ -1362,7 +1381,7 @@ export function replaceDraftSidechainConnection(
   const occupied = session.edges.find((edge) => edge.id === occupiedEdgeId);
   const destination = session.nodes.find((node) => node.id === destinationNodeId);
   if (!occupied || occupied.destinationNode !== destinationNodeId || occupied.destinationPort !== destinationPortName)
-    throw new Error("The sidechain connection changed; try again");
+    throw userError("draftErrors.sidechainChanged");
   if (destination?.kind !== "plugin" || destinationPortName !== "sidechain")
     throw new Error("Only a plugin sidechain input can replace its source");
   const withoutOccupied = removeDraftConnection(session, occupiedEdgeId);
@@ -1409,7 +1428,7 @@ export function addSourceToOccupiedOutput(
   sourcePortName: string,
 ): Session {
   const occupied = session.edges.find((edge) => edge.id === occupiedEdgeId);
-  if (!occupied) throw new Error("The output connection changed; try again");
+  if (!occupied) throw userError("draftErrors.outputChanged");
   const mixerSession = insertDraftMixer(session, occupiedEdgeId);
   const mixer = mixerSession.nodes.at(-1);
   if (!mixer || mixer.kind !== "mixer") throw new Error("Unable to add a mixer to the output");
@@ -1425,7 +1444,7 @@ export function addSourceToOccupiedInput(
   sourcePortName: string,
 ): Session {
   const occupied = session.edges.find((edge) => edge.id === occupiedEdgeId);
-  if (!occupied) throw new Error("The destination connection changed; try again");
+  if (!occupied) throw userError("draftErrors.destinationChanged");
   const mixerSession = insertDraftMixer(session, occupiedEdgeId);
   const mixer = mixerSession.nodes.at(-1);
   if (!mixer || mixer.kind !== "mixer") throw new Error("Unable to add a Mixer before this input");
@@ -1512,8 +1531,7 @@ export function insertDraftProcessor(session: Session, edgeId: EntityId, kind: I
  * fail-closed default; the dry signal passes through unaffected until it is
  * bound to an isolated worker and explicitly enabled. */
 export function insertDraftPluginProcessor(session: Session, edgeId: EntityId, entry: PluginScanEntry): Session {
-  if (entry.identity?.instrument === true)
-    throw new Error("An instrument makes sound; it cannot sit inside a connection.");
+  if (entry.identity?.instrument === true) throw userError("draftErrors.instrumentInline");
   const edge = session.edges.find((candidate) => candidate.id === edgeId);
   if (!edge) throw new Error(`Unknown draft connection: ${edgeId}`);
   const sourceNode = session.nodes.find((node) => node.id === edge.sourceNode);
@@ -1553,8 +1571,7 @@ export function removeSinglePathDraftMixer(session: Session, mixerId: EntityId):
   if (!mixer || mixer.kind !== "mixer") throw new Error("Choose a mixer node");
   const incoming = session.edges.filter((edge) => edge.destinationNode === mixerId);
   const outgoing = session.edges.filter((edge) => edge.sourceNode === mixerId);
-  if (incoming.length !== 1 || outgoing.length !== 1)
-    throw new Error("Mixer removal requires exactly one incoming and one outgoing connection");
+  if (incoming.length !== 1 || outgoing.length !== 1) throw userError("draftErrors.mixerRemoval");
   const sourceNode = session.nodes.find((node) => node.id === incoming[0].sourceNode);
   const mixerInput = mixer.ports.find((port) => port.name === incoming[0].destinationPort);
   const mixerOutput = mixer.ports.find((port) => port.name === outgoing[0].sourcePort);
@@ -1607,7 +1624,7 @@ export function removeDraftConnection(session: Session, edgeId: EntityId): Sessi
 /** Removes a draft node and its incident edges without changing the session revision. */
 export function removeDraftNode(session: Session, nodeId: EntityId): Session {
   if (!session.nodes.some((node) => node.id === nodeId)) throw new Error(`Unknown draft node: ${nodeId}`);
-  if (session.nodes.length <= 1) throw new Error("A draft must retain at least one node");
+  if (session.nodes.length <= 1) throw userError("draftErrors.keepOneTool");
   return {
     ...session,
     nodes: session.nodes.filter((node) => node.id !== nodeId),
@@ -1706,8 +1723,8 @@ export function setNodeDraftFlag(
 /** Renames a node in the local candidate while preserving its identity and topology. */
 export function setNodeDraftName(session: Session, nodeId: EntityId, name: string): Session {
   const trimmed = name.trim();
-  if (trimmed.length === 0) throw new Error("Node name cannot be empty");
-  if (trimmed.length > 120) throw new Error("Node name cannot exceed 120 characters");
+  if (trimmed.length === 0) throw userError("draftErrors.toolNameEmpty");
+  if (trimmed.length > 120) throw userError("draftErrors.toolNameLong");
   if (!session.nodes.some((node) => node.id === nodeId)) throw new Error(`Unknown node: ${nodeId}`);
   return { ...session, nodes: session.nodes.map((node) => (node.id === nodeId ? { ...node, name: trimmed } : node)) };
 }
@@ -1715,8 +1732,8 @@ export function setNodeDraftName(session: Session, nodeId: EntityId, name: strin
 /** Normalizes and validates a session name in the local candidate. */
 export function setSessionDraftName(session: Session, name: string): Session {
   const trimmed = name.trim();
-  if (trimmed.length === 0) throw new Error("Session name cannot be empty");
-  if (trimmed.length > 120) throw new Error("Session name cannot exceed 120 characters");
+  if (trimmed.length === 0) throw userError("draftErrors.sessionNameEmpty");
+  if (trimmed.length > 120) throw userError("draftErrors.sessionNameLong");
   return { ...session, name: trimmed };
 }
 
@@ -1734,21 +1751,21 @@ export function setNodeDraftParameter(
     parameter === "percent" &&
     (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 200)
   ) {
-    throw new Error("Volume must be between 0 and 200 %");
+    throw userError("draftErrors.volumeRange");
   }
   if (
     node.kind === "mixer" &&
     parameter.startsWith(MIXER_INPUT_VOLUME_PREFIX) &&
     (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100)
   ) {
-    throw new Error("Mixer input volume must be between 0 and 100 %");
+    throw userError("draftErrors.mixerVolumeRange");
   }
   if (
     node.kind === "gain" &&
     parameter === "gainDb" &&
     (typeof value !== "number" || !Number.isFinite(value) || value < GAIN_MIN_DB || value > GAIN_MAX_DB)
   ) {
-    throw new Error(`Gain must be between ${GAIN_MIN_DB} and ${GAIN_MAX_DB} dB`);
+    throw userError("draftErrors.gainRange", { min: GAIN_MIN_DB, max: GAIN_MAX_DB });
   }
   if (node.kind === "parametricEq" && typeof value === "number" && !Number.isFinite(value))
     throw new Error("Parametric EQ values must be finite");

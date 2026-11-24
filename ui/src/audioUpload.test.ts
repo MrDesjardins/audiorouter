@@ -6,7 +6,7 @@ describe("audio upload validation", () => {
     const file = (name: string, size: number) => ({ name, size }) as File;
     expect(audioUploadProblem(file("room.wav", 1_000))).toBeNull();
     expect(audioUploadProblem(file("Cabinet.MP3", 1_000))).toBeNull();
-    expect(audioUploadProblem(file("impulse.flac", 1_000))).toMatch(/\.wav or \.mp3/);
-    expect(audioUploadProblem(file("huge.wav", MAX_AUDIO_UPLOAD_BYTES + 1))).toMatch(/64 MiB/);
+    expect(audioUploadProblem(file("impulse.flac", 1_000))?.text).toMatch(/\.wav or \.mp3/);
+    expect(audioUploadProblem(file("huge.wav", MAX_AUDIO_UPLOAD_BYTES + 1))?.text).toMatch(/64 MiB/);
   });
 });

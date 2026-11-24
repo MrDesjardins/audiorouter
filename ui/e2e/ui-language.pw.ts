@@ -104,6 +104,47 @@ for (const [tag, back, heading, undo, redo, legend] of [
   });
 }
 
+for (const [tag, back, tools, card, title, group, browse, hint, closeDialog] of [
+  [
+    "fr",
+    "Retour à la route",
+    "Outils",
+    "Source d’application",
+    "Ajouter une source de capture d’application",
+    "Groupe d’applications",
+    "Parcourir pour trouver un .exe",
+    "Saisissez le chemin complet du fichier .exe de l’application.",
+    "Fermer le sélecteur d’application",
+  ],
+  [
+    "zh-Hans",
+    "返回路由",
+    "工具",
+    "应用音频源",
+    "添加应用捕获来源",
+    "应用组",
+    "浏览 .exe",
+    "请输入应用 .exe 文件的完整路径。",
+    "关闭应用选择器",
+  ],
+]) {
+  test(`${tag}: the application picker uses the language catalog`, async ({ page }) => {
+    await page.goto("/route-harness.html");
+    await openSettings(page, "Appearance");
+    await page.getByRole("combobox", { name: "Language", exact: true }).selectOption(tag);
+    await page.getByRole("button", { name: back, exact: true }).click();
+    await page.getByRole("tab", { name: tools, exact: true }).click();
+    await page.locator(".tool-card").filter({ hasText: card }).click();
+    const dialog = page.getByRole("dialog", { name: title, exact: true });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: group, exact: true }).click();
+    await dialog.getByRole("button", { name: browse, exact: true }).click();
+    await expect(dialog.locator(".application-picker-status")).toContainText(hint);
+    await dialog.getByRole("button", { name: closeDialog, exact: true }).click();
+    await expect(dialog).toBeHidden();
+  });
+}
+
 for (const [tag, tools, search, common, guide, gain, help, properties, enabled] of [
   [
     "fr",

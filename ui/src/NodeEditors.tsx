@@ -539,7 +539,7 @@ export function FirFilterEditor({
     if (!file) return;
     const problem = audioUploadProblem(file);
     if (problem) {
-      setMessage(problem);
+      setMessage(problem.text);
       return;
     }
     setBusy(true);

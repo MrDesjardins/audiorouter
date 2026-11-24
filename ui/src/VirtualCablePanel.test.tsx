@@ -381,8 +381,11 @@ describe("cable management availability and outcomes", () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(notify).toHaveBeenCalledWith("Cable operation failed: The AudioRouter driver package is missing.");
-    const { actionMessageTone } = await import("./actionMessage");
-    expect(actionMessageTone(notify.mock.calls[0][0] as string)).toBe("error");
+    expect(notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: "Cable operation failed: The AudioRouter driver package is missing.",
+        tone: "error",
+      }),
+    );
   });
 });

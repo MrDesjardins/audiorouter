@@ -1,5 +1,6 @@
 // Checks and import of the owner's own sound file for a Soundboard slot. The picker and
 // drag and drop (SND-13, SND-19) use the same functions, so the limits are the same.
+import { say, type UiMessage } from "./actionMessage";
 import { tm } from "./actionText";
 import { audioUploadProblem, uploadAudioMedia } from "./audioUpload";
 import type { UiBackend } from "./backend";
@@ -15,10 +16,10 @@ export function isFileDrag(dataTransfer: DataTransfer | null): boolean {
 }
 
 /** The single dropped sound file, or the reason it cannot be used, checked before any upload. */
-export function droppedSoundFile(dataTransfer: DataTransfer | null): { file: File } | { problem: string } {
+export function droppedSoundFile(dataTransfer: DataTransfer | null): { file: File } | { problem: UiMessage } {
   const files = Array.from(dataTransfer?.files ?? []);
-  if (files.length === 0) return { problem: tm("h1.dropWavMp3") };
-  if (files.length > 1) return { problem: tm("h1.dropOne") };
+  if (files.length === 0) return { problem: say("h1.dropWavMp3") };
+  if (files.length > 1) return { problem: say("h1.dropOne") };
   const problem = audioUploadProblem(files[0]);
   return problem ? { problem } : { file: files[0] };
 }
@@ -29,7 +30,7 @@ export function droppedSoundFile(dataTransfer: DataTransfer | null): { file: Fil
  */
 export async function importSoundFile(backend: UiBackend, file: File): Promise<ImportedSound> {
   const problem = audioUploadProblem(file);
-  if (problem) throw new Error(problem);
+  if (problem) throw new Error(problem.text);
   const media = await uploadAudioMedia(backend, file);
   if (media.durationMs > MAX_USER_SOUND_SECONDS * 1000)
     throw new Error(tm("h1.tooLong", { file: file.name, seconds: MAX_USER_SOUND_SECONDS }));

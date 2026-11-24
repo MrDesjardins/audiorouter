@@ -1,5 +1,8 @@
+/** @vitest-environment jsdom */
 import { describe, expect, it } from "vitest";
+import { applyLanguage } from "./i18n";
 import {
+  InputOccupiedError,
   appendDraftConnection,
   appendEqPresetNode,
   addSourceToOccupiedInput,
@@ -36,8 +39,36 @@ describe("appendDraftConnection", () => {
   it("creates a bounded mono-to-stereo map and rejects duplicate inputs", () => {
     const next = appendDraftConnection(demoSession, "mic", "out", "headphones", "in");
     expect(next.edges[0].matrix).toEqual([1, 1]);
-    expect(() => appendDraftConnection(next, "mic", "out", "headphones", "in")).toThrow("already in the draft");
+    expect(() => appendDraftConnection(next, "mic", "out", "headphones", "in")).toThrow(
+      "already in your unsaved edits",
+    );
     expect(() => appendDraftConnection(next, "voice", "out", "headphones", "in")).toThrow("already has a connection");
+  });
+
+  it("tells an occupied input apart by its class, in any language", async () => {
+    const next = appendDraftConnection(demoSession, "mic", "out", "headphones", "in");
+    await applyLanguage("fr");
+    try {
+      let refusal: unknown;
+      try {
+        appendDraftConnection(next, "voice", "out", "headphones", "in");
+      } catch (error) {
+        refusal = error;
+      }
+      expect(refusal).toBeInstanceOf(InputOccupiedError);
+      expect((refusal as Error).message).toBe("Cette entrée a déjà une connexion");
+      // Another refusal is a plain error, so the replace offer is not made for it.
+      let duplicate: unknown;
+      try {
+        appendDraftConnection(next, "mic", "out", "headphones", "in");
+      } catch (error) {
+        duplicate = error;
+      }
+      expect(duplicate).toBeInstanceOf(Error);
+      expect(duplicate).not.toBeInstanceOf(InputOccupiedError);
+    } finally {
+      await applyLanguage("en");
+    }
   });
 
   it("downmixes a stereo source into a mono destination instead of dropping a channel", () => {

@@ -1,7 +1,8 @@
 // Manual device-binding and virtual-device panels of the Advanced tab (moved from App.tsx).
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { Node } from "@audiorouter/contracts";
-import { formatUiError, type UiBackend } from "./backend";
+import { errorMessage, say, type UiMessage } from "./actionMessage";
+import { uiError, type UiBackend } from "./backend";
 import type { DeviceListItem } from "@audiorouter/contracts";
 import { uiIdempotencyKey } from "./idempotency";
 import { PanelMessage } from "./PanelMessage";
@@ -31,7 +32,7 @@ export function VirtualDeviceLifecyclePanel({
   const [busName, setBusName] = useState("AudioRouter Bus");
   const [instanceId, setInstanceId] = useState("bus-virtual-bus");
   const [plan, setPlan] = useState<import("@audiorouter/contracts").VirtualDevicePlanResult | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<UiMessage | null>(null);
   const [busy, setBusy] = useState(false);
   const refreshGeneration = useRef(0);
   const refresh = () => {
@@ -50,7 +51,7 @@ export function VirtualDeviceLifecyclePanel({
         }
       })
       .catch((error) => {
-        if (generation === refreshGeneration.current) setMessage(formatUiError(error, tr("g2.vdInventoryFail")));
+        if (generation === refreshGeneration.current) setMessage(uiError(error, tr("g2.vdInventoryFail")));
       });
   };
   // Refresh when the backend connects or changes, with the latest state.
@@ -87,17 +88,17 @@ export function VirtualDeviceLifecyclePanel({
             ? { action, id: selectedId, enabled: !(selected?.enabled ?? false) }
             : { action, id: selectedId };
     if (!operation.id || ("name" in operation && !operation.name)) {
-      setMessage(tr("g2.vdNeedIdName"));
+      setMessage(say("g2.vdNeedIdName"));
       return;
     }
     setBusy(true);
-    setMessage(tr("g2.vdPlanning"));
+    setMessage(say("g2.vdPlanning"));
     try {
       const result = await backend.planVirtualDevice(operation);
       setPlan(result);
-      setMessage(result.availability.reason);
+      setMessage(errorMessage(result.availability.reason));
     } catch (error) {
-      setMessage(formatUiError(error, tr("g2.vdPlanFail")));
+      setMessage(uiError(error, tr("g2.vdPlanFail")));
     } finally {
       setBusy(false);
     }
@@ -105,14 +106,14 @@ export function VirtualDeviceLifecyclePanel({
   const applyPlan = async () => {
     if (!plan || busy || !backend.connected) return;
     setBusy(true);
-    setMessage(tr("g2.vdApplying"));
+    setMessage(say("g2.vdApplying"));
     try {
       const result = await backend.applyVirtualDevice(plan.planId, uiIdempotencyKey("virtual-device-apply"));
       setPlan(null);
-      setMessage(tr("g2.vdApplied", { reason: result.availability.reason }));
+      setMessage(say("g2.vdApplied", { reason: result.availability.reason }));
       refresh();
     } catch (error) {
-      setMessage(formatUiError(error, tr("g2.vdApplyFail")));
+      setMessage(uiError(error, tr("g2.vdApplyFail")));
     } finally {
       setBusy(false);
     }
@@ -120,17 +121,17 @@ export function VirtualDeviceLifecyclePanel({
   const provision = async () => {
     if (!selected || busy || !backend.connected || !instanceId.trim()) return;
     setBusy(true);
-    setMessage(tr("g2.vdProvisioning"));
+    setMessage(say("g2.vdProvisioning"));
     try {
       const result = await backend.provisionVirtualDevice(
         selected.id,
         instanceId.trim(),
         uiIdempotencyKey("virtual-device-provision"),
       );
-      setMessage(tr("g2.vdProvisioned", { reason: result.availability.reason, id: result.driverInstanceId }));
+      setMessage(say("g2.vdProvisioned", { reason: result.availability.reason, id: result.driverInstanceId }));
       refresh();
     } catch (error) {
-      setMessage(formatUiError(error, tr("g2.vdProvisionFail")));
+      setMessage(uiError(error, tr("g2.vdProvisionFail")));
     } finally {
       setBusy(false);
     }
@@ -138,13 +139,13 @@ export function VirtualDeviceLifecyclePanel({
   const remove = async () => {
     if (!selected || busy || !backend.connected) return;
     setBusy(true);
-    setMessage(tr("g2.vdRemoving"));
+    setMessage(say("g2.vdRemoving"));
     try {
       const result = await backend.removeVirtualDevice(selected.id, uiIdempotencyKey("virtual-device-remove"));
-      setMessage(tr("g2.vdRemoved", { reason: result.availability.reason }));
+      setMessage(say("g2.vdRemoved", { reason: result.availability.reason }));
       refresh();
     } catch (error) {
-      setMessage(formatUiError(error, tr("g2.vdRemoveFail")));
+      setMessage(uiError(error, tr("g2.vdRemoveFail")));
     } finally {
       setBusy(false);
     }
@@ -327,7 +328,7 @@ export function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
   const [state, setState] = useState<import("@audiorouter/contracts").VirtualRouteListResult | null>(null);
   const [routeText, setRouteText] = useState("[]");
   const [revisionText, setRevisionText] = useState("0");
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<UiMessage | null>(null);
   const [busy, setBusy] = useState(false);
   const refreshGeneration = useRef(0);
   const refresh = () => {
@@ -342,7 +343,7 @@ export function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
         setMessage(null);
       })
       .catch((error) => {
-        if (generation === refreshGeneration.current) setMessage(formatUiError(error, tr("g2.vrInventoryFail")));
+        if (generation === refreshGeneration.current) setMessage(uiError(error, tr("g2.vrInventoryFail")));
       });
   };
   // Refresh when the backend connects or changes, with the latest state.
@@ -360,7 +361,7 @@ export function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
     if (busy || !backend.connected) return;
     const baseRevision = Number.parseInt(revisionText, 10);
     if (!Number.isSafeInteger(baseRevision) || baseRevision < 0) {
-      setMessage(tr("g2.vrRevisionInvalid"));
+      setMessage(say("g2.vrRevisionInvalid"));
       return;
     }
     let routes: import("@audiorouter/contracts").VirtualBusRoute[];
@@ -369,11 +370,11 @@ export function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
       if (!Array.isArray(parsed)) throw new Error(tr("g2.vrNotArray"));
       routes = parsed as import("@audiorouter/contracts").VirtualBusRoute[];
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : tr("g2.vrJsonInvalid"));
+      setMessage(errorMessage(error instanceof Error ? error.message : tr("g2.vrJsonInvalid")));
       return;
     }
     setBusy(true);
-    setMessage(tr("g2.vrReplacing"));
+    setMessage(say("g2.vrReplacing"));
     try {
       const result = await backend.replaceVirtualRoutes(
         baseRevision,
@@ -383,9 +384,9 @@ export function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
       setState({ revision: result.revision, routes: result.routes });
       setRouteText(JSON.stringify(result.routes, null, 2));
       setRevisionText(String(result.revision));
-      setMessage(tr("g2.vrReplaced", { state: result.state, revision: result.revision }));
+      setMessage(say("g2.vrReplaced", { state: result.state, revision: result.revision }));
     } catch (error) {
-      setMessage(formatUiError(error, tr("g2.vrReplaceFail")));
+      setMessage(uiError(error, tr("g2.vrReplaceFail")));
     } finally {
       setBusy(false);
     }
@@ -501,7 +502,7 @@ export function NativeEndpointPanel({
     !activeRender.some((device) => device.id === savedHint.renderEndpointId);
   const vbCablePair = findVbCableEndpointPair(devices);
   const vbCableCaptureEndpointId = findVbCableCaptureEndpointId(devices);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<UiMessage | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     const hint = readEndpointBindingHint(sessionId);
@@ -521,20 +522,20 @@ export function NativeEndpointPanel({
   const prepare = async () => {
     if (busy || !backend.connected) return;
     if (!backend.prepareNativeEndpoint) {
-      setMessage(tr("g2.neUnavailable"));
+      setMessage(say("g2.neUnavailable"));
       return;
     }
     if (!captureEndpointId || !renderEndpointId) {
-      setMessage(tr("g2.neSelectBoth"));
+      setMessage(say("g2.neSelectBoth"));
       return;
     }
     setBusy(true);
-    setMessage(tr("g2.nePreparing"));
+    setMessage(say("g2.nePreparing"));
     try {
       const result = await backend.prepareNativeEndpoint(sessionId, captureEndpointId, renderEndpointId);
-      setMessage(tr("g2.nePrepared", { state: result.state }));
+      setMessage(say("g2.nePrepared", { state: result.state }));
     } catch (error) {
-      setMessage(formatUiError(error, tr("g2.nePrepareFail")));
+      setMessage(uiError(error, tr("g2.nePrepareFail")));
     } finally {
       setBusy(false);
     }
@@ -542,20 +543,20 @@ export function NativeEndpointPanel({
   const rebind = async () => {
     if (busy || !backend.connected) return;
     if (!backend.rebindNativeEndpoint) {
-      setMessage(tr("g2.neRebindUnavailable"));
+      setMessage(say("g2.neRebindUnavailable"));
       return;
     }
     if (!captureEndpointId || !renderEndpointId) {
-      setMessage(tr("g2.neSelectBothRebind"));
+      setMessage(say("g2.neSelectBothRebind"));
       return;
     }
     setBusy(true);
-    setMessage(tr("g2.neRebinding"));
+    setMessage(say("g2.neRebinding"));
     try {
       const result = await backend.rebindNativeEndpoint(sessionId, captureEndpointId, renderEndpointId);
-      setMessage(tr("g2.neRebound", { state: result.state }));
+      setMessage(say("g2.neRebound", { state: result.state }));
     } catch (error) {
-      setMessage(formatUiError(error, tr("g2.neRebindFail")));
+      setMessage(uiError(error, tr("g2.neRebindFail")));
     } finally {
       setBusy(false);
     }
@@ -563,38 +564,38 @@ export function NativeEndpointPanel({
   const detach = async () => {
     if (busy || !backend.connected) return;
     if (!backend.detachNativeEndpoint) {
-      setMessage(tr("g2.neDetachUnavailable"));
+      setMessage(say("g2.neDetachUnavailable"));
       return;
     }
     setBusy(true);
-    setMessage(tr("g2.neDetaching"));
+    setMessage(say("g2.neDetaching"));
     try {
       const result = await backend.detachNativeEndpoint(sessionId);
-      setMessage(tr("g2.neDetached", { state: result.state }));
+      setMessage(say("g2.neDetached", { state: result.state }));
     } catch (error) {
-      setMessage(formatUiError(error, tr("g2.neDetachFail")));
+      setMessage(uiError(error, tr("g2.neDetachFail")));
     } finally {
       setBusy(false);
     }
   };
   const selectVbCable = () => {
     if (!vbCablePair) {
-      setMessage(tr("g2.neNoVbPair"));
+      setMessage(say("g2.neNoVbPair"));
       return;
     }
     setCaptureEndpointId(vbCablePair.captureEndpointId);
     setRenderEndpointId(vbCablePair.renderEndpointId);
     writeEndpointBindingHint(sessionId, vbCablePair.captureEndpointId, vbCablePair.renderEndpointId);
-    setMessage(tr("g2.neVbPairSelected"));
+    setMessage(say("g2.neVbPairSelected"));
   };
   const selectVbCableCapture = () => {
     if (!vbCableCaptureEndpointId) {
-      setMessage(tr("g2.neNoVbCapture"));
+      setMessage(say("g2.neNoVbCapture"));
       return;
     }
     setCaptureEndpointId(vbCableCaptureEndpointId);
     writeEndpointBindingHint(sessionId, vbCableCaptureEndpointId, renderEndpointId);
-    setMessage(tr("g2.neVbCaptureSelected"));
+    setMessage(say("g2.neVbCaptureSelected"));
   };
   return (
     <section
@@ -689,7 +690,7 @@ export function NativeEndpointPanel({
           className="secondary"
           onClick={() => {
             if (!renderEndpointId) {
-              setMessage(tr("g2.neNeedRenderLoopback"));
+              setMessage(say("g2.neNeedRenderLoopback"));
               return;
             }
             onAddEndpointLoopback(renderEndpointId);
@@ -770,29 +771,29 @@ export function NativeOutputFanoutPanel({
   const [endpointIds, setEndpointIds] = useState<string[]>([]);
   const [generation, setGeneration] = useState("1");
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<UiMessage | null>(null);
   const prepare = async () => {
     if (busy || !backend.connected) return;
     if (!backend.prepareNativeOutputs) {
-      setMessage(tr("g2.nfUnavailable"));
+      setMessage(say("g2.nfUnavailable"));
       return;
     }
     const parsedGeneration = Number(generation);
     if (!Number.isSafeInteger(parsedGeneration) || parsedGeneration < 1) {
-      setMessage(tr("g2.nfGeneration"));
+      setMessage(say("g2.nfGeneration"));
       return;
     }
     if (endpointIds.length < 1 || endpointIds.length > 8) {
-      setMessage(tr("g2.nfSelectRange"));
+      setMessage(say("g2.nfSelectRange"));
       return;
     }
     setBusy(true);
-    setMessage(tr("g2.nfPreparing"));
+    setMessage(say("g2.nfPreparing"));
     try {
       const result = await backend.prepareNativeOutputs(sessionId, parsedGeneration, endpointIds);
-      setMessage(tr("g2.nfPrepared", { n: result.outputCount, generation: result.generation }));
+      setMessage(say("g2.nfPrepared", { n: result.outputCount, generation: result.generation }));
     } catch (error) {
-      setMessage(formatUiError(error, tr("g2.nfPrepareFail")));
+      setMessage(uiError(error, tr("g2.nfPrepareFail")));
     } finally {
       setBusy(false);
     }
@@ -886,7 +887,7 @@ export function NativeMultiInputPanel({
   const [generation, setGeneration] = useState("1");
   const [mode, setMode] = useState<"include" | "exclude">("include");
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<UiMessage | null>(null);
   const reorder = (index: number, delta: -1 | 1) => {
     setSources((current) => {
       const target = index + delta;
@@ -912,16 +913,16 @@ export function NativeMultiInputPanel({
   const prepare = async () => {
     if (busy || !backend.connected) return;
     if (!backend.prepareNativeMultiInputs) {
-      setMessage(tr("g2.nmUnavailable"));
+      setMessage(say("g2.nmUnavailable"));
       return;
     }
     const parsedGeneration = Number(generation);
     if (!Number.isSafeInteger(parsedGeneration) || parsedGeneration < 1) {
-      setMessage(tr("g2.nfGeneration"));
+      setMessage(say("g2.nfGeneration"));
       return;
     }
     if (sources.length < 2 || sources.length > 8) {
-      setMessage(tr("g2.nmSelectRange"));
+      setMessage(say("g2.nmSelectRange"));
       return;
     }
     let bindings: import("@audiorouter/contracts").NativeMultiInputSourceBinding[];
@@ -947,16 +948,16 @@ export function NativeMultiInputPanel({
         };
       });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : tr("g2.nmBindFail"));
+      setMessage(errorMessage(error instanceof Error ? error.message : tr("g2.nmBindFail")));
       return;
     }
     setBusy(true);
-    setMessage(tr("g2.nmPreparing"));
+    setMessage(say("g2.nmPreparing"));
     try {
       const result = await backend.prepareNativeMultiInputs(sessionId, parsedGeneration, bindings);
-      setMessage(tr("g2.nmPrepared", { n: result.sources.length, generation: result.generation }));
+      setMessage(say("g2.nmPrepared", { n: result.sources.length, generation: result.generation }));
     } catch (error) {
-      setMessage(formatUiError(error, tr("g2.nmPrepareFail")));
+      setMessage(uiError(error, tr("g2.nmPrepareFail")));
     } finally {
       setBusy(false);
     }

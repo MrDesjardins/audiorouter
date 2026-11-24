@@ -6,6 +6,7 @@ import type { CanvasRect, LayoutAction } from "./canvasGeometry";
 import { useId, useRef, type Dispatch, type RefObject, type SetStateAction } from "react";
 import { useSvgTextFloor } from "./useSvgTextFloor";
 import type { DeviceListItem, DiagnosticsSnapshot, Node, Session } from "@audiorouter/contracts";
+import { errorMessage, say, type UiMessage } from "./actionMessage";
 import type { ApplicationRow, RecorderStatus, UiBackend, UiBackendSnapshot } from "./backend";
 import type { ProcessorDescriptor } from "./processorCatalog";
 import { MeterInspector } from "./MeterInspector";
@@ -120,7 +121,7 @@ export function PropertiesPanel({
   session: Session;
   recordDraftChange: (next: Session, group?: string) => void;
   draft: Session;
-  setActionMessage: Dispatch<SetStateAction<string | null>>;
+  setActionMessage: Dispatch<SetStateAction<UiMessage | null>>;
   changeNodeParameterOn: (nodeId: string, name: string, value: boolean | number | string) => void;
   devices: DeviceListItem[];
   refreshDevices: ({ announce }?: { announce?: boolean }) => void;
@@ -262,7 +263,7 @@ export function PropertiesPanel({
                     : n,
                 ),
               });
-              setActionMessage(tr("g4Panel.meterAdded"));
+              setActionMessage(say("g4Panel.meterAdded"));
             }}
           />
         ) : selectedNode.kind === "duck" ? (
@@ -328,9 +329,11 @@ export function PropertiesPanel({
                   setVirtualBusDraftCable(draft, selectedNode.id, busId, cableStatus),
                   selectedNode.id + ":busId",
                 );
-                setActionMessage(tr("g4Panel.cableChanged"));
+                setActionMessage(say("g4Panel.cableChanged"));
               } catch (error) {
-                setActionMessage(error instanceof Error ? error.message : tr("g4Panel.cableChangeFailed"));
+                setActionMessage(
+                  errorMessage(error instanceof Error ? error.message : tr("g4Panel.cableChangeFailed")),
+                );
               }
             }}
           />
@@ -360,7 +363,7 @@ export function PropertiesPanel({
                   },
                   `${selectedNode.id}:endpointBinding`,
                 );
-                setActionMessage(tr("g4Panel.inputDeviceChanged"));
+                setActionMessage(say("g4Panel.inputDeviceChanged"));
               }
             }}
           />

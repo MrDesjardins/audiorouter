@@ -35,7 +35,7 @@ describe("live autosave preference", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /Save parameter changes while audio plays/ }));
     expect(onChange).toHaveBeenCalledWith(false);
     view.rerender(<LiveAutosaveSetting enabled={false} onChange={onChange} />);
-    expect(screen.getByText(/stay as an unsaved draft/)).toBeTruthy();
+    expect(screen.getByText(/stay as unsaved edits/)).toBeTruthy();
     expect(screen.getByText("Off")).toBeTruthy();
   });
 });

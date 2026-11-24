@@ -1,6 +1,7 @@
 import type { DeviceListItem, Node, Session } from "@audiorouter/contracts";
 import { cablePartner, endpointOf, isVirtualCableName, voiceCableOutputs } from "./appUsage";
 import { appendDraftConnection, appendLibraryNode, insertDraftProcessor, type InsertableProcessorKind } from "./draft";
+import { tx } from "./i18n";
 
 /**
  * "Set up for Discord" (D2): one undoable draft change that sends a
@@ -99,10 +100,10 @@ export function appendDiscordRoute(
   const microphone = devices.find((device) => device.id === choice.microphone);
   const input = devices.find((device) => device.id === choice.cable);
   const output = input ? cablePartner(input, devices) : null;
-  if (!microphone) throw new Error("Choose a microphone.");
-  if (!input || !output) throw new Error("Choose a virtual cable.");
+  if (!microphone) throw new Error(tx("discordRoute.chooseMicrophone"));
+  if (!input || !output) throw new Error(tx("discordRoute.chooseCable"));
   if (voiceCableOutputs(session, devices).some((device) => device.id === output.id))
-    throw new Error(`This session already sends your voice to ${input.name}.`);
+    throw new Error(tx("discordRoute.alreadySends", { name: input.name }));
 
   let next = session;
   const add = (kind: "physicalInput" | "physicalOutput", name: string, endpointId: string) => {
@@ -123,7 +124,7 @@ export function appendDiscordRoute(
     add("physicalInput", "Microphone", microphone.id);
   const players = boundNodes(session, "physicalOutput", input.id);
   const taken = players.map((node) => feederOf(session, node.id)).find((name) => name !== null);
-  if (taken) throw new Error(`${taken} already plays into ${input.name}. Choose another cable.`);
+  if (taken) throw new Error(tx("discordRoute.cableTaken", { taken, name: input.name }));
   const cableNode = players.find((node) => node.enabled)?.id ?? add("physicalOutput", "Voice to Discord", input.id);
 
   next = appendDraftConnection(next, microphoneNode, "out", cableNode, "in");

@@ -295,7 +295,7 @@ describe("appendLibraryNode", () => {
 
   it("keeps one-node drafts valid", () => {
     const single = { ...demoSession, nodes: [demoSession.nodes[0]], edges: [] };
-    expect(() => removeDraftNode(single, demoSession.nodes[0].id)).toThrow("at least one node");
+    expect(() => removeDraftNode(single, demoSession.nodes[0].id)).toThrow("at least one tool");
   });
 
   it("duplicates a node without copying edges or changing the revision", () => {

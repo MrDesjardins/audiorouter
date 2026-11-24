@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
+import { errorMessage } from "./actionMessage";
 import { CopyErrorButton } from "./CopyErrorButton";
 import { PanelMessage } from "./PanelMessage";
 
@@ -15,7 +16,7 @@ it("copies the full error, keeping the original message visible", async () => {
   const message = "Unable to save: worker not found. Checked C:\\AudioRouter\\resources.";
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-  render(<PanelMessage message={message} />);
+  render(<PanelMessage message={errorMessage(message)} />);
   fireEvent.click(screen.getByRole("button", { name: "Copy error" }));
   await screen.findByRole("button", { name: "Copied" });
   expect(writeText).toHaveBeenCalledWith(message);
@@ -35,7 +36,7 @@ it("offers selectable original text when clipboard access fails", async () => {
 it("preserves the error when Windows denies clipboard access", async () => {
   const writeText = vi.fn().mockRejectedValue(new Error("Clipboard access denied"));
   Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-  render(<PanelMessage message="Unable to save plugin settings" small />);
+  render(<PanelMessage message={errorMessage("Unable to save plugin settings")} small />);
   fireEvent.click(screen.getByRole("button", { name: "Copy error" }));
   await screen.findByRole("textbox", { name: "Error text for manual copying" });
   expect(screen.getByText("Unable to save plugin settings", { selector: ".error-message-text" })).toBeTruthy();

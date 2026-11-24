@@ -1,3 +1,4 @@
+import { say, type UiMessage } from "./actionMessage";
 import { useEffect, useState } from "react";
 import { useMessages } from "./i18n/useMessages";
 
@@ -19,7 +20,7 @@ export function QuitButton({
   onMessage,
   beforeQuit,
 }: {
-  onMessage: (message: string) => void;
+  onMessage: (message: UiMessage) => void;
   /** Keeps unsaved route edits for the next launch; a failure must not block quitting. */
   beforeQuit?: () => Promise<void>;
 }) {
@@ -48,9 +49,9 @@ export function QuitButton({
       const reason = error instanceof Error ? error.message : String(error);
       if (reason.startsWith(QUIT_UNRESPONSIVE_PREFIX)) {
         setUnresponsive(true);
-        onMessage(tr("quit.unresponsiveMessage"));
+        onMessage(say("quit.unresponsiveMessage"));
       } else {
-        onMessage(tr("quit.refusedMessage", { reason }));
+        onMessage(say("quit.refusedMessage", { reason }));
       }
       setArmed(false);
     } finally {
