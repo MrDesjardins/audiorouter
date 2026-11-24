@@ -390,6 +390,68 @@ callers beyond a read of the upload path (chunks stay under the new
 `maxLength`); the built exe; any Windows hardware. The UI's handling of the new
 `virtualRoutes.replace` `revisionConflict` was not exercised.
 
+#### Real-backend verification (2026-11-24)
+
+That "Not run" gap was closed in a separate worktree on branch
+`verify/q4-contract-tests` (from `test/q4-contract-tests` at `2951e9b71`, which
+is one merge-base step from `origin/main` `0fb41911b`). No exe, shell, default
+pipe or hardware was involved; Playwright's harness spawns only the
+`e2e_backend` example on a private pipe.
+
+- Rebuilt first (stale binaries hide method failures):
+  `cargo build -p audiorouter-control --example e2e_backend`, then
+  `npx playwright test --workers=1` from `ui/` (Edge, dev server on 4186,
+  screenshots only under the Playwright output directory).
+- Specs importing `./real-backend` (22 files, 144 tests): 133 passed, 11
+  skipped, 0 failed, 7.2 min. The skips are by design: ten
+  `inspector-stability` cases whose tool has no numeric setting ("no numeric
+  settings") and the on-request README screenshot generator.
+- Full suite (136 files, 813 tests): 797 passed, 16 skipped, 0 failed, 32.4
+  min. First-pass, no retries. With nothing failing there was nothing to
+  classify, so no `origin/main` baseline worktree was needed or created.
+- `npm test` (133 files, 1167 tests), `typecheck:all`, `lint`
+  (`--max-warnings 0`) and `format:check` pass.
+
+Caller review (`ui/src/backend.ts` makes 130 `client.request` calls; the
+contracts types are generated from the same schemas the backend now enforces,
+so `typecheck:all` already rejects a wrong scalar type at compile time):
+
+- Every `idempotencyKey` the UI creates is `uiIdempotencyKey()`, `ui-` plus a
+  UUID (39 bytes), far under the 128-byte schema limit and the storage limit;
+  the request builder passes the user's key through and the server bounds it.
+  No UI path sends an empty commit key (`graph.commit` keys come from
+  `uiIdempotencyKey`).
+- The scalar values sent (`sessionId`, `nodeId`, `limit`, `generation`,
+  `slot`, `confirm`, `muted`, `allowed`, `baseRevision`, ...) are always the
+  declared types; optional fields are omitted rather than sent as the wrong
+  type, and `null` is still accepted as "omitted". Paged lists send
+  `limit: 500` (an integer). Upload chunks stay under the new `maxLength`
+  (read earlier, and the upload specs pass on the real backend).
+- `audioMedia.delete` is not called from `ui/src`.
+- Shell (`src-tauri`) callers send fixed requests (status, recordings list,
+  privacy mute, open/close); their tests pass on this branch.
+- `virtualRoutes.replace` (only `NativeDevicePanels.tsx`): every failure goes
+  through `formatUiError`; `revisionConflict` is recognised by its structured
+  code (`isRevisionConflict`) and shown as "Another save changed this route,
+  so your save was not applied. Your edits are kept...". The panel keeps the
+  typed JSON and revision after a failure, and Refresh reloads the latest.
+  Before the branch that case arrived as an invalid-params error, so the
+  conflict wording is an improvement. There is no automated UI path that
+  reaches it through the real backend (the `e2e_backend` allowlist does not
+  serve the bus-route methods), so the dispatcher/HTTP/MCP contract tests own
+  that half.
+
+Result: no branch-caused UI break found; no product code changed. One test
+added for a gap the review found: `explains a virtual-route revision conflict
+and keeps the typed edit` in `ui/src/App.accessibility.test.tsx`. It guards the
+UI side of the new contract and passes with and without the branch's backend
+change, because the UI already handled the code. The Rust tests were not
+rerun here (no Rust change).
+
+Not run: the packaged exe, the Stream Deck plugin callers (`tools/streamdeck`),
+the production-canvas and CI Playwright configs, and anything on Windows
+hardware.
+
 ## Q5 - Measure reliability and test quality over time
 
 Priority: build on the existing nightly workflow. Owner: quality maintainer.
