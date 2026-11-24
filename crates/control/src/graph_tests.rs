@@ -301,11 +301,29 @@ fn graph_commit_can_require_its_session_to_be_stopped_for_recovery_edits() {
         ))
         .result
         .unwrap();
-    for (key, value) in [
-        ("null-stopped-guard", Value::Null),
-        ("false-stopped-guard", json!(false)),
-        ("number-stopped-guard", json!(17)),
-        ("empty-stopped-guard", json!("")),
+    // A value of another type is refused by the dispatcher's schema type check
+    // (`null` and "" reach the handler's own message).
+    for (key, value, message) in [
+        (
+            "null-stopped-guard",
+            Value::Null,
+            "must be a non-empty session ID",
+        ),
+        (
+            "false-stopped-guard",
+            json!(false),
+            "requireStoppedSessionId must be a string",
+        ),
+        (
+            "number-stopped-guard",
+            json!(17),
+            "requireStoppedSessionId must be a string",
+        ),
+        (
+            "empty-stopped-guard",
+            json!(""),
+            "must be a non-empty session ID",
+        ),
     ] {
         let invalid = plane.dispatch(request(
             "graph.commit",
@@ -316,11 +334,7 @@ fn graph_commit_can_require_its_session_to_be_stopped_for_recovery_edits() {
                 "requireStoppedSessionId":value
             }),
         ));
-        assert!(invalid
-            .error
-            .unwrap()
-            .message
-            .contains("must be a non-empty session ID"));
+        assert!(invalid.error.unwrap().message.contains(message), "{key}");
     }
     let mismatched = plane.dispatch(request(
         "graph.commit",

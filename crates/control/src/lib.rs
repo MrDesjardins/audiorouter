@@ -62,6 +62,10 @@ mod audio_thread;
 mod authorization;
 mod cable_routes;
 mod catalog;
+#[cfg(test)]
+mod contract_cases;
+#[cfg(test)]
+mod contract_tests;
 mod dispatch_methods;
 mod graph;
 mod midi;
