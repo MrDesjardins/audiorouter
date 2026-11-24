@@ -88,6 +88,14 @@ impl ClientGrant {
         self.device_consent
     }
 
+/// True when this grant may open a session. A tool whose workflow ends by
+/// opening the session it just created can refuse up front instead of
+/// completing the creation and then failing the open; the Editor role has
+/// `GraphWrite` but not `SessionControl`.
+    pub fn can_control_sessions(&self) -> bool {
+        self.allows(PermissionScope::SessionControl)
+    }
+
     /// Map an enrolled role to the narrowest built-in grant for that role.
     /// Capture, recording, and device administration are never implied by these
     /// convenience roles and require a separately constructed explicit grant.
@@ -140,6 +148,8 @@ impl ClientGrant {
 struct ScalarRule {
     name: String,
     types: Vec<String>,
+    /// The published `minLength` of a string parameter, in characters.
+    min_length: Option<usize>,
     /// The published `maxLength` of a string parameter, in characters.
     max_length: Option<usize>,
 }
@@ -179,6 +189,9 @@ fn scalar_param_rules() -> &'static std::collections::HashMap<&'static str, Vec<
                         scalar.then(|| ScalarRule {
                             name: name.clone(),
                             types,
+                            min_length: property["minLength"]
+                                .as_u64()
+                                .and_then(|min| usize::try_from(min).ok()),
                             max_length: property["maxLength"]
                                 .as_u64()
                                 .and_then(|max| usize::try_from(max).ok()),
@@ -191,10 +204,13 @@ fn scalar_param_rules() -> &'static std::collections::HashMap<&'static str, Vec<
     })
 }
 
-/// Refuse a scalar parameter of the wrong JSON type. Handlers used to read an
-/// optional `sessionId`, `limit` or `kind` with `as_str()`/`as_u64()` and treat
-/// a value of another type as absent, so `sessions.summary` with a numeric
-/// `sessionId` answered about the active session. `null` still means omitted.
+/// Refuse a scalar parameter of the wrong JSON type, and a string outside the
+/// published `minLength`/`maxLength`. Handlers used to read an optional
+/// `sessionId`, `limit` or `kind` with `as_str()`/`as_u64()` and treat a value
+/// of another type as absent, so `sessions.summary` with a numeric `sessionId`
+/// answered about the active session; they also accepted an empty string for
+/// every optional string the schema marks `minLength: 1`. `null` still means
+/// omitted.
 fn validate_scalar_param_types(
     method: &str,
     params: &serde_json::Map<String, Value>,
@@ -229,6 +245,15 @@ fn validate_scalar_param_types(
                 "{} must be {expected}",
                 rule.name
             )));
+        }
+        if let (Some(min), Some(text)) = (rule.min_length, value.as_str()) {
+            if text.chars().count() < min {
+                return Err(ControlError::InvalidRequest(format!(
+                    "{} must be at least {min} character{}",
+                    rule.name,
+                    if min == 1 { "" } else { "s" }
+                )));
+            }
         }
         if let (Some(max), Some(text)) = (rule.max_length, value.as_str()) {
             if text.chars().count() > max {

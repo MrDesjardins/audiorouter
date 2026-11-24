@@ -499,47 +499,8 @@ pub fn invalid_input_failures(adapter: &mut dyn Adapter, methods: &[Method]) -> 
             }
         }
     }
-    // The ratchet for the empty-string leniency recorded in the plan.
-    let mut seen = Vec::new();
-    failures.retain(|failure| {
-        match EMPTY_STRING_LENIENT.iter().find(|(method, field)| {
-            failure.starts_with(&format!("{method} [empty-string:{field}]"))
-        }) {
-            Some(pair) => {
-                seen.push(*pair);
-                false
-            }
-            None => true,
-        }
-    });
-    for pair in EMPTY_STRING_LENIENT {
-        let (method, field) = pair;
-        let reachable = methods.iter().any(|candidate| candidate.name == *method)
-            && adapter.refuses_before_validation(method).is_none();
-        if reachable && !seen.contains(pair) {
-            failures.push(format!(
-                "{method} [empty-string:{field}] now refuses an empty string: drop it from EMPTY_STRING_LENIENT"
-            ));
-        }
-    }
     failures
 }
-
-/// Optional `minLength: 1` string parameters that a handler still accepts when
-/// they are empty (an empty `sessionId` falls back to the active session, an
-/// empty `kind` lists every preset, ...). Recorded as an open owner decision in
-/// the quality plan (Q4.1, 2026-11-24): tighten the handlers or relax the
-/// published schemas. A ratchet: a new pair fails, and so does a pair that was
-/// fixed but not removed.
-pub const EMPTY_STRING_LENIENT: &[(&str, &str)] = &[
-    ("sessions.summary", "sessionId"),
-    ("meters.levels", "sessionId"),
-    ("recordings.recovery", "cursor"),
-    ("sessions.get", "sessionId"),
-    ("sessions.export", "sessionId"),
-    ("toolPresets.list", "kind"),
-    ("toolPresets.delete", "id"),
-];
 
 /// Compare an adapter with the reference (dispatch): the same request must
 /// give the same category and message through both.

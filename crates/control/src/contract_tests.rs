@@ -306,7 +306,11 @@ fn an_empty_commit_key_is_refused_for_a_named_client_too() {
         Outcome::from_response(&response)
     };
     let trusted = ask(None);
-    assert_eq!(trusted.category, "invalidRequest", "{trusted:?}");
+    assert!(!trusted.ok, "{trusted:?}");
+    // The dispatcher refuses it as invalid params (the published schema), not
+    // later in the store as a categorized app error.
+    assert_eq!(trusted.rpc_code, -32602, "{trusted:?}");
+    assert!(trusted.message.contains("idempotencyKey"), "{trusted:?}");
     assert_eq!(ask(Some("mcp-client")), trusted);
 }
 

@@ -301,8 +301,8 @@ fn graph_commit_can_require_its_session_to_be_stopped_for_recovery_edits() {
         ))
         .result
         .unwrap();
-    // A value of another type is refused by the dispatcher's schema type check
-    // (`null` and "" reach the handler's own message).
+    // A value of another type, and an empty string, are refused by the dispatcher's
+    // schema check; only `null` reaches the handler's own message.
     for (key, value, message) in [
         (
             "null-stopped-guard",
@@ -322,7 +322,7 @@ fn graph_commit_can_require_its_session_to_be_stopped_for_recovery_edits() {
         (
             "empty-stopped-guard",
             json!(""),
-            "must be a non-empty session ID",
+            "must be at least 1 character",
         ),
     ] {
         let invalid = plane.dispatch(request(
