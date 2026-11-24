@@ -199,6 +199,36 @@ impl ControlPlane {
         inlet
     }
 
+    /// Drop every per-node recorder record of a deleted session through one
+    /// place, so the five maps cannot drift apart (SES-4). Covers the session's
+    /// Recorder nodes and any node still mapped to the session.
+    pub(crate) fn forget_session_recorder_nodes(
+        &mut self,
+        session_id: &EntityId,
+        session: &Session,
+    ) {
+        let mut nodes = session
+            .nodes
+            .iter()
+            .filter(|node| node.kind == NodeKind::Recorder)
+            .map(|node| node.id.clone())
+            .collect::<Vec<_>>();
+        nodes.extend(
+            self.recorder_node_sessions
+                .iter()
+                .filter(|(_, owner)| *owner == session_id)
+                .map(|(node, _)| node.clone()),
+        );
+        for node_id in nodes {
+            self.recorder_node_workers.remove(&node_id);
+            self.recorder_node_states.remove(&node_id);
+            self.recorder_node_sessions.remove(&node_id);
+            self.recorder_node_failures.remove(&node_id);
+            self.recording_splits.remove(&node_id);
+            self.sync_recorder_inlet(&node_id);
+        }
+    }
+
     /// Point a bound inlet at the node's current worker after attach/remove.
     pub(crate) fn sync_recorder_inlet(&self, node_id: &EntityId) {
         if let Some(inlet) = self

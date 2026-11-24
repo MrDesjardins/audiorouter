@@ -400,6 +400,12 @@ impl ControlPlane {
             ));
         }
         let states = self.session_plugin_state_candidates(id)?;
+        // SES-4: a one-click recording can run on a stopped session. Finalize
+        // its file now, while the session still exists (stopping a recorder
+        // reads the session), after every refusal above. A failed delete below
+        // then leaves the session intact with its recording already saved.
+        let deadline = self.recorder_shutdown_deadline();
+        let _ = self.finalize_session_recorders(id, deadline);
         let checkpoint = self.store.clone();
         if let Some(storage) = &self.storage {
             if let Err(error) = storage.delete_session(id) {
@@ -471,14 +477,7 @@ impl ControlPlane {
             self.multi_input_application_sources.clear();
         }
         self.runtimes.remove(id);
-        for node in session
-            .nodes
-            .iter()
-            .filter(|node| node.kind == NodeKind::Recorder)
-        {
-            self.recorder_node_workers.remove(&node.id);
-            self.sync_recorder_inlet(&node.id);
-        }
+        self.forget_session_recorder_nodes(id, &session);
         self.events
             .append(session.revision, None, "session.deleted", Some(id.clone()));
         Ok(json!({ "sessionId": id, "deleted": true }))
