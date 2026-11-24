@@ -630,6 +630,82 @@ once from the old rules by a script. Everything was verified by TypeScript, a
 read of the diff and the full unit run; the table is reviewed by test. The
 remaining changes used the Edit and Write tools.
 
+### Independent verification (2026-11-24)
+
+Branch `feat/l10n-structured-action-messages-verified`, from
+`feat/l10n-structured-action-messages` (7777bc7cf, based on origin/main
+0fb41911b). A second reviewer redid the severity work without the author's
+generation script, because the rename was done with perl and sed.
+
+Method and findings:
+
+- Recomputed the old regex severity (`actionMessageTone`, progress and
+  expiry rules from origin/main) over the old English text of all 260 keys in
+  `MESSAGE_TONES` (placeholders blanked) and compared it with the table: 258
+  agree; the two differences are the documented `g3Adv.signInFailed` and
+  `quit.refusedMessage`. The old button rules (`No audio started`,
+  `Troubleshoot`, `Open Session`, the two fixed sentences) reproduce the table's
+  `actions` exactly. The 29 English rewordings change no old-rule severity.
+- Per file, the multiset of catalog keys removed and added in the diff is
+  identical for every non-test source file, so no call site got a wrong key. A
+  normalised diff (old wrappers renamed to the new ones) shows no lost
+  interpolation argument; every remaining difference is one the plan above
+  describes. Test and e2e hunks were read: no assertion was removed or loosened
+  beyond the rename to `UiMessage` objects.
+- Defects found and fixed (the earlier check blanked placeholders, so it could
+  not see tones that depend on a value the backend returns):
+  1. `g2.neRebound` and `g2.vrReplaced` were `INFO`. The backend's only values
+     are `configured-stopped` and `applied`, which the old rules read as
+     success ("Rebound configured-stopped", "Virtual routes applied"), so both
+     lost their green check. Now `SUCCESS`.
+  2. A take that stopped saving early used `infoMessage(result.reason)` when
+     the backend sent a reason and the `SUCCESS` key `g1.appRecordingEarly`
+     when it did not, so one event had two colours. The backend text
+     ("Recording stopped saving after ...") read as success under the old
+     rules. `recordingStoppedEarly()` now gives both the key's tone.
+  3. `actionMessageTones.ts` named a test file that did not exist. The new
+     `actionMessageLegacyParity.test.ts` keeps the old rules and checks every
+     table entry against them, including every value a closed-set placeholder
+     can take, and lists the two deliberate exceptions. It fails without fix 1
+     (`g2.neRebound with state=configured-stopped: expected 'info' to be
+     'success'`). Fix 2 is covered by a test that compares both forms; it
+     cannot fail on the old inline code because the function is new.
+- Suspicious but kept, for the owner (the same wrongness existed before):
+  a recording take that stopped early shows a green check (the old rules read
+  "stopped"; a warning or error would fit the `failed` state next to it);
+  `PluginPanels` shows `disabledReason` as information (its only source,
+  `g4Panel.recoveryBlocked`, never matched an old pattern); the owner list in
+  the entry above still applies.
+
+Checks (Windows 11, from `ui/`, own worktree, 2026-11-24):
+
+- `npm ci`; `cargo build -p audiorouter-control --example e2e_backend`
+  (CARGO_BUILD_JOBS=6): pass.
+- `npm test`: 134 files, 1,179 tests pass. `npm run typecheck:all`,
+  `npm run lint` (0 warnings), `npm run format:check`, `npm run i18n:check`
+  (3 languages, 3,666 messages) and `node tools/docs/validate.mjs` (295
+  files, 1,641 links): pass.
+- Playwright, full suite, Edge, `--workers=1`, from a temporary copy of the
+  config with port 4291 and its own output folder (deleted afterwards; this
+  avoids the shared-output ENOENT failures the first author hit): 813 tests,
+  794 passed, 16 skipped, 3 failed in 31.0 minutes. The 3 failures were
+  `canvas-group-resize` drags (top side from inside, 0 zoom-outs; left side from
+  inside, 3 zoom-outs; top side from outside, 3 zoom-outs). My source edits
+  (fixes 1 and 2) reached the running dev server at the same minute, which
+  reloads the page mid-drag. All 22 tests of that spec pass when rerun alone
+  on the final code, so they are classified as caused by that reload, not by the
+  branch; no baseline run was needed, and no baseline worktree was created.
+  After the fixes, 100 tests from `group-recording-states`,
+  `recorder-one-click`, `recording-library`, `recording-workflows`,
+  `session-workflows`, `tool-workflows`, `audio-tools`, `soundboard-editor` and
+  `ui-review-repairs` passed again.
+
+Not run: the packaged shell, tray or Narrator; a fluent-reviewer pass of the
+French and Chinese wording listed above; website guide videos (no tool or
+control changed); a second full Playwright run on the final code (the 3
+failures and the specs near the fixes were rerun instead). Rollback: revert the
+verification commit.
+
 ## References
 
 - [M05 visual editor](../../milestones/M05-visual-editor.md),

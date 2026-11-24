@@ -117,8 +117,8 @@ import {
   actionMessageLifetimeMs,
   actionMessageTone,
   errorMessage,
-  infoMessage,
   offersAction,
+  recordingStoppedEarly,
   say,
   type UiMessage,
   WARNING_LIFETIME_MS,
@@ -808,7 +808,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (keptPath) setLastRecordingPaths((current) => ({ ...current, [nodeId]: keptPath }));
       if (!record && result.state === "failed") {
         // The take stopped saving early; the file is kept up to that point.
-        const early = result.reason ? infoMessage(result.reason) : say("g1.appRecordingEarly");
+        const early = recordingStoppedEarly(result.reason);
         setRecordingMessage({ nodeId, text: early.text });
         setActionMessage(early);
       } else {

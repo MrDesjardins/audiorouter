@@ -60,6 +60,18 @@ export function infoMessage(text: string): UiMessage {
  */
 export const BLANK_MESSAGE: UiMessage = infoMessage(" ");
 
+/**
+ * A recording take that stopped saving early. The backend may send its own
+ * reason; with or without one the message has the severity declared for
+ * `g1.appRecordingEarly`, so the same event never changes colour depending on
+ * which text the backend supplied. (Success, as the English wording read
+ * before L10N-06; the owner may want a warning here.)
+ */
+export function recordingStoppedEarly(reason: string | null | undefined): UiMessage {
+  const declared = say("g1.appRecordingEarly");
+  return reason ? { text: reason, tone: declared.tone, progress: declared.progress } : declared;
+}
+
 export const INFO_LIFETIME_MS = 8_000;
 export const WARNING_LIFETIME_MS = 30_000;
 

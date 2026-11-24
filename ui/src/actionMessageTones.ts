@@ -25,7 +25,7 @@ const PROGRESS = { tone: "info", progress: true } as const;
  * for something to review (closes after 30 s), SUCCESS or INFO (close after
  * 8 s), PROGRESS for work still running (stays until it changes). Entries
  * were derived from the previous English-wording rules, which
- * `actionMessageTones.test.ts` records.
+ * `actionMessageLegacyParity.test.ts` keeps and checks every entry against.
  */
 export const MESSAGE_TONES = {
   "g1.appAddedSave": INFO,
@@ -171,7 +171,7 @@ export const MESSAGE_TONES = {
   "g2.nePreparing": PROGRESS,
   "g2.neRebindUnavailable": ERROR,
   "g2.neRebinding": PROGRESS,
-  "g2.neRebound": INFO,
+  "g2.neRebound": SUCCESS,
   "g2.neSelectBoth": INFO,
   "g2.neSelectBothRebind": INFO,
   "g2.neUnavailable": ERROR,
@@ -197,7 +197,7 @@ export const MESSAGE_TONES = {
   "g2.vdProvisioning": PROGRESS,
   "g2.vdRemoved": INFO,
   "g2.vdRemoving": PROGRESS,
-  "g2.vrReplaced": INFO,
+  "g2.vrReplaced": SUCCESS,
   "g2.vrReplacing": PROGRESS,
   "g2.vrRevisionInvalid": INFO,
   "g3Adv.authorized": INFO,
