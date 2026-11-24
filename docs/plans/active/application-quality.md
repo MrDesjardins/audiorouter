@@ -539,6 +539,18 @@ Not run: the packaged exe, the Stream Deck plugin callers (`tools/streamdeck`),
 the production-canvas and CI Playwright configs, and anything on Windows
 hardware.
 
+#### Q4.1 owner items closed (2026-11-24)
+
+The three items Q4.1 left to the owner are fixed on
+`fix/rust-small-defects` without changing a role or a published schema: the
+`minLength: 1` empty-string gap (the `EMPTY_STRING_LENIENT` ratchet list is
+gone), `probe_pipe` errors no longer read as "app not running", and the MCP
+`create_session`/`start_from_goal` tools refuse an Editor before creating the
+session it cannot open. Workspace tests, Clippy, both fmt checks and the MCP
+stdio/security integration suites pass. Record:
+[rust small defects](evidence/2026-11-24-rust-small-defects.md). Not run:
+browser suites, built exe, hosted CI.
+
 ## Q5 - Measure reliability and test quality over time
 
 Priority: build on the existing nightly workflow. Owner: quality maintainer.

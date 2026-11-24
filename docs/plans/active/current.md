@@ -267,6 +267,35 @@ Next:
 4. Then Q4.2 restart interleaving and Q5.1–Q5.2 metrics, as listed in
    [application quality](application-quality.md).
 
+### Overnight 2026-11-24 work and its follow-ups
+
+All of this is local only: no branch was pushed and no PR was opened. Details
+are in the evidence files, not repeated here.
+
+- Integration: `integration/overnight-2026-11-24` at `84bfad559` contains every
+  2026-11-24 slice (Q4.1 contract tests, Q4.2 fault interleavings, Q4.3 fuzzing
+  and worker-frame hardening, the low-audit, resilience, VST, L10N and UI-audit
+  branches) and the independent review's PLAN-1 repair. Records:
+  [overnight integration](evidence/2026-11-24-overnight-integration.md) and
+  [review](evidence/2026-11-24-integration-review.md). Q4.2's restart
+  interleaving is now done; Q5.1–Q5.2 remain.
+- `fix/instrument-app-usage` (`4f3b4e8f8`): the OBS and app-usage checks use
+  the exhaustive source classification, so an Instrument is named and a
+  disabled one no longer counts as passing sound.
+- `fix/rust-small-defects` (new, from `84bfad559` + the Instrument fix):
+  closes the three Q4.1 owner items without changing any role policy.
+  Optional `minLength: 1` strings now refuse `""`; `probe_pipe` errors keep
+  their reason instead of reading as "app not running"; MCP `create_session`
+  and `start_from_goal` refuse an Editor before creating a session instead of
+  creating one it cannot open. Record:
+  [rust small defects](evidence/2026-11-24-rust-small-defects.md).
+  Workspace tests and Clippy pass; not run: browser suites, built exe, hosted
+  CI.
+- Not started, still owner decisions: the signed updater's key custody and
+  feed host, assistant recording (R2-1a), `rename_session` for assistants
+  (R2-4), RES-10 plugin worker restart, and the unreachable keyboard
+  connection dialog (delete or restore).
+
 Start with priority 1 or 2 above. Nothing on this page authorizes a pull
 request, a release, a driver install or a change to the owner's live audio or
 saved data; see [AGENTS.md](../../../AGENTS.md) for the approval and evidence
