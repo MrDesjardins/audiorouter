@@ -17,7 +17,12 @@ fn every_scope() -> ClientGrant {
 }
 
 fn plane() -> ControlPlane {
-    let mut plane = ControlPlane::default();
+    // Backed by a database, as the app is: storage validates the keys it
+    // journals, which an in-memory plane never does.
+    let mut plane = ControlPlane::with_storage(
+        "contract",
+        audiorouter_storage::Storage::open_memory().unwrap(),
+    );
     plane.insert_session(fixture_session("contract")).unwrap();
     plane
 }
@@ -309,4 +314,71 @@ fn mcp_retries_with_the_same_operation_key_apply_once() {
         .count();
     assert_eq!(gains, 1, "the retried add_tool applied twice");
     assert_eq!(session["nodes"].as_array().unwrap().len(), 3);
+}
+
+/// The tools that create a session and then open it derive a second operation
+/// key from the caller's. With the longest key the schemas allow, that derived
+/// key passed the storage limit: the session was created, the open step was
+/// refused, and the caller was told the whole call failed. A retry must replay.
+#[test]
+fn creating_a_session_with_the_longest_key_opens_it_and_retries_cleanly() {
+    // Opening a session needs SessionControl, which only an Operator has.
+    let grant = ClientGrant::for_role(ClientRole::Operator);
+    let key = "k".repeat(LONGEST_KEY);
+    for (tool, arguments) in [
+        ("create_session", json!({ "name": "Long key" })),
+        ("start_from_goal", json!({ "goal": "clean-mic" })),
+    ] {
+        let mut plane = plane();
+        let mut arguments = arguments;
+        arguments["idempotencyKey"] = json!(key);
+        let call = |plane: &mut ControlPlane| {
+            mcp_tool_call(
+                plane,
+                "contract",
+                &grant,
+                None,
+                &json!({ "id": 1, "params": { "name": tool, "arguments": arguments } }),
+            )
+        };
+        let first = call(&mut plane);
+        assert_eq!(first["result"]["isError"], false, "{tool}: {first}");
+        let again = call(&mut plane);
+        assert_eq!(
+            again["result"]["isError"], false,
+            "{tool}: the retry failed: {again}"
+        );
+        assert_eq!(first["result"], again["result"], "{tool}: retry differs");
+        let sessions = plane
+            .dispatch(audiorouter_protocol::JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(2)),
+                method: "sessions.list".into(),
+                params: None,
+            })
+            .result
+            .unwrap();
+        // The fixture session plus exactly one new one, which is open.
+        assert_eq!(
+            sessions["items"].as_array().map(Vec::len),
+            Some(2),
+            "{tool}: {sessions}"
+        );
+    }
+}
+
+#[test]
+fn the_open_step_key_stays_within_the_limit_and_is_stable() {
+    for length in [1, 100, 123, 124, 128] {
+        let key = "a".repeat(length);
+        let derived = mcp_open_key(&key);
+        assert!(derived.len() <= 128, "{length}: {} bytes", derived.len());
+        assert_eq!(derived, mcp_open_key(&key), "{length}: not deterministic");
+    }
+    // Keys that fit keep the readable form earlier records were journaled with.
+    assert_eq!(mcp_open_key("create-1"), "create-1-open");
+    assert_ne!(
+        mcp_open_key(&"a".repeat(128)),
+        mcp_open_key(&"b".repeat(128))
+    );
 }

@@ -520,7 +520,10 @@ impl ControlPlane {
                     .as_ref()
                     .ok_or(ControlError::Internal("mutation operation missing"))?
                     .2;
-                self.dispatch_privacy_mute(Some(json!({ "muted": !self.privacy_muted, "idempotencyKey": format!("toggle:{key}") })))
+                let derived = crate::persistence::derived_idempotency_key("toggle:", key);
+                self.dispatch_privacy_mute(Some(
+                    json!({ "muted": !self.privacy_muted, "idempotencyKey": derived }),
+                ))
             }
             _ => {
                 let session_id = self.simple_session_id(&params)?;

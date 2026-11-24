@@ -19,6 +19,22 @@ fn scope_idempotency_key(client: &str, method: &str, key: &str) -> String {
     )
 }
 
+/// A key the backend derives from the caller's key (`toggle:{key}`) for a
+/// second operation it performs on the caller's behalf. The caller's key may be
+/// as long as the schemas allow, so the derived one is hashed when the plain
+/// form would pass the storage limit; it stays deterministic, so a retry finds
+/// the same record.
+pub(crate) fn derived_idempotency_key(prefix: &str, key: &str) -> String {
+    let plain = format!("{prefix}{key}");
+    if plain.len() <= audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES {
+        return plain;
+    }
+    format!(
+        "scoped:{}",
+        audiorouter_storage::lower_hex(&Sha256::digest(plain.as_bytes()))
+    )
+}
+
 pub(crate) fn unix_epoch_seconds() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -514,14 +530,7 @@ impl ControlPlane {
         if let Some(client) = self.active_idempotency_scope.as_ref() {
             return scope_idempotency_key(client, &format!("{method}:commit"), key);
         }
-        let plain = format!("{method}:{key}");
-        if plain.len() <= audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES {
-            return plain;
-        }
-        format!(
-            "scoped:{}",
-            audiorouter_storage::lower_hex(&Sha256::digest(plain.as_bytes()))
-        )
+        derived_idempotency_key(&format!("{method}:"), key)
     }
 
     pub(crate) fn operation_lookup_keys(&self, operation_id: &str) -> Vec<String> {

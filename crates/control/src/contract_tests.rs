@@ -26,7 +26,12 @@ struct Dispatch {
 
 impl Dispatch {
     fn new(grant: Option<ClientGrant>) -> Self {
-        let mut plane = ControlPlane::default();
+        // Backed by a database, as the app is: storage validates the keys it
+        // journals, which an in-memory plane never does.
+        let mut plane = ControlPlane::with_storage(
+            "contract",
+            audiorouter_storage::Storage::open_memory().unwrap(),
+        );
         plane.insert_session(fixture_session("contract")).unwrap();
         Self {
             plane,
@@ -65,9 +70,9 @@ impl Adapter for Dispatch {
 #[test]
 fn generated_cases_use_the_dispatcher_limits() {
     assert_eq!(OVERSIZE_STRING_BYTES, MAX_CONTROL_STRING_BYTES + 1);
-    assert!(DEEP_NESTING > MAX_CONTROL_VALUE_DEPTH);
+    const { assert!(DEEP_NESTING > MAX_CONTROL_VALUE_DEPTH) };
     // The JSON parser's own recursion limit must not decide first.
-    assert!(DEEP_NESTING < 128);
+    const { assert!(DEEP_NESTING < 128) };
 }
 
 /// The generated table is large enough to mean something: every method gets
@@ -404,8 +409,6 @@ const RETRY_ELSEWHERE: &[(&str, &str)] = &[
     ("recordings.removeEntry", "needs a recording entry"),
     ("recordings.recycle", "moves a recording file to the recycle bin"),
     ("devices.setAccess", "window-only consent"),
-    ("safety.setPrivacyMute", "a latch with no saved state a caller can read back here"),
-    ("safety.togglePrivacyMute", "a latch with no saved state a caller can read back here"),
     ("recovery.clearSafeMode", "needs a database that started in safe mode"),
     ("system.quit", "stops the backend"),
     ("system.osTransition", "lock, sleep and sign-out lifecycle transitions"),

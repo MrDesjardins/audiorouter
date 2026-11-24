@@ -22,7 +22,12 @@ fn every_scope() -> ClientGrant {
 fn serve(grant: ClientGrant, rotate: bool) -> HttpApi {
     let (sender, receiver) = sync_channel::<(JsonRpcRequest, SyncSender<JsonRpcResponse>)>(8);
     std::thread::spawn(move || {
-        let mut plane = ControlPlane::new("http-contract");
+        // Backed by a database, as the app is: storage validates the keys it
+        // journals, which an in-memory plane never does.
+        let mut plane = ControlPlane::with_storage(
+            "http-contract",
+            audiorouter_storage::Storage::open_memory().unwrap(),
+        );
         plane.insert_session(fixture_session("contract")).unwrap();
         let mut count = 0u64;
         for (request, reply) in receiver {
@@ -89,10 +94,13 @@ impl Http {
 impl Adapter for Http {
     fn call(&mut self, method: &str, params: Option<Value>) -> Outcome {
         let body = params.unwrap_or_else(|| json!({})).to_string();
+        let mut waits = 0;
         let (status, answer) = loop {
             let (status, answer) = exchange(&self.api, &operation_path(method), &body);
-            // The adapter's own 20/s budget: wait for it to refill.
-            if status == 429 {
+            // The adapter's own 20/s budget: wait for it to refill, but not
+            // forever, so a stuck limiter fails the test instead of hanging it.
+            if status == 429 && waits < 100 {
+                waits += 1;
                 std::thread::sleep(Duration::from_millis(120));
                 continue;
             }
@@ -150,7 +158,11 @@ impl Adapter for Http {
 
 /// `ControlPlane::dispatch_authorized`, the reference for parity.
 fn direct(grant: ClientGrant) -> FnAdapter<'static> {
-    let mut plane = ControlPlane::new("http-reference");
+    // The same kind of backend as the served one: database-backed.
+    let mut plane = ControlPlane::with_storage(
+        "http-reference",
+        audiorouter_storage::Storage::open_memory().unwrap(),
+    );
     plane.insert_session(fixture_session("contract")).unwrap();
     let mut next = 0;
     FnAdapter {
@@ -178,12 +190,15 @@ fn http_publishes_the_same_method_schemas_as_the_backend() {
         assert_eq!(a.name, b.name);
         assert_eq!(a.input_schema, b.input_schema, "{}", a.name);
     }
-    // Every method has an HTTP operation in the OpenAPI document.
+    // Every method the adapter serves has an operation in the OpenAPI document
+    // (window-only methods are refused over HTTP and are not published).
     let paths = http_openapi_paths(&http.api);
     for spec in API_METHODS {
-        assert!(
+        let window_only = matches!(http_access(spec.name), HttpAccess::DesktopOnly(_));
+        assert_eq!(
             paths.contains(&operation_path(spec.name)),
-            "{} has no OpenAPI operation",
+            !window_only,
+            "{}: OpenAPI operation and the HTTP policy disagree",
             spec.name
         );
     }
@@ -337,12 +352,14 @@ fn http_retries_with_the_same_operation_key_apply_once() {
             failures.join("\n")
         );
         for run in &runs {
-            assert_eq!(
-                run.conflict.status,
-                Some(409),
-                "{}: a reused key must be HTTP 409",
-                run.method
-            );
+            if let Some(conflict) = &run.conflict {
+                assert_eq!(
+                    conflict.status,
+                    Some(409),
+                    "{}: a reused key must be HTTP 409",
+                    run.method
+                );
+            }
         }
     }
 }

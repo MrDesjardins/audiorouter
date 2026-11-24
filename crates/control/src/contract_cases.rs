@@ -134,9 +134,12 @@ pub trait Adapter {
 /// An [`Adapter`] built from closures, for adapters whose backend lives in the
 /// test (an in-memory `ControlPlane`) or behind a socket.
 pub struct FnAdapter<'a> {
-    pub call_fn: Box<dyn FnMut(&str, Option<Value>) -> Outcome + 'a>,
-    pub refuse_fn: Box<dyn Fn(&str) -> Option<&'static str> + 'a>,
+    pub call_fn: CallFn<'a>,
+    pub refuse_fn: RefuseFn<'a>,
 }
+
+pub type CallFn<'a> = Box<dyn FnMut(&str, Option<Value>) -> Outcome + 'a>;
+pub type RefuseFn<'a> = Box<dyn Fn(&str) -> Option<&'static str> + 'a>;
 
 impl Adapter for FnAdapter<'_> {
     fn call(&mut self, method: &str, params: Option<Value>) -> Outcome {
@@ -531,9 +534,7 @@ pub fn invalid_input_failures(adapter: &mut dyn Adapter, methods: &[Method]) -> 
 pub const EMPTY_STRING_LENIENT: &[(&str, &str)] = &[
     ("sessions.summary", "sessionId"),
     ("meters.levels", "sessionId"),
-    ("recordings.list", "sessionId"),
-    ("graph.history", "sessionId"),
-    ("graph.undoPlan", "sessionId"),
+    ("recordings.recovery", "cursor"),
     ("sessions.get", "sessionId"),
     ("sessions.export", "sessionId"),
     ("toolPresets.list", "kind"),
@@ -555,21 +556,22 @@ pub fn parity_failures(
             let expected = reference.call(&method.name, params.clone());
             let actual = adapter.call(&method.name, params);
             let here = format!("{} [{}]", method.name, case.label);
+            if let Some(category) = adapter.refuses_before_validation(&method.name) {
+                if actual.category != category {
+                    failures.push(format!("{here}: {name} answered {}", actual.label()));
+                }
+                continue;
+            }
             if adapter.answers_itself(&case.label) {
-                if actual.label() != expected.label()
-                    && !(actual.rpc_code == -32602 && expected.rpc_code == -32602)
-                {
+                // The adapter names its own category (`invalidRequest`), the
+                // dispatcher gives a bare JSON-RPC -32602: both are "invalid
+                // params", which is the shared contract.
+                if actual.rpc_code != expected.rpc_code {
                     failures.push(format!(
                         "{here}: {name} answered {} but dispatch answered {}",
                         actual.label(),
                         expected.label()
                     ));
-                }
-                continue;
-            }
-            if let Some(category) = adapter.refuses_before_validation(&method.name) {
-                if actual.category != category {
-                    failures.push(format!("{here}: {name} answered {}", actual.label()));
                 }
                 continue;
             }
@@ -743,6 +745,10 @@ pub fn saved_state(adapter: &mut dyn Adapter) -> Value {
         "sessions": adapter.call("sessions.list", Some(json!({}))).result,
         "active": adapter.call("sessions.active.get", None).result,
         "presets": adapter.call("toolPresets.list", Some(json!({}))).result,
+        // The privacy latch is read back through the session summary.
+        "summary": adapter
+            .call("sessions.summary", Some(json!({ "sessionId": "contract" })))
+            .result,
     })
 }
 
@@ -801,6 +807,18 @@ pub fn retries() -> Vec<Retry> {
             params: json!({ "sessionId": "contract", "from": "in", "to": "out", "idempotencyKey": "retry-connect" }),
             changed: json!({ "sessionId": "contract", "from": "in", "to": "out", "fromOutput": "out", "idempotencyKey": "retry-connect" }),
         },
+        // Keys the backend derives from the caller's key (`toggle:{key}`) must
+        // fit the storage limit at the longest key too.
+        Retry {
+            method: "safety.togglePrivacyMute",
+            params: json!({ "idempotencyKey": "retry-mute-toggle" }),
+            changed: Value::Null,
+        },
+        Retry {
+            method: "safety.setPrivacyMute",
+            params: json!({ "muted": true, "idempotencyKey": "retry-mute" }),
+            changed: json!({ "muted": false, "idempotencyKey": "retry-mute" }),
+        },
         Retry {
             method: "toolPresets.save",
             params: json!({ "kind": "gain", "name": "Contract preset", "parameters": { "gainDb": 3 }, "idempotencyKey": "retry-preset" }),
@@ -818,7 +836,8 @@ pub struct RetryRun {
     pub after_first: Value,
     pub retry: Outcome,
     pub after_retry: Value,
-    pub conflict: Outcome,
+    /// The same key with other content; `None` when the method has none.
+    pub conflict: Option<Outcome>,
     pub after_conflict: Value,
 }
 
@@ -856,7 +875,9 @@ pub fn retry_runs(
             let after_first = saved_state(adapter.as_mut());
             let again = adapter.call(retry.method, Some(retry.params.clone()));
             let after_retry = saved_state(adapter.as_mut());
-            let conflict = adapter.call(retry.method, Some(retry.changed.clone()));
+            // `null` for a request with nothing to change but its key.
+            let conflict = (!retry.changed.is_null())
+                .then(|| adapter.call(retry.method, Some(retry.changed.clone())));
             let after_conflict = saved_state(adapter.as_mut());
             RetryRun {
                 method: retry.method,
@@ -898,11 +919,13 @@ pub fn retry_failures(runs: &[RetryRun]) -> Vec<String> {
         if run.after_retry != run.after_first {
             failures.push(format!("{method}: the retry applied the change again"));
         }
-        if run.conflict.ok || run.conflict.category != "idempotencyConflict" {
-            failures.push(format!(
-                "{method}: the same key with other content answered {}",
-                run.conflict.label()
-            ));
+        if let Some(conflict) = &run.conflict {
+            if conflict.ok || conflict.category != "idempotencyConflict" {
+                failures.push(format!(
+                    "{method}: the same key with other content answered {}",
+                    conflict.label()
+                ));
+            }
         }
         if run.after_conflict != run.after_retry {
             failures.push(format!("{method}: the conflicting retry changed state"));

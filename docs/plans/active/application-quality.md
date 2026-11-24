@@ -303,6 +303,93 @@ recordings remain valid, protected paths fail silent, and changes touching
 native audio have the applicable real Windows evidence before release. Missing
 hardware evidence is an explicit blocked gate, not a passing mock result.
 
+### Q4.1 execution entry (2026-11-24, contract tests; offline, no hardware)
+
+Scope: item 1 only (invalid input, authorization, stale revision, retries).
+Fault interleavings, fuzzing and the audio items stay open. Branch
+`test/q4-contract-tests`, not pushed, no PR.
+
+Tests added. One shared generator, `crates/control/src/contract_cases.rs`,
+is compiled into three test builds with `#[path]`, so every adapter runs the
+same cases against the same fixtures (a database-backed plane, because an
+in-memory plane never exercises storage's key limits):
+
+- `crates/control/src/contract_tests.rs` (dispatcher, 13 tests),
+  `crates/cli/src/contract_tests.rs` (MCP through `mcp_tool_call`, 8 tests),
+  `src-tauri/src/http_contract_tests.rs` (HTTP on a real listener, 5 tests).
+- Coverage, walking `API_METHODS` and the published input schemas (no
+  hand-kept method list): 156 methods; 1841 generated invalid-input cases per
+  adapter (not-an-object, 40-deep nesting, unknown parameter, omitted params,
+  and per field: missing, wrong type, 4097-byte string, empty string, over
+  `maxLength`); 4 roles (none, Observer, Editor, Operator) x 156 methods x 3
+  adapters for authorization, each compared with dispatch (same category and
+  text); every default MCP tool checked against its caller's role through the
+  backend calls it really makes; the 5 `baseRevision` methods (graph.plan,
+  graph.commit, graph.undoPlan, graph.restorePlan, virtualRoutes.replace) for
+  `revisionConflict` (HTTP 409); 12 retry scenarios (nodes.add/set/toggle/
+  remove, connections.add/remove, sessions.create/duplicate/delete/active.set,
+  safety.togglePrivacyMute/setPrivacyMute, toolPresets.save), each run with a
+  short and a 128-byte key: a retry returns the same result and applies once,
+  a reused key with different input is `idempotencyConflict`, and two clients
+  may use the same key. A test fails if an idempotent method has neither a
+  scenario nor a recorded reason (`RETRY_ELSEWHERE`).
+
+Defects found and fixed, each with a regression test that failed first:
+
+1. Wrong-typed and over-long string/number/boolean parameters were silently
+   ignored by 14 methods. `validate_method_params` now checks scalar types and
+   `maxLength` from the published schema (`authorization.rs`).
+2. `graph.commit` with an empty key was accepted for a named client (MCP,
+   HTTP, CLI) because the key was scoped before it was validated.
+3. A 128-byte key (allowed by every schema) was refused for any named client
+   once the client id was added to it, and for every task edit (`nodes.add`,
+   ...) because of the `{method}:{key}` prefix. Scoped and derived keys longer
+   than the storage limit are now a SHA-256 digest (`persistence.rs`).
+4. Task-edit commit keys collided across clients; a named client now has its
+   own commit key. Compatibility: a retry that spans an upgrade of a named
+   client's task edit is not replayed once.
+5. `virtualRoutes.replace` answered a stale `baseRevision` as a malformed
+   request; it is now `revisionConflict`. (Its text says "session" for a bus
+   route revision.)
+6. `safety.togglePrivacyMute` derived `toggle:{key}`, which failed for a long
+   key; and MCP `create_session` / `start_from_goal` derived `{key}-open`, which
+   made a long key create the session and then report failure. Both are
+   bounded and deterministic (`mcp_open_key`).
+7. `audioMedia.delete` without `mediaId` returned `{"deleted": false}`; it is
+   now invalid params.
+
+Recorded for the owner, not changed:
+
+- `EMPTY_STRING_LENIENT` (7 pairs, e.g. `sessions.get` `sessionId`): an empty
+  string where the schema says `minLength: 1` is accepted and means "the
+  active session" or "all". Tighten the handlers or relax the schemas; the
+  list is a ratchet, so a new pair fails and a fixed one must be removed.
+- MCP `create_session` for an Editor creates the session but cannot open it
+  (`sessions.active.set` needs SessionControl), and reports permissionDenied.
+- `RETRY_ELSEWHERE` lists idempotent methods with no retry scenario yet
+  (each with its reason).
+
+Process note: the new code was written with Edit/Write. Two lapses: one
+`cat >>` append to `contract_cases.rs` and one two-line `sed -i` replacing
+`format!("{key}-open")` in `crates/cli/src/lib.rs`; both results were read back
+and are covered by tests.
+
+Commands (this worktree, `CARGO_BUILD_JOBS=6`): `cargo fmt --all -- --check`
+and `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` clean;
+`cargo clippy --workspace --all-targets --all-features -- -D warnings` and the
+same for `src-tauri/Cargo.toml` clean; `cargo test -p audiorouter-control -p
+audiorouter-cli -p audiorouter-transport`: all targets pass (control 466 passed
+24 ignored, cli lib 66, transport 41 plus integration tests);
+`cargo test --bin audiorouter-shell` in `src-tauri`: 136 passed, 4 ignored
+(the HTTP invalid-input sweep takes about 2 minutes because it respects the
+adapter's rate limit); `npm --prefix contracts run check:drift` passed (156
+methods); `node tools/docs/validate.mjs` passed.
+
+Not run: Playwright real-backend UI tests and the in-repo UI/Stream Deck
+callers beyond a read of the upload path (chunks stay under the new
+`maxLength`); the built exe; any Windows hardware. The UI's handling of the new
+`virtualRoutes.replace` `revisionConflict` was not exercised.
+
 ## Q5 - Measure reliability and test quality over time
 
 Priority: build on the existing nightly workflow. Owner: quality maintainer.
