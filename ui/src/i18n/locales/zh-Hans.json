@@ -3883,6 +3883,38 @@
       "bridgeTimedOutUnnamed": "受影响总线的虚拟线缆链路已超时，相应音频现已静音。请点击“停止”，再点击“播放”重新启动。",
       "bridgeFailed": "{{bus}} 的虚拟线缆链路已失败，相应音频现已静音。请点击“停止”，再点击“播放”重新启动。",
       "bridgeFailedUnnamed": "受影响总线的虚拟线缆链路已失败，相应音频现已静音。请点击“停止”，再点击“播放”重新启动。"
+    },
+    "appShell": {
+      "goToTool": "转到 {{name}}",
+      "revisionLive": "修订 {{revision}} - 在你检查并保存之前，所做的编辑不会保存",
+      "revisionPreview": "修订 {{revision}} - 在此预览中，更改仅影响显示效果"
+    },
+    "draftErrors": {
+      "runningAppOnly": "只有经过验证的正在运行的应用才能添加到图中",
+      "exePath": "请选择指向 .exe 文件的完整 Windows 路径。",
+      "exeFile": "请选择 .exe 应用程序文件。",
+      "exeNameMismatch": "可执行文件名与所选路径不一致。",
+      "exePathUnavailable": "无法获得 {{name}} 的完整可执行文件路径；请选择其 .exe 文件。",
+      "groupNeedsTwo": "分组至少需要选择两个不同的应用。",
+      "scanResultOnly": "只有受支持的 x64 扫描结果才能添加到图中",
+      "selfConnect": "工具不能连接到自身",
+      "chooseOutputPort": "请选择一个输出源端口",
+      "chooseInputPort": "请选择一个输入目标端口",
+      "connectionExists": "该连接已在你尚未保存的编辑中",
+      "inputOccupied": "该输入已有一条连接",
+      "sidechainChanged": "侧链连接已更改；请重试",
+      "outputChanged": "输出连接已更改；请重试",
+      "destinationChanged": "目标连接已更改；请重试",
+      "instrumentInline": "乐器会发出声音，不能放在连接中间。",
+      "mixerRemoval": "移除混音器要求它恰好有一条输入连接和一条输出连接",
+      "keepOneTool": "路由至少要保留一个工具",
+      "toolNameEmpty": "工具名称不能为空",
+      "toolNameLong": "工具名称不能超过 120 个字符",
+      "sessionNameEmpty": "会话名称不能为空",
+      "sessionNameLong": "会话名称不能超过 120 个字符",
+      "volumeRange": "音量必须介于 0 和 200 % 之间",
+      "mixerVolumeRange": "混音器输入音量必须介于 0 和 100 % 之间",
+      "gainRange": "增益必须介于 {{min}} 和 {{max}} dB 之间"
     }
   }
 }

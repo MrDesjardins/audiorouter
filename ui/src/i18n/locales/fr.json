@@ -3913,6 +3913,38 @@
       "bridgeTimedOutUnnamed": "La liaison du câble virtuel d’un bus concerné a expiré, ce qui coupe le son concerné. Appuyez sur Arrêter, puis sur Lecture pour la relancer.",
       "bridgeFailed": "La liaison du câble virtuel pour {{bus}} a échoué, ce qui coupe le son concerné. Appuyez sur Arrêter, puis sur Lecture pour la relancer.",
       "bridgeFailedUnnamed": "La liaison du câble virtuel d’un bus concerné a échoué, ce qui coupe le son concerné. Appuyez sur Arrêter, puis sur Lecture pour la relancer."
+    },
+    "appShell": {
+      "goToTool": "Aller à {{name}}",
+      "revisionLive": "Révision {{revision}} - les modifications restent non enregistrées tant que vous ne les avez pas examinées et enregistrées",
+      "revisionPreview": "Révision {{revision}} - les modifications ne concernent que la présentation dans cet aperçu"
+    },
+    "draftErrors": {
+      "runningAppOnly": "Seule une application en cours d’exécution et vérifiée peut être ajoutée au graphe",
+      "exePath": "Choisissez un chemin Windows complet vers un fichier .exe.",
+      "exeFile": "Choisissez un fichier d’application .exe.",
+      "exeNameMismatch": "Le nom de l’exécutable ne correspond pas au chemin choisi.",
+      "exePathUnavailable": "Le chemin complet de l’exécutable de {{name}} n’est pas disponible ; choisissez son fichier .exe.",
+      "groupNeedsTwo": "Choisissez au moins deux applications différentes pour un groupe.",
+      "scanResultOnly": "Seul un résultat d’analyse x64 pris en charge peut être ajouté au graphe",
+      "selfConnect": "Un outil ne peut pas être connecté à lui-même",
+      "chooseOutputPort": "Choisissez un port de sortie source",
+      "chooseInputPort": "Choisissez un port d’entrée de destination",
+      "connectionExists": "Cette connexion figure déjà dans vos modifications non enregistrées",
+      "inputOccupied": "Cette entrée a déjà une connexion",
+      "sidechainChanged": "La connexion sidechain a changé ; réessayez",
+      "outputChanged": "La connexion de sortie a changé ; réessayez",
+      "destinationChanged": "La connexion de destination a changé ; réessayez",
+      "instrumentInline": "Un instrument produit du son ; il ne peut pas se placer au milieu d’une connexion.",
+      "mixerRemoval": "Pour retirer un mélangeur, il faut exactement une connexion entrante et une connexion sortante",
+      "keepOneTool": "Une route doit conserver au moins un outil",
+      "toolNameEmpty": "Le nom de l’outil ne peut pas être vide",
+      "toolNameLong": "Le nom de l’outil ne peut pas dépasser 120 caractères",
+      "sessionNameEmpty": "Le nom de la session ne peut pas être vide",
+      "sessionNameLong": "Le nom de la session ne peut pas dépasser 120 caractères",
+      "volumeRange": "Le volume doit être compris entre 0 et 200 %",
+      "mixerVolumeRange": "Le volume d’entrée du mélangeur doit être compris entre 0 et 100 %",
+      "gainRange": "Le gain doit être compris entre {{min}} et {{max}} dB"
     }
   }
 }

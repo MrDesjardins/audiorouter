@@ -3895,5 +3895,37 @@ export const ENGLISH_MESSAGES = {
     "bridgeTimedOutUnnamed": "The virtual cable link for an affected bus timed out, so that audio is silent. Press Stop and Play to restart it.",
     "bridgeFailed": "The virtual cable link for {{bus}} failed, so that audio is silent. Press Stop and Play to restart it.",
     "bridgeFailedUnnamed": "The virtual cable link for an affected bus failed, so that audio is silent. Press Stop and Play to restart it."
+  },
+  "appShell": {
+    "goToTool": "Go to {{name}}",
+    "revisionLive": "Revision {{revision}} - edits stay unsaved until you review and save them",
+    "revisionPreview": "Revision {{revision}} - changes are presentation-only in this preview"
+  },
+  "draftErrors": {
+    "runningAppOnly": "Only a verified running application can be added to the graph",
+    "exePath": "Choose a full Windows path to an .exe file.",
+    "exeFile": "Choose an .exe application file.",
+    "exeNameMismatch": "The executable name does not match its selected path.",
+    "exePathUnavailable": "A full executable path for {{name}} is unavailable; choose its .exe file.",
+    "groupNeedsTwo": "Choose at least two different applications for a group.",
+    "scanResultOnly": "Only a supported x64 scan result can be added to the graph",
+    "selfConnect": "A tool cannot connect to itself",
+    "chooseOutputPort": "Choose an output source port",
+    "chooseInputPort": "Choose an input destination port",
+    "connectionExists": "That connection is already in your unsaved edits",
+    "inputOccupied": "That input already has a connection",
+    "sidechainChanged": "The sidechain connection changed; try again",
+    "outputChanged": "The output connection changed; try again",
+    "destinationChanged": "The destination connection changed; try again",
+    "instrumentInline": "An instrument makes sound; it cannot sit inside a connection.",
+    "mixerRemoval": "Mixer removal requires exactly one incoming and one outgoing connection",
+    "keepOneTool": "A route must keep at least one tool",
+    "toolNameEmpty": "Tool name cannot be empty",
+    "toolNameLong": "Tool name cannot exceed 120 characters",
+    "sessionNameEmpty": "Session name cannot be empty",
+    "sessionNameLong": "Session name cannot exceed 120 characters",
+    "volumeRange": "Volume must be between 0 and 200 %",
+    "mixerVolumeRange": "Mixer input volume must be between 0 and 100 %",
+    "gainRange": "Gain must be between {{min}} and {{max}} dB"
   }
 } as const;

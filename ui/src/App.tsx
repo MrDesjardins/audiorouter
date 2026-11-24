@@ -124,7 +124,7 @@ import {
   WARNING_LIFETIME_MS,
   withTone,
 } from "./actionMessage";
-import { unfedRouteNodes } from "./draft";
+import { InputOccupiedError, unfedRouteNodes } from "./draft";
 import { demoSession, demoSessions } from "./fixtures";
 import {
   recordDraft,
@@ -2829,7 +2829,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       return added?.id ?? null;
     } catch (error) {
       const occupied =
-        error instanceof Error && error.message === "That input already has a connection"
+        error instanceof InputOccupiedError
           ? current.edges.find(
               (edge) => edge.destinationNode === destinationNode && edge.destinationPort === destinationPort,
             )
@@ -4177,7 +4177,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   )}
                   {backend.connected && offersAction(actionMessage, "goToIssueNode") && firstIssueNode && (
                     <button type="button" className="secondary" onClick={() => selectNodeProperties(firstIssueNode.id)}>
-                      Go to {firstIssueNode.name}
+                      {tm("appShell.goToTool", { name: firstIssueNode.name })}
                     </button>
                   )}
                   {backend.connected && offersAction(actionMessage, "openStatus") && workbenchTab !== "status" && (
@@ -4288,10 +4288,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     />
                   </label>
                   <p className="muted">
-                    Revision {session.revision} -{" "}
-                    {backend.connected
-                      ? "edits stay unsaved until you review and save them"
-                      : "changes are presentation-only in this preview"}
+                    {tm(backend.connected ? "appShell.revisionLive" : "appShell.revisionPreview", {
+                      revision: session.revision,
+                    })}
                   </p>
                 </div>
                 <div className="actions">
