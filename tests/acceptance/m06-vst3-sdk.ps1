@@ -1,12 +1,22 @@
 param(
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    # Full path of cmake.exe. Otherwise AUDIOROUTER_CMAKE, PATH and the standard
+    # install folders are searched (see find-cmake.ps1).
+    [string]$CMakePath
 )
 
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'find-cmake.ps1')
+
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $sdkRoot = Join-Path $repositoryRoot 'third_party\vst3sdk'
-$cmake = Join-Path $repositoryRoot 'third_party\cmake-4.4.0\bin\cmake.exe'
+$cmake = Find-CMake -CMakePath $CMakePath -RepositoryRoot $repositoryRoot
+$cmakeVersion = @(& $cmake --version 2>&1) -join ' '
+if ($LASTEXITCODE -ne 0 -or $cmakeVersion -notmatch 'cmake version \d') {
+    throw "CMake at $cmake did not report a version: $cmakeVersion"
+}
+Write-Output "Using $cmake ($($cmakeVersion.Trim()))"
 $buildRoot = Join-Path $repositoryRoot 'third_party\vst3sdk-build'
 $bundle = Join-Path $buildRoot 'VST3\Release\mda-vst3.vst3'
 $againBundle = Join-Path $buildRoot 'VST3\Release\again.vst3'
@@ -63,7 +73,7 @@ function Invoke-ExpectedFailure([string]$File, [string[]]$Arguments, [string]$Ex
     }
 }
 
-Require-File $cmake 'repository-local CMake'
+Require-File $cmake 'CMake'
 Require-File (Join-Path $sdkRoot 'CMakeLists.txt') 'VST3 SDK checkout'
 Require-File (Join-Path $sdkRoot 'pluginterfaces\base\ipluginbase.h') 'VST3 SDK header'
 

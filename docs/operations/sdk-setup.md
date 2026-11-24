@@ -127,3 +127,11 @@ The script verifies the pinned revision, builds the local SDK sample when
 needed, runs the official validator and offline loader, and removes generated
 loader outputs. `-SkipBuild` is available when the existing Release build is
 already known to be current.
+
+The script finds CMake in this order: `-CMakePath <cmake.exe>`, the
+`AUDIOROUTER_CMAKE` environment variable, `cmake.exe` on `PATH`, the standard
+install folders (Program Files, the winget package folder, Visual Studio's
+bundled copy) and finally a `third_party\cmake-*` folder. A path you choose
+explicitly that does not exist is an error and is never replaced by another
+CMake. Install one with `winget install Kitware.CMake`. The discovery rules
+are checked without a build by `tests\acceptance\find-cmake-selftest.ps1`.
