@@ -2001,6 +2001,41 @@ describe("keyboard connection dialog", () => {
     expect(await screen.findByText("Virtual routes applied at revision 3.")).toBeTruthy();
   });
 
+  // The backend now answers a stale virtual-route baseRevision with
+  // `revisionConflict` (it was a malformed-request error); the panel must say
+  // another save won and keep what the user typed.
+  it("explains a virtual-route revision conflict and keeps the typed edit", async () => {
+    const replaceVirtualRoutes = vi.fn(async () => {
+      throw new AudioRouterRpcError({
+        code: -32010,
+        message: "Store(RevisionConflict { expected: 2, actual: 5 })",
+        data: {
+          code: "revisionConflict",
+          fieldPath: null,
+          resourceIds: [],
+          retryable: true,
+          remediation: "read the latest session revision and create a new plan",
+        },
+      });
+    });
+    const backend = {
+      ...createDisconnectedBackend(),
+      connected: true,
+      listVirtualRoutes: async () => ({ revision: 2, routes: [] }),
+      replaceVirtualRoutes,
+    };
+    await renderReady(<App backend={backend} />);
+    openTab("Status");
+    const revision = (await screen.findByRole("textbox", {
+      name: "Virtual-route base revision",
+    })) as HTMLInputElement;
+    await waitFor(() => expect(revision.value).toBe("2"));
+    fireEvent.click(screen.getByRole("button", { name: "Replace routes" }));
+    await waitFor(() => expect(replaceVirtualRoutes).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/Another save changed this route, so your save was not applied/)).toBeTruthy();
+    expect(revision.value).toBe("2");
+  });
+
   it("refreshes virtual-route inventory when the same backend reconnects", async () => {
     const listVirtualRoutes = vi.fn(async () => ({ revision: 4, routes: [] }));
     const backend = { ...createDisconnectedBackend(), connected: false, listVirtualRoutes };
