@@ -149,17 +149,55 @@ fn spawn_backend_rpc_logger(
     let handle = std::thread::Builder::new()
         .name("audiorouter-backend-log".into())
         .spawn(move || {
-            for record in receiver {
-                match record {
+            run_backend_log_records(
+                receiver,
+                |record| match record {
                     BackendLogRecord::Rpc(entry) => write_backend_rpc_log(&directory, &entry),
                     BackendLogRecord::Health(record) => {
                         append_backend_log_records(&directory, &[record])
                     }
-                }
-            }
+                },
+                || {
+                    // Best effort: the marker is the only trace that one
+                    // record was lost, so it must not end the thread either.
+                    let _ = std::panic::catch_unwind(|| {
+                        append_backend_log_records(&directory, &[backend_log_panic_record()])
+                    });
+                },
+            )
         })
         .ok()?;
     Some((sender, handle))
+}
+
+/// The record that marks one lost backend log record (RES-11). It carries no
+/// request data.
+fn backend_log_panic_record() -> serde_json::Value {
+    serde_json::json!({
+        "timeUnixMs": u64::try_from(unix_time_ms()).unwrap_or(u64::MAX),
+        "processId": std::process::id(),
+        "event": "backendLogWriterPanic",
+        "outcome": "error",
+    })
+}
+
+/// Write each queued record with `write`, surviving a panic while writing
+/// one. `backend.jsonl` is the first file read when something fails, and a
+/// panic that ended this thread silently dropped every later record for the
+/// life of the process (the sender sits in a process-wide `OnceLock`), so a
+/// panic is caught per record, reported once through `on_panic`, and the
+/// loop goes on with the next record. Returns when every sender is dropped.
+fn run_backend_log_records(
+    receiver: std::sync::mpsc::Receiver<BackendLogRecord>,
+    mut write: impl FnMut(BackendLogRecord),
+    mut on_panic: impl FnMut(),
+) {
+    for record in receiver {
+        let written = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| write(record)));
+        if written.is_err() {
+            on_panic();
+        }
+    }
 }
 
 /// The process-wide queue of the backend logger thread, started on first use.
@@ -557,6 +595,71 @@ pub fn device_inventory_log_summary(result: &serde_json::Value) -> serde_json::V
         "inactiveCount": items.map(|items| items.iter().filter(|item| matches!(item["state"].as_str(), Some("disabled" | "unplugged" | "notPresent"))).count()),
         "hasMore": result.get("nextCursor").is_some_and(|cursor| !cursor.is_null()),
     })
+}
+
+#[cfg(test)]
+fn log_entry_for_test(method: &str) -> BackendLogRecord {
+    BackendLogRecord::Rpc(BackendLogEntry {
+        frame: audiorouter_protocol::encode_frame(
+            &serde_json::json!({"jsonrpc":"2.0","id":1,"method":method,"params":{}}),
+        )
+        .unwrap(),
+        responses: Vec::new(),
+        now_ms: 1,
+        verbose: false,
+        duration_micros: 0,
+    })
+}
+
+/// RES-11: one record that panics while it is written must not end the
+/// logger thread, because every later record would then be dropped silently
+/// for the life of the process.
+#[test]
+fn a_panic_while_writing_one_record_keeps_later_records_logged() {
+    let (sender, receiver) = std::sync::mpsc::sync_channel::<BackendLogRecord>(8);
+    for method in ["first.ok", "poison.record", "later.one", "later.two"] {
+        sender.send(log_entry_for_test(method)).unwrap();
+    }
+    drop(sender);
+    let written = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let panics = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let (thread_written, thread_panics) = (written.clone(), panics.clone());
+    let thread = std::thread::spawn(move || {
+        run_backend_log_records(
+            receiver,
+            |record| {
+                let BackendLogRecord::Rpc(entry) = record else {
+                    return;
+                };
+                let request: serde_json::Value =
+                    audiorouter_protocol::decode_frame(&entry.frame).unwrap();
+                let method = request["method"].as_str().unwrap().to_owned();
+                if method == "poison.record" {
+                    panic!("injected writer panic");
+                }
+                thread_written.lock().unwrap().push(method);
+            },
+            || {
+                thread_panics.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            },
+        )
+    });
+    // The thread must end normally, not by the injected panic.
+    thread.join().expect("the log thread survives a panic");
+    assert_eq!(
+        *written.lock().unwrap(),
+        ["first.ok", "later.one", "later.two"]
+    );
+    assert_eq!(panics.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
+#[test]
+fn the_panic_marker_names_the_event_and_carries_no_request_data() {
+    let record = backend_log_panic_record();
+    assert_eq!(record["event"], "backendLogWriterPanic");
+    assert_eq!(record["outcome"], "error");
+    assert!(record["timeUnixMs"].as_u64().is_some());
+    assert_eq!(record.as_object().unwrap().len(), 4);
 }
 
 #[test]
