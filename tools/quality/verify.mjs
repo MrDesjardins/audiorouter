@@ -28,11 +28,16 @@ export function resolveCommand(command) {
   }
   return [process.platform === 'win32' && command.executable === 'cargo' ? 'cargo.exe' : command.executable, ...command.args];
 }
+/** Windows PowerShell 5.1 must not inherit PowerShell 7's module path, which hides its own cmdlets. */
+export function childEnvironment(executable, environment = process.env) {
+  if (executable !== 'powershell.exe') return environment;
+  return Object.fromEntries(Object.entries(environment).filter(([name]) => name.toLowerCase() !== 'psmodulepath'));
+}
 export function execute(command) {
   return new Promise(resolve => {
     let resolved;
     try { resolved = resolveCommand(command); } catch (error) { resolve({ status: 'blocked', detail: error.message }); return; }
-    const child = spawn(resolved[0], resolved.slice(1), { cwd: command.cwd ? path.resolve(root, command.cwd) : root, stdio: 'inherit', shell: false });
+    const child = spawn(resolved[0], resolved.slice(1), { cwd: command.cwd ? path.resolve(root, command.cwd) : root, stdio: 'inherit', shell: false, env: childEnvironment(resolved[0]) });
     child.on('error', error => resolve({ status: 'blocked', detail: error.code ?? error.message }));
     child.on('close', (code, signal) => resolve({ status: code === 0 ? 'passed' : 'failed', exitCode: code, signal }));
   });

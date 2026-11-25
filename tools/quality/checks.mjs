@@ -3,8 +3,9 @@ const npm = (directory, ...args) => ({ executable: 'npm', args: ['--prefix', dir
 const cargo = (...args) => ({ executable: 'cargo', args, windows: true });
 const ps = script => ({ executable: 'powershell', args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script], windows: true });
 // The VM lifecycle harness has no VM-free other coverage; run its host guards
-// with the release tooling whenever release-area files change.
-const lifecycle = ['process', 'guards', 'recording', 'unattended-guards'].map(name => ps(`tests/acceptance/m08-lifecycle-${name}.ps1`));
+// with the release tooling whenever release-area files change. The harness runs
+// under Windows PowerShell 5.1, so name powershell.exe: 'powershell' may become pwsh.
+const lifecycle = ['process', 'guards', 'recording', 'unattended-guards'].map(name => ({ ...ps(`tests/acceptance/m08-lifecycle-${name}.ps1`), executable: 'powershell.exe' }));
 export const checks = {
   docs: [{ executable: 'node', args: ['tools/docs/validate.mjs'] }],
   site: [{ executable: 'node', args: ['site/generate-social.mjs', '--check', '--check-changed'] }, { executable: 'node', args: ['site/check-guides.mjs'] }, { executable: 'node', args: ['site/generate-csp.mjs', '--check'] }, { executable: 'node', args: ['--test', 'site/generate-csp.test.mjs', 'site/guide-recordings.test.mjs', 'tools/site/tool-guide-guards.test.mjs'] }],
