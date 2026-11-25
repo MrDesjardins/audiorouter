@@ -836,6 +836,161 @@ fn live_edit_classification_distinguishes_parameters_flags_and_topology() {
     assert_eq!(classify_live_edit(&saved, &both), LiveEdit::ParametersOnly);
 }
 
+/// Issue #149: the reporter toggled Mute and changed the Fun Voice Changer
+/// while an automatic save was in flight. Both edits are live ones (a flag-like
+/// parameter and a preset change), so the save that follows must commit from
+/// the just-written revision instead of locking on a revision conflict, the
+/// live classification must retain the route's sources, and the saved session
+/// must carry both edits. The in-flight coalescing itself is covered by the App
+/// regression `coalesces edits during automatic save`; "no new worker for an
+/// unchanged plugin" is covered by
+/// `merged_preparation_reuses_worker_and_defers_slider_changes_until_publication`
+/// and `only_requested_plugin_groups_start_and_fully_reused_groups_are_skipped`.
+#[test]
+fn mute_and_voice_change_during_a_running_save_keep_the_revision_unlocked() {
+    use audiorouter_domain::voice_changer::{voice_preset_parameters, VOICE_PRESETS};
+    let stereo = |name: &str, direction| Port {
+        name: name.into(),
+        direction,
+        channels: 2,
+    };
+    let tool = |id: &str, kind: NodeKind| Node {
+        id: EntityId::new(id),
+        kind,
+        type_version: 1,
+        name: id.into(),
+        enabled: true,
+        bypass: false,
+        parameters: Default::default(),
+        ports: vec![
+            stereo("in", PortDirection::Input),
+            stereo("out", PortDirection::Output),
+        ],
+    };
+    let edge = |source: &str, destination: &str, matrix: Vec<f32>| Edge {
+        id: EntityId::new(format!("{source}->{destination}")),
+        source_node: EntityId::new(source),
+        source_port: "out".into(),
+        destination_node: EntityId::new(destination),
+        destination_port: "in".into(),
+        matrix,
+        enabled: true,
+    };
+    // Tone -> Mute -> Fun Voice Changer -> Meter opens no audio device, so the
+    // route starts through the ordinary API on this machine.
+    let route = Session {
+        id: EntityId::new("issue-149"),
+        name: "issue-149".into(),
+        schema_version: 1,
+        revision: 0,
+        nodes: vec![
+            test_signal("tone"),
+            tool("mute", NodeKind::Mute),
+            tool("voice", NodeKind::FunVoiceChanger),
+            meter("meter"),
+        ],
+        edges: vec![
+            edge("tone", "mute", vec![1.0, 0.0, 0.0, 1.0]),
+            edge("mute", "voice", vec![1.0, 0.0, 0.0, 1.0]),
+            edge("voice", "meter", vec![1.0, 0.0, 0.0, 1.0]),
+        ],
+    };
+    let mut plane = ControlPlane::default();
+    plane.insert_session(route.clone()).unwrap();
+    plane.session_start(&route.id).unwrap();
+
+    // The user's first autosave: Mute on and a voice preset chosen.
+    let mut first = route.clone();
+    first
+        .nodes
+        .iter_mut()
+        .find(|node| node.id.as_str() == "mute")
+        .unwrap()
+        .parameters
+        .insert("muted".into(), json!(true));
+    first
+        .nodes
+        .iter_mut()
+        .find(|node| node.id.as_str() == "voice")
+        .unwrap()
+        .parameters = voice_preset_parameters(&VOICE_PRESETS[2])
+        .into_iter()
+        .collect();
+    let plan = plane.plan_graph(&route.id, 0, first.clone()).unwrap();
+    let committed = plane.commit_graph(&plan, 0, "issue149-save-1").unwrap();
+    assert_eq!(committed["revision"], 1, "{committed}");
+    assert_eq!(classify_live_edit(&route, &first), LiveEdit::ParametersOnly);
+    assert!(classify_live_edit(&route, &first).retains_sources());
+
+    // A second edit arrived while that save was running. It is based on the
+    // revision the first save just wrote, so it must not hit a revision lock.
+    let mut second = first.clone();
+    second
+        .nodes
+        .iter_mut()
+        .find(|node| node.id.as_str() == "voice")
+        .unwrap()
+        .parameters
+        .insert("pitchSemitones".into(), json!(4.0));
+    let plan = plane.plan_graph(&route.id, 1, second.clone()).unwrap();
+    let committed = plane.commit_graph(&plan, 1, "issue149-save-2").unwrap();
+    assert_eq!(committed["revision"], 2, "{committed}");
+    assert_eq!(
+        classify_live_edit(&first, &second),
+        LiveEdit::ParametersOnly
+    );
+    assert!(first.id == second.id && first.edges == second.edges);
+
+    let saved = plane.get_session(&route.id).unwrap().clone();
+    let mute = saved
+        .nodes
+        .iter()
+        .find(|node| node.id.as_str() == "mute")
+        .unwrap();
+    assert_eq!(mute.parameters["muted"], json!(true));
+    let voice = saved
+        .nodes
+        .iter()
+        .find(|node| node.id.as_str() == "voice")
+        .unwrap();
+    assert_eq!(voice.parameters["pitchSemitones"], json!(4.0));
+    assert_eq!(saved.revision, 2);
+}
+
+fn test_signal(id: &str) -> Node {
+    Node {
+        id: EntityId::new(id),
+        kind: NodeKind::TestSignal,
+        type_version: 1,
+        name: id.into(),
+        enabled: true,
+        bypass: false,
+        parameters: Default::default(),
+        ports: vec![Port {
+            name: "out".into(),
+            direction: PortDirection::Output,
+            channels: 2,
+        }],
+    }
+}
+
+fn meter(id: &str) -> Node {
+    Node {
+        id: EntityId::new(id),
+        kind: NodeKind::Meter,
+        type_version: 1,
+        name: id.into(),
+        enabled: true,
+        bypass: false,
+        parameters: Default::default(),
+        ports: vec![Port {
+            name: "in".into(),
+            direction: PortDirection::Input,
+            channels: 2,
+        }],
+    }
+}
+
 #[test]
 fn only_a_layout_change_may_restart_the_live_route() {
     // A changed path layout needs Stop/Play; the old graph is intact.
