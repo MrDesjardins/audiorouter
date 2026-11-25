@@ -150,6 +150,23 @@ runs passed; the combined 0.0.30 candidate passed twice. A Test Signal is silent
 until played, so the recorder case plays it before recording.
 See the [VM attempt record](../plans/active/evidence/2026-11-18-installer-process.md).
 
+The four host-side lifecycle regressions also run in the `release-tests` check,
+so a change under `tests/acceptance/m08-` or `tools/vm/installer-lifecycle*` is
+covered on Windows without a VM:
+
+```powershell
+node tools/quality/verify.mjs --checks release-tests
+```
+
+Cold-boot sign-in needs a baseline whose Winlogon default user is the test
+account. On 2026-11-24 a baseline left `DefaultUserName=artest` with an expired
+password, so the wrapper's wake-and-password sequence typed into `artest` and
+could not sign in; prepare the baseline with the standard test user as the last
+signed-in default (an administrator action at the console), or sign in manually
+and run `installer-lifecycle.ps1` instead of the unattended wrapper.
+`-InjectGuestControlTimeout` now records `timeoutMarkerReached` in `result.json`
+and fails with a marker-specific message when the marker is absent.
+
 ## Current qualification snapshot
 
 The 2026-09-17 refresh is the authoritative current status: M05 passes

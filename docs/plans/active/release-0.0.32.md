@@ -206,3 +206,32 @@ tag and rebuild/verify tagged artifacts for the draft; final publication is
 a separate human action. Publication, release tags and release-asset uploads
 remain unperformed. Current-candidate installer lifecycle,
 Defender, signing, live audio/plugin and broader M08 gates remain open.
+
+## 2026-11-24 - merged, lifecycle on the consolidated bytes, no tag
+
+Verified state (read-only): PR #181 is **merged** at
+`0fb41911bbbc850bc14e26dbcfde1ff72edd0b08` (2026-11-23T20:51:53Z); `main`
+contains the 0.0.32 version/notes work after that merge. GitHub has no
+`v0.0.32` tag and no 0.0.32 release (latest release is v0.0.31). The "verify and
+push" next action above is therefore historical.
+
+Installer lifecycle on the consolidated candidate (**these bytes only**):
+`AudioRouter_0.0.32_x64-setup.exe`, 24,472,180 bytes, SHA-256
+`50bcdfc1...ceed`, source `0af71ca71`, on the disposable release guest as a
+standard user. Every lifecycle step passed (fresh install 6.8 s, production
+recording, same-version repair, rollback to 0.0.29, upgrade, uninstall,
+reinstall); the 440 Hz stereo 48 kHz recording was retained with SHA-256
+`8592C312...E011`. Record:
+[0.0.32 release qualification](evidence/2026-11-24-release-qualification-0.0.32.md).
+Two deviations: the previous fixture was 0.0.29 because host Defender blocks
+reads of the v0.0.31 installer, and offline operation was only partial (CLI,
+schema, session read, discovery and MCP stdio passed offline; the window-based
+generated-recording restart failed after reinstall and is an open finding).
+
+Still open for 0.0.32, all human-gated or unreleased-bytes work: interactive
+first-run and downloaded-file trust, real endpoint guidance, missing-WebView2 on
+a fresh baseline, a second Windows build, a clean Defender verdict, and the
+signed-artifact route. A tag, draft or publication is **not** authorized by this
+plan and was not created. After a reviewed tag exists, rebuild with
+`-ReleaseTag v0.0.32`, verify the tagged artifacts, and repeat the lifecycle on
+those bytes; this run does not transfer to rebuilt or tagged bytes.

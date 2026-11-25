@@ -418,3 +418,46 @@ install without an "unknown publisher" warning:
   published version in place.
 - **Script changes** are additive (`-Sign`); the unsigned path stays
   available and tested.
+
+## 2026-11-24 status: no credential, tooling unchanged
+
+Checked read-only; nothing was bought, enrolled or submitted anew.
+
+- The latest GitHub release is still **v0.0.31** (pre-release). The Microsoft
+  false-positive submission `eb70e424-324e-430b-a096-6e05574d16bb` has **no
+  verdict** yet. Defender on this host still blocks reads of the retained
+  v0.0.31 installer (threat `2147927549`, detected 2026-11-24 even though the
+  published digest and the local `SHA256SUMS.txt` agree). Signing, or a
+  Microsoft false-positive verdict, is the route that changes the detection
+  outcome.
+- No certificate, enrollment or provider account exists. `prepare-artifacts.ps1`
+  has **no `-Sign` switch** and builds with `--no-sign`; `verify-artifacts.ps1`
+  still throws when `signed` is not false (line 56), and
+  `test-verify-artifacts.ps1` has no signed cases. Tasks 1–8 above are
+  unimplemented, as this plan already states.
+- The app release track is independent of a tag: 0.0.32 is merged on `main` but
+  untagged, and the merged installer has only unsigned lifecycle evidence
+  ([record](evidence/2026-11-24-release-qualification-0.0.32.md)). Signing it or
+  publishing anything is not authorized by that result.
+
+Human decisions that unblock agent work, in order:
+
+1. **Purchase and identity route** (owner): SSL.com Sole Proprietor EV under the
+   driver pre-purchase gate, or a registered business EV; confirm Hardware Dev
+   Center access. No purchase, enrollment or identity document is part of this
+   plan's agent scope.
+2. **Key storage and CI**: choose the cloud signer or token with the
+   certificate. The key is not exportable, so the choice fixes whether signing
+   runs locally or on a trusted runner.
+3. **Microsoft verdict category** (owner): the submission was filed under the
+   PUA category by form error. If the reply treats it as the wrong category, file
+   a correction referring to the ID. Do not resubmit meanwhile.
+4. **Whether to sign 0.0.32 or wait for the EV certificate**: an interim
+   Artifact Signing enrollment signs the app/installer only and would be dropped
+   once the EV certificate exists.
+
+Once a credential exists, tasks 1–3 (hand-sign a throwaway CLI copy, add
+`-Sign`, teach the verifier and its regression cases) are agent-doable and must
+be exercised with real signed bytes before tasks 4–9. Until then this plan's
+remaining work is the owner decision above, and the plan can be archived with
+that gate moved to `docs/plans/active/human-gated-tasks.md`.

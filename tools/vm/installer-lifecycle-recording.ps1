@@ -33,7 +33,7 @@ function Complete-QualificationCleanup([scriptblock[]]$Actions, $PrimaryError) {
     if ($first -and -not $PrimaryError) { throw $first }
 }
 
-function New-QualificationRecording([string]$Shell, [string]$Root, [switch]$ProbeOnly) {
+function New-QualificationRecording([string]$Shell, [string]$Root, [switch]$ProbeOnly, [bool]$ExpectDeviceAccess = $false) {
     $profile = Join-Path $Root 'webview'
     $oldProfile = $env:WEBVIEW2_USER_DATA_FOLDER
     $oldArguments = $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
@@ -89,12 +89,14 @@ function New-QualificationRecording([string]$Shell, [string]$Root, [switch]$Prob
         if ($description.protocolVersion.major -ne 1) { throw 'Installed shell returned an unexpected protocol version' }
         if ($ProbeOnly) { return 'usable' }
         $access = DesktopRpc 'devices.getAccess' @{}
-        if ($access.allowed -ne $false) { throw 'Fresh shell unexpectedly grants audio device access' }
-        # The window asks once before Play opens devices. Give that consent through
-        # the same window-only method the dialog calls, then confirm it stuck.
-        $null = DesktopRpc 'devices.setAccess' @{ allowed = $true; idempotencyKey = 'qualification-device-consent' }
-        $granted = DesktopRpc 'devices.getAccess' @{}
-        if ($granted.allowed -ne $true) { throw 'Window consent did not enable device access' }
+        if ($access.allowed -ne $ExpectDeviceAccess) { throw "Installed shell device access was $($access.allowed), expected $ExpectDeviceAccess" }
+        if (-not $ExpectDeviceAccess) {
+            # The window asks once before Play opens devices. Give that consent through
+            # the same window-only method the dialog calls, then confirm it stuck.
+            $null = DesktopRpc 'devices.setAccess' @{ allowed = $true; idempotencyKey = 'qualification-device-consent' }
+            $granted = DesktopRpc 'devices.getAccess' @{}
+            if ($granted.allowed -ne $true) { throw 'Window consent did not enable device access' }
+        }
         $summary = DesktopRpc 'sessions.summary' @{ sessionId = 'qualification-recorder' }
         if ($summary.playing -ne $false) { throw 'Recorder session did not start stopped' }
         $recordings = Join-Path $Root 'recordings'

@@ -13,7 +13,10 @@ supersedes every 0.0.30 candidate, and is the frozen candidate for RQ-01–06.
 Open: the downloaded-file unsigned-publisher prompt, offline installed operation,
 the v0.0.30 rollback fixture (host Defender detection), a second Windows build,
 and the Defender verdict (Microsoft submission pending; signing decision in
-[release signing](release-signing-and-publication.md)).
+[release signing](release-signing-and-publication.md)). **Superseded in part on
+2026-11-24:** see [the 0.0.32 run and the requirement map](#2026-11-24---0032-bytes-remaining-gates-and-requirement-map).
+RQ-03's guest refusals passed on 2026-11-21; the older "synthetic only" sentence
+below is historical.
 
 ## Objective and boundary
 
@@ -260,6 +263,13 @@ Restore the guest NAT link on every exit and report cleanup failures separately.
 Never overwrite retained user data to make downgrade work. Worktree cleanup uses
 the repository-mandated cleanup script only.
 
+Coordination carried from the delegation brief: the owner of this plan owns
+`tools/vm/installer-lifecycle*.ps1`, the release evidence and the qualification
+runbook. Coordinate shared release/build-script changes with the VST track,
+qualify a rebuilt installer again because earlier artifact results do not
+transfer, and serialize heavyweight builds and VM runs. Imported historical
+results stay attached to the bytes and environments recorded with them.
+
 **Next execution action:** inventory retained candidate/manifests and raw reports,
 reconcile the intended release source with the VST handoff, and record the exact
 candidate plus present/absent snapshot UUIDs. Then run the remaining interactive
@@ -269,7 +279,8 @@ the qualified combined candidate. No VM is restored during plan preparation.
 ### Harness repair: startup-failure diagnostic (2026-11-24)
 
 Branch `fix/packaged-shell-windows-snapshot`, from `origin/main` `53e1de80e`.
-Local only; no commit, push, PR or VM run.
+Committed on `main` as `d13fb56a2` (2026-11-24), including the test and the
+`policy` wiring below; no push or PR was made by the agent.
 
 `tools/quality/packaged-shell-smoke.mjs` called `windows("Snapshot", …)` in the
 baseline startup-failure path but never defined or imported `windows`. A shell
@@ -296,3 +307,129 @@ holds the default control pipe and the plan keeps the shell off limits, and
 hosted CI. The end-to-end baseline startup-failure case remains to be exercised
 on the frozen candidate in a disposable guest before RQ-02/RQ-03 are re-cited
 against this harness revision.
+
+## 2026-11-24 - 0.0.32 bytes, remaining gates and requirement map
+
+The owner allowed VM use for this session (four guest CPUs, minimal Defender
+exclusions, restore the baseline afterwards). Full record:
+[the 0.0.32 run](evidence/2026-11-24-release-qualification-0.0.32.md). No push,
+PR, tag, draft or publication was performed.
+
+### Measured results
+
+- **RQ-04 on 0.0.32 (passed, these bytes only).** `installer-lifecycle.ps1
+  -ProductionRecording -WebViewBaseline Present` on
+  `AR-ReleaseQualification-20261116` (`lifecycle-offline-20261118`, `arqual4`,
+  4 CPUs) with candidate `0.0.32` SHA-256 `50bcdfc1...ceed` (source
+  `0af71ca71`) and previous `0.0.29` `f2c43d11...09d8`. Every step passed
+  (fresh install 6.8 s, repair, rollback, upgrade, uninstall, reinstall); a
+  440 Hz stereo 48 kHz production recording, RMS 0.0890, SHA-256
+  `8592C312...E011`, was retained through every transition. Evidence
+  `%TEMP%\ar-rq-20261124-lifecycle-ba393b5eed604d3d9521426a8ebd2de3`. This does
+  not transfer to a tagged or rebuilt 0.0.32, and the published v0.0.31
+  lifecycle keeps its 2026-11-21 result.
+- **Deviation: previous is 0.0.29, not 0.0.31.** Host Defender blocks reads of
+  the retained v0.0.31 installer (threat `2147927549`, 2026-11-24); its
+  published digest still matches. No exclusion was added (elevation was not
+  worked around), so rollback used the same 0.0.29 fixture as the v0.0.31 runs.
+- **RQ-02 timeout logic (passed, manual method).** The wrapper's cold-boot
+  sign-in fails on this baseline: Winlogon `DefaultUserName` is `artest` with an
+  expired password, so the password goes to `artest`. A wrapper attempt is
+  recorded as a console-sign-in failure, not as a passing case
+  (`%TEMP%\ar-rq-20261124-timeout-f8616933...`, graceful shutdown passed). With
+  `arqual4` signed in manually, the harness's own bounded runner cut the hung
+  guest command at 12.0 s, reached the `AR_QUAL_TIMEOUT_REACHED` marker and left
+  no `VBoxManage` process (`%TEMP%\ar-rq-20261124-timeout-manual-d55e9790...`).
+- **RQ-03 guest refusals are already real-guest evidence (2026-11-21).** The
+  "synthetic only" statement in *Established evidence* is historical: existing
+  staging, existing app directory, administrator account and the host's
+  signed-in check each refused with unchanged target state
+  ([v0.0.31 record, RQ-03](evidence/2026-11-19-release-qualification-v0.0.31.md#rq-03-real-guest-refusal-cases-passed-2026-11-21)).
+  The guest-side registry-hive assertion stays synthetic.
+- **RQ-05 offline operation (partial).** With the guest NAT link off: no DNS or
+  TCP, all six installed executables at 0.0.32, CLI `status`/`schema`/`session
+  list`/`session get`, `system.describe`, and MCP stdio `server/discover`
+  (protocol `2026-07-28`) all passed; no shell auto-started; the guest has no
+  audio endpoints, so default-device/volume checks are not claimed. The
+  generated-recording step **failed**: `sessions.play` returned running while
+  `sessions.summary` reported `playing: false` and `audioSources.transport`
+  refused, and it reproduced with the network back on. This is an open finding
+  (post-reinstall direct-RPC restart of the retained recorder route), not a
+  product verdict; no product code changed. Evidence
+  `%TEMP%\ar-rq-20261124-offline-85c928db....json`.
+
+### Harness changes in this session
+
+- `tests/acceptance/m08-lifecycle-unattended-guards.ps1` (new) covers the
+  wrapper's preflight refusals (UUIDs, driver VM, username, versions, offline-retry
+  combination, existing/missing evidence directory) and asserts the result
+  records `timeoutMarkerReached`. Before it, no host test touched the wrapper.
+- `installer-lifecycle-unattended.ps1` now records `timeoutMarkerReached` in
+  `result.json` and names a missing marker in the failure, so RQ-02 cannot read
+  as a clean timeout without a reached marker.
+- `installer-lifecycle-recording.ps1` accepts `-ExpectDeviceAccess` so an
+  already-consented installed shell can be recorded; the fresh-install default
+  is unchanged.
+- All four lifecycle host scripts are wired into the `release-tests` check
+  (`tools/quality/checks.mjs`), so they run on every release-area change and in
+  `--release` full runs. `m08-lifecycle-recording.ps1` also guards the new
+  consent switch.
+- Checks: `node tools/quality/verify.mjs --checks release-tests` passed all
+  eight scripts (28.2 s); `node tools/docs/validate.mjs` passed (303 files,
+  1,695 links); `git diff --check` clean. Not run: hosted CI, a real wrapper
+  cold-boot pass.
+
+### Requirement-to-evidence map
+
+Statuses are for the named bytes; "partial" names the missing scenario.
+
+| Requirement | Status | Evidence and exact gap |
+| --- | --- | --- |
+| DIST-01 per-user install | **Pass** | 2026-11-24 0.0.32 fresh install as `arqual4` (standard user, no elevation) and 2026-11-21 v0.0.31 runs; registration and six installed executables checked. |
+| DIST-02 state preservation | **Pass with finding** | Session and recording hash retained through repair, rollback, upgrade, uninstall and reinstall on 0.0.32. Finding: the retained recorder route did not restart through direct RPC after reinstall (see RQ-05); retention itself is proven. |
+| DIST-03 first-run guidance | **Partial** | v0.0.31 chooser, `NO DEVICE` cards, no substitution and consent prompt observed 2026-11-21 (guest + isolated host run). Missing: endpoint vendor guidance with a real endpoint on these bytes, and a 0.0.32 interactive pass. |
+| DIST-04 offline operation | **Partial** | 2026-11-24 CLI/MCP/discovery/session offline pass on 0.0.32. Missing: offline generated recording (harness finding above) and offline editing through the window. |
+| DIST-05 manual publication | **Pass as tooling review** | `tools/release/test-runbook-command.ps1` and the release scripts pass; no draft/tag/release was created. Publication remains a human action. |
+| DIST-06 provenance/assets | **Pass for v0.0.31; open for 0.0.32** | v0.0.31 assets, digest `b94e5276...3a92`, manifest, checksums, SBOMs and notices verified. The 0.0.32 consolidated manifest exists but there is no tag and no rebuild from a tag. |
+| DIST-07 unsigned disclosure | **Partial** | Manifest and 0.0.31 notes state unsigned. The downloaded-file unsigned-publisher prompt has not been observed; v0.0.31 is quarantined by Defender. |
+| DIST-08 install qualification | **Partial** | Lifecycle on v0.0.31 (four passes, exclusion deviation) and 0.0.32 (one pass). Missing: interactive first run on 0.0.32, missing-WebView2 baseline on the fresh guest, a second supported Windows build, clean Defender for v0.0.31. |
+| NFR-16 standard-user operations | **Pass** | Install, repair, rollback, upgrade, uninstall and reinstall as a standard user; administrator and unloaded-hive states refused. |
+| NFR-15 offline core | **Partial** | CLI, schema, retained session read, local discovery and MCP stdio work offline; the window-based recording path is open as above. |
+| ENG-05 release engineering | **Pass for v0.0.31** | Verified manifest, version/architecture/source agreement and artifact checks; 0.0.32 awaits a tag rebuild. |
+| M08 | **Open** | Plugins/editors, real endpoint continuity and latency, endurance, security evidence, accessibility/Narrator, participant study, reference hardware, a second Windows build and signing stay separate. DEC-17 permits unsigned app bytes. |
+
+### Remaining open checks (moved to the owner list)
+
+These need a person, hardware, a purchase or an owner decision; the manager
+collects them in `docs/plans/active/human-gated-tasks.md`. Agent-doable work in
+this plan is finished.
+
+1. **Downloaded-file unsigned-publisher prompt and first-run trust on 0.0.32**
+   (DIST-07, RQ-05): requires a person at a GUI console and a file downloaded
+   with Mark-of-the-Web; the copied-file run says nothing about it.
+2. **Fresh guest credential or interactive sign-in** (RQ-02/RQ-04 wrapper
+   rerun): `AR-ReleaseQualification-Fresh-20261121`'s standard-user password is
+   not on the host, so its console cannot be signed in.
+3. **Wrapper cold-boot sign-in on the older baseline**: Winlogon default is
+   `artest` with an expired password; preparing a baseline whose default user is
+   the test account needs an administrator at the console.
+4. **Offline generated recording through the window** (DIST-04): after reinstall,
+   the direct-RPC recorder restart fails; press Play in the installed window
+   (or fix the harness preparation) and record offline.
+5. **Endpoint states with real endpoints** (DIST-03): physical-only and existing
+   virtual-endpoint guidance, default devices and volumes unchanged.
+6. **Missing-WebView2 bootstrap on the fresh guest** (RQ-05): needs the guest
+   administrator password and a runtime-absent baseline.
+7. **A second supported Windows build and the reference PC/laptop pass** (M08,
+   DIST-08).
+8. **Defender verdict for v0.0.31 and the signing decision** (DIST-07, M08):
+   Microsoft submission `eb70e424-...` pending; see
+   [release signing](release-signing-and-publication.md).
+
+**Rollback for this session:** the guests are powered off and restored; the new
+snapshots `pre-agent-rq-20261124` were kept, and no existing snapshot, VM,
+exclusion or owner data was changed. Code rollback is reverting the harness
+commit.
+
+**Next action:** the manager archives this plan once the human-gated list exists.
+The agent-side lifecycle and harness work is complete for the 0.0.32 bytes.

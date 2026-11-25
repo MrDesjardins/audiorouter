@@ -312,3 +312,32 @@ endurance, accessibility and signing gates are untouched.
 
 Next action: have a person observe one interactive install in the
 absent-runtime baseline (GUI VirtualBox), then review the diff.
+
+## Supersession (2026-11-24)
+
+This brief is **superseded by
+[the app-only release qualification plan](release-qualification.md)** and its
+execution evidence. Do not use the checklists above as current status; several
+of them predate the 2026-11-21 runs (RQ-03's guest refusals now have real-guest
+evidence) and the 0.0.32 lifecycle, and the brief is replaced when the manager
+archives the plans.
+
+Everything unique to this brief was carried over before archiving:
+
+- ownership of `tools/vm/installer-lifecycle*.ps1`, the evidence and the runbook,
+  VST-track coordination, rebuild invalidation and serialized heavy runs: now in
+  the execution plan's *Risks, recovery and exact next action* section;
+- RQ-01–06 acceptance criteria, environments and gaps: the execution plan and
+  [the 0.0.31](evidence/2026-11-19-release-qualification-v0.0.31.md) and
+  [0.0.32](evidence/2026-11-24-release-qualification-0.0.32.md) records;
+- historical VM/attempt identities (`AR-ReleaseQualification-20261116`,
+  `lifecycle-ready-20261116`, attempt IDs, 0.0.29/0.0.30 hashes): kept in those
+  evidence records and the execution plan's inventory;
+- the ordered work packages: replaced by RQ-01–06 in the execution plan, which
+  are now measured except for the human-gated checks listed there.
+
+Remaining human-gated checks (interactive trust, fresh-guest credential,
+absent-WebView2 on a prepared baseline, real endpoints, a second Windows build,
+Defender verdict/signing) are listed in the execution plan and are collected in
+`docs/plans/active/human-gated-tasks.md`. No new work is authorized by this
+brief.

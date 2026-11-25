@@ -28,7 +28,7 @@ function Invoke-VBox([string]$Name, [string[]]$Arguments, [switch]$AllowNonzero)
 $output = [IO.Path]::GetFullPath($OutputDirectory)
 if ((Test-Path -LiteralPath $output) -or -not (Test-Path -LiteralPath (Split-Path -Parent $output) -PathType Container)) { throw 'Evidence directory must be new and have an existing parent' }
 New-Item -ItemType Directory -Path $output | Out-Null
-$result = [ordered]@{ status = 'failed'; vmId = $VmId; snapshotId = $SnapshotId; username = $Username; steps = [Collections.Generic.List[object]]::new(); error = $null }
+$result = [ordered]@{ status = 'failed'; vmId = $VmId; snapshotId = $SnapshotId; username = $Username; timeoutMarkerReached = $null; steps = [Collections.Generic.List[object]]::new(); error = $null }
 $started = $false
 try {
     if (-not $RestoreDisposableSnapshot) { throw 'Explicit disposable snapshot restore acknowledgement is required' }
@@ -112,8 +112,10 @@ try {
             try {
                 $verify = $probeBase + ('type {0}' -f $marker)
                 $markerOutput = @(Invoke-LifecycleProcess $vbox 'verify-timeout-marker' $verify $output 10 -OutputFilter '^AR_QUAL_TIMEOUT_REACHED\s*$')
-                $result.steps.Add(@{ name = 'timeout-marker'; reached = (($markerOutput | Out-String) -match '(?m)^AR_QUAL_TIMEOUT_REACHED\s*$') })
+                $result.timeoutMarkerReached = (($markerOutput | Out-String) -match '(?m)^AR_QUAL_TIMEOUT_REACHED\s*$')
+                $result.steps.Add(@{ name = 'timeout-marker'; reached = $result.timeoutMarkerReached })
             } catch {
+                $result.timeoutMarkerReached = $false
                 $result.steps.Add(@{ name = 'timeout-marker'; reached = $false; error = $_.Exception.Message })
             }
         }
@@ -130,7 +132,14 @@ try {
     $null = Invoke-LifecycleProcess (Join-Path $PSHOME 'powershell.exe') 'lifecycle' $arguments $output $runnerTimeout -SuppressOutput -KillTree
     $result.steps.Add(@{ name = 'lifecycle'; status = 'passed' })
     $result.status = 'passed'
-} catch { $result.error = $_.Exception.Message }
+} catch {
+    $result.error = $_.Exception.Message
+    # RQ-02 requires a reached marker, not only a bounded timeout. The injected
+    # run fails by design; say which half failed instead of leaving it in steps.
+    if ($InjectGuestControlTimeout -and $result.timeoutMarkerReached -eq $false) {
+        $result.error = "Guest timeout marker was not verified: $($result.error)"
+    }
+}
 finally {
     try {
       if ($started) {

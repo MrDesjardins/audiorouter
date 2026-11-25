@@ -2,6 +2,9 @@
 const npm = (directory, ...args) => ({ executable: 'npm', args: ['--prefix', directory, ...args] });
 const cargo = (...args) => ({ executable: 'cargo', args, windows: true });
 const ps = script => ({ executable: 'powershell', args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script], windows: true });
+// The VM lifecycle harness has no VM-free other coverage; run its host guards
+// with the release tooling whenever release-area files change.
+const lifecycle = ['process', 'guards', 'recording', 'unattended-guards'].map(name => ps(`tests/acceptance/m08-lifecycle-${name}.ps1`));
 export const checks = {
   docs: [{ executable: 'node', args: ['tools/docs/validate.mjs'] }],
   site: [{ executable: 'node', args: ['site/generate-social.mjs', '--check', '--check-changed'] }, { executable: 'node', args: ['site/check-guides.mjs'] }, { executable: 'node', args: ['site/generate-csp.mjs', '--check'] }, { executable: 'node', args: ['--test', 'site/generate-csp.test.mjs', 'site/guide-recordings.test.mjs', 'tools/site/tool-guide-guards.test.mjs'] }],
@@ -27,7 +30,7 @@ export const checks = {
   'probe-build': [cargo('check', '--manifest-path', 'tools/m00-wasapi-probe/Cargo.toml', '--locked'), ps('tests/acceptance/m00-native-build.ps1')],
   'cli-parity': [{ ...ps('tests/acceptance/m01-cli.ps1'), args: [...ps('tests/acceptance/m01-cli.ps1').args, '-AllowNoAudioEndpoints'] }],
   'sdk-provenance': [ps('tests/acceptance/m06-sdk-installer.ps1')],
-  'release-tests': ['prepare-artifacts', 'verify-artifacts', 'runbook-command', 'app-only-release'].map(name => ps(`tools/release/test-${name}.ps1`)),
+  'release-tests': ['prepare-artifacts', 'verify-artifacts', 'runbook-command', 'app-only-release'].map(name => ps(`tools/release/test-${name}.ps1`)).concat(lifecycle),
   'release-build': [{ ...ps('tests/acceptance/m08-release.ps1'), args: [...ps('tests/acceptance/m08-release.ps1').args, '-AppOnly'] }],
   'cargo-deny': [{ ...cargo('deny', '--manifest-path', 'Cargo.toml', 'check', 'advisories', 'licenses', 'sources', 'bans'), windows: false }, { ...cargo('deny', '--manifest-path', 'src-tauri/Cargo.toml', 'check', 'advisories', 'licenses', 'sources', 'bans'), windows: false }],
   'npm-audit': ['ui', 'contracts', 'tools/streamdeck'].map(dir => npm(dir, 'audit', '--omit=dev', '--audit-level=high')),
