@@ -2,8 +2,8 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import type { DiscoveryDocument, Node } from "@audiorouter/contracts";
-import { ProcessorParameterEditor } from "./NodeEditors";
+import type { DiagnosticsSnapshot, DiscoveryDocument, Node } from "@audiorouter/contracts";
+import { NodeTelemetryPanel, ProcessorParameterEditor } from "./NodeEditors";
 
 afterEach(cleanup);
 
@@ -31,6 +31,20 @@ const nodeType = (
 
 // The catalog now describes device and source settings for API and MCP
 // clients; the Properties panel keeps its dedicated fields for them.
+it("does not read the English audio reason to label a running tool busy", () => {
+  // "in use" in the backend sentence used to choose the Device busy pill; the
+  // status is a structured fact, so live readings decide it instead.
+  const snapshot = {
+    audio: { state: "available", reason: "audio endpoint is in use by another application" },
+    applicationCaptureStates: [],
+    nodeTelemetry: [{ nodeId: "gain-1", meter: { currentPeakDb: -12, peakDb: -10, rmsDb: -18, clippedSamples: 0 } }],
+  } as unknown as DiagnosticsSnapshot;
+  const { container } = render(<NodeTelemetryPanel node={node("gain")} snapshot={snapshot} running />);
+  const status = container.querySelector(".node-telemetry-status");
+  expect(status?.textContent).toContain("Live");
+  expect(status?.textContent).not.toContain("Device busy");
+});
+
 describe("generic settings editor", () => {
   it("gives boolean properties a stable name and an explicit state description", () => {
     const props = {
