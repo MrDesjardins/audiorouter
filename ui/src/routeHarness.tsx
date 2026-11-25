@@ -11,8 +11,10 @@ import type {
   Session,
   DiscoveryDocument,
   DiagnosticsSnapshot,
+  ObsStatus,
   PluginScanResult,
   SetupCheckResult,
+  StateEvent,
   VirtualCableStatus,
 } from "@audiorouter/contracts";
 import "./styles.css";
@@ -37,6 +39,10 @@ const injected = globalThis as {
   __routeFixtureVirtualCableStatus?: VirtualCableStatus;
   __routeFixtureCableCalls?: CableManagementRequest[];
   __routeFixtureDelayMs?: number;
+  /** One-shot workspace event batches, each sent by the next `events.subscribe` poll. */
+  __routeFixtureWorkspaceEvents?: Array<
+    Array<Pick<StateEvent, "category"> & Partial<Pick<StateEvent, "sessionId" | "operationId">>>
+  >;
   /** Delay/reject a save without delaying initial route loading. */
   __routeFixtureCommitDelayMs?: number;
   __routeFixtureCommitError?: string;
@@ -59,6 +65,8 @@ const injected = globalThis as {
   __routeFixtureDevices?: DeviceListItem[];
   __routeFixtureDeviceAccessReadError?: boolean;
   __routeFixtureDeviceAccessWriteError?: "reject" | "lost";
+  /** `obs.status` answer for the Apps card; mutate it to simulate an OBS change. */
+  __routeFixtureObsStatus?: ObsStatus;
   __routeFixtureSoundboardStatus?: Awaited<ReturnType<NonNullable<UiBackend["soundboardStatus"]>>>;
   /** `soundLibrary.list` answer; library previews return a tiny silent WAV. */
   __routeFixtureSoundLibrary?: Awaited<ReturnType<NonNullable<UiBackend["soundLibraryList"]>>>;
@@ -245,6 +253,51 @@ function silentWavBase64(): string {
 const previewBackend: UiBackend = {
   ...fixtureBackend,
   connected: true,
+  ...(injected.__routeFixtureObsStatus
+    ? {
+        async obsStatus() {
+          return structuredClone(injected.__routeFixtureObsStatus!);
+        },
+        async obsRefresh() {
+          return { queued: true as const };
+        },
+        async obsConnect() {
+          return { connection: "connecting" as const };
+        },
+        async obsDisconnect() {
+          return { connection: "off" as const };
+        },
+        async obsPreview(changes) {
+          const inputs = injected.__routeFixtureObsStatus!.inputs;
+          return {
+            previewId: "fixture-preview",
+            expiresInSeconds: 300,
+            changes: changes.map((change) => {
+              const source = inputs.find((input) => input.name === change.inputName);
+              return "deviceId" in change
+                ? {
+                    inputName: change.inputName,
+                    field: "device" as const,
+                    before: source?.deviceId ?? "",
+                    after: change.deviceId,
+                  }
+                : {
+                    inputName: change.inputName,
+                    field: "muted" as const,
+                    before: source?.muted ?? false,
+                    after: change.muted,
+                  };
+            }),
+          };
+        },
+        async obsApply() {
+          return { state: "applying" as const, changes: 1 };
+        },
+        async obsRestore() {
+          return { state: "restoring" as const };
+        },
+      }
+    : {}),
   ...(injected.__routeFixtureVirtualCableStatus
     ? {
         async getVirtualCableStatus() {
@@ -435,7 +488,17 @@ const previewBackend: UiBackend = {
     // One-shot: makes the next event poll reload the snapshot, as a backend event would.
     const forced = injected.__routeFixtureForceResync === true;
     injected.__routeFixtureForceResync = false;
-    return { backendEpoch: 1, events: [], nextSequence: sequence, resyncRequired: forced || afterSequence < sequence };
+    const queued = injected.__routeFixtureWorkspaceEvents?.shift() ?? [];
+    const events: StateEvent[] = queued.map((event, index) => ({
+      sequence: sequence + index + 1,
+      backendEpoch: 1,
+      resourceRevision: 0,
+      operationId: event.operationId ?? null,
+      category: event.category,
+      sessionId: event.sessionId ?? null,
+    }));
+    sequence += events.length;
+    return { backendEpoch: 1, events, nextSequence: sequence, resyncRequired: forced || afterSequence < sequence };
   },
   // A fresh install: opening devices is refused until the user consents.
   async getDeviceAccess() {
