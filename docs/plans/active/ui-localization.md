@@ -892,14 +892,49 @@ website guide videos (no tool control changed; only catalog wording and the
 plugin guide link's accessible name). Rollback: revert the four commits on the
 branch and regenerate the catalog outputs.
 
-Still open after this pass (agent-doable unless noted): structured backend
-error codes/scopes so `isDeviceAccessDenied` in `DeviceAccess.tsx`,
-`App.tsx`'s "session to be stopped" retry decision and `NodeEditors.tsx`'s
-"in use"/"owned" status decision stop reading English prose (AUTO-18 contract
-change); the native standalone-instance/recovery TaskDialog text is still
-English; backend-seeded plugin/preset descriptions remain English. Human-only:
-fluent review, packaged shell/tray, Narrator, Windows 150/200% scaling, live
-audio continuity. See the final handback for the human-gate list.
+### 2026-11-24 — Structured codes for the consent and stopped-session decisions
+
+Requirements: L10N-06 (no behaviour from English prose), AUTO-18 (contracts,
+REST/MCP defaults, dispatcher tests). Branch `plans/ui-localization`; local
+commits only.
+
+- `ApplicationErrorData` (`contracts/src/index.ts`) gains an optional
+  `permissionScope`, and `PermissionScope` gains the missing `pluginScan`.
+  `crates/control/src/lib.rs` adds `permission_denied_data(scope)`, used at all
+  four `permissionDenied` sites (the method's own scope, the window-only
+  network-location refusal and self-revoke refusal with device administration,
+  and the GraphWrite preview refusal). The value serializes camelCase, e.g.
+  `deviceAdministration`.
+- `ControlError::SessionNotStopped` replaces the graph commit's
+  `InvalidRequest("this graph commit requires its session to be stopped")`. It
+  keeps JSON-RPC `-32602` (as before) and adds `error.data.code`
+  `sessionNotStopped` with `application_error_data` remediation.
+- `isDeviceAccessDenied` (`DeviceAccess.tsx`) now tests
+  `error.data.permissionScope === "deviceAdministration"`; `App.tsx` uses a new
+  `isSessionNotStopped(error)` in `backend.ts`. Neither reads `error.message`
+  any more. Regressions: `DeviceAccessDialog.test.tsx` proves a plain English
+  message no longer counts as consent denial, `backend.test.ts` proves the
+  stopped-session test is structured, `authorization_tests.rs` checks the scope
+  value through `dispatch_authorized`, and `graph_tests.rs` checks the code.
+
+Checks (Windows 11, 2026-11-24): `cargo test -p audiorouter-control` 510 passed,
+29 ignored; `cargo clippy -p audiorouter-control --all-targets
+--all-features -- -D warnings` pass; both `cargo fmt --check` runs pass;
+`npm --prefix contracts run check:drift` (156 methods, 38 node kinds, 20
+processors, 24 event categories) pass; UI `typecheck:all`, `lint` (0 warnings),
+`format:check`, `npm test` 137 files/1,200 tests pass;
+`node tools/docs/validate.mjs` 306 files/1,698 links pass; `git diff --check`
+pass. Not run: workspace-wide Clippy (only the control crate changed), the
+packaged shell, Narrator, fluent review, live audio.
+
+Still open after this pass: `NodeEditors.tsx` still derives its "Device busy"
+hint from the English `snapshot.audio.reason`; the audio status has no
+device-busy code, so that is a further contract change (and the branch may be
+dead with current backend reasons). The native standalone-instance/recovery
+TaskDialog text is still English; backend-seeded plugin/preset descriptions
+remain English. Human-only: fluent review, packaged shell/tray, Narrator,
+Windows 150/200% scaling, live audio continuity. See the final handback for the
+human-gate list.
 
 ## References
 
