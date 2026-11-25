@@ -927,6 +927,13 @@ processors, 24 event categories) pass; UI `typecheck:all`, `lint` (0 warnings),
 pass. Not run: workspace-wide Clippy (only the control crate changed), the
 packaged shell, Narrator, fluent review, live audio.
 
+The L10N-08 contributor workflow is documented in
+[operations/ui-localization.md](../../operations/ui-localization.md) and linked
+from `docs/README.md`: file layout, adding a language, plural categories,
+placeholder and glossary rules, the validation/audit commands, the 200 % browser
+check and the fluent-review queue. The validation command is the coverage
+report: a new English key fails until every language covers it.
+
 Still open after this pass: `NodeEditors.tsx` still derives its "Device busy"
 hint from the English `snapshot.audio.reason`; the audio status has no
 device-busy code, so that is a further contract change (and the branch may be
