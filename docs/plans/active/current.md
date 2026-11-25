@@ -33,6 +33,9 @@ predate the fix.
 5. **Nightly upkeep.** Read each failed nightly from its retained evidence; coverage
    rows collect for the A10 and A11 decisions.
 
+6. **Signing: waiting for OSSign until 2027-03-05** (owner decision 2026-11-25, no
+   purchase meanwhile): task B1 in [human-gated tasks](human-gated-tasks.md).
+
 ## Open owner gates
 
 All owner, hardware, purchase, listening and VM gates are in

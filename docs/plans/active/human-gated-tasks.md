@@ -90,6 +90,13 @@ you do not answer.
 
 ### B1. Signing certificate, identity and key storage
 
+- **Status: waiting for OSSign (your decision, 2026-11-25).** It can sign the app
+  and attestation-sign the driver, but needs six months of project history. Apply
+  again on or after **2027-03-05**; buy and enroll nothing meanwhile. App
+  signatures would carry an OSSign backing company's name. Acceptance is not
+  promised. See the [reply, rules and application
+  checklist](../future/M03-driver-signing.md#ossign-reply-2026-11-25-ticket-991393).
+  Everything from **Steps** on is the fallback if OSSign declines.
 - **Why you:** legal identity and money; the key cannot be copied later.
 - **Needs:** confirmed eligibility. The driver part also needs D2–D4 clean.
 - **Steps:** 1. Send Microsoft the written question in Part 4 of the
