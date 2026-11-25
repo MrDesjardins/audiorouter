@@ -931,6 +931,12 @@ behavior, audio, device, installer or hardware evidence. The full record is
   merge is its hosted evidence. Open regression age and escaped-defect counts
   are not columns because the repository has no tracked dataset for them; the
   trend note says so, and escaped defects remain in the plan narrative.
+- Review fix: the nightly requires all four shard reports
+  (`--expect-shards 1,2,3,4`). A missing, truncated or unreadable report writes
+  no `browser.env`, keeps the `browser_*` columns blank and names the missing
+  shard; it never reports a partial total. Four regressions cover it (13
+  `test-trend` tests); without the guard the 3-of-4 case is accepted with
+  `browser_total=7`, so the partial-set test is load-bearing.
 
 ## Q5.2 execution: coverage baselines before any floor (2026-11-24)
 

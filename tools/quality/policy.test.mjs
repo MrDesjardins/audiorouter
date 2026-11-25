@@ -284,8 +284,9 @@ test('nightly quality records Edge first-pass failures and retries in the trend 
   assert.match(browser, /node tools\/quality\/browser-ci\.mjs run/);
   const trend = workflow.match(/\n  browser-trend:\n[\s\S]*?(?=\n  trend:)/)?.[0] ?? '';
   assert.ok(trend, 'quality.yml summarizes the Edge reports');
-  assert.match(trend, /test-trend\.mjs playwright --env/);
-  assert.match(trend, /No Playwright report artifact was retained/);
+  assert.match(trend, /test-trend\.mjs playwright --expect-shards 1,2,3,4 --env/);
+  assert.doesNotMatch(trend, /files\.Count -eq 0/);
+  assert.match(trend, /all four shard reports are required|All four shard reports are required/i);
   assert.match(workflow, /browser_total browser_first_pass_failures browser_retried_tests browser_flaky browser_failed browser_skipped browser_duration_s run_url/);
   assert.match(workflow, /columns mean the Edge report artifacts were not retained/);
   const ci = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');

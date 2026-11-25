@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -102,4 +102,81 @@ test("a missing report is refused instead of reporting zero failures", () => {
   const result = spawnSync(process.execPath, [tool, "playwright", join(tmpdir(), "missing-playwright-report.json")], { encoding: "utf8" });
   assert.equal(result.status, 2);
   assert.match(result.stderr, /Missing Playwright report/);
+});
+
+function shardDir(dir, names) {
+  const copies = new Map([
+    ["passing", fixture("passing")],
+    ["retry-passing", fixture("retry-passing")],
+    ["failing", fixture("failing")],
+  ]);
+  return names.map((name, index) => {
+    const target = join(dir, `report-${index + 1}.json`);
+    copyFileSync(copies.get(name), target);
+    return target;
+  });
+}
+
+test("three of four shard reports are not measured, and the missing shard is named", () => {
+  const tool = fileURLToPath(new URL("./test-trend.mjs", import.meta.url));
+  const dir = mkdtempSync(join(tmpdir(), "test-trend-shards-"));
+  try {
+    const reports = shardDir(dir, ["retry-passing", "failing", "passing"]);
+    const envFile = join(dir, "browser.env");
+    const result = spawnSync(process.execPath, [tool, "playwright", "--expect-shards", "1,2,3,4", "--env", envFile, ...reports], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(existsSync(envFile), false, "a partial set must not write metrics");
+    assert.match(result.stdout, /Not measured/);
+    assert.match(result.stdout, /Missing shard 4/);
+    assert.doesNotMatch(result.stdout, /browser_first_pass_failures=/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("all four shard reports produce the complete totals", () => {
+  const tool = fileURLToPath(new URL("./test-trend.mjs", import.meta.url));
+  const dir = mkdtempSync(join(tmpdir(), "test-trend-shards-"));
+  try {
+    const reports = shardDir(dir, ["retry-passing", "failing", "passing", "passing"]);
+    const envFile = join(dir, "browser.env");
+    const result = spawnSync(process.execPath, [tool, "playwright", "--expect-shards", "1,2,3,4", "--env", envFile, ...reports], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Report files \(shards\) \| 4 \|/);
+    assert.match(readFileSync(envFile, "utf8"), /^browser_total=9$/m);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a truncated shard report is treated as a missing shard", () => {
+  const tool = fileURLToPath(new URL("./test-trend.mjs", import.meta.url));
+  const dir = mkdtempSync(join(tmpdir(), "test-trend-shards-"));
+  try {
+    const reports = shardDir(dir, ["retry-passing", "failing", "passing"]);
+    writeFileSync(join(dir, "report-2.json"), '{"stats":');
+    const envFile = join(dir, "browser.env");
+    const result = spawnSync(process.execPath, [tool, "playwright", "--expect-shards", "1,2,3,4", "--env", envFile, ...reports], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(existsSync(envFile), false);
+    assert.match(result.stdout, /Missing shard 2/);
+    assert.match(result.stdout, /Unreadable or truncated report: .*report-2\.json/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a structurally empty report is treated as missing", () => {
+  const tool = fileURLToPath(new URL("./test-trend.mjs", import.meta.url));
+  const dir = mkdtempSync(join(tmpdir(), "test-trend-shards-"));
+  try {
+    const reports = shardDir(dir, ["retry-passing", "failing", "passing"]);
+    writeFileSync(join(dir, "report-2.json"), "{}");
+    const result = spawnSync(process.execPath, [tool, "playwright", "--expect-shards", "1,2,3,4", "--env", join(dir, "browser.env"), ...reports], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(existsSync(join(dir, "browser.env")), false);
+    assert.match(result.stdout, /Missing shard 2/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

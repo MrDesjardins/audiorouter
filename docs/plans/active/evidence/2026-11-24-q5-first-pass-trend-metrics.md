@@ -39,7 +39,7 @@ reports zero for it.
   and `run_url`. A cached or published CSV with the old 10-column header is
   migrated in place with blanks instead of being rejected or dropping the new
   values; an unknown column is refused.
-- Tests: `tools/quality/test-trend.test.mjs` (9), `tools/quality/summary.test.mjs`
+- Tests: `tools/quality/test-trend.test.mjs` (13), `tools/quality/summary.test.mjs`
   (3), `quality-history-chart.test.mjs` (8; older-header and round-trip cases)
   and new `policy.test.mjs` assertions pinning the workflow wiring.
 
@@ -79,11 +79,29 @@ to replay. The parser is therefore qualified on the real local report and the
 retained fixtures, not on an old hosted artifact. The first nightly after this
 change is the first hosted evidence.
 
+## Review fix: all four shard reports are required
+
+A partial download (for example 3 of 4) would silently report fewer tests and
+fewer first-pass failures. `test-trend.mjs` now accepts `--expect-shards`; the
+nightly passes `--expect-shards 1,2,3,4`. Every expected `report-<n>.json` must
+be present and parseable with a `suites` array and `stats` object. A missing,
+truncated or structurally empty report is treated as missing: the tool lists
+the missing shard (and any unreadable file), writes **no** `browser.env`, and
+exits 0 so the trend row stays blank instead of under-reporting. The trend
+workflow no longer special-cases "zero files".
+
+Regression tests (4 new, 13 in `test-trend.test.mjs`): 3 of 4 present (no env,
+names shard 4), all 4 present (total 9), truncated JSON for shard 2 (names
+shard 2 as unreadable), and a structurally empty `{}` report (missing). Proof
+the guard is load-bearing: without `--expect-shards` the same 3-file input is
+accepted and writes `browser_total=7`; the partial-set test asserts no env file
+and fails without the guard.
+
 ## Checks run (this worktree, Windows 11, Node 22.22.3)
 
 | Command | Result |
 | --- | --- |
-| `node --test tools/quality/test-trend.test.mjs tools/quality/summary.test.mjs tools/quality/quality-history-chart.test.mjs` | 20 tests passed |
+| `node --test tools/quality/test-trend.test.mjs tools/quality/summary.test.mjs tools/quality/quality-history-chart.test.mjs` | 24 tests passed |
 | `node tools/quality/verify.mjs --checks policy` | passed (107 tests, 6.1 s) |
 | `node tools/quality/test-trend.mjs playwright <real probe report>` | counts above |
 | `node tools/quality/summary.mjs history <legacy 10-column CSV> ...new columns` | old row migrated with blanks, new row complete, table printed |

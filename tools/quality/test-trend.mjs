@@ -10,7 +10,7 @@
 // (`failed`), and refuses to report a retry as first-pass success. Each report
 // is one CI shard; the longest shard is the suite's wall-clock duration.
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { basename, dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const FAILED_FIRST = new Set(["failed", "timedOut", "interrupted"]);
@@ -131,14 +131,51 @@ export function envLines(summary, runUrl) {
   return `${lines.join("\n")}\n`;
 }
 
-export function runPlaywright(reportPaths, { envFile, runUrl } = {}) {
-  const reports = reportPaths.map(path => JSON.parse(readFileSync(path, "utf8")));
-  const summary = summarizeReports(reports);
+export function runPlaywright(reportPaths, { envFile, runUrl, expectShards } = {}) {
+  const expected = expectShards ? expectShards.map(String) : [];
+  const valid = new Map();
+  const unusable = [];
+  for (const path of reportPaths) {
+    try {
+      const report = JSON.parse(readFileSync(path, "utf8"));
+      if (!Array.isArray(report?.suites) || !report?.stats || typeof report.stats !== "object") {
+        unusable.push(path);
+        continue;
+      }
+      const shard = basename(path).match(/^report-(\d+)\.json$/i)?.[1];
+      if (expected.length && (!shard || !expected.includes(shard))) {
+        unusable.push(path);
+        continue;
+      }
+      valid.set(shard ?? path, report);
+    } catch {
+      unusable.push(path);
+    }
+  }
+  if (expected.length) {
+    const missing = expected.filter((shard) => !valid.has(shard));
+    if (missing.length) return { summary: null, missing, unusable };
+  } else if (unusable.length) {
+    throw new Error(`Unreadable Playwright report: ${unusable.join(", ")}`);
+  }
+  const summary = summarizeReports([...valid.values()]);
   if (envFile) {
     mkdirSync(dirname(envFile), { recursive: true });
     writeFileSync(envFile, envLines(summary, runUrl));
   }
-  return summary;
+  return { summary, missing: [], unusable: expected.length ? unusable : [] };
+}
+
+export function formatNotMeasured({ missing, unusable }) {
+  const lines = [
+    "## Edge suite (Playwright)",
+    "",
+    "Not measured: the shard reports are incomplete, so no totals or first-pass counts are reported; `browser_*` columns stay blank.",
+    "",
+  ];
+  for (const shard of missing) lines.push(`- Missing shard ${shard} (\`report-${shard}.json\`)`);
+  for (const path of unusable) lines.push(`- Unreadable or truncated report: ${path}`);
+  return `${lines.join("\n")}\n`;
 }
 
 function parseArgs(args) {
@@ -147,7 +184,11 @@ function parseArgs(args) {
     const arg = args[index];
     if (arg === "--env") values.envFile = args[++index];
     else if (arg === "--run-url") values.runUrl = args[++index];
-    else if (arg.startsWith("--")) throw Error(`Unknown option: ${arg}`);
+    else if (arg === "--expect-shards") {
+      const shards = (args[++index] ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+      if (!shards.length || shards.some((shard) => !/^\d+$/.test(shard))) throw Error("--expect-shards needs a comma-separated list of shard numbers");
+      values.expectShards = shards;
+    } else if (arg.startsWith("--")) throw Error(`Unknown option: ${arg}`);
     else values.reports.push(arg);
   }
   return values;
@@ -156,14 +197,20 @@ function parseArgs(args) {
 const [command, ...args] = process.argv.slice(2);
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    if (command !== "playwright" || args.length === 0) {
-      console.error("usage: test-trend.mjs playwright [--env <file>] [--run-url <url>] <report.json>...");
+    if (command !== "playwright") {
+      console.error("usage: test-trend.mjs playwright [--env <file>] [--run-url <url>] [--expect-shards 1,2,3,4] <report-<shard>.json>...");
       process.exit(2);
     }
     const options = parseArgs(args);
+    if (options.reports.length === 0 && !options.expectShards) {
+      console.error("usage: test-trend.mjs playwright [--env <file>] [--run-url <url>] [--expect-shards 1,2,3,4] <report-<shard>.json>...");
+      process.exit(2);
+    }
     const missing = options.reports.filter(path => !existsSync(path));
-    if (missing.length) throw Error(`Missing Playwright report: ${missing.join(", ")}`);
-    console.log(formatSummary(runPlaywright(options.reports, options)));
+    if (missing.length && !options.expectShards) throw Error(`Missing Playwright report: ${missing.join(", ")}`);
+    const reports = options.reports.filter(path => existsSync(path));
+    const result = runPlaywright(reports, options);
+    console.log(result.summary ? formatSummary(result.summary) : formatNotMeasured(result));
   } catch (error) {
     console.error(error.message);
     process.exitCode = 2;

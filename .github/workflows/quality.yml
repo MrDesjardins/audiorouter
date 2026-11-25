@@ -572,13 +572,12 @@ jobs:
           $metrics = Join-Path $env:RUNNER_TEMP 'metrics'
           New-Item -ItemType Directory -Force -Path $metrics | Out-Null
           $files = @(Get-ChildItem -Path 'playwright-json' -Filter '*.json' -Recurse -ErrorAction SilentlyContinue)
-          if ($files.Count -eq 0) {
-            @('## Edge suite (Playwright)', '', 'No Playwright report artifact was retained, so the Edge first-pass and retry metrics were not measured for this run.') |
-              Add-Content $env:GITHUB_STEP_SUMMARY
-            exit 0
-          }
           $paths = $files | ForEach-Object { $_.FullName }
-          node tools/quality/test-trend.mjs playwright --env (Join-Path $metrics 'browser.env') --run-url $env:RUN_URL @paths |
+          # All four shard reports are required: a partial set would count fewer
+          # tests and first-pass failures than the suite actually had. The tool
+          # treats a missing or unreadable report as not measured and writes no
+          # browser.env, so the trend row stays blank instead of under-reporting.
+          node tools/quality/test-trend.mjs playwright --expect-shards 1,2,3,4 --env (Join-Path $metrics 'browser.env') --run-url $env:RUN_URL @paths |
             Add-Content $env:GITHUB_STEP_SUMMARY
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
