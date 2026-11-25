@@ -8,10 +8,13 @@
 //   node tools/quality/summary.mjs ui <coverage-summary.json>
 //       Vitest (v8) totals from the json-summary reporter.
 //   node tools/quality/summary.mjs history <file.csv> key=value...
-//       Append one row to a CSV history and print the last 14 rows.
+//       Append one row to a CSV history and print the last 14 rows. A cached
+//       history from before a metric existed is rewritten to the full header
+//       with blanks, so a new column is never silently dropped.
 //
 // The Markdown goes to stdout; the workflow appends it to the step summary.
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { HISTORY_COLUMNS } from "./quality-history-chart.mjs";
 
 // Crates that build and test on any OS (no Windows API dependency).
 const PORTABLE = new Set(["domain", "dsp", "engine", "plugin-host", "protocol", "recording", "storage"]);
@@ -85,14 +88,29 @@ function history(path, pairs) {
       return [pair.slice(0, at), pair.slice(at + 1).replaceAll(",", ";")];
     }),
   );
-  const keys = Object.keys(record);
-  if (!existsSync(path) || readFileSync(path, "utf8").trim() === "") writeFileSync(path, `${keys.join(",")}\n`);
-  const [header, ...rows] = readFileSync(path, "utf8").trim().split(/\r?\n/);
-  const columns = header.split(",");
-  appendFileSync(path, `${columns.map((column) => record[column] ?? "").join(",")}\n`);
-  rows.push(columns.map((column) => record[column] ?? "").join(","));
-  const lines = ["## Trend (last 14 runs)", "", `| ${columns.join(" | ")} |`, `| ${columns.map(() => "---").join(" | ")} |`];
-  for (const line of rows.slice(-14)) lines.push(`| ${line.split(",").join(" | ")} |`);
+  const unknown = Object.keys(record).filter((column) => !HISTORY_COLUMNS.includes(column));
+  if (unknown.length) throw new Error(`Unknown history column(s): ${unknown.join(", ")}`);
+  const hadFile = existsSync(path) && readFileSync(path, "utf8").trim() !== "";
+  if (!hadFile) writeFileSync(path, `${HISTORY_COLUMNS.join(",")}\n`);
+  const [headerLine, ...rows] = readFileSync(path, "utf8").trim().split(/\r?\n/);
+  const header = headerLine.split(",");
+  // The Actions cache carries the header from the run that created it; migrate
+  // it instead of dropping metrics that were added after that run.
+  const migrated = rows.map((line) => {
+    const cells = line.split(",");
+    if (cells.length !== header.length) throw new Error(`Invalid history row in ${path}: ${line}`);
+    const entry = Object.fromEntries(header.map((column, index) => [column, cells[index]]));
+    return HISTORY_COLUMNS.map((column) => entry[column] ?? "").join(",");
+  });
+  const next = HISTORY_COLUMNS.map((column) => record[column] ?? "").join(",");
+  if (header.join(",") !== HISTORY_COLUMNS.join(",")) {
+    writeFileSync(path, `${HISTORY_COLUMNS.join(",")}\n${[...migrated, next].join("\n")}\n`);
+  } else {
+    appendFileSync(path, `${next}\n`);
+  }
+  const printed = [...migrated, next];
+  const lines = ["## Trend (last 14 runs)", "", `| ${HISTORY_COLUMNS.join(" | ")} |`, `| ${HISTORY_COLUMNS.map(() => "---").join(" | ")} |`];
+  for (const line of printed.slice(-14)) lines.push(`| ${line.split(",").join(" | ")} |`);
   console.log(lines.join("\n") + "\n");
 }
 

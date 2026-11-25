@@ -10,6 +10,11 @@ import { backendSpecs } from "../tools/quality/browser-scope.mjs";
 export default defineConfig<BrowserOptions>({
   ...base,
   testMatch: process.env.BROWSER_SCOPE === "backend" ? backendSpecs(fileURLToPath(new URL("./e2e", import.meta.url))) : base.testMatch,
+  // Q5.1: a shard keeps a machine-readable report so the nightly trend records
+  // first-pass failures separately from a later green retry.
+  reporter: process.env.PLAYWRIGHT_JSON_OUTPUT_NAME
+    ? [["list"], ["json", { outputFile: process.env.PLAYWRIGHT_JSON_OUTPUT_NAME }]]
+    : base.reporter,
   use: { ...base.use, bundledAssets: fileURLToPath(new URL("../target/browser-acceptance-ui", import.meta.url)) },
   webServer: undefined,
 });

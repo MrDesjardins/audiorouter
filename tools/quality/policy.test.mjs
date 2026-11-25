@@ -275,6 +275,24 @@ test('nightly quality runs the bounded fuzz targets at a bounded scale', () => {
   assert.doesNotMatch(job, /contents: write|git push|git commit/);
 });
 
+test('nightly quality records Edge first-pass failures and retries in the trend table', () => {
+  const workflow = readFileSync(new URL('../../.github/workflows/quality.yml', import.meta.url), 'utf8');
+  const browser = workflow.match(/\n  browser:\n[\s\S]*?(?=\n  browser-trend:)/)?.[0] ?? '';
+  assert.ok(browser, 'quality.yml has an Edge suite job');
+  assert.match(browser, /PLAYWRIGHT_JSON_OUTPUT_NAME: .*report-\$\{\{ matrix\.shard \}\}\.json/);
+  assert.match(browser, /name: playwright-report-\$\{\{ matrix\.shard \}\}/);
+  assert.match(browser, /node tools\/quality\/browser-ci\.mjs run/);
+  const trend = workflow.match(/\n  browser-trend:\n[\s\S]*?(?=\n  trend:)/)?.[0] ?? '';
+  assert.ok(trend, 'quality.yml summarizes the Edge reports');
+  assert.match(trend, /test-trend\.mjs playwright --env/);
+  assert.match(trend, /No Playwright report artifact was retained/);
+  assert.match(workflow, /browser_total browser_first_pass_failures browser_retried_tests browser_flaky browser_failed browser_skipped browser_duration_s run_url/);
+  assert.match(workflow, /columns mean the Edge report artifacts were not retained/);
+  const ci = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
+  assert.match(ci, /PLAYWRIGHT_JSON_OUTPUT_NAME: .*report-\$\{\{ matrix\.shard \}\}\.json/);
+  assert.match(ci, /name: playwright-report-\$\{\{ matrix\.shard \}\}/);
+});
+
 test('nightly packaged shell smoke uses the built release binary and retains failure evidence', () => {
   const workflow = readFileSync(new URL('../../.github/workflows/quality.yml', import.meta.url), 'utf8');
   assert.match(workflow, /name: Packaged WebView2 smoke[\s\S]*?packaged-shell-smoke\.mjs', '--shell', 'src-tauri\/target\/release\/audiorouter-shell\.exe'/);

@@ -1,0 +1,37 @@
+{
+  "stats": { "duration": 62000, "expected": 1, "skipped": 0, "unexpected": 1, "flaky": 0 },
+  "suites": [
+    {
+      "title": "failing.pw.ts",
+      "specs": [
+        {
+          "title": "a steady pass",
+          "file": "e2e/failing.pw.ts",
+          "line": 3,
+          "tests": [
+            {
+              "expectedStatus": "passed",
+              "status": "expected",
+              "results": [{ "status": "passed", "retry": 0, "duration": 4 }]
+            }
+          ]
+        },
+        {
+          "title": "a steady failure",
+          "file": "e2e/failing.pw.ts",
+          "line": 7,
+          "tests": [
+            {
+              "expectedStatus": "passed",
+              "status": "unexpected",
+              "results": [
+                { "status": "failed", "retry": 0, "duration": 4 },
+                { "status": "failed", "retry": 1, "duration": 7 }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

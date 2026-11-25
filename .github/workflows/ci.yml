@@ -415,12 +415,24 @@ jobs:
         with:
           name: browser-fixtures
           path: target
+      - name: Prepare the Playwright report directory
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path (Join-Path $env:RUNNER_TEMP 'audiorouter-playwright-json') | Out-Null
       - name: Run Playwright tests
         env:
           BROWSER_SHARD: ${{ matrix.shard }}/4
           BROWSER_SCOPE: ${{ needs.changes.outputs.ui == 'true' && 'all' || 'backend' }}
           TEMP: ${{ runner.temp }}
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ runner.temp }}/audiorouter-playwright-json/report-${{ matrix.shard }}.json
         run: node tools/quality/verify.mjs --checks browser
+      - name: Upload shard Playwright report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report-${{ matrix.shard }}
+          path: ${{ runner.temp }}/audiorouter-playwright-json/*.json
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Upload shard verification
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

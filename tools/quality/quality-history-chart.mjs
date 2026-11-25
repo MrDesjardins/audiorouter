@@ -19,20 +19,35 @@ export const HISTORY_COLUMNS = [
   "soak_heap_growth_kib",
   "soak_private_growth_mib",
   "backend_ready_ms",
+  "browser_total",
+  "browser_first_pass_failures",
+  "browser_retried_tests",
+  "browser_flaky",
+  "browser_failed",
+  "browser_skipped",
+  "browser_duration_s",
+  "run_url",
 ];
 const PLOT_COLUMNS = ["soak_p99_us", "soak_p999_us", "soak_heap_growth_kib", "soak_private_growth_mib", "backend_ready_ms"];
 
 export function parseHistory(path) {
   const text = readFileSync(path, "utf8").trim();
   if (!text) throw new Error(`Empty quality history: ${path}`);
-  const [header, ...rows] = text.split(/\r?\n/);
-  if (header !== HISTORY_COLUMNS.join(",")) throw new Error(`Invalid quality history header: ${path}`);
+  const [headerLine, ...rows] = text.split(/\r?\n/);
+  const header = headerLine.split(",");
+  // A published history from before a metric was added keeps its old header;
+  // new columns default to blank instead of rejecting the durable file.
+  const unknown = header.filter((column) => !HISTORY_COLUMNS.includes(column));
+  if (unknown.length) throw new Error(`Unknown quality history column(s): ${unknown.join(", ")}`);
+  if (header.length !== new Set(header).size) throw new Error(`Duplicate quality history column in ${path}`);
   return rows
     .filter(Boolean)
     .map((row) => {
       const cells = row.split(",");
-      if (cells.length !== HISTORY_COLUMNS.length) throw new Error(`Invalid quality history row in ${path}: ${row}`);
-      return Object.fromEntries(HISTORY_COLUMNS.map((column, index) => [column, cells[index]]));
+      if (cells.length !== header.length) throw new Error(`Invalid quality history row in ${path}: ${row}`);
+      const entry = Object.fromEntries(HISTORY_COLUMNS.map((column) => [column, ""]));
+      header.forEach((column, index) => { entry[column] = cells[index]; });
+      return entry;
     });
 }
 
@@ -50,7 +65,7 @@ export function mergeHistory(published, collected) {
 }
 
 export function writeHistory(path, history) {
-  writeFileSync(path, `${HISTORY_COLUMNS.join(",")}\n${history.map((entry) => HISTORY_COLUMNS.map((column) => entry[column]).join(",")).join("\n")}\n`, "utf8");
+  writeFileSync(path, `${HISTORY_COLUMNS.join(",")}\n${history.map((entry) => HISTORY_COLUMNS.map((column) => entry[column] ?? "").join(",")).join("\n")}\n`, "utf8");
 }
 
 function xml(value) {

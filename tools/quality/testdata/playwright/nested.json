@@ -1,0 +1,28 @@
+{
+  "stats": { "duration": 20000, "expected": 1, "skipped": 0, "unexpected": 0, "flaky": 0 },
+  "suites": [
+    {
+      "title": "nested.pw.ts",
+      "specs": [],
+      "suites": [
+        {
+          "title": "nested describe",
+          "specs": [
+            {
+              "title": "a pass inside a nested describe",
+              "file": "e2e/nested.pw.ts",
+              "line": 5,
+              "tests": [
+                {
+                  "expectedStatus": "passed",
+                  "status": "expected",
+                  "results": [{ "status": "passed", "retry": 0, "duration": 4 }]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,7 +1,8 @@
 name: AudioRouter quality (nightly)
 
 # Code review P2-8: coverage, an engine soak and a startup timing, nightly and
-# on demand; Q4.3 adds scaled bounded fuzzing. Coverage is reported, never gated. The soak fails on a memory
+# on demand; Q4.3 adds scaled bounded fuzzing; Q5.1 adds the Edge suite's
+# first-pass failures, retries and duration. Coverage is reported, never gated. The soak fails on a memory
 # leak or a slow quantum (limits in crates/engine/examples/soak.rs and
 # docs/spec/14-quality.md NFR-04/05/06). Each run adds a row to a small trend
 # table kept in the Actions cache; quality-history.yml publishes the durable
@@ -424,9 +425,175 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # Q5.1: the Edge suite's first-pass failures, retries, final failures and
+  # duration are trend metrics. A retried green test still fails the shard
+  # (`failOnFlakyTests` in playwright.config.ts) and is still counted here;
+  # a green retry never erases the first failure.
+  browser-prepare:
+    name: Build nightly browser fixtures
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pinned Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.22.3
+          package-manager-cache: false
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # 2026-07-16 action revision
+        with:
+          toolchain: 1.96.0
+
+      - name: Install contract and UI dependencies
+        shell: pwsh
+        run: |
+          npm ci --prefix contracts
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          npm ci --prefix ui
+
+      # Build once; the shard jobs download the exact generated fixtures.
+      - name: Prepare browser fixtures and qualify guards
+        shell: pwsh
+        env:
+          TEMP: ${{ runner.temp }}
+        run: node tools/quality/browser-ci.mjs prepare
+
+      - name: Upload browser fixtures
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-fixtures
+          path: |
+            target/debug/examples/e2e_backend.exe
+            target/browser-acceptance-ui
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload browser error-guard qualification
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-guard-qualification
+          path: |
+            ${{ runner.temp }}/audiorouter-browser-guard-*
+            ${{ runner.temp }}/audiorouter-bundled-asset-guard-*
+          if-no-files-found: ignore
+          retention-days: 7
+
+  browser:
+    name: Edge suite shard ${{ matrix.shard }}/4 (nightly metrics)
+    needs: [browser-prepare]
+    runs-on: windows-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pinned Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.22.3
+          package-manager-cache: false
+
+      - name: Install UI dependencies
+        run: npm ci --prefix ui
+
+      - name: Download browser fixtures
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: browser-fixtures
+          path: target
+
+      - name: Prepare the Playwright report directory
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path (Join-Path $env:RUNNER_TEMP 'audiorouter-playwright-json') | Out-Null
+
+      - name: Run Playwright tests
+        env:
+          BROWSER_SHARD: ${{ matrix.shard }}/4
+          BROWSER_SCOPE: all
+          TEMP: ${{ runner.temp }}
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ runner.temp }}/audiorouter-playwright-json/report-${{ matrix.shard }}.json
+        run: node tools/quality/browser-ci.mjs run
+
+      - name: Upload shard Playwright report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report-${{ matrix.shard }}
+          path: ${{ runner.temp }}/audiorouter-playwright-json/*.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload shard traces and screenshots
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-results-shard-${{ matrix.shard }}
+          path: ${{ runner.temp }}/audiorouter-playwright-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+  browser-trend:
+    name: Edge suite trend metrics
+    needs: [browser]
+    if: ${{ !cancelled() }}
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pinned Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.22.3
+          package-manager-cache: false
+
+      - name: Download the shard reports
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: playwright-report-*
+          path: playwright-json
+          merge-multiple: true
+
+      - name: Summarize first-pass failures and retries
+        shell: pwsh
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          $metrics = Join-Path $env:RUNNER_TEMP 'metrics'
+          New-Item -ItemType Directory -Force -Path $metrics | Out-Null
+          $files = @(Get-ChildItem -Path 'playwright-json' -Filter '*.json' -Recurse -ErrorAction SilentlyContinue)
+          if ($files.Count -eq 0) {
+            @('## Edge suite (Playwright)', '', 'No Playwright report artifact was retained, so the Edge first-pass and retry metrics were not measured for this run.') |
+              Add-Content $env:GITHUB_STEP_SUMMARY
+            exit 0
+          }
+          $paths = $files | ForEach-Object { $_.FullName }
+          node tools/quality/test-trend.mjs playwright --env (Join-Path $metrics 'browser.env') --run-url $env:RUN_URL @paths |
+            Add-Content $env:GITHUB_STEP_SUMMARY
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Upload browser trend metrics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: metrics-browser
+          path: ${{ runner.temp }}/metrics
+          if-no-files-found: ignore
+          retention-days: 14
+
   trend:
     name: Trend table
-    needs: [coverage, soak, startup]
+    needs: [coverage, soak, startup, browser-trend]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -467,10 +634,14 @@ jobs:
               [ -n "$key" ] && value[$key]=$(tr -d '\r' <<<"$val")
             done < "$file"
           done
-          columns="rust_lines shell_lines ui_lines soak_p99_us soak_p999_us soak_heap_growth_kib soak_private_growth_mib backend_ready_ms"
+          columns="rust_lines shell_lines ui_lines soak_p99_us soak_p999_us soak_heap_growth_kib soak_private_growth_mib backend_ready_ms browser_total browser_first_pass_failures browser_retried_tests browser_flaky browser_failed browser_skipped browser_duration_s run_url"
           args=("date=$(date -u +%Y-%m-%d)" "commit=${SHA:0:8}")
           for column in $columns; do args+=("$column=${value[$column]:-}"); done
           node tools/quality/summary.mjs history quality-history.csv "${args[@]}" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo ""
+            echo "Blank \`browser_*\` columns mean the Edge report artifacts were not retained; that row did not measure them and they are not zero failures. \`run_url\` links this run's artifacts (browser shard reports: \`playwright-report-1\`..\`playwright-report-4\`, summary: \`metrics-browser\`)."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Save the trend history
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
