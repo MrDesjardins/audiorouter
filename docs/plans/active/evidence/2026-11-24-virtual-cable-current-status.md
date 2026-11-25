@@ -24,6 +24,12 @@ VDEV-09, SEC-08, NFR-02. Plans: [virtual cable](../virtual-cable.md),
 - The 2026-11-22 freezes are host-load dependent: a fresh guest with no driver
   and no Verifier froze for minutes while the host had 332 MB free. Every freeze
   from now on needs the host sampler, and a night on a busy PC decides nothing.
+- The old 2026-10-28 header line "next authorized non-driver implementation:
+  WP-09 mixed-clock" is satisfied by later work, not pending: physical and cable
+  sources compile and run together (`crates/engine/tests/source_combinations.rs`
+  pairs and triples into a Mixer, `tool_combinations.rs` processors in those
+  layouts), and `crates/control/src/goals.rs:86,114` defines the Mic-to-Discord
+  and Game-to-Discord goals. Reimplementation would duplicate shipped work.
 
 ## 2. Review-fix items confirmed in the frozen source and its host tests
 
