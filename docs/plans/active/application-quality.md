@@ -928,7 +928,9 @@ behavior, audio, device, installer or hardware evidence. The full record is
   and `git diff --check` pass. Not run: hosted nightly/CI (not allowed to
   trigger), the full Edge suite through the CI config, hosted timings.
 - Q5.1 is complete as a measurement change. The first scheduled nightly after
-  merge is its hosted evidence.
+  merge is its hosted evidence. Open regression age and escaped-defect counts
+  are not columns because the repository has no tracked dataset for them; the
+  trend note says so, and escaped defects remain in the plan narrative.
 
 ## Q5.2 execution: coverage baselines before any floor (2026-11-24)
 

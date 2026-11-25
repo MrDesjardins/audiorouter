@@ -640,7 +640,7 @@ jobs:
           node tools/quality/summary.mjs history quality-history.csv "${args[@]}" >> "$GITHUB_STEP_SUMMARY"
           {
             echo ""
-            echo "Blank \`browser_*\` columns mean the Edge report artifacts were not retained; that row did not measure them and they are not zero failures. \`run_url\` links this run's artifacts (browser shard reports: \`playwright-report-1\`..\`playwright-report-4\`, summary: \`metrics-browser\`)."
+            echo "Blank \`browser_*\` columns mean the Edge report artifacts were not retained; that row did not measure them and they are not zero failures. \`run_url\` links this run's artifacts (browser shard reports: \`playwright-report-1\`..\`playwright-report-4\`, summary: \`metrics-browser\`). Open regression age and escaped-defect counts are not in this table: there is no tracked dataset for them, so escaped defects stay in the plan narrative."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Save the trend history

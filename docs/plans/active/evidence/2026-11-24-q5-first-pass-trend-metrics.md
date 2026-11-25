@@ -107,6 +107,11 @@ change is the first hosted evidence.
 - Rust and UI unit-test durations. The trend records the Edge suite's longest
   shard only; job-level durations are visible in each Actions run. The reports
   say so in the appended note.
+- Open regression age and escaped-defect counts. There is no tracked dataset
+  for either (the repository had 0 open issues at 2026-11-24), so they are not
+  columns. Escaped defects stay in the plan narrative (for example the keybinding
+  and pipe-guard defects in Q5.3); the trend says they are not measured rather
+  than reporting zero.
 - Timings on a hosted runner.
 
 ## Cost and rollback
