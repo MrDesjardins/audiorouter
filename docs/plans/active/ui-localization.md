@@ -818,6 +818,89 @@ Process deviation: one import line in `useWorkspaceEvents.ts` was changed with
 heredoc dropped a backslash). Rollback: revert the four commits on the branch
 and regenerate the catalog outputs.
 
+### 2026-11-24 — Recovery errors, glossary alignment, guard, zoom and Chinese audit
+
+Requirements: L10N-01, L10N-04/06/07, UI-11/17/37. Branch `plans/ui-localization`
+from `main` (02ca8dc9d). Local commits only, not pushed, no PR.
+
+Done:
+
+- **Backend recovery messages (L10N-06).** `backend.ts`'s `formatUiError`
+  fixed sentences moved to a new `backendErrors.*` namespace (15 keys in each
+  catalog): already prepared, media not ready, invalid setting, revision
+  conflict, invalidated device, named busy endpoint (with and without a
+  VB-Cable twin), generic busy endpoint, unsupported route, permission denied,
+  the retry suffix, and the Windows Playback/Recording tab names used in the
+  guidance. Severity stays error whatever the text. The missing explicit
+  permission scope used to render "the the required permission"; it now says
+  "the required permission" (regression in `backend.test.ts`). The raw backend
+  message, code, HRESULT and remediation remain in the technical tail.
+- **French and Chinese alignment.** The 21 keys whose English changed from
+  engine terms to the plain glossary now use tool/outil/工具, unsaved
+  edits/modifications non enregistrées/未保存的修改 and output
+  device/périphérique de sortie/输出设备. Five Chinese messages that embedded
+  English tool names (`Input Device`, `Output Device`, `Test Signal`,
+  `Denoise`) and the plugin guide name now use the localized names; the guide
+  link takes `g3Plug.guidePlugin`/`guideInstrument` instead of a literal. New
+  regression: `PluginScanPanel.test.tsx` asserts `打开VST 插件指南`; French
+  recovery sentences are covered by `backendErrors.test.ts`.
+- **Guard (item 5).** `plainWords.test.ts` now parses production TSX with the
+  TypeScript AST and fails on a new inline JSX sentence (two or more words with
+  a lowercase word, excluding units, product names, paths and the dev preview
+  file). A positive-control test proves it sees "Save changes" and accepts
+  "48 kHz", "AudioRouter" and a path.
+- **200% zoom evidence (L10N-07).** New spec `ui/e2e/ui-language-zoom.pw.ts`:
+  720 × 500 viewport (the 1440 × 1000 layout at 200 %), dark, light and high
+  contrast, English and the development pseudo-locale; asserts document lang,
+  no horizontal page overflow on Settings and the route, and captures full-page
+  screenshots. Six of six passed on Edge. Evidence:
+  [2026-11-24-l10n-200-zoom](evidence/2026-11-24-l10n-200-zoom/README.md).
+- **Chinese rendered audit rerun.** The opt-in fixture captured 59
+  panels/views (105 screenshots). After the fixes above, the only remaining
+  Latin match for the tool names is the fixture node ID `speechDenoise-1`.
+  Remaining Latin lines are units, product/format names, paths, fixture data,
+  language endonyms, harness notices and diagnostics log lines. Evidence:
+  [2026-11-24-chinese-ui-audit](evidence/2026-11-24-chinese-ui-audit/README.md).
+- **Fluent-review queue.** A concise reviewer document lists the 88 new or
+  changed keys (English text, screen context, placeholders) and the open wording
+  decisions: the remaining `nœud`/`节点` terminology, the Play label
+  (Lecture vs Démarrer), "graph" vs route in two refusals, Windows tab names,
+  the wire permission scope, "bus", the owner's severity list, and French
+  spacing. Evidence:
+  [2026-11-24-fluent-review-queue](evidence/2026-11-24-fluent-review-queue.md).
+
+Checks (Windows 11, 2026-11-24, own worktree, from `ui/` unless noted):
+
+- `npm ci`; `npm run i18n:generate`, `npm run i18n:check`: 3 languages, 3,756
+  messages; generated TypeScript and native resources current.
+- `npm run typecheck:all`; `npm run lint` (0 warnings); `npm run format` then
+  `format:check`: pass.
+- `npm test`: 137 files, 1,198 tests pass.
+- Playwright (Edge, `--workers=1`, temporary config on port 4291 with its own
+  output, deleted afterwards): `ui-language-zoom` 6/6 pass;
+  `chinese-ui-audit` (opt-in) 1/1 pass. Earlier in the same session the
+  existing `ui-language` scenarios passed before the final edits.
+- `node tools/docs/validate.mjs`: 306 Markdown files, 1,695 links, pass.
+  `git diff --check`: pass.
+- No Rust source changed (`src-tauri/src/ui_language.rs` is regenerated and
+  unchanged because no `native.*` key changed), so no Rust format/Clippy/test
+  run was needed.
+
+Not run: the packaged shell, tray and Narrator; a fluent review of French or
+Chinese; live audio while switching languages; the full Playwright suite; the
+website guide videos (no tool control changed; only catalog wording and the
+plugin guide link's accessible name). Rollback: revert the four commits on the
+branch and regenerate the catalog outputs.
+
+Still open after this pass (agent-doable unless noted): structured backend
+error codes/scopes so `isDeviceAccessDenied` in `DeviceAccess.tsx`,
+`App.tsx`'s "session to be stopped" retry decision and `NodeEditors.tsx`'s
+"in use"/"owned" status decision stop reading English prose (AUTO-18 contract
+change); the native standalone-instance/recovery TaskDialog text is still
+English; backend-seeded plugin/preset descriptions remain English. Human-only:
+fluent review, packaged shell/tray, Narrator, Windows 150/200% scaling, live
+audio continuity. See the final handback for the human-gate list.
+
 ## References
 
 - [M05 visual editor](../../milestones/M05-visual-editor.md),
