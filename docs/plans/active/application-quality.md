@@ -899,3 +899,85 @@ product tests, CI runs, hardware experiments or application changes were
 performed. Documentation validation passed (180 Markdown files, 986 local
 links) and `git diff --check` passed. Q3.2 implementation and current
 verification progress are recorded in the active plan.
+
+## Q5.1 execution: first-pass, retry and duration metrics (2026-11-24)
+
+Branch `plans/application-quality`. Offline/workflow work only; no product
+behavior, audio, device, installer or hardware evidence. The full record is
+[first-pass trend metrics](evidence/2026-11-24-q5-first-pass-trend-metrics.md).
+
+- The Edge CI config now writes a JSON report per shard when
+  `PLAYWRIGHT_JSON_OUTPUT_NAME` is set; CI and the nightly quality workflow
+  retain it as `playwright-report-<shard>` even on failure. The retry count,
+  `failOnFlakyTests` and every assertion are unchanged.
+- `tools/quality/test-trend.mjs` counts first-attempt failures separately from
+  final failures, so a green retry cannot erase the first attempt. The nightly
+  trend table gains `browser_total`, `browser_first_pass_failures`,
+  `browser_retried_tests`, `browser_flaky`, `browser_failed`,
+  `browser_skipped`, `browser_duration_s` and `run_url`, plus a note that a
+  blank column means "not measured", not zero. A cached/published 10-column
+  history is migrated in place with blanks.
+- The nightly quality workflow now builds the browser fixtures once and runs
+  the same four Edge shards, ~12 minutes in parallel. This duplicates CI's
+  scheduled Edge run; the owner may drop one nightly Edge run later as a cost
+  decision.
+- Validation: a real Playwright 1.65/Edge run with pass, retry-pass and fail
+  tests reported 3 tests, 2 first-pass failures, 1 flaky, 1 final failure; 20
+  quality tool tests and `verify.mjs --checks policy` (107 tests) pass;
+  `actionlint` 1.7.12, UI typecheck/lint/format, `node tools/docs/validate.mjs`
+  and `git diff --check` pass. Not run: hosted nightly/CI (not allowed to
+  trigger), the full Edge suite through the CI config, hosted timings.
+- Q5.1 is complete as a measurement change. The first scheduled nightly after
+  merge is its hosted evidence.
+
+## Q5.2 execution: coverage baselines before any floor (2026-11-24)
+
+Collected read-only from five successful nightly `coverage` artifacts (runs
+45406044566, 44896903266, 44729124895, 44516582590, 44296751803; three distinct
+commits) with `gh run download`. The full table is
+[coverage baselines](evidence/2026-11-24-q5-coverage-baselines.md).
+
+Baseline ranges: desktop shell 58.3–59.4 %, `plugin-host` 62.3–63.8 %,
+`driver-helper` 67.6 %, `control` 69.1–70.0 %, `windows-audio` 71.7 %, UI lines
+72.62–73.57 %, UI branches 67.92–68.40 %. The two failed nightlies were
+excluded; one had no complete coverage summary. **No floor, gate or threshold
+was set.** Five rows over three commits is too little data, and line coverage is
+not sequence/negative-path evidence; Q2/Q4.1/Q4.2/Q4.3 carry that for critical
+modules. Recommended next measurement: at least 14 rows and 7 distinct commits,
+then propose per-module floors for the stable modules first.
+
+## Q6 execution: release/rollback scenario map (2026-11-24)
+
+Documentation map only; no install, VM, signing, release or hardware action.
+Full table: [release and rollback map](evidence/2026-11-24-q6-release-rollback-map.md).
+
+Mapped to evidence: v0.0.31 RQ-01 candidate freeze (hash/manifest/verify), RQ-04
+standard-user install/repair/rollback/upgrade/uninstall/reinstall on a fresh
+disposable guest (four passing runs, session and 440 Hz recording retained), RQ-05
+interactive and real-endpoint passes, the runtime-absent offline bootstrap retry,
+and the failure annotations at candidate SHA `a4e92bb0`.
+
+**New finding recorded:** the published v0.0.31 SHA was not fully green. Two
+manual `build-draft` runs at `a4e92bb0` failed: the `GlobalKeybindsPanel` test
+assertion and a named-pipe timeout, both later fixed by #181. CI at that SHA
+passed; those two release-workflow checks did not. This is a Q6 item 3 gap for
+the next candidate, not a reason to rewrite published bytes.
+
+Open and not agent-doable here: an exact 0.0.32 candidate build and
+qualification; a second Windows build without the Defender exclusion; the
+quarantined v0.0.30 rollback fixture; an attended interactive absent-WebView2
+install; an end-to-end database+recording restore on a reference machine; and
+the unsigned/signing/paperwork decisions. They are listed as human gates in the
+final handoff.
+
+## Remaining after 2026-11-24
+
+Q5.3's failure triage continues on each nightly; Q5.4's isolated live whole-app
+endurance and Q5.5's input-to-paint/telemetry/memory measurements need the
+reference PC, while the *synthetic* whole-app soak half of Q5.4 is not yet built;
+Q5.6 timing gates stay unset until runner variance is calibrated. Q4.2's five
+pinned owner decisions and Q4.4–Q4.7's declared-endpoint audio evidence remain
+open as recorded above. The Q5.1/Q5.2 requirements in this plan are now
+implemented; the plan is not ready to archive until the remaining agent work
+(synthetic whole-app soak, measurement additions) is either done or explicitly
+moved out by the owner.

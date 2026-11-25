@@ -92,3 +92,23 @@ without proving every identifier non-sensitive. Do not repeat that action by
 splitting it into smaller batches. The current review found raw IDs in shell.jsonl; see the dated evidence.
 Retain resource IDs in API and database flows for usability and replay. Confirm exact alert sites from the
 new-head report before any individual dismissals.
+
+## Confirmation and disposition record (2026-11-24)
+
+Read-only verification; no alert action. Full record:
+[code-scanning confirmation](evidence/2026-11-24-code-scanning-confirmation.md).
+
+- Default-branch open alerts: **0**. History: 39 total, 2 `fixed` (#1 C++
+  self-test, #3 browser-expression sanitization) and 37 `dismissed` (25
+  cleartext-logging, 11 hard-coded cryptographic value, 1 weak hashing, 1
+  JavaScript sanitization). The per-alert reasons/comments are in the evidence.
+- Latest completed main run `53e1de80` (push run 45496604253): 23 check runs,
+  all success or intentionally skipped, all with 0 annotations, including the
+  six CodeQL `Analyze` checks. The current main push run on `8e35e3ca` was still
+  in progress; its completed checks had 0 annotations.
+- The `fixed`/`dismissed` state is GitHub's own; the earlier code changes and
+  the corrected shell-log redaction remain the substantive evidence. A future
+  finding must not be dismissed merely because these are closed.
+
+The remediation objective is met: no open alert, every disposition recorded,
+no query or path exclusion added.
