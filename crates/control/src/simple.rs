@@ -507,7 +507,12 @@ impl ControlPlane {
             let scoped = self.scoped_idempotency_key(method, &key);
             let hash = Self::request_hash(&json!({ "method": method, "params": params }));
             if let Some(previous) = self.lookup_idempotent_result(&scoped, &hash)? {
-                return Ok(previous);
+                if self.runtime_replay_is_current(method, &params, &previous)? {
+                    return Ok(previous);
+                }
+                // The recorded outcome no longer holds after a restart. Re-run
+                // the request and journal the true result instead.
+                self.forget_operation_outcome(&scoped)?;
             }
             Some((scoped, hash, key))
         } else {
@@ -604,6 +609,47 @@ impl ControlPlane {
         self.runtimes
             .get(session_id)
             .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+    }
+
+    /// A journaled start/play outcome is only a valid replay while the live
+    /// runtime agrees with it. A control-plane restart keeps the idempotency
+    /// journal but loses every runtime, so a cached "running" would otherwise
+    /// answer a replay with running for a route the summary calls stopped.
+    pub(crate) fn runtime_replay_is_current(
+        &self,
+        method: &str,
+        params: &Value,
+        previous: &Value,
+    ) -> Result<bool, ControlError> {
+        if !matches!(
+            method,
+            "sessions.play" | "sessions.togglePlay" | "sessions.start" | "session.start"
+        ) {
+            return Ok(true);
+        }
+        let Ok(session_id) = self.simple_session_id(params) else {
+            // The session is gone since the result was journaled; let the
+            // method run and answer with its own notFound error.
+            return Ok(false);
+        };
+        let cached_running = previous.get("state").and_then(Value::as_str) == Some("running");
+        if cached_running != self.simple_running(&session_id) {
+            return Ok(false);
+        }
+        if !cached_running {
+            return Ok(true);
+        }
+        // A later start can reuse the id while the runtime generation moves on;
+        // the cached generation, when present, must still be the live one.
+        let live_generation = self
+            .runtimes
+            .get(&session_id)
+            .filter(|runtime| runtime.state() == RuntimeState::Running)
+            .map(|runtime| runtime.generation());
+        match previous.get("generation").and_then(Value::as_u64) {
+            Some(cached_generation) => Ok(live_generation == Some(cached_generation)),
+            None => Ok(true),
+        }
     }
 
     /// Prepare the saved route's devices (every path) and start, as Play does.

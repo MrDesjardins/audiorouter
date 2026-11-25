@@ -167,6 +167,14 @@ and run `installer-lifecycle.ps1` instead of the unattended wrapper.
 `-InjectGuestControlTimeout` now records `timeoutMarkerReached` in `result.json`
 and fails with a marker-specific message when the marker is absent.
 
+The wrapper's later sign-in attempts first dismiss a blocking expired-password
+form and clear the password field (Ctrl+A, Delete) before typing; the first
+attempt sends no focus-moving key. No guest account, password or protection is
+changed. The recorder helper uses one idempotency key per attempt: journal rows
+survive an app restart while runtimes do not, so a fixed key would replay an
+earlier Play/Record result instead of starting a new recording (the product now
+also refuses to replay a runtime action whose live state disagrees).
+
 ## Current qualification snapshot
 
 The 2026-09-17 refresh is the authoritative current status: M05 passes

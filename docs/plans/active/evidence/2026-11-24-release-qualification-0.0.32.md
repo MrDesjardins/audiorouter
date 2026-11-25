@@ -95,7 +95,7 @@ wrapper's restore/start/sign-in/shutdown path. The wrapper's new result field
 `timeoutMarkerReached` was added and is covered by a host regression, but its
 cold-boot path needs a baseline the wrapper can sign in to.
 
-## RQ-05: installed offline operation (partial)
+## RQ-05: installed offline operation (partial in the first session; passed in the follow-up)
 
 Guest network was disconnected with `VBoxManage controlvm setlinkstate1 off`
 (verified `cableconnected1="off"`). Script result:
@@ -130,6 +130,10 @@ and no product code was changed. Consequence: the offline **generated
 recording** sub-case is not qualified; it needs either the UI Play action (a
 person) or a harness step that prepares the retained route.
 
+**Corrected by the follow-up below:** the cause was a replayed idempotency
+result, not route preparation. The harness and the control plane were fixed,
+and offline operation (including the recording) then passed on the same bytes.
+
 ## Cleanup
 
 - Guest NAT link reconnected before shutdown.
@@ -155,3 +159,115 @@ person) or a harness step that prepares the retained route.
 - A second supported Windows build, real audio listening, endurance and the
   broader M08 gates.
 - Hosted CI for this branch (not pushed).
+
+## Follow-up: post-reinstall recorder failure, absent runtime, wrapper sign-in (2026-11-24, second VM session)
+
+### Root cause: a replayed idempotency result outlived its runtime
+
+The earlier failure was not offline-specific and not a recording bug. The
+recorder helper called `sessions.play` with the **fixed** key
+`qualification-play`. Idempotency results are journaled to the database
+(`operation_journal`) and survive a control-plane restart, while the runtime map
+does not. On every later shell launch the same request replayed the journaled
+"running" result without starting anything: `sessions.summary` reported
+`playing:false` and `audioSources.transport` refused. The first lifecycle run
+worked only because that key had not been used yet.
+
+Reproduced on the host through `ControlPlane::dispatch` with a file database and
+the real `tests/fixtures/installer-recorder-session.json`: play, restart the
+control plane, replay the same request → cached `running` with
+`playing:false`. Failing-first regression:
+`a_replayed_play_after_a_restart_does_not_report_a_stopped_route_as_running`
+in `crates/control/src/recorder_play_tests.rs`.
+
+Two defects, both fixed:
+
+- **Product (owning layer):** a journaled runtime outcome was replayed without
+  checking live state. `runtime_replay_is_current` now accepts a replay of
+  `sessions.play`/`togglePlay`/`start` only while the live runtime state matches
+  the recorded result; otherwise `forget_operation_outcome` deletes the stale
+  journal row and the request re-executes and journals the true result.
+  `Storage::delete_journal_result` is new
+  (`journal_delete_allows_a_corrected_result_under_the_same_key`). A cached
+  "running" for a stopped route can no longer be returned after a restart.
+- **Harness:** the recorder helper used fixed idempotency keys for play, record,
+  finalize and stop. It now uses one GUID per recording attempt so a later
+  launch is a new intent, and `m08-lifecycle-recording.ps1` guards that no fixed
+  `qualification-*` key returns. This alone makes the qualification path correct;
+  the shipped 0.0.32 bytes do not contain the product fix, so the guest proof
+  below exercises the harness fix, not the new binary.
+
+Checks: `cargo test -p audiorouter-control` (511 passed, 29 ignored),
+`cargo test -p audiorouter-storage`, workspace and shell strict Clippy, both
+format checks, `node tools/quality/verify.mjs --checks release-tests` (8 scripts,
+27.9 s), `node tools/docs/validate.mjs` (304 files/1,705 links), `git diff
+--check`.
+
+### Absent-WebView2 bootstrap on 0.0.32 (failed by design, same as v0.0.31)
+
+First attempt through the unattended wrapper on
+`lifecycle-webview-absent-v10-20261119` (UUID `6b16514e-0f8c-4699-9585-9253468a492e`)
+failed at console sign-in: the screen showed **arqual4** with "The password is
+incorrect". `guestcontrol` with the same credential succeeded, so the account
+was not the problem; the password field was receiving stray characters (a wake
+Space and an earlier attempt's text). After manually dismissing the expired
+form and clearing the field (Ctrl+A, Delete), the standard user signed in.
+
+Then, with the user signed in, `installer-lifecycle.ps1 -ProductionRecording
+-WebViewBaseline Absent -OfflineBootstrapRetry` on the same snapshot:
+
+- offline setup exit 2, duration 2.75 s; no registration, files, database, shell
+  or runtime left behind (`unattributed-installer-failure`, retry eligible);
+- after the NAT link returned, the same installer bootstrapped WebView2
+  `158.0.4370.33` and passed the whole lifecycle (install 79.7 s because of the
+  bootstrap download, repair, rollback to 0.0.29, upgrade, uninstall, reinstall);
+- production recording 440 Hz stereo 48 kHz, 96,768 frames, RMS 0.0890,
+  SHA-256 `63A6A849FBB77157FA509B4F99A4544F1E25847D8DB4D0AFFCBE92CF229FE96F`,
+  retained through the transitions.
+
+Overall status is `failed` by design because the silent NSIS offline exit has no
+verified bootstrap-specific diagnostic, exactly the v0.0.31 attribution gap; no
+new conclusion about the cause is claimed. Evidence
+`%TEMP%\ar-rq-20261124-absent-inner-34a6ffd05c0f4196bf6ac7513c1fe98d`.
+
+### Offline installed operation after reinstall: passed
+
+After that lifecycle, with the guest network disconnected, the offline check ran
+again with the fixed recorder helper and passed all steps: no DNS/TCP, six
+installed executables at 0.0.32, CLI `status`/`schema`/`session list`/`session
+get`, `system.describe`, MCP stdio `server/discover`, no auto-started shell, no
+endpoint changes (the guest has none), and a production recording through the
+installed bridge: 440 Hz stereo 48 kHz, 97,152 frames, RMS 0.0890, WAV SHA-256
+`6289270CB77C7E0C9A6706D51756DFC0614779C7EFE42B0846A2BA0670D240F4`.
+Evidence `%TEMP%\ar-rq-20261124-offline-fixed-be29bbd739ae44c3ae59c90dd2020eb6.json`.
+This closes the RQ-05 offline-operation sub-case for the 0.0.32 bytes with the
+fixed harness.
+
+### Wrapper cold-boot sign-in: fixed and proved
+
+The wrapper now, on retry only, dismisses a blocking expired-password dialog
+(Enter, then Escape to the account picker) and clears any characters left in the
+password field (Ctrl+A, Delete) before typing. No guest account, password,
+policy or protection is changed. A wrapper run on `lifecycle-offline-20261118`
+with `-InjectGuestControlTimeout` recorded: `sign-in-reset`, successful
+`console-sign-in`, `guest-ready`, a 12 s bounded timeout, `timeoutMarkerReached:
+true`, graceful shutdown; status `failed` by design for the injection. Evidence
+`%TEMP%\ar-rq-20261124-wrapperretry-702646bc7aa84aac8ae4707fffa0d9cb`. On the
+absent snapshot the same reset/clear also produced a manual sign-in.
+
+### Cleanup
+
+Both release guests were powered off, the older guest restored to
+`lifecycle-offline-20261118`, the fresh guest stayed at
+`offline-standard-user-20261121`; 4 CPUs, no VBox processes, no Defender
+exclusions added. `pre-agent-rq-20261124` snapshots are retained.
+
+### Still open after this session
+
+Interactive downloaded-file trust prompt and first-run on 0.0.32; real endpoint
+states and default-device/volume comparison; a second Windows build; the
+Defender verdict and any signing; the fresh guest's credential (optional while
+the older guest is the qualification baseline); the absent-runtime offline
+attribution. The product idempotency fix needs the next build to reach an
+installer; 0.0.32's shipped bytes behave correctly through the fixed harness and
+the UI path (which prepares before start).

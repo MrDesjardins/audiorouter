@@ -113,9 +113,13 @@ try {
     $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = $originalArguments
 }
 # Keys pressed before the password (Tab, Enter, Escape) move focus to the account list on
-# the picker and sent the qualification password to the wrong user. Only a wake is allowed.
+# the picker and sent the qualification password to the wrong user. A retry may dismiss
+# a blocking expired-password dialog first, but the first attempt must stay key-free.
 $wrapperText = [IO.File]::ReadAllText((Join-Path $PSScriptRoot '../../tools/vm/installer-lifecycle-unattended.ps1'))
-if ($wrapperText -match 'sign-in-dismiss') { throw 'Sign-in must not send focus-moving keys before the password' }
+if ($wrapperText -notmatch '(?s)if \(\$signInAttempts -gt 0\) \{.*?sign-in-reset' -or
+    $wrapperText -notmatch '(?s)if \(\$signInAttempts -gt 0\) \{.*?sign-in-clear') {
+    throw 'Sign-in reset and field clear must be retry-only steps'
+}
 # The online retry downloads the WebView2 bootstrapper, so it must wait for guest network
 # after the adapter reconnects instead of starting at once.
 $lifecycleText = [IO.File]::ReadAllText((Join-Path $PSScriptRoot '../../tools/vm/installer-lifecycle.ps1'))

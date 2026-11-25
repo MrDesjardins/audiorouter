@@ -80,6 +80,8 @@ mod network;
 mod network_paths;
 mod persistence;
 mod plugins;
+#[cfg(test)]
+mod recorder_play_tests;
 mod recorder_workers;
 mod recording;
 mod recording_library;

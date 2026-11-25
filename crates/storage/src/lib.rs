@@ -3993,6 +3993,17 @@ impl Storage {
         self.journal_commit_with_hash(key, operation, result, revision, "")
     }
 
+    /// Drop a journaled result whose recorded outcome no longer holds (for
+    /// example a runtime action that did not survive a backend restart), so a
+    /// re-execution can journal the corrected result under the same key.
+    pub fn delete_journal_result(&self, key: &str) -> Result<bool, StorageError> {
+        validate_idempotency_key(key)?;
+        Ok(self.connection.execute(
+            "DELETE FROM operation_journal WHERE idempotency_key = ?1",
+            params![key],
+        )? > 0)
+    }
+
     pub fn journal_commit_with_hash(
         &self,
         key: &str,
@@ -6182,6 +6193,34 @@ mod tests {
             storage.journal_result("op").unwrap().as_deref(),
             Some("{\"revision\":1}")
         );
+    }
+
+    #[test]
+    fn journal_delete_allows_a_corrected_result_under_the_same_key() {
+        let storage = Storage::open_memory().unwrap();
+        assert!(storage
+            .journal_commit_with_hash("op", "sessions.play", "{\"state\":\"running\"}", 0, "hash")
+            .unwrap());
+        assert_eq!(
+            storage
+                .journal_result_checked("op", "hash")
+                .unwrap()
+                .as_deref(),
+            Some("{\"state\":\"running\"}")
+        );
+        assert!(storage.delete_journal_result("op").unwrap());
+        assert_eq!(storage.journal_result_checked("op", "hash").unwrap(), None);
+        assert!(storage
+            .journal_commit_with_hash("op", "sessions.play", "{\"state\":\"stopped\"}", 0, "hash")
+            .unwrap());
+        assert_eq!(
+            storage
+                .journal_result_checked("op", "hash")
+                .unwrap()
+                .as_deref(),
+            Some("{\"state\":\"stopped\"}")
+        );
+        assert!(!storage.delete_journal_result("missing").unwrap());
     }
 
     #[test]

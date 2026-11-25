@@ -606,6 +606,20 @@ impl ControlPlane {
         audiorouter_storage::lower_hex(&digest.finalize())
     }
 
+    /// Drop a journaled outcome that no longer describes the running process
+    /// (a runtime action lost by a backend restart), so re-executing the same
+    /// request can journal its corrected result under the caller's key.
+    pub(crate) fn forget_operation_outcome(&mut self, key: &str) -> Result<(), ControlError> {
+        self.operation_outcomes.remove(key);
+        self.operation_names.remove(key);
+        self.idempotency_hashes.remove(key);
+        self.operation_order.retain(|entry| entry != key);
+        if let Some(storage) = &self.storage {
+            storage.delete_journal_result(key).map_err(storage_error)?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn lookup_idempotent_result(
         &self,
         key: &str,

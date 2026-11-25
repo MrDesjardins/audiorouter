@@ -16,6 +16,9 @@ and the Defender verdict (Microsoft submission pending; signing decision in
 [release signing](release-signing-and-publication.md)). **Superseded in part on
 2026-11-24:** see [the 0.0.32 run and the requirement map](#2026-11-24---0032-bytes-remaining-gates-and-requirement-map).
 RQ-03's guest refusals passed on 2026-11-21; the older "synthetic only" sentence
+below is historical. **Superseded in part on
+2026-11-24:** see [the 0.0.32 run and the requirement map](#2026-11-24---0032-bytes-remaining-gates-and-requirement-map).
+RQ-03's guest refusals passed on 2026-11-21; the older "synthetic only" sentence
 below is historical.
 
 ## Objective and boundary
@@ -346,17 +349,40 @@ PR, tag, draft or publication was performed.
   signed-in check each refused with unchanged target state
   ([v0.0.31 record, RQ-03](evidence/2026-11-19-release-qualification-v0.0.31.md#rq-03-real-guest-refusal-cases-passed-2026-11-21)).
   The guest-side registry-hive assertion stays synthetic.
-- **RQ-05 offline operation (partial).** With the guest NAT link off: no DNS or
-  TCP, all six installed executables at 0.0.32, CLI `status`/`schema`/`session
-  list`/`session get`, `system.describe`, and MCP stdio `server/discover`
-  (protocol `2026-07-28`) all passed; no shell auto-started; the guest has no
-  audio endpoints, so default-device/volume checks are not claimed. The
-  generated-recording step **failed**: `sessions.play` returned running while
-  `sessions.summary` reported `playing: false` and `audioSources.transport`
-  refused, and it reproduced with the network back on. This is an open finding
-  (post-reinstall direct-RPC restart of the retained recorder route), not a
-  product verdict; no product code changed. Evidence
-  `%TEMP%\ar-rq-20261124-offline-85c928db....json`.
+- **RQ-05 offline operation (passed on 0.0.32, with the harness fix).** With the
+  guest NAT link off: no DNS or TCP, all six installed executables at 0.0.32,
+  CLI `status`/`schema`/`session list`/`session get`, `system.describe`, MCP
+  stdio `server/discover` (protocol `2026-07-28`) and a production recording
+  through the installed bridge (440 Hz stereo 48 kHz, 97,152 frames, RMS
+  0.0890, WAV SHA-256 `6289270C...`) all passed; no shell auto-started; the guest
+  has no audio endpoints, so default-device/volume checks are not claimed.
+  Evidence `%TEMP%\ar-rq-20261124-offline-fixed-be29bbd7....json`. The earlier
+  failed attempt was a **stale idempotency replay**, fixed in the product and
+  the harness (below), not an offline defect.
+- **Absent-WebView2 on 0.0.32 (failed by design, attribution unchanged).** From
+  `lifecycle-webview-absent-v10-20261119` with `arqual4`:
+  `installer-lifecycle.ps1 -ProductionRecording -WebViewBaseline Absent
+  -OfflineBootstrapRetry` recorded offline setup exit 2 with nothing left behind,
+  then an online retry that bootstrapped WebView2 `158.0.4370.33` and passed the
+  full lifecycle with the recording. The overall run stays `failed` because the
+  silent offline exit has no verified bootstrap diagnostic, the same gap as
+  v0.0.31. Evidence `%TEMP%\ar-rq-20261124-absent-inner-34a6ffd0...`.
+- **Root cause and fix for the post-reinstall recorder failure.** A replayed
+  `sessions.play` result outlived its runtime: the idempotency journal survives a
+  control restart, the runtimes do not, so a cached "running" was returned while
+  the summary said stopped. Reproduced on the host through
+  `ControlPlane::dispatch` with a file database (failing-first
+  `a_replayed_play_after_a_restart_does_not_report_a_stopped_route_as_running`).
+  Fixed in the owning layer (`runtime_replay_is_current`,
+  `forget_operation_outcome`, `Storage::delete_journal_result`) and in the
+  recorder harness (per-attempt GUID keys). The shipped 0.0.32 bytes do not
+  contain the product fix; the next build carries it.
+- **Wrapper cold-boot sign-in (fixed, proved).** The unattended wrapper now, on
+  retry only, dismisses a blocking expired-password form and clears the password
+  field before typing, without changing any account or security setting. A run
+  on `lifecycle-offline-20261118` recorded `sign-in-reset`, sign-in,
+  `guest-ready`, a 12 s injected timeout, `timeoutMarkerReached: true` and
+  graceful shutdown. Evidence `%TEMP%\ar-rq-20261124-wrapperretry-702646bc....`
 
 ### Harness changes in this session
 
@@ -374,10 +400,23 @@ PR, tag, draft or publication was performed.
   (`tools/quality/checks.mjs`), so they run on every release-area change and in
   `--release` full runs. `m08-lifecycle-recording.ps1` also guards the new
   consent switch.
-- Checks: `node tools/quality/verify.mjs --checks release-tests` passed all
-  eight scripts (28.2 s); `node tools/docs/validate.mjs` passed (303 files,
-  1,695 links); `git diff --check` clean. Not run: hosted CI, a real wrapper
-  cold-boot pass.
+- Recorder idempotency keys are unique per attempt. Journal rows persist across
+  app restarts, so fixed keys replayed an earlier Play/Record result; the guard
+  in `m08-lifecycle-recording.ps1` rejects a fixed key.
+- The product side of that replay defect is fixed in `crates/control`:
+  `runtime_replay_is_current`, `forget_operation_outcome` and
+  `Storage::delete_journal_result`, with failing-first dispatcher and storage
+  regressions (`recorder_play_tests.rs`). The 0.0.32 installer does not contain
+  this fix; the next build does.
+- `installer-lifecycle-unattended.ps1` retries now dismiss a blocking
+  expired-password form and clear the password field before typing, which makes
+  its cold-boot sign-in work on the older baseline. No account or security
+  setting is changed; the guard test requires both steps to be retry-only.
+- Checks: `cargo test -p audiorouter-control` (511 passed, 29 ignored),
+  `cargo test -p audiorouter-storage`, workspace and shell strict Clippy, both
+  format checks, `node tools/quality/verify.mjs --checks release-tests` (8
+  scripts, 27.9 s), `node tools/docs/validate.mjs` (304 files, 1,705 links),
+  `git diff --check` clean. Not run: hosted CI.
 
 ### Requirement-to-evidence map
 
@@ -386,15 +425,15 @@ Statuses are for the named bytes; "partial" names the missing scenario.
 | Requirement | Status | Evidence and exact gap |
 | --- | --- | --- |
 | DIST-01 per-user install | **Pass** | 2026-11-24 0.0.32 fresh install as `arqual4` (standard user, no elevation) and 2026-11-21 v0.0.31 runs; registration and six installed executables checked. |
-| DIST-02 state preservation | **Pass with finding** | Session and recording hash retained through repair, rollback, upgrade, uninstall and reinstall on 0.0.32. Finding: the retained recorder route did not restart through direct RPC after reinstall (see RQ-05); retention itself is proven. |
+| DIST-02 state preservation | **Pass** | Session and recording hash retained through repair, rollback, upgrade, uninstall and reinstall on 0.0.32; a production recording was produced offline after the reinstall. The post-reinstall direct-RPC restart finding is fixed in source with a dispatcher regression; 0.0.32 bytes need the next build for non-UI clients, while the UI Play path prepares first. |
 | DIST-03 first-run guidance | **Partial** | v0.0.31 chooser, `NO DEVICE` cards, no substitution and consent prompt observed 2026-11-21 (guest + isolated host run). Missing: endpoint vendor guidance with a real endpoint on these bytes, and a 0.0.32 interactive pass. |
-| DIST-04 offline operation | **Partial** | 2026-11-24 CLI/MCP/discovery/session offline pass on 0.0.32. Missing: offline generated recording (harness finding above) and offline editing through the window. |
+| DIST-04 offline operation | **Pass for the tested surface** | 2026-11-24 offline on 0.0.32: CLI, schema, retained session read, discovery, MCP stdio and a production recording through the installed bridge. Missing: offline editing through the window itself (not exercised) and the absent-runtime diagnostic attribution. |
 | DIST-05 manual publication | **Pass as tooling review** | `tools/release/test-runbook-command.ps1` and the release scripts pass; no draft/tag/release was created. Publication remains a human action. |
 | DIST-06 provenance/assets | **Pass for v0.0.31; open for 0.0.32** | v0.0.31 assets, digest `b94e5276...3a92`, manifest, checksums, SBOMs and notices verified. The 0.0.32 consolidated manifest exists but there is no tag and no rebuild from a tag. |
 | DIST-07 unsigned disclosure | **Partial** | Manifest and 0.0.31 notes state unsigned. The downloaded-file unsigned-publisher prompt has not been observed; v0.0.31 is quarantined by Defender. |
-| DIST-08 install qualification | **Partial** | Lifecycle on v0.0.31 (four passes, exclusion deviation) and 0.0.32 (one pass). Missing: interactive first run on 0.0.32, missing-WebView2 baseline on the fresh guest, a second supported Windows build, clean Defender for v0.0.31. |
+| DIST-08 install qualification | **Partial** | Lifecycle on v0.0.31 (four passes, exclusion deviation) and 0.0.32 (one pass); absent-runtime baseline on 0.0.32 bootstrapped and passed after the retry. Missing: interactive first run on 0.0.32, a second supported Windows build, clean Defender for v0.0.31, and the offline bootstrap attribution. |
 | NFR-16 standard-user operations | **Pass** | Install, repair, rollback, upgrade, uninstall and reinstall as a standard user; administrator and unloaded-hive states refused. |
-| NFR-15 offline core | **Partial** | CLI, schema, retained session read, local discovery and MCP stdio work offline; the window-based recording path is open as above. |
+| NFR-15 offline core | **Pass for the tested surface** | CLI, schema, retained session read, local discovery, MCP stdio and a production recording all work offline on 0.0.32. |
 | ENG-05 release engineering | **Pass for v0.0.31** | Verified manifest, version/architecture/source agreement and artifact checks; 0.0.32 awaits a tag rebuild. |
 | M08 | **Open** | Plugins/editors, real endpoint continuity and latency, endurance, security evidence, accessibility/Narrator, participant study, reference hardware, a second Windows build and signing stay separate. DEC-17 permits unsigned app bytes. |
 
@@ -407,29 +446,31 @@ this plan is finished.
 1. **Downloaded-file unsigned-publisher prompt and first-run trust on 0.0.32**
    (DIST-07, RQ-05): requires a person at a GUI console and a file downloaded
    with Mark-of-the-Web; the copied-file run says nothing about it.
-2. **Fresh guest credential or interactive sign-in** (RQ-02/RQ-04 wrapper
-   rerun): `AR-ReleaseQualification-Fresh-20261121`'s standard-user password is
-   not on the host, so its console cannot be signed in.
-3. **Wrapper cold-boot sign-in on the older baseline**: Winlogon default is
-   `artest` with an expired password; preparing a baseline whose default user is
-   the test account needs an administrator at the console.
-4. **Offline generated recording through the window** (DIST-04): after reinstall,
-   the direct-RPC recorder restart fails; press Play in the installed window
-   (or fix the harness preparation) and record offline.
-5. **Endpoint states with real endpoints** (DIST-03): physical-only and existing
+2. **Endpoint states with real endpoints** (DIST-03): physical-only and existing
    virtual-endpoint guidance, default devices and volumes unchanged.
-6. **Missing-WebView2 bootstrap on the fresh guest** (RQ-05): needs the guest
-   administrator password and a runtime-absent baseline.
-7. **A second supported Windows build and the reference PC/laptop pass** (M08,
+3. **A second supported Windows build and the reference PC/laptop pass** (M08,
    DIST-08).
-8. **Defender verdict for v0.0.31 and the signing decision** (DIST-07, M08):
+4. **Defender verdict for v0.0.31 and the signing decision** (DIST-07, M08):
    Microsoft submission `eb70e424-...` pending; see
    [release signing](release-signing-and-publication.md).
 
+Optional environments, not gates now that the older guest covers the same cases:
+the fresh guest's standard-user credential (its console cannot be signed in
+without it), and the fresh guest's administrator password if a runtime-absent
+baseline is wanted there. The absent-runtime attribution gap (silent offline
+setup exit 2 with no bootstrap-specific diagnostic) stays a documented failure;
+a future build could add a diagnostic, which is a product change, not a
+qualification gate.
+
+**Open product follow-up (next build, not a gate):** the idempotency-replay fix
+in `crates/control` and `crates/storage` must ship in the next installer. It is
+proven by host dispatcher regressions; the 0.0.32 guest bytes predate it and were
+qualified with the fixed harness and the UI's prepare-then-start path.
+
 **Rollback for this session:** the guests are powered off and restored; the new
 snapshots `pre-agent-rq-20261124` were kept, and no existing snapshot, VM,
-exclusion or owner data was changed. Code rollback is reverting the harness
-commit.
+exclusion or owner data was changed. Code rollback is reverting the harness and
+dispatcher commit.
 
 **Next action:** the manager archives this plan once the human-gated list exists.
 The agent-side lifecycle and harness work is complete for the 0.0.32 bytes.

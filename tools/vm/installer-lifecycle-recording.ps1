@@ -88,27 +88,32 @@ function New-QualificationRecording([string]$Shell, [string]$Root, [switch]$Prob
         $description = DesktopRpc 'system.describe' @{}
         if ($description.protocolVersion.major -ne 1) { throw 'Installed shell returned an unexpected protocol version' }
         if ($ProbeOnly) { return 'usable' }
+        # Every recording is a new intent. Idempotency records persist in the
+        # database across app restarts, so a fixed key would replay a previous
+        # "playing"/"recording" result (and a replayed Play after a restart
+        # reports a stopped route as running). Use one nonce for this attempt.
+        $run = [guid]::NewGuid().ToString('N')
         $access = DesktopRpc 'devices.getAccess' @{}
         if ($access.allowed -ne $ExpectDeviceAccess) { throw "Installed shell device access was $($access.allowed), expected $ExpectDeviceAccess" }
         if (-not $ExpectDeviceAccess) {
             # The window asks once before Play opens devices. Give that consent through
             # the same window-only method the dialog calls, then confirm it stuck.
-            $null = DesktopRpc 'devices.setAccess' @{ allowed = $true; idempotencyKey = 'qualification-device-consent' }
+            $null = DesktopRpc 'devices.setAccess' @{ allowed = $true; idempotencyKey = ('qualification-device-consent-' + $run) }
             $granted = DesktopRpc 'devices.getAccess' @{}
             if ($granted.allowed -ne $true) { throw 'Window consent did not enable device access' }
         }
         $summary = DesktopRpc 'sessions.summary' @{ sessionId = 'qualification-recorder' }
         if ($summary.playing -ne $false) { throw 'Recorder session did not start stopped' }
         $recordings = Join-Path $Root 'recordings'
-        $null = DesktopRpc 'recordings.setRoot' @{ root = $recordings; create = $true; idempotencyKey = 'qualification-root' }
-        $null = DesktopRpc 'sessions.play' @{ sessionId = 'qualification-recorder'; idempotencyKey = 'qualification-play' }
+        $null = DesktopRpc 'recordings.setRoot' @{ root = $recordings; create = $true; idempotencyKey = ('qualification-root-' + $run) }
+        $null = DesktopRpc 'sessions.play' @{ sessionId = 'qualification-recorder'; idempotencyKey = ('qualification-play-' + $run) }
         # A Test Signal stays silent until it is played, like the Tone button in the app.
         $tone = DesktopRpc 'audioSources.transport' @{ sessionId = 'qualification-recorder'; nodeId = 'tone'; action = 'play' }
         if ($tone.state -ne 'playing') { throw 'Generated tone did not start' }
-        $null = DesktopRpc 'recorders.startRecording' @{ sessionId = 'qualification-recorder'; nodeId = 'recorder'; idempotencyKey = 'qualification-start' }
+        $null = DesktopRpc 'recorders.startRecording' @{ sessionId = 'qualification-recorder'; nodeId = 'recorder'; idempotencyKey = ('qualification-start-' + $run) }
         Start-Sleep -Seconds 2
-        $null = DesktopRpc 'recorders.stopRecording' @{ sessionId = 'qualification-recorder'; nodeId = 'recorder'; idempotencyKey = 'qualification-finalize' }
-        $null = DesktopRpc 'sessions.stop' @{ sessionId = 'qualification-recorder'; idempotencyKey = 'qualification-stop' }
+        $null = DesktopRpc 'recorders.stopRecording' @{ sessionId = 'qualification-recorder'; nodeId = 'recorder'; idempotencyKey = ('qualification-finalize-' + $run) }
+        $null = DesktopRpc 'sessions.stop' @{ sessionId = 'qualification-recorder'; idempotencyKey = ('qualification-stop-' + $run) }
         $file = @(Get-ChildItem -LiteralPath $recordings -Filter '*.wav' -File)
         if ($file.Count -ne 1) { throw 'Expected exactly one finalized production WAV' }
         return $file[0].FullName

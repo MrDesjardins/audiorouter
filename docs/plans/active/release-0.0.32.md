@@ -228,6 +228,19 @@ reads of the v0.0.31 installer, and offline operation was only partial (CLI,
 schema, session read, discovery and MCP stdio passed offline; the window-based
 generated-recording restart failed after reinstall and is an open finding).
 
+Follow-up (2026-11-24, second VM session): offline operation now **passes** on
+these bytes with the fixed lifecycle harness, including a production recording
+after the reinstall; the absent-WebView2 baseline bootstrapped WebView2
+`158.0.4370.33` and passed the full lifecycle after its intended offline-exit
+failure; the unattended wrapper's cold-boot sign-in was fixed and proved. The
+earlier recorder failure was a stale replayed `sessions.play` idempotency result:
+the journal survives an app restart while the runtime does not. That product
+defect is fixed in `crates/control`/`crates/storage` with a failing-first
+dispatcher regression, but **these installer bytes predate the fix**; the next
+build must carry it. The UI Play path was never affected because it prepares
+before start. See
+[the 0.0.32 qualification record](evidence/2026-11-24-release-qualification-0.0.32.md#follow-up-post-reinstall-recorder-failure-absent-runtime-wrapper-sign-in-2026-11-24-second-vm-session).
+
 Still open for 0.0.32, all human-gated or unreleased-bytes work: interactive
 first-run and downloaded-file trust, real endpoint guidance, missing-WebView2 on
 a fresh baseline, a second Windows build, a clean Defender verdict, and the
