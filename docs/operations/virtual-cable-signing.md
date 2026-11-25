@@ -1,5 +1,11 @@
 # Signing the AudioRouter virtual cable (step-by-step guide)
 
+> **On hold (2026-11-25):** the owner is waiting for OSSign (six-month project
+> age, earliest application 2027-03-05), which would submit the driver for us.
+> Do not start Parts 1-6 or buy a certificate. This guide is the fallback if
+> OSSign declines. See the
+> [OSSign reply](../plans/future/M03-driver-signing.md#ossign-reply-2026-11-25-ticket-991393).
+
 For the maintainer. These steps cost money and use your identity documents,
 so only you can do them. The agent prepares the driver files, checks every
 result and keeps the records. Facts, prices and Microsoft rules below were

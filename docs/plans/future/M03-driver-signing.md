@@ -1,5 +1,11 @@
 # M03 driver and signing track (AudioRouter virtual cable)
 
+**Decision (2026-11-25, owner): wait for OSSign; buy nothing meanwhile.** OSSign
+answered and can sign both the driver and the app, but needs six months of
+project history. The target date to apply again is **2027-03-05**. See
+[OSSign reply](#ossign-reply-2026-11-25-ticket-991393). This supersedes the
+purchase order below, which stays as the fallback if OSSign declines.
+
 **Update (2026-11-21, user): the one investment goes to the driver.** SignPath
 Foundation declined on 2026-11-16 (reputation requirement; its program does not
 cover driver signing at all). The owner is in the USA and chose that any spend
@@ -140,7 +146,7 @@ through Partner Center, and the failure mode has no appeal path.**
 - The signature users see on an attested driver is Microsoft's, so the owner's
   legal name appears only as the INF provider and inside Partner Center.
 
-**A cheaper route for a single signing: OSSign (unconfirmed).** OSSign is a
+**A cheaper route for a single signing: OSSign (as known on 2026-11-21; answered since, see [the reply](#ossign-reply-2026-11-25-ticket-991393)).** OSSign is a
 Swedish open-source signing initiative (GitHub org
 [OSSign](https://github.com/ossign), contact@ossign.org, backed by
 Scheibling Consulting AB, Cloudyne Systems and Clysec; small, 44 followers). Its
@@ -178,10 +184,57 @@ consider Artifact Signing ($9.99/month) for the app instead.
 
 | Route | Cost | Main risk | Next action |
 | --- | --- | --- | --- |
-| 1. OSSign sponsorship | $0 | Eligibility (history, community), terms unknown, third-party dependency | Owner or agent emails contact@ossign.org with the project, license, repo and driver scope; no purchase |
+| 1. OSSign sponsorship (**chosen 2026-11-25**) | No charge mentioned; confirm | Six-month history rule, acceptance not promised, third-party dependency | Apply again on or after 2027-03-05; no purchase |
 | 2. Own EV (SSL.com Sole Proprietor) + Partner Center as an individual | $359–$459 | Automated trust block with no appeal; certificate cost sunk | Written questions to SSL.com (acceptance and refund) and a Partner Center support ticket before buying |
 | 3. Register a business, then EV and Partner Center | state fee plus $359+ (not researched) | A business was blocked too in one report; company name replaces the personal one | Only if route 2 is refused |
 | 4. Stay on VB-Cable (Route D) | $0 | Install step stays for users | Always available |
+
+### OSSign reply (2026-11-25, ticket 991393)
+
+What OSSign wrote to the owner by email:
+
+1. Nothing in the project looked like a policy problem "from a quick glance".
+   There is a **six-month minimum age**. This is not an acceptance.
+2. It can attestation-sign the driver and sign the app binaries. WHQL is possible
+   with a different scope of requirements.
+3. Attestation is a manual process: OSSign generally builds and tests from the
+   **public sources** and submits that. Expect its build, not our frozen binary,
+   to be the signed one, so Stage A evidence may not transfer without a rerun.
+4. App binaries carry the certificate and name of one of OSSign's backing
+   companies. On the driver, the main signature is **Microsoft's**; OSSign's name
+   may appear deep in the driver files. It does not issue certificates to projects.
+5. Interim suggestions, not taken: Azure Artifact Signing (EUR 9/month, no minimum
+   period) for the app; Certum's open-source certificate; SSL.com or Certum for EV.
+   It said Microsoft's own signing service does not serve the hardware program.
+
+Its [project rules](https://docs.ossign.org/project-rules.html) and
+[process](https://docs.ossign.org/how-it-works.html) (read 2026-11-25 through a
+summarizing fetch, so re-read before applying):
+
+| Rule | AudioRouter on 2026-11-25 |
+| --- | --- |
+| Six months of regular activity before applying, "absolute and non-negotiable" | **Not met.** The GitHub repository was created and first committed to on 2026-09-05, so six months is 2027-03-05 |
+| Public on GitHub, one primary project | Met: public |
+| OSI-approved license | GitHub reports GPL-3.0; the driver folder also carries MS-PL (`drivers/audiorouter-virtual/LICENSE-MS-PL.txt`). Both are OSI-approved; confirm which files each covers and that the combination is compatible before applying |
+| Community impact (stars, issues, PRs, downloads) | 70 stars; no threshold published |
+| CI with vulnerability and dependency checks | cargo-deny, npm audit, Dependabot and CodeQL exist; recheck when applying |
+| LLM-generated content is judged case by case; the author must show a clear understanding | Prepare: the owner should be able to explain the driver design |
+| No test certificates or custom CAs, leaked secrets in history, unexplained binary blobs or risky build scripts; whole-codebase review | Not audited. The test-signed VM tooling needs a clear explanation |
+| Kernel drivers get stricter checks | Keep the driver small and documented |
+
+After acceptance OSSign creates a companion repository, makes a test build and
+reviews changes per release (hours to a day or two). Archived projects lose
+signing. Its `requesting-builds` page and application form were not read.
+
+**While waiting:** stay active in public and keep CI green, keep releases unsigned
+and disclosed, stay on VB-Cable (Route D), and finish Stage A and the assurance
+plan. Before applying, make the driver build reproducible from a clean public
+checkout and audit the table above.
+
+**Apply checklist (2027-03-05 or later):** re-read the rules; ask cost,
+turnaround and whether the exact OSSign-built package can be returned for Stage A
+before submission; apply at https://ossign.org/#apply, citing ticket 991393.
+If declined, reopen the EV route below with fresh prices.
 
 ### SSL.com reply (2026-11-21, ticket #159205994) and what it changes
 
@@ -218,7 +271,7 @@ Consequences for the plan:
 
 1. Will the owner register a business (state fee, a business address and phone listing become public in the certificate) if Partner Center refuses individuals? Or is "no business" firm?
 2. ~~Is the legal name acceptable as the public publisher name?~~ Answered 2026-11-21: yes.
-2b. Is the owner willing to let OSSign (a third-party, small, Sweden-based initiative) handle the signed submission, with the signature coming from its Hardware Program account? And willing to wait for its eligibility window (a third-party report says six months of public history)? Is a $359 spend acceptable with a real chance of enrollment refusal and no refund?
+2b. ~~OSSign and its eligibility window~~ Answered 2026-11-25: yes, wait for OSSign. The EV spend is not being made. Original question: Is the owner willing to let OSSign (a third-party, small, Sweden-based initiative) handle the signed submission, with the signature coming from its Hardware Program account? And willing to wait for its eligibility window (a third-party report says six months of public history)? Is a $359 spend acceptable with a real chance of enrollment refusal and no refund?
 3. Does signing the app and installer justify $379 (token) to $900/yr (eSigner) beyond the driver, given that SmartScreen reputation is not instant?
 4. How many driver releases are expected in the first two years? That decides 1-year versus a multi-year term.
 5. Is a signed driver still wanted if Microsoft answers that attestation is for testing only and WHCP/HLK is needed (weeks of lab work, no extra money)?
@@ -231,7 +284,7 @@ Consequences for the plan:
 - Certum in USD, its individual eligibility and CI use.
 - Windows Report's 2027 claim (HTTP 403), Microsoft's own announcement link, and whether an expired certificate affects signed drivers.
 - No Partner Center registration was attempted; whether a sole-proprietor EV passes manual review is unknown.
-- OSSign's own pages (ossign.org returned only a title; `ossign-docs/pages/` not read): eligibility, cost, publisher name, application and turnaround. SSL.com's refund policy. Microsoft's `hardware-submission-support` page (support path for blocked registrations) was not fetched.
+- OSSign's cost, application form and attestation turnaround (the rules and publisher name were answered 2026-11-25). SSL.com's refund policy. Microsoft's `hardware-submission-support` page (support path for blocked registrations) was not fetched.
 
 ### Sources (read 2026-11-21)
 
