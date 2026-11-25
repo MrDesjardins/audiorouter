@@ -63,7 +63,7 @@ function Get-PreflightReasons {
     $reasons = @()
     if ($Verdict.Verdict -eq 'Starved') { $reasons += $Verdict.Detail }
     if ($Verdict.Verdict -eq 'NoData') { $reasons += $Verdict.Detail }
-    if (@($Wsl).Count -gt 0) { $reasons += "WSL is running ($(@($Wsl) -join ', ')); run: wsl --shutdown" }
+    if (@($Wsl).Count -gt 0) { $reasons += "WSL is running ($(@($Wsl) -join ', ')); stop it first (owner action): wsl --shutdown" }
     return @($reasons)
 }
 # A sampler is alive when the CSV gained a row recently (host clock only).
