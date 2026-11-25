@@ -978,14 +978,120 @@ install; an end-to-end database+recording restore on a reference machine; and
 the unsigned/signing/paperwork decisions. They are listed as human gates in the
 final handoff.
 
+## Q5.4 execution: synthetic whole-app soak (2026-11-24)
+
+The synthetic half of Q5.4 is implemented and run; it is not endurance evidence.
+Full record: [soak and measurements](evidence/2026-11-24-q5-soak-and-measurements.md).
+
+- `run-app-soak.ps1 -Synthetic` runs the packaged shell on a fresh disposable
+  database/profile, refuses a running instance or an owned default control pipe,
+  never presses Play or grants device administration, and samples handles,
+  threads, private bytes, CPU and bounded log bytes. The shared
+  `app-soak-analysis.mjs` now produces both modes' verdicts; 10 tests cover
+  passing/leaking data, log floods, short vs endurance and exit codes.
+- `packaged-shell-synthetic.mjs` drives device-free `nodes.add`/`nodes.set`
+  edits, one bridged `nodes.remove`, idle polling and a UI reload every 2
+  minutes over loopback CDP.
+- Recorded 10-minute run: 1803 edits, 4 reloads, 0 RPC/page errors, 64 nodes,
+  623 ms 64-node input-to-paint, shell alive, 0 error lines, isolation clean.
+  Shell private +13 MiB over the run; handles fell; WebView private fell after
+  reloads. Log history was 1.8/2.3 h under that edit rate. The values are
+  reported as a short run, not against endurance gates. A corrected 3-minute run
+  measured post-GC JS heap 10.7 → 20.0 MiB. No gate was set.
+- Not run: a release-mode shell, scheduling the soak in CI, or the live
+  whole-app endurance on the reference PC (Q5.4 hardware half remains).
+
+## Q5.5 execution: local UI baselines (2026-11-24)
+
+`ui/e2e/performance-baseline.pw.ts` (skipped unless
+`AUDIOROUTER_PERF_BASELINE=1`) recorded with Edge and the dev server:
+64-node input-to-paint 1617 ms; telemetry 56 changes/3 s with gap min/median/
+p95/max 33.6/47.9/80.1/100.3 ms; post-GC JS heap 31.9 MiB; browser private 54.6
+MiB; all renderers 558.2 MiB (2); GPU 334.3 MiB. Renderer attribution is not
+claimed. These are development baselines, reported not gated; the packaged
+WebView and the reference-PC memory measurements remain open.
+
+## Q4.4/Q4.5 verification against M02/M04 (2026-11-24)
+
+No new test was needed; the existing coverage was mapped in the evidence file.
+Q4.4: deterministic continuity/silence/sample fidelity, non-finite rejection,
+clock mismatch, queue bounds, bypass, graph replacement, every source/tool kind
+and Mixer topology, and burst/stall/restart cases all have named tests in
+`engine/tests/deterministic_audio.rs`, `source_combinations.rs`,
+`tool_combinations.rs`, engine unit tests and `drift_sim_tests.rs`, backed by
+M02/M04 evidence. Q4.5: every one-click recording asserts a parsed WAV
+(`assert_playable_wav`), WAV/FLAC inspector and recovery tests cover headers,
+frame counts and truncation, drops/stalls/repeats are injected, independent
+recorder nodes and a failing sibling cover fan-out and write-failure isolation,
+and bounded fuzzing parses mutated files. The open parts are the declared-
+endpoint live cases (Q4.6/Q4.7) and a real full-volume disk failure.
+
+## Q4.2 owner decision briefs (2026-11-24)
+
+Each is pinned today; the tests named in the Q4.2 section already encode it. Pick
+one line per item.
+
+1. **A dropped recovery leaves the runtime marked running.**
+   Current: a graph commit, a recording start or a failed plugin drops a pending
+   device recovery; the route still reports running while its worker is stopped;
+   `devices.bindingInvalidated` is the only notice until Stop.
+   Recommended: on a user-triggered drop, mark the route stopped and publish the
+   reason so status matches the stopped worker; never auto-restart. This may
+   finalize a recording, so pair it with a test.
+   Alternative: keep today's status and make the UI banner say "device lost;
+   press Stop, then Play", avoiding any recorder-finalization change.
+   Tests: `a_graph_commit_during_device_recovery_cancels_the_stale_recovery`,
+   `a_recording_started_after_a_device_loss_cancels_the_recovery`.
+
+2. **`session.start` on a device-lost route starts nothing.**
+   Current: it cancels the pending recovery; because the runtime says running it
+   starts nothing and the route stays silent until Stop+Play. Desktop Play
+   prepares first and refuses, so mostly an API-client path.
+   Recommended: keep fail-closed but return a distinct `nodeNotReady` ("stop,
+   then play") instead of a successful no-op.
+   Alternative: let `session.start` attempt prepare/recovery automatically
+   (auto-heal), which starts a route the user may not have confirmed.
+   Test: `a_start_on_a_device_lost_route_cancels_its_recovery_and_starts_nothing`.
+
+3. **A second sleep forgets the first sleep's resume list.**
+   Current: two sleeps without a resume replace the list with an empty one;
+   nothing restarts, and Resume offers nothing.
+   Recommended: merge/union the stopped-route lists across repeated sleeps;
+   still fail-closed.
+   Alternative: keep the empty list and document that a missed resume
+   notification empties Resume.
+   Test: `a_second_sleep_forgets_the_first_sleeps_resume_list`.
+
+4. **The sleep resume list has no failed-plugin filter.**
+   Current: the witness and recovery exclude failed-plugin routes, but the sleep
+   resume list does not; its only consumer is the Advanced panel's explicit
+   Restart, and `record_runtime_crash` has the same gap (tests only).
+   Recommended: apply the same failed-plugin filter to both, so an explicit
+   Restart skips a known-failed plugin with a message.
+   Alternative: leave it explicit and document that Restart may retry a failed
+   plugin.
+   Test: add one for whichever choice; the Q4.2 inventory records the gap.
+
+5. **Armed-recorder sleep semantics differ from "recording".**
+   Current: `handle_os_transition` counts an Armed recorder as recording and
+   refuses sleep; `session_is_recording` does not, and recovery may still arm.
+   Recommended: use one "armed or recording" predicate for sleep refusal and
+   never arm recovery for an armed recorder.
+   Alternative: treat Armed as idle, allow sleep, and discard the armed recorder
+   with an explicit message.
+   Test: `sleep_with_a_recording_changes_nothing_and_resume_after_it_restarts_nothing`
+   (recording case); add the armed case with the chosen behaviour.
+
 ## Remaining after 2026-11-24
 
-Q5.3's failure triage continues on each nightly; Q5.4's isolated live whole-app
-endurance and Q5.5's input-to-paint/telemetry/memory measurements need the
-reference PC, while the *synthetic* whole-app soak half of Q5.4 is not yet built;
-Q5.6 timing gates stay unset until runner variance is calibrated. Q4.2's five
-pinned owner decisions and Q4.4–Q4.7's declared-endpoint audio evidence remain
-open as recorded above. The Q5.1/Q5.2 requirements in this plan are now
-implemented; the plan is not ready to archive until the remaining agent work
-(synthetic whole-app soak, measurement additions) is either done or explicitly
-moved out by the owner.
+Q5.3's failure triage continues per nightly (operating cadence, not a one-shot
+slice). Q5.4's live whole-app endurance and the reference-PC memory/renderer
+measurements need the reference PC; Q5.6 timing gates and Q5.2 module floors are
+decisions after more nightly data. Q4.2's five decisions above and Q4.6/Q4.7's
+declared-endpoint audio evidence remain owner/hardware items. Q6's release,
+installer, clean-machine, rollback-fixture, database-restore, preview and
+signing items remain human gates (final handoff).
+
+No agent-only Q5.4/Q5.5 slice remains. The plan is ready to archive once the
+owner moves the Q4.2/Q5.x decision and Q4.6/Q4.7 hardware items to the human-gated
+task file; the code, soak, measurement and documentation work is on this branch.
