@@ -974,12 +974,74 @@ docs 307 files/1,701 links pass; `git diff --check` pass. Not run: a packaged
 Windows launch of the new dialog in each language, Narrator, fluent review,
 live audio.
 
-Everything an agent can do on this plan is done. The remaining items need a
-person, hardware, VM, purchase or an owner decision; see the final handback,
-which supplies the exact steps and pass criteria for the manager's
-`human-gated-tasks.md`. Accepted, non-blocking limitation: backend-originated
-Fun Voice Changer preset names/descriptions and a few node-issue details stay
-English where the backend supplies them (recorded 2026-11-19).
+### 2026-11-24 — Manager review round 2: real-path proof and code lists
+
+Requirements: L10N-06, UI-04, AUTO-18. Same branch, local commits only.
+
+1. **Fixture defect.** `ui/src/routeHarness.tsx` still threw
+   `new Error("permission denied: DeviceAdministration")`, so the new
+   structured check never opened the consent dialog. Before the fix,
+   `device-access-consent` (3 themes) and the device-access case in
+   `dialog-audits-more` (3 themes) failed: 6 failed, 28 passed. The fixture now
+   throws `AudioRouterRpcError` with the backend's exact shape
+   (`code -32001`, `data.code permissionDenied`,
+   `data.permissionScope deviceAdministration`, empty `resourceIds`,
+   retryable false, remediation). After the fix both specs pass: 34 passed.
+   A grep of `ui/src` and `ui/e2e` found no other unstructured producer:
+   `backend.ts` still parses the permission sentence only to choose the
+   displayed message (not a behaviour decision), and "session to be stopped"
+   remains only in tests that prove the prose no longer counts.
+2. **Real path.** No hop rewrites `data`: `forward_rpc_request_from` encodes the
+   request, round-trips the authenticated pipe and decodes the response;
+   `log_shell_rpc_with` reads fields without mutating them;
+   `createAudioRouterClient` builds `AudioRouterRpcError` from `response.error`.
+   Two new tests: `a_permission_refusal_keeps_its_scope_through_the_shell_transport`
+   (`src-tauri`, Observer through `dispatch_authorized` → real pipe → decoded
+   `data.permissionScope = deviceAdministration`) and the UI
+   `structured errors through the transport` case
+   (`createLiveBackendFromTransport` → `AudioRouterRpcError.data.permissionScope`
+   → `isDeviceAccessDenied`).
+3. **`sessionNotStopped` lists.** Added to `REFUSAL_CATEGORIES`
+   (`contract_cases.rs`), the transport log guidance, the MCP activity
+   allow-list (`cli`), the control error-data table, the HTTP 409 mapping and
+   its test, and `docs/spec/10-api.md`. The transport kind check is shape-based
+   (`is_stable_error_code`), so no list change is needed; `api-reference.md`
+   has no error-code union and no in-repo generator, and
+   `ApplicationErrorData.code` is a string (no union) — left unchanged.
+4. **Device-busy reasons.** `audio_status_for` can produce 16 reasons
+   (running/configured-stopped/not-prepared × endpoint, process-loopback,
+   duplex, render-source, multi-input, cable-route); none contains "in use",
+   "owned" or "exclusive". New regression
+   `no_audio_status_reason_means_another_application_owns_the_device`
+   (`status_tests.rs`) enumerates them.
+5. **Read-only load.** `shell_settings::load` only stats and reads the file; it
+   never creates, renames or quarantines. New test
+   `load_never_rewrites_a_damaged_or_oversized_file` proves corrupt and
+   oversized bytes are unchanged and the directory entry count stays 1.
+
+Checks (Windows 11, 2026-11-24): `cargo test -p audiorouter-control
+-p audiorouter-transport -p audiorouter-cli` (control 511 passed/29 ignored;
+transport 43/1; the CLI binaries that ran all passed);
+`cargo test --manifest-path src-tauri/Cargo.toml` 144 passed/4 ignored;
+`cargo clippy --workspace --all-targets --all-features -- -D warnings` and the
+same for `src-tauri`: pass; both `cargo fmt --check`: pass. UI `typecheck:all`,
+`lint` (0 warnings), `format:check`, `npm test` 137 files/1,202 tests: pass.
+`contracts check:drift` pass; docs 307 files/1,701 links; `git diff --check`
+clean. Playwright (Edge, `--workers=2`, temp port 4291): 110 passed across
+`device-access-consent`, `device-access-recovery`, `device-binding`,
+`device-used-by`, `dialog-audits`, `dialog-audits-more`, `goals-and-tour`,
+`live-controls`, `node-not-ready`, `setup-check`, `startup-reconnect`,
+`ui-language`, `ui-language-zoom`, `unfed-processors`, `copy-error` and
+`header-canvas-usability`.
+
+Not run: packaged shell/tray/dialogs, Narrator, display scaling, live audio,
+fluent review, full Playwright suite.
+
+Accepted, non-blocking limitation: backend-originated Fun Voice Changer preset
+names/descriptions and a few node-issue details stay English where the backend
+supplies them (recorded 2026-11-19). The plan remains ARCHIVE: every remaining
+item is a human gate or that accepted product decision; the human-gate steps
+were supplied in the round-2 handback.
 
 ## References
 

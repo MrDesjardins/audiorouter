@@ -4032,6 +4032,44 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
+    fn a_permission_refusal_keeps_its_scope_through_the_shell_transport() {
+        let pipe_name = format!(r"\\.\pipe\audiorouter-shell-scope-{}", std::process::id());
+        let server = {
+            let pipe_name = pipe_name.clone();
+            std::thread::spawn(move || {
+                audiorouter_transport::serve_control_connections_as_role(
+                    &pipe_name,
+                    1,
+                    ControlPlane::new("shell-scope-test"),
+                    audiorouter_control::ClientRole::Observer,
+                )
+                .unwrap();
+            })
+        };
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "nativeEndpoints.prepare".into(),
+            params: Some(json!({
+                "sessionId": "session-scope",
+                "captureEndpointId": "capture-scope",
+                "renderEndpointId": "render-scope"
+            })),
+        };
+        let response = forward_rpc_request(&request, &pipe_name).unwrap();
+        let error = response.error.expect("Observer must be refused");
+        assert_eq!(error.code, -32001);
+        let data = error.data.expect("a refusal carries its data");
+        assert_eq!(data["code"], "permissionDenied");
+        assert_eq!(
+            data["permissionScope"], "deviceAdministration",
+            "the shell transport must preserve the structured scope"
+        );
+        server.join().unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
     fn chosen_save_destination_is_approved_and_exported_through_the_real_pipe() {
         let suffix = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

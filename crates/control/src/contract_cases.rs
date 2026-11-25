@@ -433,6 +433,7 @@ pub const REFUSAL_CATEGORIES: &[&str] = &[
     "nodeNotReady",
     "idempotencyConflict",
     "revisionConflict",
+    "sessionNotStopped",
 ];
 
 /// Run every generated invalid case for every method against `adapter` and

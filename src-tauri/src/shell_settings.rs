@@ -207,4 +207,25 @@ mod tests {
         assert!(loaded.keybinds.is_empty());
         let _ = std::fs::remove_dir_all(&folder);
     }
+
+    #[test]
+    fn load_never_rewrites_a_damaged_or_oversized_file() {
+        // The language is resolved before the single-instance claim; loading
+        // must stay read-only, with no create, rename or quarantine.
+        let folder =
+            std::env::temp_dir().join(format!("audiorouter-shell-readonly-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&folder);
+        std::fs::create_dir_all(&folder).unwrap();
+        let path = path_beside(&folder.join("state.sqlite"));
+        for content in [
+            "{ not json".to_owned(),
+            format!("\"{}\"", "x".repeat(MAX_SETTINGS_BYTES as usize + 1)),
+        ] {
+            std::fs::write(&path, &content).unwrap();
+            let _ = load(&path);
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), content);
+            assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 1);
+        }
+        let _ = std::fs::remove_dir_all(&folder);
+    }
 }

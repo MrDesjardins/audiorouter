@@ -13,6 +13,7 @@ import {
 } from "./backend";
 import { AudioRouterRpcError } from "@audiorouter/contracts";
 import { demoSession } from "./fixtures";
+import { isDeviceAccessDenied } from "./DeviceAccess";
 import { applyGraphDraft, describeDraftChanges, setNodeDraftFlag, setNodeDraftParameter } from "./draft";
 
 describe("disconnected backend", () => {
@@ -248,6 +249,39 @@ describe("UI error formatting", () => {
     expect(formatUiError(error, "fallback")).toBe(
       "Permission denied: this app is not granted the required permission needed for this action, so the backend refused it. Nothing was changed.",
     );
+  });
+});
+
+describe("structured errors through the transport", () => {
+  it("keeps the permission scope from the transport response to the consent check", async () => {
+    const transport = {
+      send: async (request: { id?: unknown }) => ({
+        jsonrpc: "2.0",
+        id: request.id ?? null,
+        error: {
+          code: -32001,
+          message: "permission denied: DeviceAdministration",
+          data: {
+            code: "permissionDenied",
+            fieldPath: null,
+            resourceIds: [],
+            retryable: false,
+            remediation: "request the required permission scope for the target operation",
+            permissionScope: "deviceAdministration",
+          },
+        },
+      }),
+    };
+    const backend = createLiveBackendFromTransport(transport as never, "session");
+    let caught: unknown;
+    try {
+      await backend.prepareNativeEndpoint!("session", "capture", "render");
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(AudioRouterRpcError);
+    expect((caught as AudioRouterRpcError).data?.permissionScope).toBe("deviceAdministration");
+    expect(isDeviceAccessDenied(caught)).toBe(true);
   });
 });
 

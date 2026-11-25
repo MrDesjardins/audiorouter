@@ -269,7 +269,7 @@ impl std::fmt::Display for ControlError {
             | Self::Audio { message, .. }
             | Self::NodeNotReady { message, .. } => write!(f, "{message}"),
             Self::SessionNotStopped => {
-                write!(f, "this graph commit requires its session to be stopped")
+                write!(f, "This graph commit requires its session to be stopped.")
             }
             Self::PluginScan(error) => match error {
                 audiorouter_plugin_host::ScanError::InvalidRoot => {
@@ -1618,6 +1618,7 @@ mod tests {
                 "idempotencyConflict",
             ),
             (ControlError::IdempotencyConflict, "idempotencyConflict"),
+            (ControlError::SessionNotStopped, "sessionNotStopped"),
             (ControlError::Storage("disk full".into()), "storageFailure"),
             (
                 ControlError::CorruptDatabase("page checksum".into()),
@@ -1641,6 +1642,7 @@ mod tests {
                 "\")",
                 "InvalidRequest",
                 "IdempotencyConflict",
+                "SessionNotStopped",
                 "SessionNotFound",
                 "PluginScan",
                 "InvalidRoot",

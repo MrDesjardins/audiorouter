@@ -513,7 +513,19 @@ const previewBackend: UiBackend = {
     return { allowed };
   },
   async prepareNativeEndpoint(sessionId, captureEndpointId, renderEndpointId) {
-    if (!deviceAccess) throw new Error("permission denied: DeviceAdministration");
+    if (!deviceAccess)
+      throw new AudioRouterRpcError({
+        code: -32001,
+        message: "permission denied: DeviceAdministration",
+        data: {
+          code: "permissionDenied",
+          fieldPath: null,
+          resourceIds: [],
+          retryable: false,
+          remediation: "request the required permission scope for the target operation",
+          permissionScope: "deviceAdministration",
+        },
+      });
     if (sessionId !== committed.id || captureEndpointId !== "capture-preview" || renderEndpointId !== "render-preview")
       throw new Error("Fixture endpoint mismatch");
     prepared = true;

@@ -2747,6 +2747,7 @@ fn mcp_tool_activity_record(
                 *kind,
                 "permissionDenied"
                     | "revisionConflict"
+                    | "sessionNotStopped"
                     | "rateLimited"
                     | "invalidParams"
                     | "notFound"
@@ -4707,6 +4708,13 @@ mod tests {
         let record =
             mcp_tool_activity_record("assistant-client", &request, &response, 1234, "bad id");
         assert_eq!(record["errorKind"], "permissionDenied");
+        // A refused commit that needs its session stopped keeps its own kind.
+        let stopped = serde_json::json!({"error":{"code":-32602,"message":"private detail","data":{"code":"sessionNotStopped"}}});
+        assert_eq!(
+            mcp_tool_activity_record("assistant-client", &request, &stopped, 1234, "bad id")
+                ["errorKind"],
+            "sessionNotStopped"
+        );
         // An invalid correlation ID is never logged.
         assert_eq!(record["requestId"], Value::Null);
         assert_eq!(record["outcome"], "error");
