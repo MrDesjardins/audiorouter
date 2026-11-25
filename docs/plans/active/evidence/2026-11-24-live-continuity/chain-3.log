@@ -4,53 +4,53 @@ At line:11 char:91
 +                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     + CategoryInfo          : NotSpecified: (    Finished `r...get(s) in 0.13s:String) [], RemoteException
     + FullyQualifiedErrorId : NativeCommandError
- 
+
      Running tests\live_audio_continuity.rs (target\release\deps\live_audio_continuity-8b777f43e301c398.exe)
 
 running 1 test
 tone render buffer: 2400 frames
 prepared: {"branchNodeIds":["destination"],"generation":1,"pathCount":1,"renderEndpointIds":["{0.0.0.00000000}.{03498a2
 a-ef6a-4dd4-b9ba-72e22f567d7a}"],"sessionId":"continuity","sourceNodeIds":["source"],"state":"configured-stopped"}
-started: 
+started:
 {"generation":1,"preview":false,"runtime":"native","savedRevision":0,"sessionId":"continuity","state":"running"}
 service phase maxima (wait, dispatch, pump): [3.1974ms, 924.5┬╡s, 895.1┬╡s]
-chain: [Gain, ParametricEq, GraphicEq, BassTreble, Dehum, Compressor, Gate, Limiter, Delay, Meter]; audio service: 
+chain: [Gain, ParametricEq, GraphicEq, BassTreble, Dehum, Compressor, Gate, Limiter, Delay, Meter]; audio service:
 {"active":true,"lateGaps":0,"maxGapMicros":3204,"passes":19281}; output underruns: 1
   "source" timing={"delayMs":19.927378574916897} plugin=null network=null processor=null
-  "tool-0" timing={"delayMs":0.0,"processingUsAvg":0.5068545316070069,"processingUsMax":60.2} plugin=null network=null 
+  "tool-0" timing={"delayMs":0.0,"processingUsAvg":0.5068545316070069,"processingUsMax":60.2} plugin=null network=null
 processor=null
-  "tool-1" timing={"delayMs":0.0,"processingUsAvg":3.694960649911145,"processingUsMax":57.9} plugin=null network=null 
+  "tool-1" timing={"delayMs":0.0,"processingUsAvg":3.694960649911145,"processingUsMax":57.9} plugin=null network=null
 processor=null
-  "tool-2" timing={"delayMs":0.0,"processingUsAvg":9.754023863924855,"processingUsMax":100.4} plugin=null network=null 
+  "tool-2" timing={"delayMs":0.0,"processingUsAvg":9.754023863924855,"processingUsMax":100.4} plugin=null network=null
 processor=null
-  "tool-3" timing={"delayMs":0.0,"processingUsAvg":2.5174536684437676,"processingUsMax":38.1} plugin=null network=null 
+  "tool-3" timing={"delayMs":0.0,"processingUsAvg":2.5174536684437676,"processingUsMax":38.1} plugin=null network=null
 processor=null
-  "tool-4" timing={"delayMs":0.0,"processingUsAvg":4.386760599136837,"processingUsMax":186.9} plugin=null network=null 
+  "tool-4" timing={"delayMs":0.0,"processingUsAvg":4.386760599136837,"processingUsMax":186.9} plugin=null network=null
 processor=null
-  "tool-5" timing={"delayMs":0.0,"processingUsAvg":2.2366590505204367,"processingUsMax":48.6} plugin=null network=null 
+  "tool-5" timing={"delayMs":0.0,"processingUsAvg":2.2366590505204367,"processingUsMax":48.6} plugin=null network=null
 processor={"gainReductionDb":[0.0,0.0],"gateOpen":[false,false],"inputLevelDb":[-26.021881103515625,-26.021881103515625
 ],"outputLevelDb":[-26.021881103515625,-26.021881103515625]}
-  "tool-6" timing={"delayMs":0.0,"processingUsAvg":11.184513835998985,"processingUsMax":150.5} plugin=null 
+  "tool-6" timing={"delayMs":0.0,"processingUsAvg":11.184513835998985,"processingUsMax":150.5} plugin=null
 network=null processor={"gainReductionDb":[1.6815581571897805e-43,0.0],"gateOpen":[true,false],"inputLevelDb":[-26.0218
 81103515625,-26.021881103515625],"outputLevelDb":[-26.021881103515625,-26.021881103515625]}
   "tool-7" timing={"delayMs":5.0,"processingUsAvg":1.762147753236862,"processingUsMax":14.4} plugin=null network=null p
 rocessor={"gainReductionDb":[0.0,0.0],"gateOpen":[false,false],"inputLevelDb":[-26.021881103515625,-26.021881103515625]
 ,"outputLevelDb":[-26.029834747314453,-26.029834747314453]}
-  "tool-8" timing={"delayMs":0.0,"processingUsAvg":2.2974485910129476,"processingUsMax":88.4} plugin=null network=null 
+  "tool-8" timing={"delayMs":0.0,"processingUsAvg":2.2974485910129476,"processingUsMax":88.4} plugin=null network=null
 processor=null
-  "tool-9" timing={"delayMs":0.0,"processingUsAvg":0.8638486925615639,"processingUsMax":13.1} plugin=null network=null 
+  "tool-9" timing={"delayMs":0.0,"processingUsAvg":0.8638486925615639,"processingUsMax":13.1} plugin=null network=null
 processor=null
   "destination" timing={"delayMs":25.84539460489017} plugin=null network=null processor=null
-reference (CABLE Output): 20.0 s analysed, peak 0.0500, 0 glitches, 0 silent runs (0 samples), 0 WASAPI discontinuity 
+reference (CABLE Output): 20.0 s analysed, peak 0.0500, 0 glitches, 0 silent runs (0 samples), 0 WASAPI discontinuity
 flags
   glitches per 5 s: [0, 0, 0, 0, 0]
-routed result (CABLE-B Output): 20.0 s analysed, peak 0.0500, 2 glitches, 1 silent runs (578 samples), 0 WASAPI 
+routed result (CABLE-B Output): 20.0 s analysed, peak 0.0500, 2 glitches, 1 silent runs (578 samples), 0 WASAPI
 discontinuity flags
   glitches per 5 s: [0, 0, 2, 0, 0]
   at   11.477 s residual 0.61x amplitude
   at   11.489 s residual 0.61x amplitude
 
-thread 'live::live_backend_service_keeps_a_routed_tone_continuous' (50668) panicked at 
+thread 'live::live_backend_service_keeps_a_routed_tone_continuous' (50668) panicked at
 crates\transport\tests\live_audio_continuity.rs:1223:9:
 assertion `left == right` failed: the routed tone has audible discontinuities
   left: 2
