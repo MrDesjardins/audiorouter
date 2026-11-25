@@ -479,3 +479,44 @@ PR #171 (`c6f59c195`) and PR #174 (`3ef36a1ff`) are merged (status note,
 2026-11-24). Owner decisions still open: whether assistants may record
 (option a), and whether session rename needs a new API method. Once decided,
 the implementation is portable.
+
+## Closure verification (2026-11-24)
+
+Verified on branch `plans/api-mcp` from `origin/main` `53e1de80e`. Every
+finding in both reviews is implemented and covered on `main`; the local
+`fix/rust-small-defects` commits are also already in `main` through the #187
+integration branch, so nothing was cherry-picked. Full evidence, per-finding
+file/test references and command results:
+[`evidence/2026-11-24-api-mcp-plan-closure.md`](evidence/2026-11-24-api-mcp-plan-closure.md).
+
+- Findings 1-14: implementations at the cited files; the named regression
+  tests pass (network-path refusal, retry-safe session creation, plain error
+  text, annotation/read-only hints, default tools without keys, MCP lifecycle
+  stdio tests, result envelope, HTTP status codes and OpenAPI, idempotency
+  conflict, recipe numbering, `GET /api/v1/sessions` paging, saved-version
+  errors).
+- R2-2 (client revoke self-lockout), R2-3 (silent start), R2-5 (shared REST
+  budget) and R2-6 (undo retry wording, HTTP docs, test doc comment) are
+  fixed and tested.
+- R2-1 option (b) is in place; R2-4 OBS status is a default read-only tool.
+- **R2-4 bus inventory decided (agent):** `virtualDevices.list` and
+  `virtualRoutes.list` stay expert tools. The bus lifecycle needs device
+  administration no MCP role holds, `get_virtual_cable_status` already reports
+  driver and cable state, and two more default tools would only add context;
+  no authority or default surface is widened.
+- Checks run and passing: both `cargo fmt -- --check`, both Clippy runs
+  (`-D warnings`), `cargo test` for domain/control/cli, transport and
+  `src-tauri` (142 passed, 4 ignored), `mcp_stdio` (5 passed), contract drift
+  (156 methods), `node tools/docs/validate.mjs` (304 files, 1697 links), UI
+  format/lint/typecheck/build and the full UI suite (136 files, 1191 tests),
+  and `git diff --check`. Not run: Playwright, packaged shell, live owner
+  profile, external ChatGPT connector, OBS connection, audio/device/driver
+  checks.
+
+The plan's implementation work is complete and ready to archive. The two
+items below are owner decisions, not agent work:
+
+1. Allow assistants to record (option a: a per-client MCP opt-in scope), with
+   its authorization decision record; or keep recording window-only.
+2. Session rename for assistants: a new API method plus contracts, docs and a
+   default tool; or keep rename window-only.

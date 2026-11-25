@@ -249,3 +249,38 @@ the development harness supplied the browser evidence instead. No API,
 contract, authorization semantic, MCP protocol, transport, credential, or
 native audio changes were made, so contract-drift and native/audio gates were
 not required for this slice.
+
+## Closure verification (2026-11-24)
+
+This work shipped as PR #114, merge commit `31849e012`, which is an ancestor
+of `main` at `53e1de80e`. The local branch `feature/mcp-setup-ux` did not need
+porting: the setup implementation (`0139e12aa`) is the pre-review form of the
+merged PR, and its three later commits already have equivalents or better
+versions on `main`.
+
+Verified on `main` / this branch:
+
+- path selector and role language: `ui/src/Workbench.tsx:894-910` and
+  `245-251`; boundary text `ui/src/i18n/locales/en.json:2783,2869`;
+- exact-client state refreshes on the two-second activity cycle:
+  `ui/src/useWorkbenchStatus.ts:26-37,70` (the local commit refreshed once);
+- role-boundary regression: `ui/src/Workbench.test.tsx:171`;
+- test timing from `b1ee0ef12`/`33a7a17b5` is in
+  `ui/src/App.sessionSelection.test.tsx:211,265,273,334,...`; the Playwright
+  teardown race is handled in `ui/e2e/browser-test.ts:15,74-75` by scoped
+  `unroute`, awaiting in-flight handlers and tolerating an already-handled
+  route;
+- UI quality pieces from `1b4b7235e` are present at `ui/src/App.tsx:388,1198,4103`
+  and `ui/src/Workbench.tsx:731`.
+
+Checks run 2026-11-24: `npm --prefix ui run format:check` and `lint` pass with
+zero warnings; `npm --prefix ui run build` (typecheck:all + vite) passes; the
+full UI suite passes (136 files, 1191 tests); `cargo test -p audiorouter-cli
+--test mcp_stdio` passes (5 tests); `node tools/docs/validate.mjs` passes (304
+Markdown files, 1697 links); `git diff --check` passes. Full record:
+[`evidence/2026-11-24-api-mcp-plan-closure.md`](evidence/2026-11-24-api-mcp-plan-closure.md).
+
+Not run here and left to the owner: a packaged-shell run, the owner's live
+profile, an external ChatGPT connector acceptance, and an OBS connection. The
+implementation and portable checks are complete; the plan is ready to
+archive.
