@@ -43,7 +43,7 @@ path for rationale and acceptance; [active execution](../active/current.md)
 owns final qualification. Native, Narrator/scaling, participant and performance
 gates remain open; broader navigation redesign is still deferred.
 
-[Application quality and regression prevention](../active/application-quality.md) records
+[Application quality and regression prevention](../archived/2026-11-24-application-quality.md) records
 the owner-requested plan (2026-10-21): consistent merge gates, state-transition
 and fault tests, production/packaged UI verification, backend/audio regression
 coverage, reliability trends and release/rollback qualification. Implementation was authorized on 2026-10-21 and is now active.

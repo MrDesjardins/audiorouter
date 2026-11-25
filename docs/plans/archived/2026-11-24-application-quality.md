@@ -1,5 +1,9 @@
 # Application quality and regression prevention
 
+> **Archived 2026-11-24 — agent slices done; decisions, endurance and live evidence.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
 Status: implementation authorized by the owner on 2026-10-21 ("Let's do it!").
 Progress at 2026-10-25 (main `11737991`, delivery PR #73):
 
@@ -15,8 +19,8 @@ Progress at 2026-10-25 (main `11737991`, delivery PR #73):
   normal native bridge, stopped/no-grant state, session save/restart/reload and
   child cleanup. The earlier blank-page reports were caused by the restricted
   launch environment and a one-shot probe that perturbed normal UI refresh;
-  see the [investigation evidence](evidence/2026-10-25-packaged-webview-smoke.md).
-  The [11-case local fault/cancellation qualification](evidence/2026-10-25-packaged-smoke-guard-qualification.md)
+  see the [investigation evidence](../active/evidence/2026-10-25-packaged-webview-smoke.md).
+  The [11-case local fault/cancellation qualification](../active/evidence/2026-10-25-packaged-smoke-guard-qualification.md)
   passes; current hosted Windows CI remains open.
 - One Q4 slice, the graph-commit storage-failure recovery test (PR #56), is
   merged.
@@ -29,7 +33,7 @@ Progress at 2026-10-25 (main `11737991`, delivery PR #73):
   showed `ERR_NO_BUFFER_SPACE` loading the dev entry, before React mounted.
   Local bundled run: 343 passed / 10 existing skips / zero flaky retries; UI
   unit tests 743 passed. Current hosted PR and packaged qualification remain
-  open; see the [CI repair evidence](evidence/2026-10-25-pr73-ci-repair.md).
+  open; see the [CI repair evidence](../active/evidence/2026-10-25-pr73-ci-repair.md).
 - Hosted follow-up: the repaired Edge job passed all 343 non-skipped scenarios.
   Nightly exposed an OBS test Instant-underflow assumption and elevated
   WebView2 ignoring profile/debugger overrides. The follow-up adds forward-clock
@@ -41,7 +45,7 @@ Hosted Q3.2 evidence now passes on source 512bc0e3: all 11 qualification cases,
 normal packaged UI/native/save/restart/cleanup, standard-user token, coverage
 and manual synthetic soak (run 40241297374). Final documentation-head checks
 and owner PR review/merge remain the delivery action; exact results and limits
-are in the [CI repair evidence](evidence/2026-10-25-pr73-ci-repair.md#passing-packaged-evidence-on-512bc0e3).
+are in the [CI repair evidence](../active/evidence/2026-10-25-pr73-ci-repair.md#passing-packaged-evidence-on-512bc0e3).
 
 Later browser counterexample: fa15bcc5's bundled canvas chunk also failed with
 ERR_NO_BUFFER_SPACE before its drag scenario. The CI fixture now delivers exact
@@ -49,7 +53,7 @@ compiled HTML/assets directly through Playwright, preserves actual HTTP API/Rust
 RPC traffic and fails on missing files. Offline-positive/missing-file-negative
 qualification and the full local 343-pass replay succeed; current-head CI remains
 required. The fa15bcc5 nightly passed its default 20-minute soak and all packaged
-gates. See the [transport evidence](evidence/2026-10-25-pr73-ci-repair.md#compiled-fixture-transport-counterexample-and-repair).
+gates. See the [transport evidence](../active/evidence/2026-10-25-pr73-ci-repair.md#compiled-fixture-transport-counterexample-and-repair).
 
 **Q3.2 complete (2026-11-23).** The packaged smoke and its 11-case guard
 qualification run in the nightly quality workflow after the exact release
@@ -218,7 +222,7 @@ See the dated review sections in the active plan for reproductions and fixes.
 
 The initial planning inspection did not verify branch protection or remote CI.
 Q1 has since audited and activated protection after a full successful CI run;
-the [active execution record](current.md) links the settings/evidence. Current
+the [active execution record](../active/current.md) links the settings/evidence. Current
 coverage percentages still need Q5 baseline evidence.
 
 ## Delivery rules
@@ -446,7 +450,7 @@ Defects found and fixed, each with a regression test that failed first:
    now invalid params.
 
 Recorded for the owner (2026-11-24). The first two were closed the same day on
-`fix/rust-small-defects` ([record](evidence/2026-11-24-rust-small-defects.md)):
+`fix/rust-small-defects` ([record](../active/evidence/2026-11-24-rust-small-defects.md)):
 
 - `EMPTY_STRING_LENIENT` (7 pairs, e.g. `sessions.get` `sessionId`): an empty
   string where the schema says `minLength: 1` was accepted and meant "the
@@ -551,7 +555,7 @@ gone), `probe_pipe` errors no longer read as "app not running", and the MCP
 session it cannot open. Workspace and shell tests, Clippy, both fmt checks, the
 MCP stdio/security integration suites and the full Edge Playwright suite
 (862 passed, 16 skipped) pass. Record:
-[rust small defects](evidence/2026-11-24-rust-small-defects.md). Not run:
+[rust small defects](../active/evidence/2026-11-24-rust-small-defects.md). Not run:
 built exe, hosted CI.
 
 ## Q5 - Measure reliability and test quality over time
@@ -882,12 +886,12 @@ checks.
 ## Validation of the Q3.2 plan update
 
 Local main was updated from `0bfaee77` to `11737991` while preserving the
-Q3.2 work. The [2026-10-25 investigation](evidence/2026-10-25-packaged-webview-smoke.md)
+Q3.2 work. The [2026-10-25 investigation](../active/evidence/2026-10-25-packaged-webview-smoke.md)
 records why the original restricted launches and create-only marker were not
 valid product-failure evidence, the harness corrections, and two passing
 packaged UI runs. Native describes now run through the ordinary Tauri API;
 the diagnostic marker is cleared from inherited child environments. A normal
-standard-user launch outside the tool process sandbox passed. The [local guard qualification](evidence/2026-10-25-packaged-smoke-guard-qualification.md)
+standard-user launch outside the tool process sandbox passed. The [local guard qualification](../active/evidence/2026-10-25-packaged-smoke-guard-qualification.md)
 now passes all 11 cases, including real console-break cancellation at three
 lifecycle points and observed native/readiness/document/quit faults. Current
 hosted Windows CI remains required before Q3.2 is complete.
@@ -904,7 +908,7 @@ verification progress are recorded in the active plan.
 
 Branch `plans/application-quality`. Offline/workflow work only; no product
 behavior, audio, device, installer or hardware evidence. The full record is
-[first-pass trend metrics](evidence/2026-11-24-q5-first-pass-trend-metrics.md).
+[first-pass trend metrics](../active/evidence/2026-11-24-q5-first-pass-trend-metrics.md).
 
 - The Edge CI config now writes a JSON report per shard when
   `PLAYWRIGHT_JSON_OUTPUT_NAME` is set; CI and the nightly quality workflow
@@ -943,7 +947,7 @@ behavior, audio, device, installer or hardware evidence. The full record is
 Collected read-only from five successful nightly `coverage` artifacts (runs
 45406044566, 44896903266, 44729124895, 44516582590, 44296751803; three distinct
 commits) with `gh run download`. The full table is
-[coverage baselines](evidence/2026-11-24-q5-coverage-baselines.md).
+[coverage baselines](../active/evidence/2026-11-24-q5-coverage-baselines.md).
 
 Baseline ranges: desktop shell 58.3–59.4 %, `plugin-host` 62.3–63.8 %,
 `driver-helper` 67.6 %, `control` 69.1–70.0 %, `windows-audio` 71.7 %, UI lines
@@ -957,7 +961,7 @@ then propose per-module floors for the stable modules first.
 ## Q6 execution: release/rollback scenario map (2026-11-24)
 
 Documentation map only; no install, VM, signing, release or hardware action.
-Full table: [release and rollback map](evidence/2026-11-24-q6-release-rollback-map.md).
+Full table: [release and rollback map](../active/evidence/2026-11-24-q6-release-rollback-map.md).
 
 Mapped to evidence: v0.0.31 RQ-01 candidate freeze (hash/manifest/verify), RQ-04
 standard-user install/repair/rollback/upgrade/uninstall/reinstall on a fresh
@@ -981,7 +985,7 @@ final handoff.
 ## Q5.4 execution: synthetic whole-app soak (2026-11-24)
 
 The synthetic half of Q5.4 is implemented and run; it is not endurance evidence.
-Full record: [soak and measurements](evidence/2026-11-24-q5-soak-and-measurements.md).
+Full record: [soak and measurements](../active/evidence/2026-11-24-q5-soak-and-measurements.md).
 
 - `run-app-soak.ps1 -Synthetic` runs the packaged shell on a fresh disposable
   database/profile, refuses a running instance or an owned default control pipe,

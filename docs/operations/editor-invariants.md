@@ -95,6 +95,6 @@ The persistence corpus checks 300 generated records and canonical round-trips.
 Nightly coverage adds a seed derived from `github.run_id` while keeping all fixed
 PR seeds; reproduce with `AUDIOROUTER_TEST_SEED=<run ID>` and the same tests.
 Logs print the bounded seed and failing action prefix/sample. Remaining Q2
-work in the [quality plan](../plans/active/application-quality.md) includes
+work in the [quality plan](../plans/archived/2026-11-24-application-quality.md) includes
 broader import/failure interleavings and permanent minimized fixtures for new
 failures. A test count alone does not establish those unrun gates.

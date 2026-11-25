@@ -1148,7 +1148,7 @@ Rollback only the trace ordering/archive assertion together. Preserve this
 failure's report under target/ci-40246053743 and on the Actions run.
 
 Objective: close the remaining packaged-UI gate in the authorized
-[application-quality roadmap](../active/application-quality.md). Test the exact release
+[application-quality roadmap](2026-11-24-application-quality.md). Test the exact release
 shell binary built for this SHA with its embedded UI; prove that the real
 native bridge reaches the backend, the canvas becomes usable, and session
 changes survive an app restart. Requirements UI-11/17, NFR-14/15 and
@@ -2037,7 +2037,7 @@ in UI-16. Next: scoped persistence PR, then Q3 production browser coverage.
 
 ## Quality Q2 - editor state boundaries - 2026-10-21
 
-Owner approved the [application quality roadmap](../active/application-quality.md).
+Owner approved the [application quality roadmap](2026-11-24-application-quality.md).
 Q1 is isolated on main in PR #50; current CI run 39710446637 is pending.
 Its local intentional format/type/test/contract/classifier faults were all
 detected by the real shared runner and restored in finally blocks; reports
@@ -2476,7 +2476,7 @@ the backups. The test app was not launched by the agent. It contains the current
 feature and the three documented review findings; no fixes were applied.
 ## Application quality implementation - 2026-10-21
 
-Owner approved the [quality roadmap](../active/application-quality.md). Execute Q1-Q6
+Owner approved the [quality roadmap](2026-11-24-application-quality.md). Execute Q1-Q6
 in small changes; Q1 begins with shared verification and merge gates.
 Requirements ENG-01/02/04/05 first, then UI/QUAL/NFR gates in the roadmap.
 Worktree was clean except the requested planning documents; unrelated original

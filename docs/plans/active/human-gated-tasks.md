@@ -47,7 +47,7 @@ Results that are **FAILED today** are marked so. Nothing on this page has passed
 
 | Group | Tasks | What you need |
 | --- | --- | --- |
-| [A. Decisions](#a-decisions) | A1–A17 | Only an answer |
+| [A. Decisions](#a-decisions) | A1–A18 | Only an answer |
 | [B. Purchases and outside companies](#b-purchases-and-outside-companies) | B1–B4 | Money, account or reply |
 | [C. Quiet-PC runs](#c-quiet-pc-runs) | C1–C3 | A quiet time window |
 | [D. Virtual machine](#d-virtual-machine-virtual-cable) | D1–D6 | AR-DriverTest, one sign-in |
@@ -82,6 +82,7 @@ you do not answer.
 | A15 | Leave Fun Voice Changer preset names in English? | Default: yes (accepted limitation). Otherwise an agent adds a translation map | L10N-01/05 | [Localization](../archived/2026-11-24-ui-localization.md) |
 | A16 | Delete or restore the keyboard connection dialog that nothing opens? | Default: leave as it is | UI-11 | [Active plan](current.md) |
 | A17 | Future work: promote the signed updater (key custody, feed host, channels) or the UAD inventory? | Default: both stay in `future/` | SEC-11, PLUG | [Updater](../future/auto-update-tauri.md), [UAD](../future/uad-plugin-support.md) |
+| A18 | Allow more than 16,384 edits in 24 hours (automation)? | Above it new edits are refused until old records expire. Default: keep. A larger journal costs disk and time on every edit | API-07/11 | [Application quality](../archived/2026-11-24-application-quality.md) |
 
 **Result:** none recorded.
 

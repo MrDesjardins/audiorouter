@@ -1,5 +1,5 @@
 //! Deterministic, bounded fuzzing helpers shared by the Q4.3 parser, import and
-//! compiler tests (`docs/plans/active/application-quality.md`).
+//! compiler tests (`docs/plans/archived/2026-11-24-application-quality.md`).
 //!
 //! Included by each fuzz test with
 //! `#[path = "../../../tests/support/fuzz.rs"] mod fuzz;`, so there is one copy

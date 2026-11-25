@@ -119,7 +119,7 @@ reconciling the later handoff against older open-work summaries first.
    [UI quality review](2026-11-24-ui-quality-review.md).
 5. **Application quality roadmap.** Q3.2 is complete (2026-11-23). Next: the
    two CI-flake repair branches, then Q4–Q6; see
-   [application quality](../active/application-quality.md).
+   [application quality](2026-11-24-application-quality.md).
 6. **Audio-latency residual owner gates (ARCH-08, CAP-04, NFR-03).** The
    real-session `audioHealth` log is analysed (55.8 h after the repair,
    [evidence](../active/evidence/2026-11-23-audio-health-after-latency-repair.md)).
@@ -205,7 +205,7 @@ questions: whether assistants may record, and session rename for assistants.
 
 Execution plans that still hold open work:
 
-- [Application quality](../active/application-quality.md) — Q3.2 hosted, then Q4–Q6.
+- [Application quality](2026-11-24-application-quality.md) — Q3.2 hosted, then Q4–Q6.
 - [Code review fixes](../active/code-review-fixes.md) — residual continuity and
   service-timing qualification.
 - [Code-scanning remediation](2026-11-24-code-scanning-remediation.md) — current-head
@@ -257,7 +257,7 @@ Each carries an archive banner, and its residual gates are listed above.
 Owner asked to work on priorities 5 and 6. Done so far:
 
 - Q3.2 is complete on hosted runners (nightly packaged smoke and its guard
-  qualification pass; see [application quality](../active/application-quality.md)).
+  qualification pass; see [application quality](2026-11-24-application-quality.md)).
 - `main` CI was red after #178/#180. Two of the three failing tests were real
   defects, each fixed on its own branch with a regression that fails without
   the fix: `fix/keybind-selection-after-failed-delete` (UI, a failed bulk
@@ -283,7 +283,7 @@ Next:
    `voice-to-cable-a` cushion floor is decided (keep 10 ms, 2026-11-24), so no
    pump constant changed and the remaining gaps stay as measured.
 4. Then Q4.2 restart interleaving and Q5.1–Q5.2 metrics, as listed in
-   [application quality](../active/application-quality.md).
+   [application quality](2026-11-24-application-quality.md).
 
 ### Overnight 2026-11-24 work and its follow-ups
 
