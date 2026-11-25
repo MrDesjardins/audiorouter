@@ -48,6 +48,9 @@ The [editor invariant catalog](operations/editor-invariants.md) records state
 ownership, layout/history rules and the executable regression coverage.
 The [production UI checks](operations/production-ui-tests.md) cover optimized
 adapters, usable-canvas readiness, uncaught errors and retained evidence.
+The [interface language workflow](operations/ui-localization.md) explains the
+per-language catalogs, adding a language, the validation and audit commands,
+the plain-word glossary and the fluent-review queue.
 
 The [verification runbook](operations/verification.md) documents shared local/CI
 profiles, check selection, evidence, guarded audio and merge-gate rollout.
