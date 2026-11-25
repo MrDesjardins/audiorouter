@@ -87,12 +87,13 @@ test("the summary says a short run is not endurance", () => {
     mode: "short",
     shell: "C:\\shell.exe",
     isolation: "no file changed",
-    activity: { edits: 42, reloads: 2, rpcErrors: 0, pageErrors: [], paint64Ms: 812, jsHeapStartMiB: 40, jsHeapEndMiB: 42 },
+    activity: { edits: 42, reloads: 2, rpcErrors: 0, pageErrors: [], editTo64PaintedMs: 812, jsHeapStartMiB: 40, jsHeapEndMiB: 42 },
   });
   assert.match(markdown, /not endurance evidence/);
   assert.match(markdown, /Overall: INFO/);
   assert.match(markdown, /Graph edits \| 42/);
-  assert.match(markdown, /64-node input-to-paint \| 812 ms/);
+  assert.match(markdown, /Backend edit to 64 painted cards \| 812 ms/);
+  assert.match(markdown, /not comparable to a route-harness page-load paint measurement/);
 });
 
 test("the command can fail on a leaking sample file", () => {

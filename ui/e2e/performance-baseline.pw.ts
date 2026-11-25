@@ -4,9 +4,12 @@ import type { Browser } from "@playwright/test";
 import { test, expect, type Page } from "./browser-test";
 import { demoSession } from "../src/fixtures";
 
-// Q5.5 informational baselines: a 64-node canvas input-to-paint, telemetry
-// display freshness, and post-GC JS heap vs the renderer's OS private bytes.
-// Run with AUDIOROUTER_PERF_BASELINE=1; the values are recorded, never gated.
+// Q5.5 informational baselines: a 64-node route-harness load to 64 painted
+// cards (dev server, including module load), telemetry display freshness, and
+// post-GC JS heap vs the renderer's OS private bytes. The load-to-paint number
+// is not a user input-to-paint time and is not comparable to the synthetic
+// soak's backend-edit timing. Run with AUDIOROUTER_PERF_BASELINE=1; the values
+// are recorded, never gated.
 test.skip(!process.env.AUDIOROUTER_PERF_BASELINE, "Set AUDIOROUTER_PERF_BASELINE=1 to record UI performance baselines");
 
 const NODE_COUNT = 64;
@@ -170,11 +173,13 @@ test("records 64-node paint, telemetry freshness and post-GC memory", async ({ p
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     return document.querySelectorAll(".react-flow__node").length;
   });
-  const loadToPaintMs = Date.now() - started;
+  // From navigation through 64 attached cards and two animation frames: dev
+  // module load + fixture render, not a user input-to-paint measurement.
+  const loadTo64PaintedMs = Date.now() - started;
   const telemetry = await telemetryFreshness(page);
   const jsHeapMiB = await postGcHeapMiB(page);
   const memory = await rendererPrivateBytes(browser);
-  const result = { nodeCount: painted, loadToPaintMs, telemetry, postGcJsHeapMiB: jsHeapMiB, memory };
+  const result = { nodeCount: painted, loadTo64PaintedMs, telemetry, postGcJsHeapMiB: jsHeapMiB, memory };
   writeFileSync(testInfo.outputPath("ui-performance.json"), `${JSON.stringify(result, null, 2)}\n`);
   console.log(`UI performance baseline: ${JSON.stringify(result)}`);
   expect(painted).toBe(NODE_COUNT);

@@ -44,7 +44,7 @@ const activity = {
   reloads: 0,
   rpcErrors: 0,
   pageErrors: [],
-  paint64Ms: null,
+  editTo64PaintedMs: null,
   jsHeapStartMiB: null,
   jsHeapEndMiB: null,
   lastNodeCount: 0,
@@ -184,11 +184,13 @@ async function main() {
 
   while (Date.now() < deadline) {
     try {
-      if (added.length === targetNodes - baseNodes - 1 && activity.paint64Ms === null) {
+      if (added.length === targetNodes - baseNodes - 1 && activity.editTo64PaintedMs === null) {
+        // Timed from the backend nodes.add RPC through nodes.set and the UI
+        // refresh until 64 cards exist. It is not a user input-to-paint time.
         const started = performance.now();
         await edit();
         const count = await paintedNodeCount(page, targetNodes);
-        activity.paint64Ms = performance.now() - started;
+        activity.editTo64PaintedMs = performance.now() - started;
         activity.lastNodeCount = count;
       } else {
         await edit();

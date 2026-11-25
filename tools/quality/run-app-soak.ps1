@@ -257,25 +257,10 @@ if (-not $shellProcess.HasExited) {
 
 $realAfter = Get-NewestWrite
 $isolated = $realAfter -le $realBefore -or $realAfter -lt $launchUtc
-$externalWriter = $null
-if (-not $isolated) {
-    # A shared machine can run another AudioRouter/CLI while this soak runs.
-    # The shell and its backend share the shell PID; a different processId in
-    # the real log means the change was not this run. We never open that path.
-    $realBackendLog = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'AudioRouter\logs\backend.jsonl'
-    if (Test-Path -LiteralPath $realBackendLog) {
-        try {
-            $last = Get-Content -LiteralPath $realBackendLog -Tail 1 | ConvertFrom-Json
-            if ($null -ne $last.processId -and [int]$last.processId -ne $shellProcess.Id) { $externalWriter = [int]$last.processId }
-        } catch { /* a malformed line leaves the writer unknown */ }
-    }
-}
 $isolation = if ($isolated) {
     'no file changed during the run'
-} elseif ($externalWriter) {
-    "newest change $($realAfter.ToLocalTime().ToString('HH:mm:ss')) was written by process $externalWriter, not this run's shell $($shellProcess.Id)"
 } else {
-    "newest change $($realAfter.ToLocalTime().ToString('HH:mm:ss')) (writer not identified; anything else that ran, such as a CLI, also counts)"
+    "not isolated, writer unknown: newest change $($realAfter.ToLocalTime().ToString('HH:mm:ss')) (anything else that ran, such as a CLI, also counts)"
 }
 $shellLabel = "$Shell (SHA-256 $((Get-FileHash -LiteralPath $Shell).Hash.Substring(0, 16))...); $(if ($Synthetic) { 'fresh disposable database' } else { "database copy of $SourceDatabase" })"
 $mode = if ($Synthetic) { 'short' } else { 'endurance' }
@@ -287,8 +272,7 @@ if ($Synthetic) { $analysisArgs += @('--activity', (Join-Path $Output 'activity.
 $analysisExit = $LASTEXITCODE
 if ($analysisExit -eq 1) { throw "App soak checks failed; see $summaryPath" }
 if ($analysisExit -ne 0) { throw "App soak analysis failed (exit $analysisExit)" }
-if ($Synthetic -and -not $isolated -and -not $externalWriter) { throw "Real AudioRouter or WebView folders changed during the synthetic run; see $summaryPath" }
-if ($Synthetic -and $externalWriter) { Write-Warning "Real AudioRouter folders changed during the run by external process $externalWriter; this shell used only $dataDir." }
+if ($Synthetic -and -not $isolated) { throw "Real AudioRouter or WebView folders changed during the synthetic run (not isolated); see $summaryPath" }
 if ($Synthetic) {
     $activityPath = Join-Path $Output 'activity.json'
     if (-not (Test-Path -LiteralPath $activityPath)) { throw "Synthetic driver produced no activity file; see $(Join-Path $Output 'synthetic-driver.err')" }

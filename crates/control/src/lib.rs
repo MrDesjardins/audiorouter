@@ -69,6 +69,8 @@ mod contract_cases;
 #[cfg(test)]
 mod contract_tests;
 mod dispatch_methods;
+#[cfg(test)]
+mod edit_soak_tests;
 mod graph;
 mod midi;
 mod native_application;

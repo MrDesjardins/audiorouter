@@ -206,6 +206,17 @@ test('gate process fails closed for invalid JSON, cancellation and skipped requi
   }
 });
 
+test('the synthetic soak never reads real logs and fails a changed real folder', () => {
+  const script = readFileSync(new URL('../../tools/quality/run-app-soak.ps1', import.meta.url), 'utf8');
+  // A C-style block comment is not PowerShell and once made this path throw.
+  assert.doesNotMatch(script, /\/\*/);
+  assert.doesNotMatch(script, /AudioRouter\\logs\\backend\.jsonl/);
+  assert.doesNotMatch(script, /\$externalWriter/);
+  assert.match(script, /not isolated, writer unknown/);
+  // A changed real folder is not excused by another process's log line.
+  assert.match(script, /if \(\$Synthetic -and -not \$isolated\) \{ throw/);
+});
+
 // Keep this independent of npm packages: the policy job must run before installs.
 // actionlint validates workflow syntax; these assertions pin the policy wiring.
 test('CI invokes the shared full inventory and gates every classified job', () => {

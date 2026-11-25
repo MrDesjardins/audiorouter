@@ -988,28 +988,60 @@ Full record: [soak and measurements](evidence/2026-11-24-q5-soak-and-measurement
   never presses Play or grants device administration, and samples handles,
   threads, private bytes, CPU and bounded log bytes. The shared
   `app-soak-analysis.mjs` now produces both modes' verdicts; 10 tests cover
-  passing/leaking data, log floods, short vs endurance and exit codes.
+  passing/leaking data, log floods, short vs endurance and exit codes. A
+  changed real AudioRouter/WebView folder reports "not isolated, writer
+  unknown" and fails a synthetic run; the script never reads the real logs
+  (Windows PowerShell 5.1 parse check and a policy guard cover it).
 - `packaged-shell-synthetic.mjs` drives device-free `nodes.add`/`nodes.set`
   edits, one bridged `nodes.remove`, idle polling and a UI reload every 2
   minutes over loopback CDP.
 - Recorded 10-minute run: 1803 edits, 4 reloads, 0 RPC/page errors, 64 nodes,
-  623 ms 64-node input-to-paint, shell alive, 0 error lines, isolation clean.
-  Shell private +13 MiB over the run; handles fell; WebView private fell after
-  reloads. Log history was 1.8/2.3 h under that edit rate. The values are
-  reported as a short run, not against endurance gates. A corrected 3-minute run
-  measured post-GC JS heap 10.7 → 20.0 MiB. No gate was set.
+  623 ms **backend edit to 64 painted cards** (`nodes.add` + `nodes.set` + UI
+  refresh; not a user input-to-paint), shell alive, 0 error lines, isolation
+  clean. The shell private +13 MiB over the run is not the ControlPlane: the
+  in-process test below plateaus at ~29 MiB over 20,000 edits; handles fell and
+  the WebView private fell after reloads. Log history was 1.8/2.3 h under that
+  edit rate. The values are reported as a short run, not against endurance
+  gates. A corrected 3-minute run measured post-GC JS heap 10.7 -> 20.0 MiB.
+  No gate was set.
 - Not run: a release-mode shell, scheduling the soak in CI, or the live
   whole-app endurance on the reference PC (Q5.4 hardware half remains).
+
+### Round 3: in-process edit soak and the journal-refusal defect
+
+`crates/control/src/edit_soak_tests.rs` (ignored, release) runs `nodes.set` +
+`status.get` through `ControlPlane::dispatch` with 64 nodes and a temp SQLite
+database, sampling private bytes and every retainer at 1k/2k/5k/10k/20k edits.
+Result: private bytes 25.41 / 25.60 / 28.83 / 28.96 / 29.05 MiB, DB 3.32 / 3.96
+/ 5.88 / 9.07 / 15.48 MiB; outcomes/order/hashes 100/100/50, events capped at
+10,000, history 100, notes 200, journal 2 rows/edit. The ControlPlane is
+**bounded and flat**; no memory-leak fix was needed.
+
+The same run exposed a real **journal-capacity defect**: every edit writes two
+`operation_journal` rows, so the old 4,096-row cap refused the **2,049th** edit
+(`operation journal limit reached`, -32602, no structured data). That is
+reachable in a normal editing day and contradicted API-07's 24-hour retention.
+Fixed in `crates/storage/src/lib.rs`: 131,072 rows (65,536 edits, ~42 MB, 24 h
+at ~45 edits/min); 24-hour pruning is unchanged; the refusal test uses a
+thread-local 8-row cap and a new regression inserts 4,097 rows plus one. The
+release thread's `sessions.rs`/`simple.rs`/`persistence.rs` were not touched.
+Residual: the 20/s API ceiling would need ~1.1 GB for 24 h; if reached, the
+error is still unstructured `-32602` (asked the release thread to map
+`JournalLimitReached` in `persistence.rs`).
 
 ## Q5.5 execution: local UI baselines (2026-11-24)
 
 `ui/e2e/performance-baseline.pw.ts` (skipped unless
 `AUDIOROUTER_PERF_BASELINE=1`) recorded with Edge and the dev server:
-64-node input-to-paint 1617 ms; telemetry 56 changes/3 s with gap min/median/
-p95/max 33.6/47.9/80.1/100.3 ms; post-GC JS heap 31.9 MiB; browser private 54.6
-MiB; all renderers 558.2 MiB (2); GPU 334.3 MiB. Renderer attribution is not
-claimed. These are development baselines, reported not gated; the packaged
-WebView and the reference-PC memory measurements remain open.
+**route-harness load to 64 painted cards 1617–2511 ms over two local runs** (dev
+server; includes module load, not a user input and not comparable to the soak's
+623 ms backend-edit number); telemetry 38–56 changes/3 s with gap min/median/
+p95/max 33.6–57.7/47.9–72.1/80.1–113.1/100.3–128.9 ms; post-GC JS heap
+31.9–35.2 MiB; browser private 54.2–54.6 MiB; all renderers 558.2–562.2 MiB
+(2); GPU 225.7–334.3 MiB. Renderer attribution is not claimed.
+NFR-08's user input-to-paint p95 at 64 nodes is still unmeasured. These are
+development baselines, reported not gated; the packaged WebView and the
+reference-PC memory measurements remain open.
 
 ## Q4.4/Q4.5 verification against M02/M04 (2026-11-24)
 

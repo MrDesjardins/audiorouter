@@ -199,9 +199,11 @@ export function formatSummary(analysis, { mode = "short", shell = "", isolation 
       `| UI reload restarts | ${activity.reloads ?? "–"} |`,
       `| Backend RPC errors | ${activity.rpcErrors ?? "–"} |`,
       `| Uncaught page errors | ${activity.pageErrors?.length ?? "–"} |`,
-      `| 64-node input-to-paint | ${activity.paint64Ms == null ? "–" : `${activity.paint64Ms.toFixed(0)} ms`} |`,
+      `| Backend edit to 64 painted cards | ${activity.editTo64PaintedMs == null ? "–" : `${activity.editTo64PaintedMs.toFixed(0)} ms`} |`,
       `| Post-GC JS heap (start → end) | ${activity.jsHeapStartMiB?.toFixed(1) ?? "–"} → ${activity.jsHeapEndMiB?.toFixed(1) ?? "–"} MiB |`,
       `| Shell/WebView private bytes at end | ${analysis.last.shellPrivate?.toFixed(1) ?? "–"} / ${analysis.last.webPrivate?.toFixed(1) ?? "–"} MiB |`,
+      "",
+      "Backend edit to 64 painted cards times the `nodes.add` + `nodes.set` RPCs and the UI refresh until 64 cards exist; it is not a user input-to-paint time and is not comparable to a route-harness page-load paint measurement.",
     );
     if (activity.pageErrors?.length) for (const error of activity.pageErrors.slice(0, 5)) lines.push(`- Page error: ${error}`);
   }
