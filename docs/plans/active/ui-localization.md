@@ -4,6 +4,14 @@ Date: 2026-11-19. Status: foundation, everyday UI surfaces and the native tray
 text path implemented 2026-11-19 after the owner asked to execute the plan.
 Remaining slices and gates are listed under “Execution record” below.
 
+Status 2026-11-24: every item an agent can implement is done (catalogs for
+English, French and Simplified Chinese; structured action and error data;
+native tray/status and instance dialogs; zoom, Chinese-audit and browser
+evidence; a guard and a contributor workflow). What remains needs a fluent
+reviewer, the packaged Windows shell/tray, Narrator, display scaling, live
+audio, or an owner decision on backend-supplied preset text. Read the last
+execution-record entry, not the earlier open lists.
+
 ## Objective and recommendation
 
 Make AudioRouter's interface available in multiple languages, with one editable
