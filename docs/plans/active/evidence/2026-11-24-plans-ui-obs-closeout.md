@@ -1,6 +1,7 @@
 # OBS/Discord and UI quality close-out (2026-11-24)
 
-Branch `plans/ui-obs`, base `02ca8dc9d`; code/test commit `d7228d849`.
+Branch `plans/ui-obs`, base `02ca8dc9d`; code/test commit `d7228d849`;
+plan/evidence changes in the following commit.
 Environment: Windows host, Node 22.22.3, npm 10.9.8, Rust/Cargo 1.96.0,
 Microsoft Edge through Playwright (`channel: msedge`), free port 4186. `npm ci`
 was run in `ui/` and `contracts/`. No AudioRouter shell, OBS or Discord process
@@ -59,7 +60,7 @@ provides them.
 | `npm --prefix contracts run check:drift` | passed: 156 methods, 38 kinds, 20 processors, 24 event categories |
 | `node tools/site/check-tool-guide-property-coverage.mjs` | 39 guide kinds, 258 properties covered |
 | `node tools/site/check-tool-guide-videos.mjs` | 39 tools, 204 videos, 54,492,108 bytes, all within format/duration/size |
-| `node tools/docs/validate.mjs` | 304 Markdown files, 1,695 local links |
+| `node tools/docs/validate.mjs` | 304 files/1,695 links before the plan additions; 305 files/1,700 links after them (final) |
 | `git diff --check` | clean |
 
 Screenshots from the browser runs are in Playwright's per-test output folder
