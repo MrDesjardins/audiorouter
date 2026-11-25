@@ -347,3 +347,30 @@ is unchanged by that rebase. Original repair retained locally on
 Rollback: revert this repair's UI/tests/docs and five refreshed overviews;
 there is no storage migration or API change. Do not replace the running
 owner's executable until it can be closed deliberately.
+
+### Close-out status — 2026-11-24
+
+All seven findings (R1–R7) are repaired and merged in PR #176
+(`37adfe111`). No implementation work remains in this plan.
+
+The affected Properties overviews were refreshed in that PR; the guide
+manifest now reports all 258 properties recorded and `check-tool-guide-videos`
+passes 204 videos (re-run 2026-11-24), so the earlier guide limitation is
+closed on `main`. The portable follow-ups that overlapped the UI quality review
+(a lost-device message on a live route, a narrow window at 200 %, dropdown
+Escape/Tab, the OBS card in three themes) are covered in
+[the UI quality review, Round 31](ui-quality-review.md#round-31-portable-halves-of-the-round-30-gaps-2026-11-24),
+with evidence in
+[2026-11-24 close-out](evidence/2026-11-24-plans-ui-obs-closeout.md).
+
+What is left needs a person or the owner's machine and moves to the human-gated
+list:
+
+- the owned-backend packaged save/restart smoke (requires the owner to close
+  their running app: it owns the default control pipe and the release
+  executable);
+- an attended live instrument/MIDI, physical audio, and Narrator pass;
+- a fresh-install packaged run of this build.
+
+No new defect was found by the 2026-11-24 portable work. Archive this plan once
+the gates above are moved; do not archive the gates themselves as done.

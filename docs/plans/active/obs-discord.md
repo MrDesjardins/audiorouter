@@ -697,3 +697,41 @@ has been requested or granted for this branch.
     "Discord hears the game"; Windows showed Discord's speaker on CABLE
     Input, the same cable. The footer now names the relation: Heard by,
     Sound from, Shared with, Also recorded by (Vitest regression).
+
+### Portable close-out — 2026-11-24
+
+The "Waiting" lists are now exercised where a fake server, fixtures or the
+browser can carry them. Evidence:
+[2026-11-24 close-out](evidence/2026-11-24-plans-ui-obs-closeout.md).
+
+- **O1/O2 backend:** `cargo test -p audiorouter-control obs::tests` passed
+  25/25 (fake v5 server: no-auth server, wrong/pasted password, saved
+  scene-collection read, moves that name the old value, preview expiry,
+  parallel-change refusal, apply/restore after a collection switch or same-name
+  source recreation, partial apply/restore resume, connection loss and
+  reconnect, bounded files/queues/tracks, worker shutdown on owner drop). The
+  full `audiorouter-control` lib suite passed 509/509 with 29 ignored.
+- **D1:** `audio_endpoints_merge_repeats_and_are_bounded` passed in
+  `windows-audio`. `applications.*`, `apps.*` and `obs.*` are reached by default
+  MCP tools: `audiorouter-cli` lib passed 71/71, including
+  `every_api_method_is_reached_by_a_default_mcp_tool_or_excluded`.
+- **UI:** the Discord/OBS modules passed 69/69 (`appUsage`, `obsUsage`,
+  `ObsCard`, `useObsStatus`). New `ui/e2e/obs-card.pw.ts` renders the Apps OBS
+  card against a simulated live OBS with the raw-microphone problem and CABLE-A
+  voice path, in dark, light and high contrast at 1440x1000 and 640x690: table,
+  device text, problem, Fix in OBS button, no sideways scrolling, and no card,
+  summary or table movement across a re-poll or an opened/cancelled fix dialog.
+  Screenshots use Playwright's per-test output folder.
+- **Checks:** scoped Clippy (`control`, `cli`, `domain`, `-D warnings`) clean;
+  both Rust formatters clean; `contracts` drift 156 methods/38 kinds/20
+  processors/24 event categories; UI typecheck, format, `--max-warnings 0` lint
+  and 1,191 unit tests pass; docs validation 304 files/1,695 links; `git diff
+  --check` clean.
+- **No defect** was found in these paths. No real OBS/Discord process, device,
+  driver or owner profile was touched.
+
+Remaining checks need a person or the owner's PC: a real OBS Fix/Restore on a
+copied profile, the owner's acceptance of the strip/cards on the live setup, the
+guarded endpoint-usage walk with Discord/Siege/Outplayed running, and one real
+Discord configuration check. Implementation work is finished; the plan is
+archive-ready once those move to the human-gated list.

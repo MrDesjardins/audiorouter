@@ -92,6 +92,68 @@ and join the fluent-review queue. Checks: `goals::tests` 11 pass (including
 Not run: live device-loss on the rebuilt exe, physical-key dropdown
 cancellation, a narrow 200 % window, and the participant study.
 
+## Round 31 — portable halves of the Round 30 gaps (2026-11-24)
+
+Branch `plans/ui-obs`, base `02ca8dc9d`; code/test commit `d7228d849`.
+Evidence: [close-out record](evidence/2026-11-24-plans-ui-obs-closeout.md).
+No product defect was reproduced; two first-run failures were test-harness
+mistakes, corrected, not waived.
+
+- **Lost device on a live route (browser half).** The disposable route harness
+  can now raise one-shot workspace events. New `ui/e2e/device-loss-message.pw.ts`
+  (three themes) checks that `devices.bindingInvalidated` produces an assertive
+  red `alert` that stays past 1.5 s, and that the top bar, tabs and canvas keep
+  their exact bounds. At 640x690 the message covers neither a tab nor a top-bar
+  button and the page does not scroll sideways. The real unplug on the rebuilt
+  exe is still the owner's check.
+- **Narrow window at 200 % (browser half).** New
+  `ui/e2e/narrow-200-percent.pw.ts` sets a 640x360 CSS viewport with
+  `deviceScaleFactor: 2` (a 1280x720 window at 200 % zoom) in three themes: no
+  sideways document overflow, no navigation control outside the window
+  sideways, no control's own text clipped, a non-zero canvas renderer, and
+  Properties reachable by scrolling. This is CSS geometry, not the owner's
+  physical display scaling (Round 30's 100/150/200 % table stays the owner's).
+- **Dropdown cancellation (browser half).** `ui/e2e/native-select-keyboard.pw.ts`
+  now also proves that after Escape and Tab the picker keeps the chosen device,
+  focus lands on "Refresh available outputs", and no commit/start/plan call
+  reached the backend. The native popup's provisional highlight and Escape on a
+  physical keyboard remain the owner's check: headless automation cannot open
+  that popup (Round 27's finding).
+- **OBS/Discord plan shared this work:** new `ui/e2e/obs-card.pw.ts` renders the
+  Apps OBS card against a simulated live OBS in three themes at 1440x1000 and
+  640x690, with a problem, the "Fix in OBS" button and no movement across a
+  re-poll or an opened/cancelled dialog.
+
+**Guide clips.** All 258 properties are recorded and 204 videos meet the format,
+duration and size budgets. PR #176 (2026-11-22) refreshed the five overviews
+affected by the seven findings. Since then #187 changed message plumbing and
+the Network address reserved slot, not a Properties control, so no Properties
+guide needs re-recording on `main`. The unmerged `improve/ui-spacing-errors`
+branch changes chart label spacing and would need its own refresh if merged.
+
+**Participant study.** Script and observation sheet are prepared, not run:
+[2026-11-24 participant study](evidence/2026-11-24-ui-quality-participant-study.md).
+It carries the M08 criterion (four of five within ten minutes; all five identify
+Discord's sources), verbatim moderator text, the intervention rules and the
+per-participant table. It needs five real Windows participants.
+
+**Local branches (read-only).** `improve/ui-spacing-errors` holds valuable work
+that never reached main: the measured `crampedLayout` audit, `dialog-spacing.pw.ts`,
+`panel-spacing.pw.ts`, the spacing repairs they found, and plain-sentence errors
+through `formatUiError` at 19 call sites plus the shell's plain-string rejection.
+It cannot be merged blindly after the 2026-11-10 divergence (`App.tsx`,
+`styles.css`, `backend.ts` now include L10N-06 structured messages). The work
+needs a deliberate port and its own guide refresh. `improve/ui-quality-review-iteration4`
+has nothing unique: main's bundled-fixture teardown and the 5 s/15 s lazy-Status
+waits are equal or stronger.
+
+**Checks:** UI typecheck, format, `--max-warnings 0` lint and 1,191 unit tests;
+21 focused Edge scenarios across the four specs in three themes; docs validation
+304 files/1,695 links; contracts drift; both Rust formatters; `git diff --check`.
+No shell, real audio, OBS, Discord or owner data was used. Remaining: the
+physical-key popup, the real unplug on a rebuilt exe, the physical narrow 200 %
+window, Narrator and the participant study, all owner gates.
+
 ## Round 29 — agent audits for the Round 28 portable gaps (2026-11-24)
 
 Agent audits, not a participant study: no score is changed here (scoring stays with the owner).
