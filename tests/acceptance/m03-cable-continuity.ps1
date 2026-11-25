@@ -53,7 +53,8 @@ Assert $mixedFailed 'mixed QPC and nominal clock records fail attribution'
 $body = $ast.Find({ param($node) $node -is [Management.Automation.Language.TryStatementAst] -and $node.Extent.Text.Contains('Cable continuity: 8 cables') }, $true)
 $helpers = @($ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in @('Invoke-Helper','Get-Inventory','Get-EndpointIndex','Get-CableCount') }, $true))
 $pairsAst = $ast.Find({ param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$pairs' }, $true)
-Assert ($null -ne $body -and $helpers.Count -eq 4 -and $null -ne $pairsAst) 'runner body, helpers and pair table found'
+$sliceAst = $ast.Find({ param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$pairs' -and $node.Extent.Text.Contains('$RouteCount') }, $true)
+Assert ($null -ne $sliceAst -and $null -ne $body -and $helpers.Count -eq 4 -and $null -ne $pairsAst) 'runner body, helpers and pair table found'
 $execution = [scriptblock]::Create($body.Extent.Text)
 
 function New-Inventory([int] $Cables) {
@@ -75,6 +76,8 @@ function Test-Continuity([string] $Case) {
     $probe = 'fake-probe'; $tone = 'fake-tone'; $helper = 'fake-helper'
     foreach ($definition in $helpers) { . ([scriptblock]::Create($definition.Extent.Text)) }
     . ([scriptblock]::Create($pairsAst.Extent.Text))
+    $RouteCount = if ($Case -eq 'two-routes') { 2 } else { 4 }
+    . ([scriptblock]::Create($sliceAst.Extent.Text))
     $routes = @{}; $probes = @{}; $results = @(); $failure = $null; $cablesBefore = $null; $restored = $null; $verdict = $null
     $script:cables = if ($Case -eq 'already-8') { 8 } else { 2 }
     $script:helperCalls = @(); $script:tones = @(); $script:probeRuns = @(); $script:killed = 0
@@ -173,13 +176,14 @@ function Test-Continuity([string] $Case) {
         'unexplained' {
             Assert (@($results[0].Events | Where-Object { -not $_.VmWide }).Count -eq 2 -and $verdict -eq 'unexplained-events') 'a stall on one route only does not explain its loss'
         }
+        'two-routes' { Assert (-not $failure -and $verdict -eq 'clean' -and $script:tones.Count -eq 2 -and $script:probeRuns.Count -eq 2 -and $saved.Routes -eq 2 -and @($saved.Results).Count -eq 2) 'two routes run and report two results' }
         'set-cables-failure' { Assert ([bool]$failure -and $script:tones.Count -eq 0 -and $script:probeRuns.Count -eq 0) 'no audio when eight cables cannot be enabled' }
         'route-early-exit' { Assert ([bool]$failure -and [string]$failure -match 'C-to-D route exited' -and $script:probeRuns.Count -eq 0) 'a route that fails to start stops the run before any impulse' }
         'probe-hang' { Assert ([bool]$failure -and $script:killed -ge 1) 'a hung impulse train is killed' }
         'corrupted' { Assert ([bool]$failure -and [string]$failure -match 'corrupted') 'corrupted impulses fail the run' }
     }
 }
-foreach ($case in @('clean','vm-wide','qpc-wide','lost-truncated','unexplained','already-8','set-cables-failure','route-early-exit','probe-hang','corrupted')) { Test-Continuity $case }
+foreach ($case in @('clean','vm-wide','qpc-wide','lost-truncated','unexplained','already-8','two-routes','set-cables-failure','route-early-exit','probe-hang','corrupted')) { Test-Continuity $case }
 
 $probeBinary = Join-Path $workspace 'target\m00-probe-cable\m00-probe.exe'
 $imports = @(Assert-PortableVmTool $probeBinary)

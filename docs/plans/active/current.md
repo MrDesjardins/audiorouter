@@ -45,6 +45,8 @@ in for them.
 ## Active plan index
 
 - [Human-gated tasks](human-gated-tasks.md)
+- [One driver, signed once](driver-sign-once.md): cables, performance and stability before signing (accepted 2026-11-25, freeze 2027-01-24);
+  its [W0 inventory](driver-irreversibility-inventory.md) is approved (driver edits still wait for D2), hours are collected with the [driver soak](../../operations/virtual-cable-soak.md)
 - [Code-review fixes](code-review-fixes.md)
 - Evidence for active and archived plans stays in `evidence/`, because many records
   link to it.

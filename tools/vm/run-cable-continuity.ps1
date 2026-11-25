@@ -5,7 +5,9 @@
    seconds in which all four route processes saw a scheduling gap. Under VirtualBox NEM this
    is a documented deviation run, never VCAB-24 qualification. #>
 [CmdletBinding()]
-param([ValidateRange(1, 60)][int] $Minutes = 60)
+param([ValidateRange(1, 60)][int] $Minutes = 60,
+    # Fewer routes load the guest less; attributing a stall needs at least two.
+    [ValidateSet(2, 4)][int] $RouteCount = 4)
 $ErrorActionPreference = 'Stop'
 
 # A progress line from m03_bridge_tone: tool-relative time, the largest worker
@@ -146,6 +148,7 @@ $pairs = @(
     @{ Name = 'A-to-B'; Render = 'A'; Capture = 'B' }, @{ Name = 'C-to-D'; Render = 'C'; Capture = 'D' },
     @{ Name = 'E-to-F'; Render = 'E'; Capture = 'F' }, @{ Name = 'G-to-H'; Render = 'G'; Capture = 'H' }
 )
+$pairs = @($pairs | Select-Object -First $RouteCount)
 $routes = @{}
 $probes = @{}
 $results = @()
@@ -176,7 +179,7 @@ function Get-CableCount([string] $Inventory) {
 }
 function Get-Seconds { return [DateTime]::UtcNow.Ticks / 1.0e7 }
 try {
-    Write-Host "Cable continuity: 8 cables, 4 engine routes, $Minutes minute(s) of impulses per route. No manual playback needed."
+    Write-Host "Cable continuity: 8 cables, $($pairs.Count) engine routes, $Minutes minute(s) of impulses per route. No manual playback needed."
     $inventory = Get-Inventory 'inventory-before'
     $cablesBefore = Get-CableCount $inventory
     if ($cablesBefore -lt 1) { throw 'No AudioRouter cable is active; install the driver first. No audio test started.' }
@@ -221,7 +224,7 @@ try {
             -RedirectStandardOutput (Join-Path $evidence "$($pair.Name)-probe.txt") -RedirectStandardError (Join-Path $evidence "$($pair.Name)-probe-stderr.txt")
         $null = $probes[$pair.Name].Handle
     }
-    Write-Host "All four routes and impulse trains running; results in about $Minutes minute(s)."
+    Write-Host "All $($pairs.Count) routes and impulse trains running; results in about $Minutes minute(s)."
     $deadline = [Diagnostics.Stopwatch]::StartNew()
     foreach ($pair in $pairs) {
         $remaining = [Math]::Max(1000, ($Minutes * 60 + 120) * 1000 - [int]$deadline.ElapsedMilliseconds)
@@ -309,8 +312,8 @@ try {
         Write-Host ("Cable count restored to {0}: {1}" -f $cablesBefore, $(if ($restored) { 'yes' } else { "NO (exit $($restore.Code)); run the helper set-cables again" }))
     }
     Write-PairedTraceJson (Join-Path $evidence 'result.json') @{ Run = $run; Passed = (-not [bool]$failure); Error = [string]$failure
-        Minutes = $Minutes; CablesBefore = $cablesBefore; CableCountRestored = $restored; Verdict = $verdict; Causes = $causes; Results = $results; Qualification = $false
-        Scope = 'Eight cables, four AudioRouter engine routes (A->B, C->D, E->F, G->H), identity-coded impulses every 10 ms; NEM VM deviation run, not VCAB-24 qualification' }
+        Minutes = $Minutes; Routes = $pairs.Count; CablesBefore = $cablesBefore; CableCountRestored = $restored; Verdict = $verdict; Causes = $causes; Results = $results; Qualification = $false
+        Scope = 'Eight cables, ' + $pairs.Count + ' AudioRouter engine routes (first of A->B, C->D, E->F, G->H), identity-coded impulses every 10 ms; NEM VM deviation run, not VCAB-24 qualification' }
     $zip = Join-Path $bundle "$run.zip"
     Compress-Archive -LiteralPath $evidence -DestinationPath $zip
     Copy-Item -LiteralPath $zip -Destination $peer
