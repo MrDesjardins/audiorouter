@@ -203,10 +203,11 @@ Which side:
   another client disturbed) need not.
 - The reference capture, which contains no AudioRouter code, was clean.
 
-Conclusion: the gap entered on the **result-capture side of the harness** (a
-shared capture of CABLE-A Output), not in the route’s output pump and not in
-the audio-service thread. Why that capture stream produced one silent period
-is not established; another client on the default communications capture is
+Hypothesis, not a conclusion (manager review): these facts point to the
+**result-capture side of the harness** (a shared capture of CABLE-A Output)
+rather than the route’s output pump or the audio-service thread, but no run
+isolates it, so the product is not cleared and the result stays failed. Why
+the captured stream had one silent period is not established; another client on the default communications capture is
 the leading possibility, consistent with the unproven isolation above.
 
 Comparison with the 2026-11-23 health log: on the owner’s real CABLE-A route at

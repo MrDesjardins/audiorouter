@@ -652,9 +652,10 @@ ms apart: one 10 ms device period plus the boundary samples. The route’s
 `outputUnderruns` stayed at 1 (the startup one) and the failing runs had a
 healthy service thread; the capture reported 0 WASAPI flags; the reference was
 clean. A route output underrun would both increment that counter and render
-digital silence, so this entered on the **result-capture side of the harness**
-(a shared capture of CABLE-A Output), not the output pump or the service
-thread. Why is not established; another client on the default communications
+digital silence. That suggests the **result-capture side of the harness** (a
+shared capture of CABLE-A Output) rather than the output pump or the service
+thread, but it is a hypothesis: no isolated run confirms it, so the product is
+not cleared. Why is not established; another client on the default communications
 capture is the leading possibility. The owner’s own 55.8 h health log at a
 10 ms CABLE-A cushion shows 0.48 underruns an hour outside stalls, each counted
 by that output; these were not. The harness now prints one line per second with
