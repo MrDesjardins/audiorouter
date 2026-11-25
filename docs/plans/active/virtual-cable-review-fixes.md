@@ -734,3 +734,35 @@ Ordered next VM block (one night, idle host, from `02-test-signing-ready`, after
 3. Owner decisions: revert the frame-clock hunk as a new RC above 0.2.6 with its
    PDB, or accept 0.2.5 with the confounded A/B recorded; and whether helper exit
    5 under a live route is acceptable for review item 3.
+
+## Host-load measurement repaired for guest CPU; 24 h pool enabled (2026-11-24, second host pass)
+
+The first host-load gate judged the worst single sample of TOTAL host CPU, so
+the guest's own 4 vCPUs (up to about 17 % of a 24-thread PC) plus one spike could
+read as starvation and excuse a real driver freeze. The owner's 2026-11-22 rule
+is about HOST load; its 20 % and 6 GB limits are unchanged.
+
+- The sampler now writes six columns: total CPU, non-VM CPU, the VirtualBox
+  processes' CPU and available memory (plus UTC and pages/s). The measurement is
+  shared with the preflight so the gate and the CSV cannot drift.
+- The verdict judges sustained non-VM load: Starved only when the mean non-VM CPU
+  is above 20 % AND at least half the samples are above it, over two or more
+  samples. One spike is never starvation. Memory is host-wide (the VM's 8 GB is
+  part of it) and the 6 GB floor is judged on the window median against a single
+  dip. Fewer than two samples is NoData, never Idle or Starved.
+- Live check while the release guest ran: total CPU peak 22 %, mean non-VM CPU
+  3.4 %; the old rule would have called it Starved, the new one refuses only on
+  host memory (median 5.5 GB) and WSL, which is correct.
+- Host tests cover VM-only load Idle, sustained other load Starved, one spike
+  (long and short windows), a single sample NoData, memory dip vs sustained low,
+  the limits themselves, legacy 4-column rows, both CSV formats and a real
+  sampler run. All pass.
+- `-PoolMinutes` now accepts 5-1440 with a 2 h default; the pool block copies
+  `pool-tags.csv` to the share after every 30 s sample, the state keeps
+  `hostRows` across a restart, and the preflight starts the sampler for 26 h.
+  Tested with a 2,880-sample (24 h) series, the parameter/AST checks, the
+  state JSON round-trip and the share copy.
+- Bundle `rc-0.2.5-r7` is the current guest bundle; r6 is left untouched.
+
+Not run: any VM start, driver install, Verifier, WPR, VB-Cable, signed package,
+24 h pool, Stage B/C. Stage A on 0.2.5 stays not passed.

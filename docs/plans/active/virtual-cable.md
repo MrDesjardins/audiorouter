@@ -5085,3 +5085,16 @@ are not isolated to the short comparison. Evidence and limits are in the
 Next: keep the VM off and review virtual HDA interrupt/clock recovery against
 retained timing data before preparing a candidate. No new test or driver patch
 is requested by this rollback result; all prior qualification gates remain.
+
+**2026-11-24 (second host pass): host-load rule fixed and a 24 h pool path added.**
+The first gate judged the worst single sample of total host CPU, so the guest's
+own vCPUs could be read as host starvation. CPU is now recorded as total, non-VM
+and VM, and judged on sustained non-VM load (mean > 20 % with at least half the
+samples above it, two or more samples); one spike is not starvation, the owner's
+20 %/6000 MB limits stand, and a live check with the release guest running gave
+22 % total but 3.4 % non-VM. `-PoolMinutes` accepts 5-1440 (2 h default), the
+pool samples are copied to the share while the block runs, and the sampler runs
+26 h; bundle `rc-0.2.5-r7` is current. Details:
+[current status](evidence/2026-11-24-virtual-cable-current-status.md) and
+[review fixes](virtual-cable-review-fixes.md). Still no VM start, driver install
+or driver source change.

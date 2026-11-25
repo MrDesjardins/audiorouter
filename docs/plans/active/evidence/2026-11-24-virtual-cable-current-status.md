@@ -74,39 +74,49 @@ Objective: make the next VM night decidable. A freeze on a busy host is not a
 driver result (2026-11-22 evidence), so the run now refuses to start without host
 measurements and records them per block.
 
-- `tools/vm/host-load.ps1`: parameterised sampler (`-OutputPath`, `-Minutes`,
-  `-IntervalSeconds`, `-Once`); full UTC timestamps, language-independent CIM
-  measurement, one row per interval to the share root
-  `C:\VMs\ar-share\host-load.csv` (guest: `Z:\host-load.csv`).
+- `tools/vm/host-load.ps1`: parameterised sampler (`-OutputPath`, `-Minutes` up
+  to 2880, `-IntervalSeconds`, `-Once`); full UTC timestamps and six columns:
+  total CPU, non-VM CPU, the VirtualBox processes' CPU and memory. One row per
+  interval to the share root `C:\VMs\ar-share\host-load.csv` (guest:
+  `Z:\host-load.csv`). It shares its measurement with the preflight.
 - `tools/vm/round2-host-preflight.ps1`: host idle gate. 10 s measurement, WSL2
-  host-process check, heaviest-process report, starts the sampler when no fresh
-  one exists, exit 0 ready / 2 refused. `-LibraryOnly` makes it testable.
-  Refused this PC on 2026-11-24 (54-79 % CPU, 3.9-4.7 GB free, `vmmemWSL`), which
-  is the intended behaviour, not a defect.
-- `tools/vm/round2-support.ps1`: `Get-HostLoadRows`, `Get-HostLoadWindow`,
-  `Get-HostLoadVerdict` (Idle/Starved/NoData at 20 % CPU and 6000 MB).
+  host-process check, heaviest-process report, starts the sampler for 26 h when
+  no fresh one exists, exit 0 ready / 2 refused. `-LibraryOnly` makes it
+  testable. On 2026-11-24, with the release guest running, it measured total CPU
+  peak 22 % but mean non-VM CPU 3.4 %, and refused on host memory (median
+  5.5 GB) and WSL. The old total-CPU rule would have called that starvation; the
+  new one does not.
+- `tools/vm/round2-support.ps1`: `Get-HostLoadRows` (4- and 6-column),
+  `Get-HostLoadWindow`, `Get-HostLoadVerdict`. CPU is Starved only for sustained
+  non-VM load (mean > 20 % and at least half the samples above it, over two or
+  more samples); the guest's own vCPUs do not count; memory uses the window
+  median against 6000 MB; fewer than two samples is NoData, never Idle or
+  Starved. The owner's 20 %/6000 MB limits are unchanged.
 - `tools/vm/run-stage-a.ps1`: round 2 now runs `host-load sampler` first and
   stops with FAIL/SKIP when the CSV is absent or not growing; each block records
   `host load (<block>)`; the state file keeps `hostRows`; an unexpected restart
   records `host load (<step>, until the restart)`, positioned by row count, never
-  by comparing the guest and host clocks (they differ by hours).
-- `tools/vm/round2-support.tests.ps1`: +35 checks for parsing, windows, verdicts,
-  the runner wiring, the preflight gate and sampler liveness. Ends
+  by comparing the guest and host clocks (they differ by hours). `-PoolMinutes`
+  accepts 5-1440 (2 h default) for a 24 h VCAB-28 run, and the pool block copies
+  `pool-tags.csv` to the share after every sample.
+- `tools/vm/round2-support.tests.ps1`: extended with both CSV formats, VM-only,
+  sustained, one-spike, short-window, memory-dip, legacy and 24 h cases, the
+  runner wiring, the preflight gate, and a real sampler-format run. Ends
   `All round-2 host checks passed.`
 - Docs: the VM guide's round-2 section now gives the preflight/sampler commands,
-  expected output, the stop rule and a new bundle name. A corrupted sentence
-  (`toolsmhost-load.ps1`, `C:VMshost-load.csv`, backslashes lost in an older
-  shell edit) is fixed.
+  expected output, the sustained-load rule, the 24 h pool recipe and bundle r7.
+  A corrupted sentence (`toolsmhost-load.ps1`, `C:VMshost-load.csv`, backslashes
+  lost in an older shell edit) is fixed.
 
-A new bundle is required for the guest (`rc-0.2.5-r3/r4/r5` have the old runner).
-`prepare-round2-bundle.ps1 -Destination C:\VMs\ar-share\rc-0.2.5-r6` builds it from
-a clean committed tree and verifies every hash. Done on 2026-11-24 at source
-`5fad66d15`: `C:\VMs\ar-share\rc-0.2.5-r6`, 89 files, `MANIFEST.txt` SHA-256
-`870B35EA63C56D2D833C5896115E14B1C57129B387F81692C7AB73AF93825753`; the bundle's
-`run-stage-a.ps1` contains the gate and its `round2-support.ps1` the host-load
-helpers. Read-only VM state: `AR-DriverTest` is `poweroff` with current snapshot
-`02-test-signing-ready`, 8192 MB RAM, 4 vCPUs, nested VT-x off (NEM); no VirtualBox
-VM was running. No snapshot was taken, restored or deleted.
+A new bundle is required for the guest (r3-r6 predate the six-column sampler and
+the pool changes). `prepare-round2-bundle.ps1 -Destination
+C:\VMs\ar-share\rc-0.2.5-r7` builds it from a clean committed tree and verifies
+every hash; r6 is left in place as history. The bundle's `run-stage-a.ps1`
+contains the gate and its `round2-support.ps1` the host-load helpers. Read-only
+VM state on 2026-11-24: `AR-DriverTest` is `poweroff` with current snapshot
+`02-test-signing-ready`, 8192 MB RAM, 4 vCPUs, nested VT-x off (NEM); the
+release-qualification guest was running on the host, so no slot was taken. No
+snapshot was taken, restored or deleted.
 
 ## 5. The one remaining ordered VM block (fail-fast)
 
@@ -125,6 +135,8 @@ after `round2-host-preflight.ps1` exits 0. Order matters:
    and whether helper exit 5 under a live route is acceptable for item 3.
 
 Nothing above is a pass until its block reports PASS under an idle host-load line.
+VCAB-28's 24 h pool is a separate gate: `-Blocks pool -PoolMinutes 1440` with the
+26 h sampler, or fold it into the Stage C long session (owner decision).
 
 ## 6. Not run
 

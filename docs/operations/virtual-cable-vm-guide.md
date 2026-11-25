@@ -451,12 +451,12 @@ host-load gate (normal PowerShell, no build, no driver):
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\round2-support.tests.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\prepare-round2-bundle.ps1 -Destination C:\VMs\ar-share\rc-0.2.5-r6
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\prepare-round2-bundle.ps1 -Destination C:\VMs\ar-share\rc-0.2.5-r7
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\round2-host-preflight.ps1
 ```
 
 The first command must end with `All round-2 host checks passed.` The second
-builds `C:\VMs\ar-share\rc-0.2.5-r6` (the same 0.2.5 files, the new scripts and
+builds `C:\VMs\ar-share\rc-0.2.5-r7` (the same 0.2.5 files, the new scripts and
 `driver-rc3`); it refuses a dirty tree and a non-empty destination, so use a new
 folder for every rebuild. It is light, but copying the bundle reads a few
 hundred MB. Do not run these while on a call.
@@ -467,37 +467,46 @@ installed). It measures CPU and available memory for 10 s, prints the heaviest
 processes, and refuses with exit 2 while the PC is busy or WSL is running. When
 the PC is idle it starts the host-load sampler, which writes one row every 20 s
 to `C:\VMs\ar-share\host-load.csv` (the guest sees the same rows as
-`Z:\host-load.csv`) and keeps running for 8 h. Leave that window open.
+`Z:\host-load.csv`) for 26 h, enough for a 24 h pool run. Leave that window
+open.
 
 A freeze is a driver candidate only if the host stayed under 20 % CPU with
-6 GB or more available during it. The round-2 run itself now enforces the
-sampler: before any block it checks that the CSV is on the share and still
-growing and stops with a FAIL and a SKIP line when it is not, so a night on a
-busy PC cannot be mistaken for a driver result. Every block also records a
-`host load (<block>)` line with its worst CPU and least available memory.
+6 GB or more available during it. CPU is judged on **non-VM** load, sustained:
+the sampler records total CPU, the VirtualBox processes' share and the
+remainder, and a block is Starved only when the mean non-VM CPU is above 20 %
+with at least half its samples above it over two or more samples. The guest's
+own 4 vCPUs (up to about 17 % of a 24-thread PC) therefore do not count, and
+one spike never does. Memory is host-wide (the VM's 8 GB is part of it) and the
+6 GB floor is judged on the window median, so one transient dip is not
+starvation. The round-2 run enforces the sampler: before any block it checks
+that the CSV is on the share and still growing and stops with a FAIL and a SKIP
+line when it is not. Every block also records a `host load (<block>)` line with
+those numbers.
 
 Optional host pause test (needs the VM to be running; leave this window open):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\round2-pause-watcher.ps1 -Share C:\VMs\ar-share\rc-0.2.5-r6
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\round2-pause-watcher.ps1 -Share C:\VMs\ar-share\rc-0.2.5-r7
 ```
 
 In the VM: restore `02-test-signing-ready`, start it, sign in, copy
-`Z:\rc-0.2.5-r6` to `C:\ar\rc-0.2.5-r6`, open PowerShell as administrator:
+`Z:\rc-0.2.5-r7` to `C:\ar\rc-0.2.5-r7`, open PowerShell as administrator:
 
 ```powershell
-cd C:\ar\rc-0.2.5-r6
+cd C:\ar\rc-0.2.5-r7
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run-stage-a.ps1 -Session round2 -AutoLogon
 ```
 
 The run's first check is `host-load sampler`; if it fails, start the sampler on
 the PC and run the command again. Expected output for a healthy block sequence:
 each block's steps print PASS/REVIEW rows, then a `host load (<block>) INFO`
-row such as `224 samples, worst CPU 6 %, least available 9,412 MB (host idle)`.
-A `host load ... REVIEW` row means the PC was busy and that block's results are
-host-confounded, not a driver result. If the guest freezes, the resumed run
-prints `host load (<step>, until the restart)` for the window that contains the
-freeze, so the decision needs no clock comparison between the two machines.
+row such as `224 samples, mean non-VM CPU 3.4 % (peak 10 %, 0 % of samples above
+20 %); median available 9,412 MB (least 9,200 MB); total CPU peak 22 % (host
+idle for its own work)`. A `host load ... REVIEW` row means the PC was busy and
+that block's results are host-confounded, not a driver result. If the guest
+freezes, the resumed run prints `host load (<step>, until the restart)` for the
+window that contains the freeze, so the decision needs no clock comparison
+between the two machines.
 
 `-AutoLogon` asks once for the guest account's password, checks it, and stores
 it in the guest's Winlogon key so the VM signs in by itself after each planned
@@ -506,18 +515,24 @@ run, and restoring the checkpoint removes it too. Without it you must log back
 in after every restart and the night stalls. Add `-WithHostPause` only if the
 watcher is running.
 
+**A 24 h pool run (VCAB-28):** `-PoolMinutes` accepts up to 1440 and defaults
+to 120. Start the sampler with at least 25 h (`round2-host-preflight.ps1`
+defaults to 1560 min). The pool block copies `pool-tags.csv` to the share after
+every 30 s sample, so a restart does not lose the samples, and the run's state
+keeps `hostRows` across a restart. Shorter variants: `-Blocks repro
+-FuzzSeconds 300 -ReproBoots 5`, `-Blocks ab -AbPhases 4`, `-PoolMinutes 30`,
+`-FuzzSeconds 900`.
+
 **Keep the PC awake overnight** (Settings, System, Power: screen and sleep set
 to Never, or PowerToys Awake). If the host sleeps, the VM stops with it and the
 run resumes in the morning with meaningless timings; a stalled night is not
 evidence about the driver. The summary and
-`stage-a-round2-*.zip` land on `Z:\rc-0.2.5-r6`. If the guest is frozen in the
+`stage-a-round2-*.zip` land on `Z:\rc-0.2.5-r7`. If the guest is frozen in the
 morning, do not restore the snapshot first: copy `round2-state.json` from the
 share, save `host-load.csv` and the host's
 `C:\VMs\AR-DriverTest\Logs\VBox.log`, then power off. The state file records
 `hostRows`, the sampler row count when the frozen step began; the rows after
 that position are the freeze window.
-Shorter runs: `-Blocks ab` (about 75 min), `-AbPhases 4`, `-PoolMinutes 30`,
-`-FuzzSeconds 900`.
 
 Rollback: shut the VM down and restore `02-test-signing-ready` (untick the
 snapshot-of-current-state box). Nothing here touches the host's drivers or

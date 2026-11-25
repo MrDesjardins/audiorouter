@@ -69,7 +69,7 @@ param(
     [switch] $Resume,
     [ValidateRange(0, 1800)][int] $SettleSeconds = 300,
     [ValidateRange(60, 3600)][int] $FuzzSeconds = 1800,
-    [ValidateRange(5, 120)][int] $PoolMinutes = 60,
+    [ValidateRange(5, 1440)][int] $PoolMinutes = 120,
     [ValidateRange(1, 60)][int] $EightMinutes = 30,
     # round2 only
     [ValidatePattern('^(ab|pause|live|pool|verifier|control|repro)(,(ab|pause|live|pool|verifier|control|repro))*$')][string] $Blocks = 'ab,pool,verifier,live',
@@ -1247,6 +1247,9 @@ function Block-Pool {
                 $s = Get-DriverPoolTagSample
                 if (-not (Test-Path -LiteralPath $csv)) { ($s.PSObject.Properties.Name + 'minutes') -join ',' | Set-Content -LiteralPath $csv }
                 (@($s.PSObject.Properties | ForEach-Object { $_.Value }) + $minutes) -join ',' | Add-Content -LiteralPath $csv
+                # Keep the samples on the share while the block runs: a 24 h run
+                # that loses the guest must not lose its evidence with it.
+                try { Copy-Item -LiteralPath $csv -Destination (Join-Path $peer 'pool-tags.csv') -Force -ErrorAction Stop } catch { }
                 $sum = 0.0; $allocs = 0.0
                 foreach ($tag in $script:DriverPoolTags) { $sum += $s.$tag; $allocs += $s."$tag-allocs" }
                 $tagged.Add([pscustomobject]@{ Minutes = $minutes; Bytes = $sum })
@@ -1259,7 +1262,7 @@ function Block-Pool {
         $allocGrowth = Get-SeriesGrowthMiBPerHour $tagAllocs
         $wholeGrowth = Get-SeriesGrowthMiBPerHour $whole
         $first = $tagged[0].Bytes; $last = $tagged[$tagged.Count - 1].Bytes
-        $detail = "driver tags (MNWR, MNTR, SyAu, AUDR): $([Math]::Round($first / 1KB)) KiB to $([Math]::Round($last / 1KB)) KiB, growth $tagGrowth MiB/h; live allocations $($tagAllocs[0].Bytes) to $($tagAllocs[$tagAllocs.Count - 1].Bytes); whole non-paged pool growth $wholeGrowth MiB/h; $($tagged.Count) samples; tone restarted $restarts time(s); pool-tags.csv"
+        $detail = "driver tags (MNWR, MNTR, SyAu, AUDR): $([Math]::Round($first / 1KB)) KiB to $([Math]::Round($last / 1KB)) KiB, growth $tagGrowth MiB/h; live allocations $($tagAllocs[0].Bytes) to $($tagAllocs[$tagAllocs.Count - 1].Bytes); whole non-paged pool growth $wholeGrowth MiB/h; $($tagged.Count) samples; tone restarted $restarts time(s); pool-tags.csv (copied to the share each sample)"
         if ($null -eq $tagGrowth) { Add-Result $label 'FAIL' "too few samples; $detail" }
         elseif ($first -eq 0 -and $last -eq 0) { Add-Result $label 'FAIL' "the driver tags were never seen (wrong tag names?); $detail" }
         elseif ($tagGrowth -le 0.25) { Add-Result $label 'PASS' $detail }

@@ -18,54 +18,28 @@ param(
     [double] $MaxCpuPercent = 20,
     [int] $MinAvailableMb = 6000,
     [ValidateRange(5, 120)][int] $MeasureSeconds = 10,
-    [ValidateRange(1, 3600)][int] $SamplerMinutes = 480,
+    [ValidateRange(1, 2880)][int] $SamplerMinutes = 1560,
     [switch] $NoSampler,
     [switch] $LibraryOnly
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'round2-support.ps1')
 
-# One host snapshot. Win32_Processor.LoadPercentage and the perf-memory
-# properties are language-independent, unlike Get-Counter path names.
-function Get-HostLoadSnapshot {
-    $cpu = 0
-    $processors = @(Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue)
-    if ($processors.Count -gt 0) {
-        $cpu = [double][Math]::Round((($processors | Measure-Object -Property LoadPercentage -Average).Average), 0)
-    }
-    $availableMb = -1
-    $pages = -1
-    $memory = Get-CimInstance Win32_PerfRawData_PerfOS_Memory -ErrorAction SilentlyContinue
-    if ($memory) { $availableMb = [double]$memory.AvailableMBytes }
-    if ($availableMb -lt 0) {
-        $os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
-        if ($os) { $availableMb = [double]($os.FreePhysicalMemory / 1024) }
-    }
-    $formatted = Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory -ErrorAction SilentlyContinue
-    if ($formatted -and $null -ne $formatted.PagesPerSec) { $pages = [double]$formatted.PagesPerSec }
-    return [pscustomobject]@{ CpuPercent = $cpu; AvailableMb = $availableMb; PagesPerSec = $pages }
-}
-# Samples for MeasureSeconds; returns worst CPU and least memory as a
-# Get-HostLoadVerdict-shaped summary.
+# Samples for MeasureSeconds, using the sampler's own measurement so the gate and
+# the CSV agree. Returns a Get-HostLoadVerdict-shaped summary of the window.
 function Measure-HostIdle {
     param([int] $Seconds = 10, [int] $IntervalSeconds = 1)
     $samples = New-Object System.Collections.Generic.List[object]
+    $baseline = Get-HostCpuBaseline
+    Start-Sleep -Milliseconds 500
     $until = (Get-Date).AddSeconds($Seconds)
     do {
-        $samples.Add((Get-HostLoadSnapshot))
+        $sample = Get-HostLoadSnapshot -Baseline $baseline
+        $baseline = $sample.Baseline
+        if ($sample.CpuPercent -ge 0 -and $sample.AvailableMb -ge 0) { $samples.Add($sample) }
         if ((Get-Date) -lt $until) { Start-Sleep -Seconds $IntervalSeconds }
     } while ((Get-Date) -lt $until)
-    $usable = @($samples | Where-Object { $_.CpuPercent -ge 0 -and $_.AvailableMb -ge 0 })
-    if ($usable.Count -eq 0) { return (Get-HostLoadWindow -Rows @()) }
-    return [pscustomobject]@{
-        Count = $usable.Count
-        From = 0
-        To = $usable.Count
-        WorstCpuPercent = [double](($usable | Measure-Object -Property CpuPercent -Maximum).Maximum)
-        MinAvailableMb = [double](($usable | Measure-Object -Property AvailableMb -Minimum).Minimum)
-        FirstUtc = $null
-        LastUtc = $null
-    }
+    return (Get-HostLoadWindow -Rows $samples.ToArray())
 }
 # Names that are worth naming when the PC is busy; the measurement decides, this
 # is only the explanation.
