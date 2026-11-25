@@ -24,15 +24,40 @@ the code is `crates/control/src/service_timing_tests.rs` and
 | Play/export/import overlapping | The pipe harness starts `exportFile` and a re-`importFile` together and measures the queued second request; a separate scenario runs the noise export with six concurrent quick-request clients. Export/import work runs under the production `run_while_servicing` with the real `service_running_native_audio` closure | yes for the queueing and service cadence |
 | Raw numbers recorded | Three runs, medians and maxima, CSVs linked from the record | yes |
 
-The only thing the evidence does **not** do is start real Play from one
-scenario: `sessions.start` for an Audio File route calls
-`nativePaths.prepare`, which opens device endpoints. The record measures the
-two device-free steps that Play holds the control thread for (decode 0.6–0.7 s
-serviced, compile < 0.3 ms inline) and separately shows that a second request
-queues behind a running bundle request. An endpoint-opening Play is therefore
-the live gate, not another synthetic run. The portable item is satisfied; no
-new test was added, and none of the measured methods approached its deadline
-(slowest 2.0 s of 60 s; slowest quick call 28 ms of 5 s).
+**Does RES-6 cover all three overlapping?** No. It covers Play's two
+device-free steps *separately*, and export + import overlapping (queued on one
+serve loop, plus concurrent quick clients). It does not run decode, export and
+import at the same time. A real starting Play still needs endpoints
+(`nativePaths.prepare`), so that half is the live gate. The portable
+concurrency was added:
+
+`concurrent_play_export_import_service_cadence`
+([service_timing_tests.rs:1021](../../../../crates/control/src/service_timing_tests.rs)),
+opt-in and `#[ignore]`, on the same ~400 MiB library. It runs Play's decode of
+eight 100 s stereo files, a bundle export (prepare + ZIP) and a bundle import
+(stage + restore) on three threads while the real
+`service_running_native_audio` closure ticks. Two runs at scale 1:
+
+| Run | Play decode | Export | Import | Service passes | Gap median / p99 / max | Gaps > 8 ms |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 | 748 ms | 447 ms | 1,688 ms | 1,094 | 1.54 / 1.75 / 2.04 ms | 0 |
+| 1 | 750 ms | 462 ms | 3,204 ms | 2,072 | 1.54 / 1.66 / 12.65 ms | **1** |
+
+Raw rows: [concurrent timing](2026-11-24-concurrent-service-timing.csv).
+Command: `$env:AUDIOROUTER_TIMING_RUNS=2;
+$env:AUDIOROUTER_TIMING_CSV=<absolute path>; cargo test -p audiorouter-control
+--release --lib --locked
+service_timing_tests::concurrent_play_export_import_service_cadence -- --ignored
+--exact --nocapture`. The median stayed at ~1.54 ms in both runs. Run 1 had
+**one** pass of 12.65 ms (one gap over the 8 ms `AUDIO_SERVICE_LATE_GAP`),
+which run 0 did not reproduce. That is a host stall under concurrent I/O on a
+PC already running other work, not a device run; it does not open a device. An
+earlier pair of runs (before a clippy-only borrow edit) measured play 753/853,
+export 447/507 and import 2,148/2,520 ms with max gaps 1.88/3.20 ms and no gap
+over 8 ms, so the late pass is intermittent.
+
+No measured method approached its deadline (slowest 2.0 s of 60 s; slowest
+quick call 28 ms of 5 s).
 
 The one candidate defect the evidence found (the 2 s pipe-busy wait) is
 already fixed on main with regressions: `connect_client_waiting`,
@@ -64,6 +89,34 @@ This is the bounded-concern pass the plan claims, not a claim that the large
 compiler and endpoint files are small.
 
 ## 4. Live continuity re-runs (owner authorized 2026-11-24)
+
+### Deviation: the runs were not proven isolated
+
+The brief for this slot said to skip if any app was busy or the owner might be
+in a call. Six 20 s tones were rendered into CABLE-A Input and captured from
+CABLE-A Output before that was proven. CABLE-A Output is the Windows default
+communications capture, and Discord and Zoom were running. That is a
+deviation from the brief; it is recorded rather than excused. No further audio
+was run after the failures, and none will run until the owner gives a quiet
+window.
+
+Exact wall-clock windows (UTC; local was PST, 2026-11-24 evening), from the
+PowerShell log files’ creation and last-write times:
+
+| Run | UTC start | UTC end | Result |
+| --- | --- | --- | --- |
+| gain-1 | 2026-11-25 02:20:49 | 02:21:11 | pass |
+| gain-2 | 02:21:28 | 02:21:51 | pass |
+| gain-3 | 02:21:51 | 02:22:13 | fail |
+| chain-1 | 02:22:13 | 02:22:35 | fail |
+| chain-2 | 02:22:35 | 02:22:57 | pass |
+| chain-3 | 02:22:57 | 02:23:20 | fail |
+
+Other load on the machine: `VirtualBox`, `VBoxSVC` and `VBoxSDS` were running
+(a guest, as the manager reported), together with several `node` processes from
+other worktree sessions. The two passing runs that showed an ~82 ms service
+pass (gain-2, chain-2) are consistent with host-wide stalls; the failing runs
+did not have one.
 
 ### Preconditions and limits
 
@@ -117,6 +170,70 @@ underruns: 1` (startup/teardown) in every run.
   are not provably isolated, not a passed gate. It needs a re-run with the
   owner confirming that no call/game holds the cables, and with CABLE-A Output
   free. The CABLE-B 8-channel decision is separate.
+
+### Where the ~11 ms gap entered
+
+The three failures lost one contiguous silent block, framed by exactly two
+sample-level discontinuities:
+
+| Run | Glitch times (s) | Silent samples | Silent duration | One 10 ms device period? |
+| --- | --- | --- | --- | --- |
+| gain-3 | 18.389 and 18.400 | 527 | 10.98 ms | 10 ms + ~1 ms |
+| chain-1 | 1.189 and 1.200 | 544 | 11.33 ms | 10 ms + ~1.3 ms |
+| chain-3 | 11.477 and 11.489 | 578 | 12.04 ms | 10 ms + ~2 ms |
+
+Every endpoint’s `default100ns` is 100,000, i.e. a 10 ms shared-mode period
+(`devices list` in the same session). The gap is one period plus the two
+boundary samples, so it is the shape of one capture packet lost or zeroed —
+not a drift slip and not several periods.
+
+Which side:
+
+- `output underruns: 1` in every run, the startup/teardown one. A route output
+  underrun renders exact digital silence and increments that counter (the
+  harness’s own `report` comment says so). The failing runs did not increment
+  it.
+- The failing runs had 0 audio-service `lateGaps` and a 3.06–3.20 ms maximum
+  gap; the pump maxima were 0.11–0.91 ms. The two *passing* runs had the only
+  ~82 ms slow service pass. So the service thread and the output pump were
+  on time in the failures.
+- The result capture reported 0 WASAPI discontinuity flags in the failures.
+  A lost capture *packet flag* would normally set `DATA_DISCONTINUITY`; a
+  silence produced inside the shared-mode engine (or a capture stream that
+  another client disturbed) need not.
+- The reference capture, which contains no AudioRouter code, was clean.
+
+Conclusion: the gap entered on the **result-capture side of the harness** (a
+shared capture of CABLE-A Output), not in the route’s output pump and not in
+the audio-service thread. Why that capture stream produced one silent period
+is not established; another client on the default communications capture is
+the leading possibility, consistent with the unproven isolation above.
+
+Comparison with the 2026-11-23 health log: on the owner’s real CABLE-A route at
+a 10 ms cushion, `voice-to-cable-a` recorded 20 underruns outside stalls in
+41.3 h (0.48 an hour), and every one was counted by that output’s counter. The
+failing runs here did not count one. Earlier passing runs on this CABLE-A pair
+(2026-11-02, 20 s, gain and ten tools) were clean; the 2026-11-02 repeat
+failures were traced to the owner’s running route forming a loop, and their
+reference path also glitched in 2 of 3 runs. Here no shell ran and the
+reference was clean, so the loop explanation does not apply.
+
+### Harness counters added
+
+`live_audio_continuity` now prints one line per second during measurement:
+
+```text
+t=<s>s utc_ms=<epoch ms> outputQueueMs=<destination timing.delayMs>
+outputUnderruns=<total> (+<delta>) submittedQuanta=<total> (+<delta>)
+cpuBusyPercent=<host busy %> audioThread=<passes/lateGaps/maxGapMicros/...>
+```
+
+The queue is the destination node’s `timing.delayMs` from `system.diagnostics`;
+the counters come from `nativeMultiInputs.pump`; host CPU is between
+`GetSystemTimes` samples; the timestamp is UTC epoch ms. It is test-only
+logging, no product behaviour change, and it compiles in the release test
+binary. It was not run against audio (the quiet-window rule); the next isolated
+run will show the queue and underrun delta at the failing second.
 
 ## 5. Remaining prerequisites
 

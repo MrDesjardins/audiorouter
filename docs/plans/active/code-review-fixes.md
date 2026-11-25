@@ -10,10 +10,11 @@
 > were not provably isolated (CABLE-A Output is the default capture and
 > Discord/Zoom were open), so the automated continuity gate is **failed under
 > non-isolated conditions**, not passed and not attributed to the engine.
-> Remaining: isolated CABLE-A repeats with the owner confirming a free cable,
+> Remaining: isolated CABLE-A repeats once the manager opens a quiet window,
 > the CABLE-B 8-channel owner decision (no valid CABLE-B result endpoint
-> exists), and the licensed latency-changing commercial-plugin run. Archive
-> when the isolated repeat and the two owner decisions are settled.
+> exists), and the licensed latency-changing commercial-plugin run. This plan
+> stays **KEEP** until a clean isolated repeat passes; the three of six
+> failures are not a human gate yet.
 
 Owner request, 2026-11-01: "do the two code review markdown in the future
 folder. Set them in current and tackle all of them." Sources:
@@ -593,17 +594,22 @@ the latency-changing commercial-plugin run.
 Evidence: [residual record](evidence/2026-11-24-code-review-fixes-residual.md)
 and the raw [run logs](evidence/2026-11-24-live-continuity/).
 
-**Portable timing item — covered, no new harness.** The #187 synthetic record
-matches the item point for point: a ~400 MiB media library with ~100 sessions
-and 2,000 recordings; export and import through `ControlPlane::dispatch` and
-through the production pipe serve loop; the two device-free Play steps
-(decode 0.6–0.7 s under `while_servicing_audio`, compile < 0.3 ms inline); a
-queued export + re-import and six concurrent pollers; three runs with medians
-and maxima. The one scenario it cannot run is a real Play start, because
-`sessions.start` for an Audio File route opens endpoints through
-`nativePaths.prepare`; that is live-gate work, not synthetic. No measured
-method approached its deadline. The pipe-busy candidate defect it found is
-already fixed on main (`connect_client_waiting`, `probe_pipe`,
+**Portable timing item — now covered by a new concurrency run.** The #187
+record covers a ~400 MiB library, export/import through `ControlPlane::dispatch`
+and the production pipe loop, Play’s two device-free steps and their deadlines,
+a queued export + re-import and six concurrent quick clients. It does **not**
+run play decode, export and import at the same time, and it cannot start real
+Play because `nativePaths.prepare` opens endpoints. Added
+`concurrent_play_export_import_service_cadence`
+(`service_timing_tests.rs:1021`, opt-in `#[ignore]`): eight 100 s file decode +
+bundle export + bundle import on three threads while the real
+`service_running_native_audio` closure ticks. Two scale-1 runs: play 748/750 ms,
+export 447/462 ms, import 1,688/3,204 ms; service gap median 1.54 ms; max 2.04
+ms in one run and **12.65 ms in the other (one gap over 8 ms)**, not
+reproduced. A host stall under concurrent I/O, not a device run. CSV:
+[concurrent timing](evidence/2026-11-24-concurrent-service-timing.csv). No
+measured method approaches its deadline. The pipe-busy candidate defect it
+found is already fixed on main (`connect_client_waiting`, `probe_pipe`,
 `crates/transport/tests/busy_pipe_wait.rs`).
 
 **Silent catches — confirmed.** `useWorkbenchStatus.ts:21-88` records one
@@ -625,20 +631,44 @@ large compiler and endpoint files are still large.
 **Live re-runs (owner authorized).** Six 20 s CABLE-A runs of
 `live::live_backend_service_keeps_a_routed_tone_continuous`, release harness,
 private pipe, in-memory plane, no plugins: three `gain` and three ten-tool
-chains. Reference path 0 glitches in all six. Routed result: 0 glitches in
+chains, UTC 2026-11-25 02:20:49–02:23:20 (local 2026-11-24 18:20–18:23 PST).
+Reference path 0 glitches in all six. Routed result: 0 glitches in
 gain-1/gain-2/chain-2, and **2 glitches with one ~11–12 ms silent run** in
-gain-3, chain-1 and chain-3. The failing runs had 0 late gaps and a ≤ 3.2 ms
-max service gap; two passing runs had an ~82 ms slow service pass. So the
-silence is not service-thread lateness. CABLE-A Output is the default
-communications capture and Discord/Zoom were open; the runs were not provably
-isolated, so this is a **failed** assertion under non-isolated conditions, not
-a product defect and not a passed gate. CABLE-B was not run: its Input is
-8-channel, which the stereo worker refuses (owner decision). Latency samples:
-source 12.1–19.9 ms, destination 22.5–28.1 ms.
+gain-3 (18.389 s), chain-1 (1.189 s) and chain-3 (11.477 s). The failing runs
+had 0 late gaps and a ≤ 3.2 ms max service gap; the two passing runs had the
+only ~82 ms slow service pass. So the silence is not service-thread lateness.
 
-**Still open.** (1) Three clean isolated runs per chain after the owner
-confirms no call/stream holds CABLE-A Output — a reproducible failure then
-becomes a defect to trace at the glitch offset. (2) The CABLE-B 8-channel
-decision. (3) A licensed latency-changing non-Blue-Cat plugin run; installed
-UADx/TDR candidates were not used because licensing and the exact choice are
-the owner's, and UADx previously returned input unchanged.
+**Deviation.** The brief said to skip if any app was busy or the owner might be
+in a call. The tones were rendered before that was proven. CABLE-A Output is
+the Windows default communications capture; Discord and Zoom were open, and a
+VirtualBox guest (`VirtualBox`/`VBoxSVC`/`VBoxSDS`) plus other worktree `node`
+processes were running. This is recorded as a deviation, not excused, and no
+further audio was run. This is a **failed** assertion under non-isolated
+conditions, not a passed gate and not attributed to the engine.
+
+**Where the gap entered.** Each failure is one contiguous silence of
+527/544/578 samples (10.98/11.33/12.04 ms), framed by two discontinuities ~11–12
+ms apart: one 10 ms device period plus the boundary samples. The route’s
+`outputUnderruns` stayed at 1 (the startup one) and the failing runs had a
+healthy service thread; the capture reported 0 WASAPI flags; the reference was
+clean. A route output underrun would both increment that counter and render
+digital silence, so this entered on the **result-capture side of the harness**
+(a shared capture of CABLE-A Output), not the output pump or the service
+thread. Why is not established; another client on the default communications
+capture is the leading possibility. The owner’s own 55.8 h health log at a
+10 ms CABLE-A cushion shows 0.48 underruns an hour outside stalls, each counted
+by that output; these were not. The harness now prints one line per second with
+`outputQueueMs`, `outputUnderruns` (+delta), `submittedQuanta`, host
+`cpuBusyPercent` and a UTC timestamp, so the next isolated run shows the queue
+and underrun at the failing second. It compiles; it was not run against audio.
+
+CABLE-B was not run: its Input is 8-channel, which the stereo worker refuses
+(owner decision). Latency samples: source 12.1–19.9 ms, destination
+22.5–28.1 ms.
+
+**Still open (KEEP this plan).** (1) Three clean isolated runs per chain once
+the manager opens a quiet window; a reproducible failure then becomes a defect
+to trace at the glitch offset. (2) The CABLE-B 8-channel decision. (3) A
+licensed latency-changing non-Blue-Cat plugin run; installed UADx/TDR
+candidates were not used because licensing and the exact choice are the
+owner’s, and UADx previously returned input unchanged.
