@@ -111,8 +111,11 @@ measurements and records them per block.
 A new bundle is required for the guest (r3-r6 predate the six-column sampler and
 the pool changes). `prepare-round2-bundle.ps1 -Destination
 C:\VMs\ar-share\rc-0.2.5-r7` builds it from a clean committed tree and verifies
-every hash; r6 is left in place as history. The bundle's `run-stage-a.ps1`
-contains the gate and its `round2-support.ps1` the host-load helpers. Read-only
+every hash; r6 is left in place as history. Done at source `97ab60910`:
+`C:\VMs\ar-share\rc-0.2.5-r7`, 89 files, `MANIFEST.txt` SHA-256
+`3D40FB0CB2C359BFA4988C2BC029B1589D45DB47652E43CD0459B4295A7180E7`. The bundle's
+`run-stage-a.ps1` contains the gate and `-PoolMinutes` 1440, and its
+`round2-support.ps1` the host-load helpers. Read-only
 VM state on 2026-11-24: `AR-DriverTest` is `poweroff` with current snapshot
 `02-test-signing-ready`, 8192 MB RAM, 4 vCPUs, nested VT-x off (NEM); the
 release-qualification guest was running on the host, so no slot was taken. No
