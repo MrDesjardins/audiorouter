@@ -2652,16 +2652,25 @@ fn install_panic_log() {
 
 fn main() {
     install_panic_log();
+    let pipe_name =
+        std::env::var("AUDIOROUTER_CONTROL_PIPE").unwrap_or_else(|_| DEFAULT_PIPE_NAME.to_owned());
+    let database_path = std::env::var_os("AUDIOROUTER_DATABASE")
+        .map(std::path::PathBuf::from)
+        .map(Ok)
+        .unwrap_or_else(default_database_path)
+        .unwrap_or_default();
     // Claim the desktop before opening storage, enrolling, forwarding RPCs or
     // starting recovery supervision. Test/external-pipe clients own no backend.
     #[cfg(windows)]
+    let startup_language = resolved_saved_language(&database_path);
+    #[cfg(windows)]
     let _instance_guard = if std::env::var_os("AUDIOROUTER_CONTROL_PIPE").is_none() {
         // Already running (often in the tray): bring that window forward.
-        if instance_windows::show_running_instance() {
+        if instance_windows::show_running_instance(&startup_language) {
             log_instance_check("shown");
             return;
         }
-        match instance_windows::claim_or_recover() {
+        match instance_windows::claim_or_recover(&startup_language) {
             Ok(Some(guard)) => {
                 log_instance_check("ready");
                 Some(guard)
@@ -2679,13 +2688,6 @@ fn main() {
     } else {
         None
     };
-    let pipe_name =
-        std::env::var("AUDIOROUTER_CONTROL_PIPE").unwrap_or_else(|_| DEFAULT_PIPE_NAME.to_owned());
-    let database_path = std::env::var_os("AUDIOROUTER_DATABASE")
-        .map(std::path::PathBuf::from)
-        .map(Ok)
-        .unwrap_or_else(default_database_path)
-        .unwrap_or_default();
     let state = ShellState {
         pipe_name,
         session_id: DESKTOP_SESSION_ID.to_owned(),

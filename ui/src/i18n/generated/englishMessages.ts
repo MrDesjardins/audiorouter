@@ -1027,7 +1027,21 @@ export const ENGLISH_MESSAGES = {
     "restorePaused": "Restore paused: unavailable saved sessions need recovery.",
     "restoredAll": "Playing again after a restart",
     "restoredPartial": "Restored {{restored}} of {{total}} routes after a restart",
-    "restoreFailed": "Restore failed: the audio engine did not start"
+    "restoreFailed": "Restore failed: the audio engine did not start",
+    "instanceInstruction": "There is already an instance running. Please close it.",
+    "instanceContent": "You can close the existing AudioRouter window normally, then open this version again. If the old app is stuck, force close it below to continue with this version.",
+    "instanceForceClose": "Force close old instance and continue\nStops its audio. Unsaved changes and unfinished recordings may be lost.",
+    "instanceCloseAndReopen": "There is already an instance running. Please close it and open AudioRouter again.",
+    "instanceStarting": "There is already an instance starting. Please close it or wait, then try again.",
+    "instanceCouldNotClose": "Could not close the old app. Close it in Task Manager, then try again.",
+    "instanceStillClosing": "The old app is still closing. Please wait and open AudioRouter again.",
+    "instanceVerifyUser": "Could not verify this Windows user.",
+    "instanceCheckOwnership": "Could not check AudioRouter instance ownership.",
+    "instanceCheckApps": "Could not check running apps. Please close AudioRouter and try again.",
+    "instanceCheckSession": "Could not check this Windows session.",
+    "instanceOtherSession": "AudioRouter is running in another Windows session. Please close it there and try again.",
+    "instanceCloseBlocked": "There is already an instance running. Please close it. Windows would not allow this app to close it automatically.",
+    "instanceExtraInstances": "Please close the extra AudioRouter instances and try again."
   },
   "goalGuide": {
     "summary": "Choose a setup goal",

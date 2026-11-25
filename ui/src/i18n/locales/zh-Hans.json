@@ -1019,7 +1019,21 @@
       "restorePaused": "已暂停恢复。需要恢复不可用的已保存会话。",
       "restoredAll": "重启后已恢复播放",
       "restoredPartial": "重启后已恢复 {{restored}} 条路由，共 {{total}} 条",
-      "restoreFailed": "恢复失败：音频引擎未启动"
+      "restoreFailed": "恢复失败：音频引擎未启动",
+      "instanceInstruction": "已有 AudioRouter 实例正在运行。请将其关闭。",
+      "instanceContent": "你可以正常关闭现有的 AudioRouter 窗口，然后重新打开此版本。如果旧应用卡住，请在下方强制关闭它以继续使用此版本。",
+      "instanceForceClose": "强制关闭旧实例并继续\n这会停止其音频。未保存的修改和未完成的录音可能会丢失。",
+      "instanceCloseAndReopen": "已有 AudioRouter 实例正在运行。请关闭它，然后重新打开 AudioRouter。",
+      "instanceStarting": "已有 AudioRouter 实例正在启动。请关闭它或稍等，然后重试。",
+      "instanceCouldNotClose": "无法关闭旧应用。请在任务管理器中关闭它，然后重试。",
+      "instanceStillClosing": "旧应用仍在关闭中。请稍等，然后重新打开 AudioRouter。",
+      "instanceVerifyUser": "无法验证此 Windows 用户。",
+      "instanceCheckOwnership": "无法检查 AudioRouter 实例所有权。",
+      "instanceCheckApps": "无法检查正在运行的应用。请关闭 AudioRouter，然后重试。",
+      "instanceCheckSession": "无法检查此 Windows 会话。",
+      "instanceOtherSession": "AudioRouter 正在另一个 Windows 会话中运行。请在那里关闭它，然后重试。",
+      "instanceCloseBlocked": "已有 AudioRouter 实例正在运行。请将其关闭。Windows 不允许此应用自动关闭它。",
+      "instanceExtraInstances": "请关闭多余的 AudioRouter 实例，然后重试。"
     },
     "goalGuide": {
       "summary": "选择设置目标",

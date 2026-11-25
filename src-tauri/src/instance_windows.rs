@@ -54,13 +54,14 @@ fn eligible(pid: u32, own_pid: u32, image: &str, same_user: bool, same_session: 
 
 /// Returned handles pin verified process objects, avoiding PID reuse when the
 /// user takes time to read the recovery dialog.
-fn existing_instances() -> Result<Vec<(OwnedHandle, String)>, String> {
+fn existing_instances(language: &str) -> Result<Vec<(OwnedHandle, String)>, String> {
     // SAFETY: snapshot handle is owned locally; entry size matches the ABI and
     // Windows fills only its fixed fields. Each process is opened independently.
     unsafe {
-        let snapshot = OwnedHandle(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0).map_err(
-            |_| "Could not check running apps. Please close AudioRouter and try again.",
-        )?);
+        let snapshot = OwnedHandle(
+            CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+                .map_err(|_| crate::ui_language::text(language, "native.instanceCheckApps"))?,
+        );
         let mut entry = PROCESSENTRY32W {
             dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
             ..Default::default()
@@ -68,7 +69,7 @@ fn existing_instances() -> Result<Vec<(OwnedHandle, String)>, String> {
         let mut found = Vec::new();
         let mut own_session = 0;
         ProcessIdToSessionId(std::process::id(), &mut own_session)
-            .map_err(|_| "Could not check this Windows session.")?;
+            .map_err(|_| crate::ui_language::text(language, "native.instanceCheckSession"))?;
         if Process32FirstW(snapshot.0, &mut entry).is_err() {
             return Ok(found);
         }
@@ -105,7 +106,11 @@ fn existing_instances() -> Result<Vec<(OwnedHandle, String)>, String> {
                     let same_user = audiorouter_transport::client_is_same_user(entry.th32ProcessID)
                         .unwrap_or(false);
                     if verified_image && verified_session && same_user && session != own_session {
-                        return Err("AudioRouter is running in another Windows session. Please close it there and try again.".into());
+                        return Err(crate::ui_language::text(
+                            language,
+                            "native.instanceOtherSession",
+                        )
+                        .to_owned());
                     }
                     let image_path = String::from_utf16_lossy(&image[..length as usize]);
                     if verified_image
@@ -120,14 +125,23 @@ fn existing_instances() -> Result<Vec<(OwnedHandle, String)>, String> {
                         && WaitForSingleObject(pinned.0, 0) != WAIT_OBJECT_0
                     {
                         // Open termination rights only after identity checks.
-                        let killer = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE | PROCESS_SYNCHRONIZE, false, entry.th32ProcessID)
-                            .map_err(|_| "There is already an instance running. Please close it. Windows would not allow this app to close it automatically.")?;
+                        let killer = OpenProcess(
+                            PROCESS_QUERY_LIMITED_INFORMATION
+                                | PROCESS_TERMINATE
+                                | PROCESS_SYNCHRONIZE,
+                            false,
+                            entry.th32ProcessID,
+                        )
+                        .map_err(|_| {
+                            crate::ui_language::text(language, "native.instanceCloseBlocked")
+                        })?;
                         found.push((OwnedHandle(killer), image_path));
                         if found.len() > 8 {
-                            return Err(
-                                "Please close the extra AudioRouter instances and try again."
-                                    .into(),
-                            );
+                            return Err(crate::ui_language::text(
+                                language,
+                                "native.instanceExtraInstances",
+                            )
+                            .to_owned());
                         }
                     }
                 }
@@ -140,16 +154,31 @@ fn existing_instances() -> Result<Vec<(OwnedHandle, String)>, String> {
     }
 }
 
-fn recovery_dialog() -> Result<bool, String> {
+/// NUL-terminated UTF-16 for a TaskDialog string; the caller keeps it alive
+/// across the modal call.
+fn wide(text: &str) -> Vec<u16> {
+    text.encode_utf16().chain(Some(0)).collect()
+}
+
+fn recovery_dialog(language: &str) -> Result<bool, String> {
+    let instruction = wide(crate::ui_language::text(
+        language,
+        "native.instanceInstruction",
+    ));
+    let content = wide(crate::ui_language::text(language, "native.instanceContent"));
+    let force = wide(crate::ui_language::text(
+        language,
+        "native.instanceForceClose",
+    ));
     let buttons = [TASKDIALOG_BUTTON {
         nButtonID: 100,
-        pszButtonText: w!("Force close old instance and continue\nStops its audio. Unsaved changes and unfinished recordings may be lost."),
+        pszButtonText: PCWSTR(force.as_ptr()),
     }];
     let config = TASKDIALOGCONFIG {
         cbSize: std::mem::size_of::<TASKDIALOGCONFIG>() as u32,
         pszWindowTitle: w!("AudioRouter"),
-        pszMainInstruction: w!("There is already an instance running. Please close it."),
-        pszContent: w!("You can close the existing AudioRouter window normally, then open this version again. If the old app is stuck, force close it below to continue with this version."),
+        pszMainInstruction: PCWSTR(instruction.as_ptr()),
+        pszContent: PCWSTR(content.as_ptr()),
         dwFlags: TDF_ALLOW_DIALOG_CANCELLATION | TDF_USE_COMMAND_LINKS,
         dwCommonButtons: TDCBF_CANCEL_BUTTON,
         cButtons: buttons.len() as u32,
@@ -161,7 +190,7 @@ fn recovery_dialog() -> Result<bool, String> {
     // SAFETY: all literal strings and button/config buffers outlive this modal
     // call. No callbacks, parent windows or borrowed handles are supplied.
     unsafe { TaskDialogIndirect(&config, Some(&mut chosen), None, None) }.map_err(|_| {
-        "There is already an instance running. Please close it and open AudioRouter again."
+        crate::ui_language::text(language, "native.instanceCloseAndReopen").to_owned()
     })?;
     Ok(chosen == 100)
 }
@@ -195,11 +224,11 @@ fn same_program(running: &str, own: &std::path::Path) -> bool {
 /// sits in the tray): ask the running instance to show its window. Returns
 /// false when there is none, it is another build, or it does not listen
 /// (older versions); the caller then continues with `claim_or_recover`.
-pub fn show_running_instance() -> bool {
+pub fn show_running_instance(language: &str) -> bool {
     let Ok(own) = std::env::current_exe() else {
         return false;
     };
-    let Ok(existing) = existing_instances() else {
+    let Ok(existing) = existing_instances(language) else {
         return false;
     };
     if existing.is_empty() || !existing.iter().all(|(_, image)| same_program(image, &own)) {
@@ -254,9 +283,9 @@ pub fn listen_for_show_requests(on_show: impl Fn() + Send + 'static) {
 }
 
 /// None means the user canceled: exit without touching database/backend.
-pub fn claim_or_recover() -> Result<Option<InstanceGuard>, String> {
+pub fn claim_or_recover(language: &str) -> Result<Option<InstanceGuard>, String> {
     let sid = audiorouter_transport::current_user_sid()
-        .map_err(|_| "Could not verify this Windows user.")?;
+        .map_err(|_| crate::ui_language::text(language, "native.instanceVerifyUser").to_owned())?;
     let name: Vec<u16> = format!("Local\\AudioRouter.DesktopInstance.{sid}")
         .encode_utf16()
         .chain(Some(0))
@@ -264,8 +293,9 @@ pub fn claim_or_recover() -> Result<Option<InstanceGuard>, String> {
     // SAFETY: name is NUL terminated and alive for the call. The handle is
     // owned by this scope; default security inherits the user's ACL.
     let handle = OwnedHandle(
-        unsafe { CreateMutexW(None, false, PCWSTR(name.as_ptr())) }
-            .map_err(|_| "Could not check AudioRouter instance ownership.")?,
+        unsafe { CreateMutexW(None, false, PCWSTR(name.as_ptr())) }.map_err(|_| {
+            crate::ui_language::text(language, "native.instanceCheckOwnership").to_owned()
+        })?,
     );
     // SAFETY: valid owned mutex; zero wait does not block startup.
     let result = unsafe { WaitForSingleObject(handle.0, 0) };
@@ -273,9 +303,9 @@ pub fn claim_or_recover() -> Result<Option<InstanceGuard>, String> {
         handle,
         owned: result == WAIT_OBJECT_0 || result == WAIT_ABANDONED,
     };
-    let existing = existing_instances()?;
+    let existing = existing_instances(language)?;
     if !existing.is_empty() {
-        if !recovery_dialog()? {
+        if !recovery_dialog(language)? {
             return Ok(None);
         }
         for (process, _) in existing {
@@ -284,13 +314,14 @@ pub fn claim_or_recover() -> Result<Option<InstanceGuard>, String> {
             unsafe {
                 if WaitForSingleObject(process.0, 0) != WAIT_OBJECT_0 {
                     TerminateProcess(process.0, 0).map_err(|_| {
-                        "Could not close the old app. Close it in Task Manager, then try again."
+                        crate::ui_language::text(language, "native.instanceCouldNotClose")
+                            .to_owned()
                     })?;
                 }
                 if WaitForSingleObject(process.0, 5000) != WAIT_OBJECT_0 {
                     return Err(
-                        "The old app is still closing. Please wait and open AudioRouter again."
-                            .into(),
+                        crate::ui_language::text(language, "native.instanceStillClosing")
+                            .to_owned(),
                     );
                 }
             }
@@ -301,10 +332,7 @@ pub fn claim_or_recover() -> Result<Option<InstanceGuard>, String> {
         let result = unsafe { WaitForSingleObject(guard.handle.0, 1000) };
         guard.owned = result == WAIT_OBJECT_0 || result == WAIT_ABANDONED;
         if !guard.owned {
-            return Err(
-                "There is already an instance starting. Please close it or wait, then try again."
-                    .into(),
-            );
+            return Err(crate::ui_language::text(language, "native.instanceStarting").to_owned());
         }
     }
     Ok(Some(guard))
@@ -362,7 +390,7 @@ mod tests {
     }
     #[test]
     fn existing_instance_inventory_is_read_only_and_never_targets_self() {
-        let found = existing_instances().unwrap();
+        let found = existing_instances("en").unwrap();
         assert!(found.len() <= 8);
     }
 }

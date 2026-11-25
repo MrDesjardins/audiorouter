@@ -1041,7 +1041,21 @@
       "restorePaused": "La reprise est suspendue. Récupérez les sessions enregistrées indisponibles.",
       "restoredAll": "Lecture reprise après le redémarrage",
       "restoredPartial": "{{restored}} routes sur {{total}} rétablies après le redémarrage",
-      "restoreFailed": "Échec de la reprise : le moteur audio n’a pas démarré"
+      "restoreFailed": "Échec de la reprise : le moteur audio n’a pas démarré",
+      "instanceInstruction": "Une instance d’AudioRouter est déjà en cours d’exécution. Veuillez la fermer.",
+      "instanceContent": "Vous pouvez fermer normalement la fenêtre AudioRouter existante, puis rouvrir cette version. Si l’ancienne application ne répond plus, forcez sa fermeture ci-dessous pour continuer avec cette version.",
+      "instanceForceClose": "Forcer la fermeture de l’ancienne instance et continuer\nCela arrête son audio. Les modifications non enregistrées et les enregistrements inachevés peuvent être perdus.",
+      "instanceCloseAndReopen": "Une instance d’AudioRouter est déjà en cours d’exécution. Fermez-la, puis rouvrez AudioRouter.",
+      "instanceStarting": "Une instance d’AudioRouter est déjà en cours de démarrage. Fermez-la ou attendez, puis réessayez.",
+      "instanceCouldNotClose": "Impossible de fermer l’ancienne application. Fermez-la dans le Gestionnaire des tâches, puis réessayez.",
+      "instanceStillClosing": "L’ancienne application est encore en cours de fermeture. Attendez, puis rouvrez AudioRouter.",
+      "instanceVerifyUser": "Impossible de vérifier cet utilisateur Windows.",
+      "instanceCheckOwnership": "Impossible de vérifier la propriété de l’instance AudioRouter.",
+      "instanceCheckApps": "Impossible de vérifier les applications en cours. Fermez AudioRouter, puis réessayez.",
+      "instanceCheckSession": "Impossible de vérifier cette session Windows.",
+      "instanceOtherSession": "AudioRouter est en cours d’exécution dans une autre session Windows. Fermez-le là-bas, puis réessayez.",
+      "instanceCloseBlocked": "Une instance d’AudioRouter est déjà en cours d’exécution. Fermez-la. Windows n’a pas autorisé cette application à la fermer automatiquement.",
+      "instanceExtraInstances": "Fermez les instances AudioRouter supplémentaires, puis réessayez."
     },
     "goalGuide": {
       "summary": "Choisir un objectif de configuration",
