@@ -7,6 +7,14 @@ fn build_schema(build: impl FnOnce() -> Value) -> Value {
     build()
 }
 
+/// `^cable-[a-p]$`: every bus ID the app can address (domain `MAX_CABLES`).
+pub(crate) fn cable_bus_pattern() -> String {
+    format!(
+        "^cable-[a-{}]$",
+        char::from(b'a' + audiorouter_domain::MAX_CABLES - 1)
+    )
+}
+
 pub(crate) fn method_output_schema(name: &str) -> Value {
     // Keep the comprehensive match in a separate, uninlined function. A debug
     // build otherwise reserves every arm's temporaries in the caller's frame
@@ -356,14 +364,15 @@ fn method_output_schema_impl(name: &str) -> Value {
                 "driverVersion": { "type": ["string", "null"], "maxLength": 32 },
                 "protocol": { "type": ["string", "null"], "maxLength": 16 },
                 "defaultPeriodFrames": { "type": ["integer", "null"], "minimum": 0, "maximum": 960 },
-                "cableCount": { "type": "integer", "minimum": 0, "maximum": 8 },
+                "cableCount": { "type": "integer", "minimum": 0, "maximum": audiorouter_domain::MAX_CABLES },
+                "maxCables": { "type": "integer", "minimum": 1, "maximum": audiorouter_domain::MAX_CABLES },
                 "cables": {
                     "type": "array",
-                    "maxItems": 8,
+                    "maxItems": audiorouter_domain::MAX_CABLES,
                     "items": {
                         "type": "object",
                         "properties": {
-                            "busId": { "type": "string", "pattern": "^cable-[a-h]$" },
+                            "busId": { "type": "string", "pattern": cable_bus_pattern() },
                             "name": { "type": "string", "minLength": 1, "maxLength": 48 },
                             "renderEndpointId": { "type": ["string", "null"], "maxLength": 512 },
                             "captureEndpointId": { "type": ["string", "null"], "maxLength": 512 },
@@ -374,7 +383,7 @@ fn method_output_schema_impl(name: &str) -> Value {
                     }
                 }
             },
-            "required": ["state", "driverVersion", "protocol", "defaultPeriodFrames", "cableCount", "cables"],
+            "required": ["state", "driverVersion", "protocol", "defaultPeriodFrames", "cableCount", "maxCables", "cables"],
             "additionalProperties": false
         }),
         "startup.get" => json!({
@@ -2039,8 +2048,8 @@ pub(crate) fn diagnostics_output_schema() -> Value {
                         "properties": {
                             "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                             "generation": { "type": "integer", "minimum": 0 },
-                            "renderBus": { "type": "string", "pattern": "^cable-[a-h]$" },
-                            "captureBus": { "type": "string", "pattern": "^cable-[a-h]$" },
+                            "renderBus": { "type": "string", "pattern": cable_bus_pattern() },
+                            "captureBus": { "type": "string", "pattern": cable_bus_pattern() },
                             "blockFrames": { "type": "integer", "minimum": 128, "maximum": 960 },
                             "renderChannels": { "type": "integer", "minimum": 1, "maximum": audiorouter_domain::MAX_CABLE_CHANNELS },
                             "captureChannels": { "type": "integer", "minimum": 1, "maximum": audiorouter_domain::MAX_CABLE_CHANNELS },

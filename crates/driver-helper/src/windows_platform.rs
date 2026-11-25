@@ -703,19 +703,20 @@ impl Platform for WindowsPlatform {
         select_active_cable_endpoints(display, &states)
     }
 
-    fn query_driver(&mut self) -> Option<(u16, u16, u32, u32, u32)> {
+    fn query_driver(&mut self) -> Option<crate::DriverQuery> {
         let client = audiorouter_windows_audio::NativeBridgeControlClient::open(
             r"\\.\AudioRouterVirtualBridge",
         )
         .ok()?;
         let info = client.query().ok()?;
-        Some((
-            info.protocol_major,
-            info.protocol_minor,
-            info.capabilities,
-            info.cable_count,
-            info.default_period_frames,
-        ))
+        Some(crate::DriverQuery {
+            protocol_major: info.protocol_major,
+            protocol_minor: info.protocol_minor,
+            capabilities: info.capabilities,
+            cable_count: info.cable_count,
+            max_cables: info.max_cables,
+            default_period_frames: info.default_period_frames,
+        })
     }
 
     fn sleep_ms(&mut self, ms: u64) {

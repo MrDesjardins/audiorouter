@@ -15,6 +15,7 @@ function cableStatus(state: VirtualCableStatus["state"]): VirtualCableStatus {
     protocol: installed ? "1.1" : null,
     defaultPeriodFrames: installed ? 480 : null,
     cableCount: installed ? 2 : 0,
+    maxCables: 8,
     cables: installed
       ? ["cable-a", "cable-b"].map((busId) => ({
           busId,

@@ -29,9 +29,20 @@ export function useVirtualCableStatus(): VirtualCableStatus | null {
   return useSyncExternalStore(subscribe, getVirtualCableStatus, getVirtualCableStatus);
 }
 
+/** Every bus ID the app can address, `cable-a` to `cable-p` (domain `MAX_CABLES`). */
+export const CABLE_BUS_ID = /^cable-([a-p])$/;
+
+/** Cables offered when the driver does not report its maximum (0.2.5 reports 8). */
+export const LEGACY_DRIVER_MAX_CABLES = 8;
+
+/** Most cables the installed driver accepts; never more than it reports. */
+export function maxCables(status: VirtualCableStatus | null): number {
+  return status?.maxCables ?? LEGACY_DRIVER_MAX_CABLES;
+}
+
 /** "cable-a" → "Cable A". Unknown IDs are shown as they are. */
 export function cableLabel(busId: string): string {
-  const match = /^cable-([a-h])$/.exec(busId);
+  const match = CABLE_BUS_ID.exec(busId);
   return match ? `Cable ${match[1].toUpperCase()}` : busId;
 }
 

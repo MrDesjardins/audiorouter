@@ -28,6 +28,31 @@ pub const MAX_GRAPH_HISTORY_ENTRIES: usize = 100;
 pub const MAX_ACTIVE_SESSIONS: usize = 2;
 pub const MAX_ROUTE_PATHS: usize = 500;
 pub const MAX_VIRTUAL_BUSES: usize = 8;
+/// Most AudioRouter cables the app can address (`cable-a` to `cable-p`).
+/// The limit for one PC is the installed driver's QUERY `MaxCables`, never
+/// this value: see [`LEGACY_DRIVER_MAX_CABLES`] and the driver helper's
+/// `cable_capacity`. A test pins it against `AR_BRIDGE_MAX_CABLES`.
+pub const MAX_CABLES: u8 = 16;
+/// Capacity assumed when the driver does not report one (0.2.5 and earlier,
+/// or a driver that is not answering). Unknown means 8, never more: the
+/// 0.2.5 driver reads an out-of-range `CableCount` as the default of 2.
+pub const LEGACY_DRIVER_MAX_CABLES: u8 = 8;
+const _: () = assert!(LEGACY_DRIVER_MAX_CABLES <= MAX_CABLES && MAX_CABLES <= 26);
+
+/// Cable index of a canonical bus ID (`cable-a` is 0), within [`MAX_CABLES`].
+pub fn cable_bus_index(bus_id: &str) -> Option<u8> {
+    let suffix = bus_id.strip_prefix("cable-")?.as_bytes();
+    match suffix {
+        [letter @ b'a'..=b'z'] if *letter - b'a' < MAX_CABLES => Some(*letter - b'a'),
+        _ => None,
+    }
+}
+
+/// Canonical bus ID of cable `index` (0 is `cable-a`).
+pub fn cable_bus_id(index: u8) -> String {
+    format!("cable-{}", char::from(b'a' + index))
+}
+
 pub const MAX_VIRTUAL_BUS_ROUTES: usize = MAX_VIRTUAL_BUSES * MAX_VIRTUAL_BUSES;
 pub const MAX_VIRTUAL_BUS_NAME_CHARS: usize = 120;
 pub const MAX_VIRTUAL_BUS_DRIVER_INSTANCE_ID_CHARS: usize = 256;
@@ -3888,6 +3913,46 @@ impl FakeRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cable_bus_ids_cover_exactly_the_app_maximum() {
+        assert_eq!(cable_bus_index("cable-a"), Some(0));
+        assert_eq!(cable_bus_index("cable-h"), Some(7));
+        assert_eq!(cable_bus_index("cable-i"), Some(8));
+        assert_eq!(cable_bus_index("cable-p"), Some(15));
+        for refused in [
+            "cable-q",
+            "cable-z",
+            "cable-",
+            "cable-ab",
+            "cable-A",
+            "Cable-a",
+            "cable-\u{e9}",
+            "",
+        ] {
+            assert_eq!(cable_bus_index(refused), None, "{refused}");
+        }
+        for index in 0..MAX_CABLES {
+            assert_eq!(cable_bus_index(&cable_bus_id(index)), Some(index));
+        }
+    }
+
+    /// The app may address more cables than a driver offers (the QUERY decides
+    /// at run time), never fewer. Becomes an equality in the 0.3.0 driver
+    /// commit that raises `AR_BRIDGE_MAX_CABLES`.
+    #[test]
+    fn app_cable_maximum_covers_the_driver_header() {
+        let header = include_str!("../../../drivers/audiorouter-virtual/Source/Inc/bridgeio.h");
+        let value: u8 = header
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("#define AR_BRIDGE_MAX_CABLES "))
+            .and_then(|value| value.trim().parse().ok())
+            .expect("AR_BRIDGE_MAX_CABLES in bridgeio.h");
+        assert!(
+            (LEGACY_DRIVER_MAX_CABLES..=MAX_CABLES).contains(&value),
+            "header says {value}"
+        );
+    }
 
     #[test]
     fn an_invalid_graph_message_names_the_first_five_problems_and_counts_the_rest() {

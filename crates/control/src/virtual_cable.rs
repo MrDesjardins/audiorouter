@@ -26,11 +26,6 @@ fn virtual_cable_cache_is_fresh(age: Duration, endpoint_change: Option<bool>) ->
     }
 }
 
-/// Bus ID of cable `index` (0 = `cable-a`).
-fn bus_id(index: u8) -> String {
-    format!("cable-{}", char::from(b'a' + index))
-}
-
 /// The API shape of a status report: per enabled cable its bus ID, both
 /// endpoint IDs and whether both endpoints are present.
 pub(crate) fn virtual_cable_status_json(report: &audiorouter_driver_helper::StatusReport) -> Value {
@@ -69,7 +64,7 @@ pub(crate) fn virtual_cable_status_json(report: &audiorouter_driver_helper::Stat
                 })
                 .unwrap_or_else(|| format!("Cable {}", char::from(b'A' + cable)));
             json!({
-                "busId": bus_id(cable),
+                "busId": audiorouter_domain::cable_bus_id(cable),
                 "name": name,
                 "renderEndpointId": render,
                 "captureEndpointId": capture,
@@ -83,6 +78,7 @@ pub(crate) fn virtual_cable_status_json(report: &audiorouter_driver_helper::Stat
         "protocol": report.protocol,
         "defaultPeriodFrames": report.default_period_frames,
         "cableCount": report.cable_count,
+        "maxCables": report.max_cables,
         "cables": cables,
     })
 }
@@ -117,6 +113,7 @@ fn read_virtual_cable_status() -> Result<Value, ControlError> {
         "driverVersion": null,
         "protocol": null,
         "cableCount": 0,
+        "maxCables": audiorouter_domain::LEGACY_DRIVER_MAX_CABLES,
         "cables": [],
     }))
 }
@@ -179,6 +176,7 @@ mod tests {
             installed_driver_version: Some("0.1.4.0".into()),
             device_instance_id: Some(r"ROOT\MEDIA\0000".into()),
             cable_count: count,
+            max_cables: 8,
             default_period_frames: Some(480),
             cable_names: Default::default(),
             protocol: Some("1.1".into()),
@@ -212,6 +210,48 @@ mod tests {
         assert_eq!(cables[0]["renderEndpointId"], "{0.0.0.00000000}.0");
         assert_eq!(cables[0]["captureEndpointId"], "{0.0.1.00000000}.0");
         assert!(cables.iter().all(|cable| cable["present"] == true));
+    }
+
+    #[test]
+    fn status_reports_the_driver_maximum_and_lists_cables_up_to_p() {
+        assert_eq!(
+            virtual_cable_status_json(&report("installed", 2, Vec::new()))["maxCables"],
+            8
+        );
+        let endpoints = (0..16)
+            .flat_map(|cable| {
+                [
+                    endpoint(cable, Direction::Input),
+                    endpoint(cable, Direction::Output),
+                ]
+            })
+            .collect();
+        let mut report = report("installed", 16, endpoints);
+        report.max_cables = 16;
+        let value = virtual_cable_status_json(&report);
+        assert_eq!(value["maxCables"], 16);
+        let cables = value["cables"].as_array().unwrap();
+        assert_eq!(cables.len(), 16);
+        assert_eq!(cables[15]["busId"], "cable-p");
+        assert_eq!(cables[15]["name"], "Cable P");
+        assert!(cables[15]["present"].as_bool().unwrap());
+        // The published output schema accepts what the backend now returns.
+        let schema = crate::api_output_schema::method_output_schema("virtualCable.status");
+        assert!(schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("maxCables")));
+        assert_eq!(schema["properties"]["cables"]["maxItems"], 16);
+        let pattern = schema["properties"]["cables"]["items"]["properties"]["busId"]["pattern"]
+            .as_str()
+            .unwrap();
+        assert_eq!(pattern, "^cable-[a-p]$");
+        for key in value.as_object().unwrap().keys() {
+            assert!(
+                schema["properties"].get(key).is_some(),
+                "{key} not in the schema"
+            );
+        }
     }
 
     #[test]

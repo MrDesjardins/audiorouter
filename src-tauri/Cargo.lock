@@ -118,6 +118,7 @@ dependencies = [
 name = "audiorouter-driver-helper"
 version = "0.0.32"
 dependencies = [
+ "audiorouter-domain",
  "audiorouter-windows-audio",
  "serde",
  "serde_json",

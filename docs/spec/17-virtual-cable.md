@@ -31,20 +31,23 @@ prompt, and gets AudioRouter-owned virtual audio devices that games, Discord,
 OBS and browsers can select. No VB-Cable download, no reboot in the normal
 case, no Secure Boot change.
 
-**Non-goals for the first release:** more than eight cables, more than eight
-channels per cable, sample rates other than 44.1/48/96 kHz, exclusive mode, ASIO, Windows Server, ARM64 *release* (it keeps
+**Non-goals for the first release:** more than sixteen cables (eight in driver
+0.2.5), more than eight channels per cable, sample rates other than 44.1/48/96 kHz, exclusive mode, ASIO, Windows Server, ARM64 *release* (it keeps
 building), Windows 10, distribution through Windows Update, a cable that
 passes audio when AudioRouter is not running.
 
 ## 2. Product behavior
 
-- **VCAB-01 — Up to eight cables, two enabled by default.** The driver
-  supports **Cable A to Cable H** (`AR_MAX_CABLES = 8`, a compile-time
-  constant; raising it later to at most 16 needs only the tables below and a
-  new qualification). Each cable has one playback endpoint (apps play into
-  it) and one recording endpoint (apps record from it), so 8 cables = 16
+- **VCAB-01 — Up to sixteen cables, two enabled by default.** Driver 0.3.0
+  supports **Cable A to Cable P** (`AR_BRIDGE_MAX_CABLES = 16`, owner decision
+  2026-11-25, final for the signed driver); driver 0.2.5 and earlier support
+  A to H (8). Each cable has one playback endpoint (apps play into
+  it) and one recording endpoint (apps record from it), so 16 cables = 32
   Windows endpoints. Only **enabled** cables appear in Windows. The user
-  picks how many (1–8, default 2) in Setup; enabled cables are always the
+  picks how many (1 to the installed driver's QUERY `MaxCables`, default 2)
+  in Setup; the app addresses at most 16 (domain `MAX_CABLES`) and treats a
+  driver that does not answer as an eight-cable driver, because 0.2.5 reads
+  an out-of-range `CableCount` as 2; enabled cables are always the
   first N (A, A–B, A–C, …) so that a cable's identity never moves. Changing
   the number needs one UAC prompt and briefly restarts the virtual device
   (all cables pause for about a second). Lowering the number removes the
@@ -546,7 +549,7 @@ takes effect when the helper restarts the device (about 1 s pause).
 
 | Value | Type | Range | Default | Purpose |
 | --- | --- | --- | --- | --- |
-| `CableCount` | DWORD | 1–8 | 2 | Enabled cables (VCAB-01) |
+| `CableCount` | DWORD | 1–`MaxCables` (8 in 0.2.5, 16 in 0.3.0) | 2 | Enabled cables (VCAB-01); the helper refuses a larger count before writing |
 | `Cables\<n>\Name` | REG_SZ, ≤ 48 chars | printable, no control chars | `Cable A` … `Cable H` | Not used: the driver does not read it (Names decision below); AudioRouter's labels live in the helper state (VCAB-02) |
 | `MinPeriodFrames` | DWORD | 64–480 | 128 | Smallest shared-mode period offered |
 | `DefaultPeriodFrames` | DWORD | 128–960 | 480 | Default period |
@@ -642,7 +645,7 @@ through a pipe by its non-elevated parent when started with `runas`):
 | `install --package <dir>` | Verify the package (9.1); record current default devices; add the package to the driver store (`DiInstallDriverW` or `SetupCopyOEMInfW` + install); if no `ROOT\AudioRouterVirtual` device exists, create one (`SetupDiCreateDeviceInfoW` + `SPDRP_HARDWAREID` + `SetupDiCallClassInstaller(DIF_REGISTERDEVICE)` + `UpdateDriverForPlugAndPlayDevicesW`); wait (bounded, 30 s) for the enabled cables' endpoints (default 2 cables = 4 endpoints); report defaults that changed. |
 | `update --package <dir>` | Same as install when the device exists: newer `DriverVer` is applied with `UpdateDriverForPlugAndPlayDevicesW`; the device instance stays. Windows assigns new endpoint IDs and migrates their settings (VCAB-05), so report the new IDs per cable. Report if Windows requires a restart. |
 | `repair --package <dir>` | Reinstall the same version; recreate the device if missing. |
-| `set-cables --count <1-8>` | Write `CableCount` to the device's hardware key, then restart the device (`SetupDiCallClassInstaller(DIF_PROPERTYCHANGE)` with `DICS_PROPCHANGE`); wait (bounded, 30 s) until exactly the first N cables' endpoints are present. Reports a pending restart if Windows cannot restart the device while it is in use. |
+| `set-cables --count <1-16>` | Refuse a count above the driver's QUERY `MaxCables` (8 when it does not answer) before any change. Write `CableCount` to the device's hardware key, then restart the device (`SetupDiCallClassInstaller(DIF_PROPERTYCHANGE)` with `DICS_PROPCHANGE`); wait (bounded, 30 s) until exactly the first N cables' endpoints are present. Reports a pending restart if Windows cannot restart the device while it is in use. |
 | `configure --name <n>=<text> --param <Value>=<n>` | Store cable labels (AudioRouter only, §5.5; no device restart and no Windows change for names) and write §5.5 parameters (validated against the same ranges), then restart the device like `set-cables` when a parameter changed. |
 | `remove` | Remove the `ROOT\AudioRouterVirtual` device (`DiUninstallDevice`), then the package (`DiUninstallDriverW` / `pnputil` equivalent) for **this** package only (exact `oem*.inf` from state). Never touches other drivers. |
 
@@ -780,7 +783,8 @@ notifications that the backend already watches.
   restart normally, the cables carry sound only while AudioRouter runs.
   Replace the sentence "AudioRouter does not install virtual audio drivers."
 - **Setup → Virtual cables panel**: status pill (reserved width, UI-17),
-  driver version, a **Number of cables** select (1–8; changing it shows the
+  driver version, a **Number of cables** select (1 to `maxCables` from
+  `virtualCable.status`; changing it shows the
   UAC note, and lowering it lists affected sessions first), an editable
   **name per cable** (AudioRouter's label, applied with one UAC prompt and
   no device restart; a fixed note under the list says the Windows name stays

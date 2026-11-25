@@ -969,9 +969,11 @@ export interface VirtualCableStatus {
   /** Driver preferred bridge period in frames, when the bridge QUERY is available. */
   defaultPeriodFrames: number | null;
   cableCount: number;
+  /** Most cables the installed driver accepts (its bridge QUERY); 8 when it does not answer. Setup offers 1 to this. */
+  maxCables: number;
   cables: {
     busId: string;
-    /** User-facing cable name set in Setup; defaults to Cable A through H. */
+    /** User-facing cable name set in Setup; defaults to Cable A, Cable B and so on. */
     name: string;
     renderEndpointId: string | null;
     captureEndpointId: string | null;

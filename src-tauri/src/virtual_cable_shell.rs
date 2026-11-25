@@ -6,6 +6,8 @@
 use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
+use audiorouter_domain::MAX_CABLES;
+
 const HELPER_NAME: &str = "audiorouter-driver-helper.exe";
 const RESULT_WAIT_MS: u32 = 10 * 60 * 1000;
 
@@ -37,10 +39,14 @@ impl CableAction {
                 ]
             }
             Self::Remove => vec!["remove".into()],
-            Self::SetCount(count) if (1..=8).contains(count) => {
+            // The helper refuses a count above the installed driver's own
+            // maximum before it changes anything.
+            Self::SetCount(count) if (1..=MAX_CABLES).contains(count) => {
                 vec!["set-cables".into(), "--count".into(), count.to_string()]
             }
-            Self::SetCount(_) => return Err("Cable count must be between 1 and 8.".into()),
+            Self::SetCount(_) => {
+                return Err(format!("Cable count must be between 1 and {MAX_CABLES}."))
+            }
             Self::SetLowLatency(enabled) => vec![
                 "configure".into(),
                 "--param".into(),
@@ -53,7 +59,7 @@ impl CableAction {
                 let mut args = vec!["configure".into()];
                 let mut seen = std::collections::BTreeSet::new();
                 for (index, name) in names {
-                    if !(1..=8).contains(index) || !seen.insert(*index) {
+                    if !(1..=MAX_CABLES).contains(index) || !seen.insert(*index) {
                         return Err("Cable name selection is invalid.".into());
                     }
                     let length = name.chars().count();
@@ -310,6 +316,21 @@ mod tests {
             .windows(2)
             .any(|pair| pair[0] == "--param" && pair[1] == "DefaultPeriodFrames=480"));
         assert!(CableAction::SetCount(0).arguments(package, result).is_err());
+        assert_eq!(
+            CableAction::SetCount(16)
+                .arguments(package, result)
+                .unwrap()[2],
+            "16"
+        );
+        assert!(CableAction::SetCount(17)
+            .arguments(package, result)
+            .is_err());
+        assert!(CableAction::Configure(vec![(16, "Stream".into())])
+            .arguments(package, result)
+            .is_ok());
+        assert!(CableAction::Configure(vec![(17, "Stream".into())])
+            .arguments(package, result)
+            .is_err());
         assert!(
             CableAction::Configure(vec![(1, "Game".into()), (1, "Other".into())])
                 .arguments(package, result)

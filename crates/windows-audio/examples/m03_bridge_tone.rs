@@ -132,11 +132,12 @@ fn number(text: &str, min: u32, max: u32) -> Result<u32, String> {
 }
 
 fn cable(text: &str) -> Result<String, String> {
-    let bytes = text.as_bytes();
-    if bytes.len() == 7 && text.starts_with("cable-") && (b'a'..=b'h').contains(&bytes[6]) {
-        Ok(text.to_owned())
-    } else {
-        Err(format!("cable IDs are cable-a … cable-h, not {text}"))
+    match audiorouter_domain::cable_bus_index(text) {
+        Some(_) => Ok(text.to_owned()),
+        None => Err(format!(
+            "cable IDs are cable-a … {}, not {text}",
+            audiorouter_domain::cable_bus_id(audiorouter_domain::MAX_CABLES - 1)
+        )),
     }
 }
 

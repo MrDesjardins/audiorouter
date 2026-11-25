@@ -29,6 +29,7 @@ function status(state: VirtualCableStatus["state"], present = [true, true]): Vir
     protocol: state === "notInstalled" ? null : "1.1",
     defaultPeriodFrames: state === "notInstalled" ? null : 480,
     cableCount: present.length,
+    maxCables: 8,
     cables: present.map((isPresent, index) => {
       const busId = `cable-${String.fromCharCode(97 + index)}`;
       return {
@@ -281,6 +282,46 @@ describe("VirtualCablePanel", () => {
     expect(screen.getByText("Game and chat")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Confirm and remove cables" }));
     expect(manage).toHaveBeenCalledWith({ operation: "setCount", count: 2 });
+  });
+
+  it("offers only the cable counts the installed driver accepts", () => {
+    const counts = () =>
+      Array.from(
+        (screen.getByRole("combobox", { name: "Number of cables" }) as HTMLSelectElement).options,
+        (option) => option.value,
+      );
+    setVirtualCableStatus(status("installed", [true, true]));
+    const props = { connected: true, cableRoute: null, manageVirtualCable: vi.fn(), sessions: [] };
+    const { rerender } = render(<VirtualCablePanel {...props} />);
+    // A 0.2.5 driver reads 9 or more as 2 and drops the other cables.
+    expect(counts()).toEqual(["1", "2", "3", "4", "5", "6", "7", "8"]);
+    act(() => setVirtualCableStatus({ ...status("installed", [true, true]), maxCables: 16 }));
+    rerender(<VirtualCablePanel {...props} />);
+    expect(counts().at(-1)).toBe("16");
+    expect(counts()).toHaveLength(16);
+  });
+
+  it("finds sessions on cables I to P before a reduction", () => {
+    vi.useFakeTimers();
+    setVirtualCableStatus({ ...status("installed", Array<boolean>(12).fill(true)), maxCables: 16 });
+    render(
+      <VirtualCablePanel
+        connected
+        cableRoute={null}
+        manageVirtualCable={vi.fn().mockResolvedValue({ ok: true })}
+        sessions={[
+          {
+            id: "session-1",
+            name: "Stream mix",
+            nodes: [{ kind: "virtualCaptureSink", parameters: { busId: "cable-l" } }],
+          },
+        ]}
+      />,
+    );
+    fireEvent.change(screen.getByRole("combobox", { name: "Number of cables" }), { target: { value: "11" } });
+    expect(screen.getByText("Stream mix")).toBeTruthy();
+    expect(cableLabel("cable-p")).toBe("Cable P");
+    expect(cableLabel("cable-q")).toBe("cable-q");
   });
 
   it("validates the helper's cable-name limits before saving", () => {

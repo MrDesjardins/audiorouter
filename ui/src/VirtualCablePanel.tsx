@@ -10,10 +10,12 @@ import type { CableManagementRequest } from "./backend";
 import { errorMessage, say, type UiMessage } from "./actionMessage";
 import { BooleanField } from "./BooleanField";
 import {
+  CABLE_BUS_ID,
   cableLabel,
   cableName,
   cableUnavailableReason,
   defaultCable,
+  maxCables,
   setVirtualCableStatus,
   useVirtualCableStatus,
 } from "./virtualCableStatus";
@@ -115,7 +117,7 @@ export function VirtualCablePanel({
     return sessions.filter((session) =>
       session.nodes.some((node) => {
         if (node.kind !== "virtualRenderSource" && node.kind !== "virtualCaptureSink") return false;
-        const match = /^cable-([a-h])$/.exec(String(node.parameters.busId ?? ""));
+        const match = CABLE_BUS_ID.exec(String(node.parameters.busId ?? ""));
         return match !== null && match[1].charCodeAt(0) - 96 > pendingCount;
       }),
     );
@@ -300,7 +302,7 @@ export function VirtualCablePanel({
                   setPendingCount(Number(event.target.value));
                 }}
               >
-                {Array.from({ length: 8 }, (_, index) => index + 1).map((count) => (
+                {Array.from({ length: maxCables(status) }, (_, index) => index + 1).map((count) => (
                   <option key={count} value={count}>
                     {count}
                   </option>

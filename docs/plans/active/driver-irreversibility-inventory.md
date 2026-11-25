@@ -24,6 +24,7 @@ Fill **Owner** with `yes` (accept the recommendation), `no`, or another choice.
 | A11 | Channels | 1, 2, 4, 6, 8 | No 16-channel cable | Keep | |
 | A12 | Processing modes | DEFAULT only, no RAW | Apps that demand RAW cannot get it | Keep: the cable applies no processing in DEFAULT. Prove with a RAW request test that Windows fails cleanly | |
 | A13 | Streams per pin | 1 render, 1 capture | Only one exclusive-mode app; the shared engine mixes any number | Keep | |
+| A14 | Downgrade with more than 8 cables (found 2026-11-25, after approval) | 0.2.5 reads an out-of-range `CableCount` as **2**; the 0.2.5 helper refuses a state file naming cable 9 or later | A user on 0.3.0 with 12 cables who rolls back keeps only A-B, and the old helper refuses its own state file | **Decide before the freeze.** Proposal: 0.3.0 reads a new value (for example `CableCount16`) when present and `CableCount` otherwise; the helper writes `CableCount` = min(count, 8) as well, and keeps names for cables 9-16 out of the old state file. A rollback then keeps 8 cables. Needs a downgrade test | **open: owner** |
 
 ## B. Permanent identities: any change looks like a new device
 

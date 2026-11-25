@@ -278,7 +278,9 @@ and `tool_combinations` suites run for 9-16 cables.
 
 0.2.5 sources (`7c88895c2`) stay in Git history and buildable (tag it only if you want one). Each W2-W4 change is its own commit
 and can be reverted before the freeze; after it, only defects are fixed, as 0.3.1. The
-app falls back through QUERY, so a 0.2.5 driver keeps working with eight cables.
+app reads the driver's QUERY `MaxCables`, so a new app keeps working with a 0.2.5 driver and its eight
+cables. The reverse is not safe yet: rolling back from more than 8 cables to 0.2.5 leaves only cables A-B
+(inventory row A14, open, to be settled before the freeze).
 Users without the driver keep VB-Cable.
 
 ## 11. Progress and next action
@@ -295,6 +297,30 @@ Users without the driver keep VB-Cable.
   `tests/acceptance/m03-cable-quality.ps1` fails on this PC (`IO.Compression.ZipFile` not loaded), also without these changes.
 
 The soak is fixed at eight cables and 2 or 4 routes; W2 must extend it to 16 before any 0.3.0 hour counts.
+
+**W2, app side** (branch `feat/cables-16-app`, 2026-11-25, no driver source changed):
+
+- One app maximum, `audiorouter_domain::MAX_CABLES = 16`, with `cable_bus_index`/`cable_bus_id`
+  for `cable-a`..`cable-p`; a test keeps `AR_BRIDGE_MAX_CABLES` (still 8) between 8 and 16. Make it
+  an equality in the driver commit.
+- **Safety finding:** the 0.2.5 driver reads an out-of-range `CableCount` as 2, so writing 9 would
+  silently remove cables C-H. The helper now takes the driver's capacity from the bridge QUERY
+  `MaxCables` (8 when the bridge does not answer, never more). `set-cables` refuses a larger count
+  before any write, and the status reports the count the driver really uses. Install and update
+  wait for the new driver's QUERY before they count cables.
+- `configure --name` refuses a cable beyond the driver capacity too.
+- `virtualCable.status` gains `maxCables` (schema, contracts, API reference, MCP text). The Setup
+  picker offers 1 to `maxCables`. The shell and the schemas accept up to 16, and spec 17 VCAB-01
+  says sixteen. Section 5.1 of the spec (driver tables) changes with the driver commit.
+- Checks (host, 2026-11-25): `cargo test --workspace --no-fail-fast` (all pass after the fixes;
+  `siege_round` feed test failed once and passed on two reruns, unrelated), Clippy for the workspace
+  and `src-tauri`, both `cargo fmt --check`, `src-tauri` cable tests, UI typecheck, format and lint,
+  `VirtualCablePanel.test.tsx` (22), `e2e/virtual-cables.pw.ts` in the three themes (4), contract
+  drift, docs validation, `m03-driver-vm-guards.ps1` (547).
+- Not exercised: cables 9-16 on a real driver (none exists yet). The INF generator,
+  `m03-inf-gen.ps1` and `m03-driver-build.ps1` still count 8 and change with the driver commit.
+  A direct bridge OPEN of `cable-i` against 0.2.5 reports "driver unavailable", not "cable not
+  enabled"; only the route compiler opens bridges, and it checks QUERY first.
 
 Owner: D1, then the first rehearsal night. Agent: read its records, then the churn runner.
 Rollback: delete the soak files and revert `-RouteCount`; nothing else depends on them.

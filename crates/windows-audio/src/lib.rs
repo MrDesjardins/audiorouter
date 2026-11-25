@@ -357,8 +357,9 @@ pub fn classify_native_bridge_error(error: &windows::core::Error) -> NativeBridg
         code if code == win32(1167) => NativeBridgeDriverError::CableNotEnabled, // STATUS_DEVICE_NOT_CONNECTED
         code if code == win32(22) => NativeBridgeDriverError::LeaseNotActive, // STATUS_INVALID_DEVICE_STATE
         // CreateFileW on a missing \\.\AudioRouterVirtualBridge link. The
-        // driver's unknown-cable status also maps to 2, but the client
-        // rejects non-canonical cable IDs before any IOCTL is sent.
+        // driver's unknown-cable status also maps to 2: the client rejects IDs
+        // beyond cable-p, and the route compiler refuses a cable beyond the
+        // driver's enabled count (QUERY) before any OPEN is sent.
         code if code == win32(2) || code == win32(3) => NativeBridgeDriverError::DriverUnavailable,
         _ => NativeBridgeDriverError::Other,
     }
@@ -366,12 +367,8 @@ pub fn classify_native_bridge_error(error: &windows::core::Error) -> NativeBridg
 
 #[cfg(windows)]
 fn native_bridge_cable_index(bus_id: &str) -> Option<u16> {
-    let suffix = bus_id.strip_prefix("cable-")?;
-    let bytes = suffix.as_bytes();
-    if bytes.len() != 1 || !(b'a'..=b'h').contains(&bytes[0]) {
-        return None;
-    }
-    Some(u16::from(bytes[0] - b'a'))
+    // Any app cable; the driver refuses a bus beyond its own MaxCables.
+    audiorouter_domain::cable_bus_index(bus_id).map(u16::from)
 }
 
 #[cfg(windows)]
@@ -14010,7 +14007,7 @@ mod tests {
         );
         assert!(native_bridge_open_request(
             &audiorouter_protocol::AudioBridgeHello {
-                bus_id: "cable-i".to_owned(),
+                bus_id: "cable-q".to_owned(),
                 ..hello.clone()
             },
             0,
