@@ -466,8 +466,10 @@ pub struct ControlPlane {
     operation_outcomes: HashMap<String, Value>,
     /// Every idempotency key journaled by this backend lifetime, even after
     /// its result leaves the bounded in-memory replay cache. A storage row
-    /// whose key is absent here came from an earlier lifetime.
+    /// whose key is absent here came from an earlier lifetime. Bounded like the
+    /// durable journal; an evicted key is treated as earlier, so it is refused.
     lifetime_operations: std::collections::HashSet<String>,
+    lifetime_operation_order: VecDeque<String>,
     operation_names: HashMap<String, String>,
     operation_order: VecDeque<String>,
     idempotency_hashes: HashMap<String, String>,
@@ -695,6 +697,7 @@ impl ControlPlane {
             mutation_limiter: MutationRateLimiter::default(),
             operation_outcomes: HashMap::new(),
             lifetime_operations: std::collections::HashSet::new(),
+            lifetime_operation_order: VecDeque::new(),
             operation_names: HashMap::new(),
             operation_order: VecDeque::new(),
             idempotency_hashes: HashMap::new(),

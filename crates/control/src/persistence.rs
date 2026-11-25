@@ -292,6 +292,7 @@ impl ControlPlane {
             mutation_limiter: MutationRateLimiter::default(),
             operation_outcomes: HashMap::new(),
             lifetime_operations: std::collections::HashSet::new(),
+            lifetime_operation_order: VecDeque::new(),
             operation_names: HashMap::new(),
             operation_order: VecDeque::new(),
             idempotency_hashes: HashMap::new(),
@@ -597,7 +598,17 @@ impl ControlPlane {
         }
         self.operation_outcomes
             .insert(idempotency_key.to_owned(), result);
-        self.lifetime_operations.insert(idempotency_key.to_owned());
+        if self.lifetime_operations.insert(idempotency_key.to_owned()) {
+            if self.lifetime_operation_order.len()
+                >= audiorouter_storage::MAX_OPERATION_JOURNAL_ENTRIES
+            {
+                if let Some(oldest) = self.lifetime_operation_order.pop_front() {
+                    self.lifetime_operations.remove(&oldest);
+                }
+            }
+            self.lifetime_operation_order
+                .push_back(idempotency_key.to_owned());
+        }
         self.operation_names
             .insert(idempotency_key.to_owned(), operation.to_owned());
         if let Some(hash) = request_hash {
