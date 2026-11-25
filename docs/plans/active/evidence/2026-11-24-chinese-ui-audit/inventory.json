@@ -1,0 +1,1137 @@
+[
+  {
+    "id": "tool-physicalInput",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-physicalInput-1.png",
+      "tool-physicalInput-2.png"
+    ],
+    "latin": [
+      "从麦克风、线路输入或虚拟音频线（如 CABLE Output）接收声音。在“属性”中选择设备。",
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "立体声 · 2 声道 · 48 kHz — Preview Microphone",
+      "工具 ID",
+      "节点 ID",
+      "physicalInput-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-testSignal",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-testSignal-1.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "工具 ID",
+      "节点 ID",
+      "testSignal-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-audioFile",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-audioFile-1.png",
+      "tool-audioFile-2.png"
+    ],
+    "latin": [
+      "在路由中播放 WAV 或 MP3 文件。在“属性”中选择文件。",
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "选择 WAV 或 MP3",
+      "选择 WAV 或 MP3 文件。音频由后端解码并通过此图路由。",
+      "导入文件最大 64 MiB，时长最长 120 秒。播放会在当前路由预览和已准备好的原生输出路由中使用此来源。",
+      "工具 ID",
+      "节点 ID",
+      "audioFile-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-soundboard",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-soundboard-1.png",
+      "tool-soundboard-2.png"
+    ],
+    "latin": [
+      "最多可配置九个音效，可通过按钮、API 或 Stream Deck 触发。",
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "最多可添加九个音效。每个音效会在工具上显示为一个按钮；可在此处或工具上点击播放，也可通过 Stream Deck 触发。你也可以把 WAV 或 MP3 文件拖到这里，或拖到某个音效上将其替换。",
+      "工具 ID",
+      "节点 ID",
+      "soundboard-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-physicalOutput",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-physicalOutput-1.png",
+      "tool-physicalOutput-2.png"
+    ],
+    "latin": [
+      "将声音发送到扬声器、耳机或 CABLE Input 等虚拟音频线。在“属性”中选择设备。",
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "8 声道多声道 · 48 kHz — Preview Game (7.1)",
+      "立体声 · 2 声道 · 48 kHz — Preview Output",
+      "工具 ID",
+      "节点 ID",
+      "physicalOutput-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-networkReceive",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-networkReceive-1.png",
+      "tool-networkReceive-2.png",
+      "tool-networkReceive-3.png"
+    ],
+    "latin": [
+      "播放同一网络中另一台电脑上的 AudioRouter 发送的音频。请输入那台电脑的 IP 地址。",
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "发送端 IP",
+      "UDP",
+      "你的输出 / OBS",
+      "将发送端的目标设为 此电脑的 IP。 在两台电脑上使用端口 47800。",
+      "发送端电脑的 IP 地址",
+      "缓冲（ms）",
+      "在另一台电脑上添加“网络发送”工具，使用此电脑的 IP 地址和端口 47800。来自其他任何地址的音频都会被忽略。首次使用时，Windows 防火墙可能会请求允许 AudioRouter 在专用网络上通信。较大的缓冲可以应对 Wi-Fi 抖动，但会增加延迟。 要查看电脑的 IP 地址，请运行 ipconfig 并读取其 IPv4 地址。",
+      "工具 ID",
+      "节点 ID",
+      "networkReceive-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-networkSend",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-networkSend-1.png",
+      "tool-networkSend-2.png"
+    ],
+    "latin": [
+      "将音频发送到同一网络中另一台电脑上的 AudioRouter。请输入接收电脑的 IP 地址。",
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "UDP",
+      "目标 IP",
+      "将接收端的发送方设为 此电脑的 IP。 在两台电脑上使用端口 47800。",
+      "接收端电脑的 IP 地址",
+      "在另一台电脑上添加“网络接收”工具，将发送方设为此电脑的 IP 地址，并使用相同的端口。两台电脑必须在同一局域网内。在两台电脑上使用相同的配对密钥即可加密音频。没有密钥时，音频不加密。 要查看电脑的 IP 地址，请运行 ipconfig 并读取其 IPv4 地址。",
+      "工具 ID",
+      "节点 ID",
+      "networkSend-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-volume",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-volume-1.png",
+      "tool-volume-2.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "每改变 6 dB，振幅约翻倍或减半。将输出保持在 0 dBFS 以下以避免削波。",
+      "= 0.0 dB",
+      "典型人声 −18 dBFS",
+      "-18.0 dBFS",
+      "71 % (−3 dB)",
+      "141 % (+3 dB)",
+      "工具 ID",
+      "节点 ID",
+      "volume-1",
+      "典型人声的输入为 -18 dBFS，输出为 -18.0 dBFS",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-gain",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-gain-1.png",
+      "tool-gain-2.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "每改变 6 dB，振幅约翻倍或减半。将输出保持在 0 dBFS 以下以避免削波。",
+      "0.0 dB",
+      "典型人声 −18 dBFS",
+      "-18.0 dBFS",
+      "−12 dB",
+      "−6 dB",
+      "−3 dB",
+      "0 dB",
+      "+3 dB",
+      "+6 dB",
+      "+12 dB",
+      "工具 ID",
+      "节点 ID",
+      "gain-1",
+      "典型人声的输入为 -18 dBFS，输出为 -18.0 dBFS",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-bassTreble",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-bassTreble-1.png",
+      "tool-bassTreble-2.png"
+    ],
+    "latin": [
+      "将低音和高音调整最多 12 dB。调节搁架频率可改变受影响的人声频段。",
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "低音 0.0 dB 低于 500 Hz",
+      "高音 0.0 dB 高于 1.5 kHz",
+      "工具 ID",
+      "节点 ID",
+      "bassTreble-1",
+      "低音 +3 dB，高音 −1 dB",
+      "高音 +3 dB",
+      "低音 −4 dB",
+      "低音 −6 dB，高音 +4 dB",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-dehum",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-dehum-1.png",
+      "tool-dehum-2.png"
+    ],
+    "latin": [
+      "去除 50 或 60 Hz 的电流嗡声及其谐波。",
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "50 Hz",
+      "60 Hz",
+      "50 Hz：欧洲、亚洲、非洲、澳大利亚。60 Hz：北美和南美部分地区。",
+      "深度 18 dB 于 60 Hz",
+      "削减点 4：60, 120, 180, 240 Hz",
+      "工具 ID",
+      "节点 ID",
+      "dehum-1",
+      "在 60 Hz 及其 3 个倍频处最多削减 18 dB",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-declick",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-declick-1.png",
+      "tool-declick-2.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "工具 ID",
+      "节点 ID",
+      "declick-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-denoise",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-denoise-1.png",
+      "tool-denoise-2.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "工具 ID",
+      "节点 ID",
+      "denoise-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-speechDenoise",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-speechDenoise-1.png",
+      "tool-speechDenoise-2.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "工具 ID",
+      "节点 ID",
+      "speechDenoise-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-spectralGate",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-spectralGate-1.png",
+      "tool-spectralGate-2.png"
+    ],
+    "latin": [
+      "学习各频率的噪声电平，并像 ReaFIR 的噪声门一样阻断低于该电平的信号。可查看实时频谱。",
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "工具 ID",
+      "节点 ID",
+      "spectralGate-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-firFilter",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-firFilter-1.png",
+      "tool-firFilter-2.png"
+    ],
+    "latin": [
+      "FIR 滤波器",
+      "使用最长 2 秒的 WAV 或 MP3 脉冲响应模拟房间、扬声器或麦克风的音色。可混合处理后的信号与原声。",
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "选择 WAV 或 MP3",
+      "工具 ID",
+      "节点 ID",
+      "firFilter-1",
+      "FIR 脉冲响应",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-timeShift",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-timeShift-1.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "工具 ID",
+      "节点 ID",
+      "timeShift-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-mixer",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-mixer-1.png",
+      "tool-mixer-2.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "工具 ID",
+      "节点 ID",
+      "mixer-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-duck",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-duck-1.png",
+      "tool-duck-2.png",
+      "tool-duck-3.png"
+    ],
+    "latin": [
+      "当另一音源声音较大时自动降低此音频，也可通过 Stats.cc 在指定的 Siege 阶段降低音量。在“属性”中选择触发条件。",
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "Siege 回合（Stats.cc）",
+      "此音频（dB）",
+      "dB",
+      "0 dB",
+      "40 dB",
+      "↑ 起音 20 ms",
+      "↑ 保持 300 ms · 释放 500 ms",
+      "工具 ID",
+      "节点 ID",
+      "duck-1",
+      "双击可恢复为 6 dB",
+      "起音 20 ms，保持 300 ms，释放 500 ms",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-inputSwitch",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-inputSwitch-1.png",
+      "tool-inputSwitch-2.png"
+    ],
+    "latin": [
+      "在输入 A 和 B 之间切换，交叉淡化通常为 0.5 秒，按住 Shift 点击时为 2 秒。",
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "工具 ID",
+      "节点 ID",
+      "inputSwitch-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-outputSwitch",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-outputSwitch-1.png",
+      "tool-outputSwitch-2.png"
+    ],
+    "latin": [
+      "将信号只发送到 A 或 B，例如耳机或 OBS。可在“属性”中或通过 Stream Deck 切换。",
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "工具 ID",
+      "节点 ID",
+      "outputSwitch-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-recorder",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-recorder-1.png",
+      "tool-recorder-2.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "WAV 24-bit · 每次录音一个文件",
+      "C:\\Recordings",
+      "工具 ID",
+      "节点 ID",
+      "recorder-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-mute",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-mute-1.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "工具 ID",
+      "节点 ID",
+      "mute-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-meter",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-meter-1.png",
+      "tool-meter-2.png",
+      "tool-meter-3.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "RMS",
+      "条形：RMS · 细线：最近峰值（保持 1.2 秒后回落）· 金线：重置以来的最高峰值 · 阴影带：人声目标范围，说话峰值应落在此范围内（−18 至 −6 dBFS）。高于 0 dBFS 即超出满量程。数字显示当前精确值。",
+      "这是采样峰值，不是真峰值或 LUFS。削波时长按声道统计超过满量程的采样数，并非一次连续削波的时长。音频图准备或替换时统计会重新开始。",
+      "工具 ID",
+      "节点 ID",
+      "meter-1",
+      "左 RMS 电平",
+      "右 RMS 电平",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-parametricEq",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-parametricEq-1.png",
+      "tool-parametricEq-2.png",
+      "tool-parametricEq-3.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "在下方选择一个点即可编辑，不会移动它。拖动可改变频率和适用的增益。图表显示 ±12 dB；精确增益控件仍保留完整的 ±24 dB 范围。双击图表可添加峰值/频段点。播放时，阴影区域显示输入的声音：走动或开枪，观察哪些频率升高。",
+      "工具 ID",
+      "节点 ID",
+      "parametricEq-1",
+      "均衡器频率（Hz）",
+      "均衡器增益（dB）",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-compressor",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-compressor-1.png",
+      "tool-compressor-2.png",
+      "tool-compressor-3.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "输入 (dBFS)",
+      "10 ms · 150 ms · 6 dB",
+      "增益衰减 (dB)",
+      "↑ 起音 10 ms",
+      "↑ 释放 150 ms",
+      "工具 ID",
+      "节点 ID",
+      "compressor-1",
+      "一个单词如何被塑形：起音 10 ms，释放 150 ms",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-gate",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-gate-1.png",
+      "tool-gate-2.png",
+      "tool-gate-3.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "输入 (dBFS)",
+      "5 ms · 50 ms · 150 ms",
+      "↑ 起音 5 ms",
+      "↑ 保持 50 ms · 释放 150 ms",
+      "工具 ID",
+      "节点 ID",
+      "gate-1",
+      "一个单词如何被塑形：起音 5 ms，保持 50 ms · 释放 150 ms",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-limiter",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-limiter-1.png",
+      "tool-limiter-2.png",
+      "tool-limiter-3.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "输入 (dBFS)",
+      "5 ms · 100 ms",
+      "增益衰减 (dB)",
+      "↑ 前瞻 5 ms",
+      "↑ 释放 100 ms",
+      "工具 ID",
+      "节点 ID",
+      "limiter-1",
+      "一个单词如何被塑形：前瞻 5 ms，释放 100 ms",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-delay",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-delay-1.png",
+      "tool-delay-2.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "0 ms",
+      "25 ms",
+      "50 ms",
+      "75 ms",
+      "100 ms",
+      "0 个采样（48 kHz）",
+      "0.0 个视频帧（30 fps）· 0.0 （60 fps）",
+      "20 ms",
+      "33 ms",
+      "67 ms",
+      "200 ms",
+      "500 ms",
+      "工具 ID",
+      "节点 ID",
+      "delay-1",
+      "原声在 0 ms，延迟副本在 0 ms",
+      "30 fps 下的一个视频帧",
+      "30 fps 下的两个视频帧",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-graphicEq",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-graphicEq-1.png",
+      "tool-graphicEq-2.png"
+    ],
+    "latin": [
+      "提升或衰减十个固定频段，范围从 31.5 Hz 的低频到 16 kHz 的高频。",
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "向上拖动滑块可提升该频段，向下拖动可削减。双击滑块可恢复为 0 dB。",
+      "1 kHz 频段，精确值（dB）",
+      "工具 ID",
+      "节点 ID",
+      "graphicEq-1",
+      "31.5 Hz 频段",
+      "双击可恢复为 0 dB",
+      "63 Hz 频段",
+      "125 Hz 频段",
+      "250 Hz 频段",
+      "500 Hz 频段",
+      "1 kHz 频段",
+      "2 kHz 频段",
+      "4 kHz 频段",
+      "8 kHz 频段",
+      "16 kHz 频段",
+      "1 kHz 精确值",
+      "所有频段均为 0 dB",
+      "压低刺耳的 2–8 kHz",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-pitch",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-pitch-1.png",
+      "tool-pitch-2.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "工具 ID",
+      "节点 ID",
+      "pitch-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-funVoiceChanger",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-funVoiceChanger-1.png",
+      "tool-funVoiceChanger-2.png",
+      "tool-funVoiceChanger-3.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "输出为单声道，并有 21 ms 延迟。旁路会跳过这段延迟，因此时间会突变；请改为把混合设为 0 % 来对比。",
+      "工具 ID",
+      "节点 ID",
+      "funVoiceChanger-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-applicationCapture",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-applicationCapture-1.png",
+      "tool-applicationCapture-2.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "example.exe（任何已验证的实例）",
+      "Music - PID 4242",
+      "工具 ID",
+      "节点 ID",
+      "application-capture-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-endpointLoopback",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-endpointLoopback-1.png",
+      "tool-endpointLoopback-2.png"
+    ],
+    "latin": [
+      "endpointLoopback",
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "工具 ID",
+      "节点 ID",
+      "endpoint-loopback-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-virtualRenderSource",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-virtualRenderSource-1.png",
+      "tool-virtualRenderSource-2.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "Cable A Input（未安装）",
+      "请在“虚拟线缆”中安装 AudioRouter 线缆，或使用“输入设备”搭配 CABLE Output 之类的虚拟线缆。",
+      "工具 ID",
+      "节点 ID",
+      "virtual-render-source-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-virtualCaptureSink",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-virtualCaptureSink-1.png",
+      "tool-virtualCaptureSink-2.png"
+    ],
+    "latin": [
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "Cable B Output（未安装）",
+      "请在“虚拟线缆”中安装 AudioRouter 线缆，或使用“输入设备”搭配 CABLE Output 之类的虚拟线缆。",
+      "工具 ID",
+      "节点 ID",
+      "virtual-capture-sink-1",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-plugin",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-plugin-1.png",
+      "tool-plugin-2.png",
+      "tool-plugin-3.png"
+    ],
+    "latin": [
+      "plugin",
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "从磁盘加载的 VST3 插件",
+      "example.vst3",
+      "SHA-256 指纹",
+      "VST3 程序",
+      "VST3 的单元和程序为只读；请在插件自己的窗口中选择程序。",
+      "如果此插件约 2 秒内原样放过你的麦克风声音（未授权的插件就是这样），AudioRouter 会将其静音，避免你的声音在未经处理的情况下被当作已处理的声音发送出去。",
+      "工具 ID",
+      "节点 ID",
+      "audit-plugin",
+      "VST 插件绑定",
+      "C:\\Audit\\example.vst3",
+      "VST3 程序和预设",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "tool-instrument",
+    "language": "zh-Hans",
+    "screenshots": [
+      "tool-instrument-1.png",
+      "tool-instrument-2.png"
+    ],
+    "latin": [
+      "instrument",
+      "点击名称可重命名工具。按 Enter 或点击其他位置即可完成，按 Esc 可取消。",
+      "所有已连接的 MIDI 键盘",
+      "Fixture Keystation",
+      "工具 ID",
+      "节点 ID",
+      "audit-instrument",
+      "乐器键盘与 MIDI",
+      "复制节点 ID",
+      "复制节点 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "page-tools",
+    "language": "zh-Hans",
+    "screenshots": [
+      "page-tools-1.png"
+    ],
+    "latin": [
+      "FIR 滤波器",
+      "插件（VST2/VST3）",
+      "尚未找到插件。请扫描 Windows 的标准插件文件夹，或选择其他文件夹。",
+      "请在“虚拟线缆”中安装 AudioRouter 线缆，或使用“输入设备”搭配 CABLE Output 之类的虚拟线缆。",
+      "从麦克风、线路输入或虚拟音频线（如 CABLE Output）接收声音。在“属性”中选择设备。",
+      "将声音发送到扬声器、耳机或 CABLE Input 等虚拟音频线。在“属性”中选择设备。",
+      "在路由中播放 WAV 或 MP3 文件。在“属性”中选择文件。",
+      "最多可配置九个音效，可通过按钮、API 或 Stream Deck 触发。",
+      "播放同一网络中另一台电脑上的 AudioRouter 发送的音频。请输入那台电脑的 IP 地址。",
+      "将音频发送到同一网络中另一台电脑上的 AudioRouter。请输入接收电脑的 IP 地址。",
+      "学习各频率的噪声电平，并像 ReaFIR 的噪声门一样阻断低于该电平的信号。可查看实时频谱。",
+      "去除 50 或 60 Hz 的电流嗡声及其谐波。",
+      "当另一音源声音较大时自动降低此音频，也可通过 Stats.cc 在指定的 Siege 阶段降低音量。在“属性”中选择触发条件。",
+      "提升或衰减十个固定频段，范围从 31.5 Hz 的低频到 16 kHz 的高频。",
+      "将低音和高音调整最多 12 dB。调节搁架频率可改变受影响的人声频段。",
+      "使用最长 2 秒的 WAV 或 MP3 脉冲响应模拟房间、扬声器或麦克风的音色。可混合处理后的信号与原声。",
+      "固定FIR 滤波器",
+      "打开FIR 滤波器指南",
+      "如何使用FIR 滤波器",
+      "在输入 A 和 B 之间切换，交叉淡化通常为 0.5 秒，按住 Shift 点击时为 2 秒。",
+      "将信号只发送到 A 或 B，例如耳机或 OBS。可在“属性”中或通过 Stream Deck 切换。",
+      "打开VST 插件指南",
+      "如何使用VST 插件"
+    ]
+  },
+  {
+    "id": "page-session",
+    "language": "zh-Hans",
+    "screenshots": [
+      "page-session-1.png"
+    ],
+    "latin": [
+      "会话 ID",
+      "chinese-audit",
+      "复制会话 ID",
+      "复制会话 ID 以用于 API 集成"
+    ]
+  },
+  {
+    "id": "page-recording",
+    "language": "zh-Hans",
+    "screenshots": [
+      "page-recording-1.png"
+    ],
+    "latin": [
+      "C:\\Recordings",
+      "recorder-1",
+      "录音器 ID",
+      "WAV 24 位（适合编辑）",
+      "WAV 16 位",
+      "WAV 32 位浮点",
+      "FLAC 16 位",
+      "FLAC 24 位（更小，无损）",
+      "MP3 192 kbps",
+      "48 kHz",
+      "44.1 kHz",
+      "TPDF 抖动"
+    ]
+  },
+  {
+    "id": "page-status",
+    "language": "zh-Hans",
+    "screenshots": [
+      "page-status-1.png"
+    ],
+    "latin": [
+      "人声范围：−18 至 −6 dB",
+      "未找到 VB-Cable。只有在其他应用需要听到 AudioRouter 的声音时才需要安装",
+      "未检查：Browser fixture: no Windows devices are read.",
+      "这里显示 Windows 当前提供的设备。要使用其中一个，请添加输入设备或输出设备工具，然后在工具的“属性”中选择设备。AudioRouter 不会修改 Windows 的默认设备或音量。取消勾选“在设备选择列表中显示”，即可在此电脑上隐藏不使用的设备，例如显示器扬声器或摄像头麦克风。",
+      "Preview Microphone",
+      "48 kHz · 立体声",
+      "Preview Game (7.1)",
+      "48 kHz · 8 声道",
+      "Preview Output",
+      "通常无需使用此设置。请在输入设备或输出设备工具的“属性”中选择设备，再点击“播放”。可使用这里的控件检查设备格式、在 Windows 重置设备后重新打开设备、手动运行 VB-Cable 回环测试或添加回环源。",
+      "选择 VB-Cable 捕获",
+      "选择 VB-Cable 回环对",
+      "立体声 · 2 声道 · 48 kHz — Preview Microphone",
+      "8 声道多声道 · 48 kHz — Preview Game (7.1)",
+      "立体声 · 2 声道 · 48 kHz — Preview Output",
+      "准备、重新绑定和分离需要 deviceAdministration 权限。如果准备时提示权限被拒绝，请关闭桌面外壳，并在 PowerShell 中为该进程设置 $env:AUDIOROUTER_ALLOW_DEVICE_ADMIN = \"1\" 后重新启动。这需要已注册的操作员账户。物理端点和现有的 VB-Cable 设备不需要 AudioRouter 虚拟驱动程序。端点默认设置、音量和静音永远不会被更改。所选 ID 仅作为本地界面提示保留；已保存的 ID 缺失时会保持未选择，直到你主动选择替代项。回环操作只用于有意的 CABLE Input → CABLE Output 测试；正常监听请选择物理渲染端点。",
+      "这只会准备显式分支；启动/停止和图的有效性仍由后端负责。不会更改 Windows 的默认设置或音量。",
+      "总线 ID",
+      "节点处于停止状态，并绑定到此确切的总线 ID；端点可用性仍由后端报告。",
+      "实例 ID",
+      "目标状态采用“规划/应用”方式。原生所有权是单独的显式 deviceAdministration 操作，在受管驱动加载并通过验证之前不可用。",
+      "路由 JSON",
+      "断开连接的预览模式绝不会更改路由状态。替换需要后端的 deviceAdministration 权限，且本身不会激活端点。",
+      "在你主动验证端点和驱动之前，原生路由会保持停止。此操作不会更改 Windows 默认设置、音量、静音或驱动状态。",
+      "在设备选择列表中显示 Preview Microphone",
+      "在设备选择列表中显示 Preview Game (7.1)",
+      "在设备选择列表中显示 Preview Output",
+      "未找到明确的活动 VB-Cable 捕获端点",
+      "未找到明确的活动 VB-Cable 回环对",
+      "受管设备实例 ID",
+      "虚拟路由 JSON"
+    ]
+  },
+  {
+    "id": "page-apps",
+    "language": "zh-Hans",
+    "screenshots": [
+      "page-apps-1.png"
+    ],
+    "latin": [
+      "切换回 AudioRouter 时会自动检查。",
+      "Discord",
+      "Discord 未运行。启动后即可检查其设备。",
+      "Discord 运行时检查。",
+      "Discord 推荐设置",
+      "在 Discord 中打开“用户设置 › 语音和视频”：",
+      "自动增益控制: 使用 Compressor 时关闭",
+      "OBS Studio",
+      "正在检查 OBS…"
+    ]
+  },
+  {
+    "id": "page-timing",
+    "language": "zh-Hans",
+    "screenshots": [
+      "page-timing-1.png"
+    ],
+    "latin": []
+  },
+  {
+    "id": "settings-virtualCables",
+    "language": "zh-Hans",
+    "screenshots": [
+      "settings-virtualCables-1.png"
+    ],
+    "latin": [
+      "AudioRouter 虚拟线缆",
+      "AudioRouter 虚拟线缆暂不可用",
+      "此版本尚未包含 AudioRouter 自己的虚拟音频线驱动程序，驱动仍在测试和签名。发布前可使用 VB-Cable 等虚拟音频线。按照“与其他应用配合使用”中的说明，在路由末端添加输出设备并选择该音频线。",
+      "未安装 AudioRouter 驱动",
+      "添加路由：Cable A → Cable B",
+      "AudioRouter 不会更改 Windows 或其他应用的设置。要将处理后的麦克风声音发送到 Discord、OBS 或游戏，请在路由末端添加输出设备，并选择虚拟音频线（例如 CABLE Input）。然后在接收应用中将对应的录音端（CABLE Output）选为麦克风。"
+    ]
+  },
+  {
+    "id": "settings-plugins",
+    "language": "zh-Hans",
+    "screenshots": [
+      "settings-plugins-1.png"
+    ],
+    "latin": [
+      "VST3 和 VST2 发现",
+      "扫描文件夹时会读取文件元数据。检查 VST2 容器时，只在隔离的工作进程中打开所选文件。",
+      "后端要求显式的 pluginScan 权限；选择结果只会复制其路径，检查仍需手动触发。将结果添加到路由是另一个独立的显式操作。加载上次扫描绝不会触发新的文件系统扫描。",
+      "C:\\Plugins",
+      "C:\\Plugins\\effect.vst3 or effect.dll"
+    ]
+  },
+  {
+    "id": "settings-deviceAccess",
+    "language": "zh-Hans",
+    "screenshots": [
+      "settings-deviceAccess-1.png"
+    ],
+    "latin": [
+      "点击“播放”时，AudioRouter 可以打开会话中的音频设备。",
+      "游戏和 Discord",
+      "使用“为 Discord 设置”选择要用的麦克风和语音虚拟音频线，并按需添加语音降噪等处理。",
+      "接收应用尚未验证： 打开 Discord 或其他接收应用，选择设置中显示的虚拟音频线录音端，并运行应用的输入测试。应用必须已打开并通过测试，选对设备后仍需验证。",
+      "检查路由，准备就绪后点击“播放”。AudioRouter 不会更改 Windows 的默认设备。",
+      "为 Discord 设置",
+      "要将麦克风声音发送到其他应用，请使用受支持的虚拟音频设备，例如 VB-Cable 或 Voicemeeter。请从其供应商处下载并单独安装。"
+    ]
+  },
+  {
+    "id": "settings-uiOptions",
+    "language": "zh-Hans",
+    "screenshots": [
+      "settings-uiOptions-1.png"
+    ],
+    "latin": [
+      "English",
+      "Français",
+      "Pseudo (expanded)",
+      "仅在 AudioRouter 窗口处于前台时",
+      "使用其他程序时（例如在另一块屏幕上玩游戏），光点会暂停。返回 AudioRouter 后会继续。颜色、光晕和电平表仍会更新。 将窗口关闭到系统托盘后，应用会停止绘制界面。"
+    ]
+  },
+  {
+    "id": "settings-startup",
+    "language": "zh-Hans",
+    "screenshots": [
+      "settings-startup-1.png"
+    ],
+    "latin": [
+      "AudioRouter 启动时",
+      "随 Windows 启动时，AudioRouter 会在系统托盘运行，不打开窗口。您也可以让它立即播放所选会话并启动 API。关闭窗口后，音频仍会继续播放。",
+      "登录 Windows 时启动 AudioRouter",
+      "只有 AudioRouter 桌面应用可以设置登录时启动。此处会保存您的选择，但不会修改 Windows。",
+      "AudioRouter 启动时播放",
+      "请在 AudioRouter 桌面应用中使用此功能。",
+      "AudioRouter 启动时启动 API",
+      "自动启动本地 API"
+    ]
+  },
+  {
+    "id": "settings-shortcuts",
+    "language": "zh-Hans",
+    "screenshots": [
+      "settings-shortcuts-1.png"
+    ],
+    "latin": [
+      "即使 AudioRouter 已最小化到系统托盘，这些快捷键也能在整个 Windows 中使用。支持组合键、功能键（F1–F24）以及鼠标侧键和中键。这些是应用唯一的音频快捷键。",
+      "Windows 全局快捷键可在桌面应用中使用。"
+    ]
+  },
+  {
+    "id": "settings-versions",
+    "language": "zh-Hans",
+    "screenshots": [
+      "settings-versions-1.png"
+    ],
+    "latin": [
+      "AudioRouter 0.0.32 已是最新版本。 下次检查时间：明天 18:41。",
+      "每天在 GitHub 上检查一次新版本",
+      "AudioRouter 会读取 github.com 上的公开发布列表，不会发送您的个人信息或音频。如果无法访问 GitHub，将在最多 12 小时内重试，之后等到第二天再检查。发布页面会在浏览器中打开，应用不会下载或安装更新。目前 AudioRouter 发布的是预发行版。"
+    ]
+  },
+  {
+    "id": "settings-help",
+    "language": "zh-Hans",
+    "screenshots": [
+      "settings-help-1.png"
+    ],
+    "latin": [
+      "在任意位置按 Ctrl+K 即可查找工具、设置、卡片或会话。"
+    ]
+  },
+  {
+    "id": "settings-mcp",
+    "language": "zh-Hans",
+    "screenshots": [
+      "settings-mcp-1.png"
+    ],
+    "latin": [
+      "MCP 连接",
+      "AudioRouter 使用标准 MCP 协议。请在下方选择本地应用，或通过可选的 OpenAI 隧道连接 ChatGPT。",
+      "本地 Cowork",
+      "ChatGPT",
+      "对于在此电脑上运行的 Codex、Claude Code 或其他助手，请使用本地 stdio 命令。",
+      "audiorouter-local：未授权",
+      "MCP 客户端无法获得设备管理权限，也不能通过点击“播放”来打开音频设备。",
+      "适用于在此电脑上运行的 Codex、Claude Code 或其他助手。助手会启动 AudioRouter 的本地 MCP 命令；使用期间请保持 AudioRouter 打开。",
+      "Codex",
+      "Claude Code",
+      "其他 MCP 应用",
+      "此名称用于在 AudioRouter 中标识权限，并不是你的助手账户。",
+      "正在检查已安装的 MCP 命令和本地客户端访问权限…",
+      "将此内容添加到你的 Codex 配置",
+      "正在检查已安装的本地 MCP 命令…",
+      "请让你的助手列出 AudioRouter 会话，然后在下方的“最近的 MCP 活动”中查看请求及其结果。此检查只能确认请求已到达 AudioRouter，无法确认外部应用是否已批准连接器，也无法确认助手是否已在对话中启用该连接。",
+      "每个 CLI、MCP 或外壳连接都是单独授权的客户端。如果某个客户端不应再访问此后端，请立即撤销其访问权限。",
+      "客户端 ID",
+      "最近的 MCP 活动",
+      "尚无 MCP 调用。",
+      "助手客户端 ID",
+      "新客户端 ID"
+    ]
+  },
+  {
+    "id": "settings-api",
+    "language": "zh-Hans",
+    "screenshots": [
+      "settings-api-1.png"
+    ],
+    "latin": [
+      "本地 HTTP 控制",
+      "API",
+      "可从此电脑或家庭网络中的设备（例如控制面板）发起 REST 请求。更改使用与此窗口相同的后台，并自动显示在此处。命名管道 JSON-RPC 和 MCP 仍然可用。",
+      "HTTP 控制可在桌面应用中使用。",
+      "API 已停止",
+      "启动 API",
+      "要让 API 随 AudioRouter 启动，请在“设置”→“AudioRouter 启动时”开启“自动启动本地 API”。",
+      "已保存的令牌可供您自己的应用使用。即使 API 已停止，令牌也会保持不变，直到您生成新令牌。",
+      "显示 API 令牌",
+      "Stream Deck 插件",
+      "AudioRouter 自带 Stream Deck 插件（需要 Stream Deck 7.1 或更高版本）。请先启动 API，安装插件，然后在动作设置中输入此 API 的 URL 和令牌。",
+      "安装 Stream Deck 插件",
+      "请打开已安装的 AudioRouter 应用来安装 Stream Deck 插件。",
+      "选择一个工具和一项设置，即可得到其他应用（游戏集成、StreamDeck、脚本）可发送的确切请求。选择本身不会更改任何内容，只有点击“发送”才会生效。",
+      "跟随 AudioRouter 中选中的会话",
+      "true",
+      "false",
+      "JSON 正文",
+      "curl",
+      "PowerShell",
+      "正文（需附带 Authorization: Bearer 请求头发送）",
+      "每个事件请使用新的 idempotencyKey；同一事件重试时沿用其键，以确保只生效一次。令牌只是占位符，请从上方复制你自己的令牌。",
+      "API 端口",
+      "请求 URL"
+    ]
+  },
+  {
+    "id": "settings-diagnostics",
+    "language": "zh-Hans",
+    "screenshots": [
+      "settings-diagnostics-1.png"
+    ],
+    "latin": [
+      "“复制支持包”会保存一个 ZIP，其中包含应用与 Windows 版本、最新的后端、外壳和 MCP 日志行，以及这些客户端诊断信息。不会上传任何内容。你也可以打开文件夹，附上 shell.jsonl、backend.jsonl、discovery.jsonl 和 network.jsonl，以及存在时的 .previous.jsonl 文件。若问题出在两台电脑之间，请发送两台电脑上的文件夹。请说明发生了什么以及大致时间。",
+      "请打开已安装的 AudioRouter 应用以访问此电脑的日志文件。",
+      "6:41:38 PM Graph checkpoint: 38 nodes, 0 connections; revision 7",
+      "6:41:38 PM Virtual cable status read failed",
+      "6:41:38 PM Graph checkpoint: 3 nodes, 0 connections; revision 7",
+      "后端 RPC",
+      "尚未记录任何后端诊断信息。日志文件存放在 LocalAppData/AudioRouter/logs 下。"
+    ]
+  },
+  {
+    "id": "settings-clients",
+    "language": "zh-Hans",
+    "screenshots": [
+      "settings-clients-1.png"
+    ],
+    "latin": [
+      "每个 CLI、MCP 或外壳连接都是单独授权的客户端。如果某个客户端不应再访问此后端，请立即撤销其访问权限。",
+      "客户端 ID",
+      "新客户端 ID"
+    ]
+  },
+  {
+    "id": "settings-sessionJson",
+    "language": "zh-Hans",
+    "screenshots": [
+      "settings-sessionJson-1.png"
+    ],
+    "latin": [
+      "会话 JSON",
+      "仅传输图结构的 JSON，用于脚本和审阅。若要备份或迁移整套配置（包括导入的音频和插件设置），请改用“会话 → 会话文件”。导入绝不会启动音频、启用录音机或启动项，也不包含凭据、录音、插件二进制文件或特定于本机的授权。"
+    ]
+  },
+  {
+    "id": "settings-catalog",
+    "language": "zh-Hans",
+    "screenshots": [
+      "settings-catalog-1.png"
+    ],
+    "latin": [
+      "DSP 目录"
+    ]
+  },
+  {
+    "id": "settings-identity",
+    "language": "zh-Hans",
+    "screenshots": [
+      "settings-identity-1.png"
+    ],
+    "latin": [
+      "Music.exe",
+      "PID 4242 · C:\\Apps\\Music.exe"
+    ]
+  }
+]

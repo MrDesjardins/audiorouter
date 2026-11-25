@@ -3375,6 +3375,8 @@
       "selectedPath": "Chemin découvert sélectionné ; inspectez-le explicitement quand vous êtes prêt.",
       "scanEyebrow": "Détection VST3 et VST2",
       "scanHeading": "Analyse des plugins",
+      "guidePlugin": "Plug-in VST",
+      "guideInstrument": "Instrument",
       "absDir": "Dossier de plugins (chemin absolu)",
       "scanDir": "Analyser le dossier",
       "loadLast": "Charger la dernière analyse",

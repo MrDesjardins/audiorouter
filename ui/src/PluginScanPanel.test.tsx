@@ -4,8 +4,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { PluginScanPanel, PluginToolsGroup } from "./PluginPanels";
 import { createDisconnectedBackend } from "./backend";
 import { demoSession } from "./fixtures";
+import { applyLanguage } from "./i18n";
 
-afterEach(cleanup);
+afterEach(async () => {
+  cleanup();
+  await applyLanguage("en");
+});
 
 it("reports failed standard scans instead of claiming zero plugins were found", async () => {
   const backend = {
@@ -79,4 +83,28 @@ it("offers one plugin guide for the whole list, not a misleading copy per plugin
   await waitFor(() => expect(screen.getByText("beta")).toBeTruthy());
   const guides = screen.getAllByRole("link", { name: /guide/i });
   expect(guides.map((link) => link.getAttribute("aria-label"))).toEqual(["Open VST plugin guide"]);
+});
+
+it("names the plugin guide in the selected language", async () => {
+  await applyLanguage("zh-Hans");
+  const backend = {
+    ...createDisconnectedBackend(demoSession),
+    connected: true,
+    pluginInventory: vi.fn(async () => ({ inventories: [] })),
+  } as never;
+  render(
+    <PluginToolsGroup
+      backend={backend}
+      connected
+      search=""
+      refreshKey={false}
+      onAdd={() => {}}
+      onOpenPicker={() => {}}
+    />,
+  );
+  await waitFor(() =>
+    expect(screen.getAllByRole("link", { name: /指南/ }).map((link) => link.getAttribute("aria-label"))).toEqual([
+      "打开VST 插件指南",
+    ]),
+  );
 });

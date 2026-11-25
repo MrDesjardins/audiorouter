@@ -420,7 +420,7 @@ export function PluginToolsGroup({
         <div className="tool-plugin-group" aria-label={tr("g3Plug.instruments")}>
           <div className="tool-library-entry">
             <h4>{tr("g3Plug.instrumentsHeading")}</h4>
-            <ToolGuideLink kind="instrument" compact toolName="Instrument" />
+            <ToolGuideLink kind="instrument" compact toolName={tr("g3Plug.guideInstrument")} />
           </div>
           {renderRows(instruments)}
         </div>
@@ -428,7 +428,7 @@ export function PluginToolsGroup({
       <div className="tool-plugin-group" aria-label={tr("g3Plug.plugins")}>
         <div className="tool-library-entry">
           <h4>{tr("g3Plug.pluginsHeading")}</h4>
-          <ToolGuideLink kind="plugin" compact toolName="VST plugin" />
+          <ToolGuideLink kind="plugin" compact toolName={tr("g3Plug.guidePlugin")} />
         </div>
         {renderRows(effects)}
         {effects.length === 0 && !query && <p className="muted">{tr("g3Plug.noneYet")}</p>}

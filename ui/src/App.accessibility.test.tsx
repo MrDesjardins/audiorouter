@@ -1315,7 +1315,7 @@ describe("VB-Cable endpoint selection", () => {
     expect(await screen.findByText(/selected audio device is in use by another application/i)).toBeTruthy();
     expect(
       screen.getByText(
-        /choose a different device in the Output Device node's Properties, or release this exact device/i,
+        /choose a different device in the Properties of the output tool, or release this exact device/i,
       ),
     ).toBeTruthy();
   });

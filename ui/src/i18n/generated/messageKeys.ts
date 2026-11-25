@@ -1396,6 +1396,8 @@ export const MESSAGE_KEYS = [
   "g3Plug.guardOnText",
   "g3Plug.guardUnchanged",
   "g3Plug.guardUnchangedText",
+  "g3Plug.guideInstrument",
+  "g3Plug.guidePlugin",
   "g3Plug.hFailed",
   "g3Plug.hQuarantined",
   "g3Plug.hRunning",

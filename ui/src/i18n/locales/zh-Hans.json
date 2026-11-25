@@ -970,7 +970,7 @@
       "showDevice": "在设备选择列表中显示 {{name}}",
       "heading": "此电脑上的音频设备",
       "refresh": "刷新",
-      "help": "这里显示 Windows 当前提供的设备。要使用其中一个，请添加 Input Device 或 Output Device 工具，然后在工具的“属性”中选择设备。AudioRouter 不会修改 Windows 的默认设备或音量。取消勾选“在设备选择列表中显示”，即可在此电脑上隐藏不使用的设备，例如显示器扬声器或摄像头麦克风。",
+      "help": "这里显示 Windows 当前提供的设备。要使用其中一个，请添加输入设备或输出设备工具，然后在工具的“属性”中选择设备。AudioRouter 不会修改 Windows 的默认设备或音量。取消勾选“在设备选择列表中显示”，即可在此电脑上隐藏不使用的设备，例如显示器扬声器或摄像头麦克风。",
       "inputs": "输入（麦克风、线路输入、虚拟音频线）",
       "outputs": "输出（扬声器、耳机、虚拟音频线）",
       "inactive_other": "另有 {{count}} 台设备已拔出或在 Windows 中被禁用。",
@@ -1047,10 +1047,10 @@
     "setupWorkbench": {
       "readiness": "就绪检查",
       "otherAppsHeading": "与其他应用配合使用",
-      "otherAppsHelp": "AudioRouter 不会更改 Windows 或其他应用的设置。要将处理后的麦克风声音发送到 Discord、OBS 或游戏，请在路由末端添加 Output Device，并选择虚拟音频线（例如 CABLE Input）。然后在接收应用中将对应的录音端（CABLE Output）选为麦克风。"
+      "otherAppsHelp": "AudioRouter 不会更改 Windows 或其他应用的设置。要将处理后的麦克风声音发送到 Discord、OBS 或游戏，请在路由末端添加输出设备，并选择虚拟音频线（例如 CABLE Input）。然后在接收应用中将对应的录音端（CABLE Output）选为麦克风。"
     },
     "deviceTroubleshooting": {
-      "bindingHelp": "仅在单条路由的 Input Device 或 Output Device 工具未单独指定设备时，才会使用此处选择的设备。",
+      "bindingHelp": "仅在单条路由的输入设备或输出设备工具未单独指定设备时，才会使用此处选择的设备。",
       "multipleCapture": "多个采集设备",
       "multipleOutput": "多个输出设备",
       "managedDevices": "受管理的虚拟设备和路由"
@@ -1063,7 +1063,7 @@
       "outputOne": "输出",
       "outputOther": "输出",
       "noPair": "尚无可用的输入与输出组合。请连接或启用音频设备，然后刷新列表。AudioRouter 不会自行安装音频驱动程序。",
-      "step1": "打开“工具”，添加 Input Device 和 Output Device，也可先添加 Test Signal。",
+      "step1": "打开“工具”，添加输入设备和输出设备，也可先添加测试信号。",
       "step2": "在各工具的“属性”中选择可用设备，然后连接工具以建立路由。",
       "step3": "检查路由，准备就绪后点击“播放”。AudioRouter 不会更改 Windows 的默认设备。",
       "openTools": "打开“工具”",
@@ -1152,7 +1152,7 @@
       "troubleshoot": {
         "heading": "故障排查与恢复",
         "manualBinding": "手动绑定设备",
-        "manualHelp": "通常无需使用此设置。请在 Input Device 或 Output Device 工具的“属性”中选择设备，再点击“播放”。可使用这里的控件检查设备格式、在 Windows 重置设备后重新打开设备、手动运行 VB-Cable 回环测试或添加回环源。",
+        "manualHelp": "通常无需使用此设置。请在输入设备或输出设备工具的“属性”中选择设备，再点击“播放”。可使用这里的控件检查设备格式、在 Windows 重置设备后重新打开设备、手动运行 VB-Cable 回环测试或添加回环源。",
         "crashRecovery": "崩溃恢复",
         "recent": "近期 {{count}} 次",
         "safeMode": "安全模式已启用。",
@@ -3345,6 +3345,8 @@
       "selectedPath": "已选择发现的路径；准备好后请手动检查。",
       "scanEyebrow": "VST3 和 VST2 发现",
       "scanHeading": "插件扫描",
+      "guidePlugin": "VST 插件",
+      "guideInstrument": "乐器",
       "absDir": "插件目录（绝对路径）",
       "scanDir": "扫描目录",
       "loadLast": "加载上次扫描",
@@ -3750,7 +3752,7 @@
       "checkingUsage": "正在检查哪些应用在使用你的设备…",
       "checking": "正在检查…",
       "recNoiseSetting": "噪声抑制",
-      "recNoiseValue": "使用 Denoise 时选“无”",
+      "recNoiseValue": "使用“降噪”时选“无”",
       "recNoiseWhy": "避免对同一麦克风重复降噪。",
       "recAgcSetting": "自动增益控制",
       "recAgcValue": "使用 Compressor 时关闭",

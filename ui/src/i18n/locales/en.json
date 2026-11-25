@@ -3360,6 +3360,8 @@
       "selectedPath": "Selected the discovered path; inspect it explicitly when ready.",
       "scanEyebrow": "VST3 and VST2 discovery",
       "scanHeading": "Plugin scan",
+      "guidePlugin": "VST plugin",
+      "guideInstrument": "Instrument",
       "absDir": "Absolute plugin directory",
       "scanDir": "Scan directory",
       "loadLast": "Load last scan",
