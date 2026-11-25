@@ -33,17 +33,16 @@ pub const MAX_PENDING_PLAN_RECORDS: usize = 100;
 /// plane. The extra row used by list reads is a fail-closed overflow sentinel.
 pub const MAX_CLIENT_ENROLLMENTS: usize = 256;
 /// Maximum number of recent idempotency outcomes retained by SQLite. A graph
-/// edit writes two rows (the edit outcome and its commit), so this holds about
-/// 65,000 edits: at a sustained 45 edits/minute it covers the 24-hour API-07
-/// retention window and costs roughly 42 MB of journal rows. The 20/s API-11
-/// ceiling can reach it sooner; a bounded journal cannot hold 24 hours at that
-/// rate without a much larger database.
-pub const MAX_OPERATION_JOURNAL_ENTRIES: usize = 131_072;
+/// edit writes two rows (the edit outcome and its commit), so this holds 16,384
+/// edits in the 24-hour API-07 window. Every commit counts the rows, so the
+/// bound also limits handler time (about 0.5 ms at this size, 2 ms at 131,072).
+/// Sustained automation near the API-11 ceiling can still reach it and is refused.
+pub const MAX_OPERATION_JOURNAL_ENTRIES: usize = 32_768;
 
 #[cfg(test)]
 thread_local! {
     /// A small capacity for the refusal test, so the production bound does not
-    /// require 131,072 inserts. Thread-local keeps parallel tests independent.
+    /// require tens of thousands of inserts. Thread-local keeps parallel tests independent.
     static TEST_JOURNAL_CAPACITY: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
@@ -6210,7 +6209,7 @@ mod tests {
     #[test]
     fn operation_journal_rejects_new_keys_at_capacity_but_replays_existing() {
         // A small thread-local cap exercises the refusal without inserting the
-        // production bound's 131,072 rows.
+        // production bound's rows.
         TEST_JOURNAL_CAPACITY.with(|capacity| capacity.set(8));
         let storage = Storage::open_memory().unwrap();
         for index in 0..8 {
@@ -6228,7 +6227,7 @@ mod tests {
         TEST_JOURNAL_CAPACITY.with(|capacity| capacity.set(0));
     }
 
-    const _: () = assert!(MAX_OPERATION_JOURNAL_ENTRIES >= 100_000);
+    const _: () = assert!(MAX_OPERATION_JOURNAL_ENTRIES >= 32_768);
 
     #[test]
     fn operation_journal_accepts_more_than_the_old_small_bound() {

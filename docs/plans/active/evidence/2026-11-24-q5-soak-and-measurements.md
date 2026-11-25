@@ -134,6 +134,11 @@ test cap keeps the refusal test at 8 rows. Regression
 then one more; it fails at the old 4,096-row cap and passes now. The release
 thread's `crates/control/{sessions,simple,persistence}.rs` were not touched.
 
+**Manager change at integration:** the merged bound is **32,768 rows (16,384 edits in 24 h)**,
+not 131,072. Each commit counts the rows; a SQLite check measured about 2 ms at 131,072 and
+scales with rows, so the smaller bound keeps handlers short. Sustained automation above about
+11 edits a minute for a whole day can still be refused, with an unstructured -32602 error.
+
 Residual limits: at the API-11 ceiling of 20/s (172,800 edits/day, 345,600 rows)
 24 hours would need about 1.1 GB; the fixed bound covers about 6 hours at the
 synthetic 3/s and about 55 minutes at 20/s. A bounded journal cannot hold the

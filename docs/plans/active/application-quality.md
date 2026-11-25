@@ -1029,6 +1029,11 @@ Residual: the 20/s API ceiling would need ~1.1 GB for 24 h; if reached, the
 error is still unstructured `-32602` (asked the release thread to map
 `JournalLimitReached` in `persistence.rs`).
 
+**Manager change at integration:** the merged bound is **32,768 rows (16,384 edits in 24 h)**,
+not 131,072. Each commit counts the rows; a SQLite check measured about 2 ms at 131,072 and
+scales with rows, so the smaller bound keeps handlers short. Sustained automation above about
+11 edits a minute for a whole day can still be refused, with an unstructured -32602 error.
+
 ## Q5.5 execution: local UI baselines (2026-11-24)
 
 `ui/e2e/performance-baseline.pw.ts` (skipped unless
