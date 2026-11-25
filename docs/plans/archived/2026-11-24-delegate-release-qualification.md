@@ -1,5 +1,9 @@
 # Delegation brief: app-only release qualification
 
+> **Archived 2026-11-24 — superseded delegation brief; release checks.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
 Prepared 2026-11-18. Status: ready to delegate; no execution performed by this brief.
 
 ## Assignment and scope
@@ -19,13 +23,13 @@ its trust behavior. App signing is not a prerequisite for this app-only task.
 
 Read these completely, then their relevant linked decisions/specifications:
 
-- [Project overview](../../README.md) and [current priorities](current.md).
+- [Project overview](../../README.md) and [current priorities](../active/current.md).
 - [Release qualification runbook](../../operations/release-qualification.md).
 - [Delivery specification](../../spec/15-delivery.md), M08 and DIST-01–08;
   [quality specification](../../spec/14-quality.md), NFR-16.
-- [Historical VM results](../archived/2026-11-16-active-plan-history.md),
+- [Historical VM results](2026-11-16-active-plan-history.md),
   particularly the November 16 installer and unattended continuation.
-- [Release signing plan](release-signing-and-publication.md), for boundaries;
+- [Release signing plan](2026-11-24-release-signing-and-publication.md), for boundaries;
   [verification runbook](../../operations/verification.md).
 - `tools/vm/installer-lifecycle.ps1`, `installer-lifecycle-guest.ps1`,
   `installer-lifecycle-unattended.ps1`, and relevant `tools/release/` scripts.
@@ -180,7 +184,7 @@ manifest, notices and SBOMs. DIST-07 still needs interactive trust observation.
   pending VST handoff. Preparation requires a clean committed source.
 - RQ-02: three consecutive historical runs on the same harness passed.
   Injected guest timeout confirmed client exit. Marker, graceful shutdown
-  and clean recovery remain open. See the [attempt record](evidence/2026-11-18-installer-process.md).
+  and clean recovery remain open. See the [attempt record](../active/evidence/2026-11-18-installer-process.md).
 - RQ-03: wrong hash and excluded VM refusal passed. Baseline now checks
   guest login before loading a profile. Wrong snapshot and guest refusal
   cases need another disposable run.
@@ -219,7 +223,7 @@ marker-file timeout, clean recovery and production recorder cases.
   exercised. Final combined package, runtime baselines and signed-off
   interactive evidence remain external dependencies.
 
-See the [redacted process and VM evidence](evidence/2026-11-18-installer-process.md)
+See the [redacted process and VM evidence](../active/evidence/2026-11-18-installer-process.md)
 for the attempt IDs and results. The guest recording root is approved through
 the desktop window under REC-07. The production recording case needs to
 exercise that path in the disposable guest, use generated audio through the
@@ -270,7 +274,7 @@ recording, because a Test Signal is silent until played (the first recording
 was all zeros); the WAV verifier accepts mono or stereo.
 
 Results on the final revision (evidence in the
-[attempt record](evidence/2026-11-18-installer-process.md)):
+[attempt record](../active/evidence/2026-11-18-installer-process.md)):
 
 - **RQ-02:** injected guest-control timeout `ar-rq02-timeout-327fe687`: bounded
   at 12 s, marker reached, honest failure, graceful shutdown; followed by three
@@ -316,7 +320,7 @@ absent-runtime baseline (GUI VirtualBox), then review the diff.
 ## Supersession (2026-11-24)
 
 This brief is **superseded by
-[the app-only release qualification plan](release-qualification.md)** and its
+[the app-only release qualification plan](2026-11-24-release-qualification.md)** and its
 execution evidence. Do not use the checklists above as current status; several
 of them predate the 2026-11-21 runs (RQ-03's guest refusals now have real-guest
 evidence) and the 0.0.32 lifecycle, and the brief is replaced when the manager
@@ -328,8 +332,8 @@ Everything unique to this brief was carried over before archiving:
   VST-track coordination, rebuild invalidation and serialized heavy runs: now in
   the execution plan's *Risks, recovery and exact next action* section;
 - RQ-01–06 acceptance criteria, environments and gaps: the execution plan and
-  [the 0.0.31](evidence/2026-11-19-release-qualification-v0.0.31.md) and
-  [0.0.32](evidence/2026-11-24-release-qualification-0.0.32.md) records;
+  [the 0.0.31](../active/evidence/2026-11-19-release-qualification-v0.0.31.md) and
+  [0.0.32](../active/evidence/2026-11-24-release-qualification-0.0.32.md) records;
 - historical VM/attempt identities (`AR-ReleaseQualification-20261116`,
   `lifecycle-ready-20261116`, attempt IDs, 0.0.29/0.0.30 hashes): kept in those
   evidence records and the execution plan's inventory;

@@ -1,6 +1,6 @@
 # Release qualification, candidate v0.0.31
 
-Execution record for [the plan](../release-qualification.md). Started 2026-11-19.
+Execution record for [the plan](../../archived/2026-11-24-release-qualification.md). Started 2026-11-19.
 Status: in progress; RQ-04/05 guest runs blocked on the guest credential.
 
 ## Candidate reconciliation (RQ-01)

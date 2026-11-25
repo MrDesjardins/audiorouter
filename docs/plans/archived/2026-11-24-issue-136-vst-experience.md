@@ -1,5 +1,9 @@
 # Issue #136 - VST experience investigation and execution plan
 
+> **Archived 2026-11-24 — software scenarios covered; reporter evidence is BLOCKED and eye/ear checks.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
 Status: planning only. This task did not reproduce or fix a reported defect.
 Branch `feature/vst-plugin-experience` is isolated from `fix/resilience` and
 based on `origin/main` at `7d70d502958b86d307cce4e4be847207e6725c19`.
@@ -374,6 +378,6 @@ no support bundle or reporter database exists in the repository.
 This audit changed no code. Local re-verification (formats, Clippy, workspace
 tests, both engine combination suites, fixture VST2 shell/bus/plan tests, docs
 validation, diff check) passed; see
-[audit evidence](evidence/2026-11-24-vst-plans-audit.md). Disposition:
+[audit evidence](../active/evidence/2026-11-24-vst-plans-audit.md). Disposition:
 **archive**; the reporter-specific evidence remains an external gate, and the
 remaining by-eye/by-ear checks are in the manager's `human-gated-tasks.md`.

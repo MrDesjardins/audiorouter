@@ -5,11 +5,11 @@ Foundation declined on 2026-11-16 (reputation requirement; its program does not
 cover driver signing at all). The owner is in the USA and chose that any spend
 should target the audio driver. The EV certificate bought for driver attestation
 also signs the app and installer, so it replaces the separate app-signing
-purchase (see [release signing](../active/release-signing-and-publication.md)).
+purchase (see [release signing](../archived/2026-11-24-release-signing-and-publication.md)).
 Microsoft Artifact Signing cannot sign the driver. The purchase gate is
 unchanged: no certificate until the pre-purchase assurance plan and Stage A on the
 current driver package pass in the isolated VM (see
-[virtual-cable.md](../active/virtual-cable.md)); the app-only release stays the
+[virtual-cable.md](../archived/2026-11-24-virtual-cable.md)); the app-only release stays the
 supported path meanwhile. Open before buying: whether a sole-proprietor EV
 certificate gives Hardware Dev Center access in the owner's name, and which cloud
 signer lets CI sign the app without exporting the key. Recheck all prices.
@@ -31,7 +31,7 @@ or was silent, that is said.
 | Identity validation? | SSL.com: ID check, callback to a listed phone number, agreements; standard 3-5 days, expedited +$599. D-U-N-S is not mentioned on its pages. Exact documents are on a page not read. |
 | Does Partner Center need an organization? | Microsoft's registration page ([updated 2026-08-13](https://learn.microsoft.com/en-us/windows-hardware/drivers/dashboard/hardware-program-register)) never mentions individuals; every step says "company", "organization" and a legal contact. D-U-N-S is optional (a manual entry exists), a free Entra ID tenant is created if needed, and an EV certificate is required for approval. Whether a sole proprietor passes review is **not documented**. Forum reports of blocked enrollments and slow manual review exist (2026). |
 | Token or cloud? | Both are offered. SSL.com warns a YubiKey "may not meet" EV requirements for Microsoft HLK driver signing and says to confirm before buying (its 2026-10 guide lists YubiKey 5.7.4 or Thales SafeNet for 3072-bit keys). Microsoft's pages say nothing about key storage. eSigner cloud is the path SSL.com names for kernel drivers. |
-| Can CI sign the app? | eSigner: yes in principle (CKA with signtool, CodeSignTool, a GitHub Actions guide exists; not read). A hardware token cannot run on a hosted runner. The release tooling signs locally first anyway (see [release signing](../active/release-signing-and-publication.md)), so a token on the owner's PC is workable. Certum cloud: 5,000 signatures per month, CI use not verified. |
+| Can CI sign the app? | eSigner: yes in principle (CKA with signtool, CodeSignTool, a GitHub Actions guide exists; not read). A hardware token cannot run on a hosted runner. The release tooling signs locally first anyway (see [release signing](../archived/2026-11-24-release-signing-and-publication.md)), so a token on the owner's PC is workable. Certum cloud: 5,000 signatures per month, CI use not verified. |
 | WHQL or attestation? | Attestation is the plan (below). WHCP is the fallback and costs time, not money. |
 
 ### Prices (2026-11-21)
@@ -90,11 +90,11 @@ liability insurance cost is budgeted (agreement §15(g); see the signing guide).
 ### Recommended order of steps (each gated)
 
 0. **Now, $0, nothing bought.** Send two written questions (see below) to SSL.com and Partner Center support; ask Certum the same two. Do not buy before the answers.
-1. **Pre-purchase gate (existing, unchanged):** the [assurance plan](../active/virtual-cable.md) tasks 1-4 and Stage A on the frozen RC pass in the VM; owner decision (task 5).
+1. **Pre-purchase gate (existing, unchanged):** the [assurance plan](../archived/2026-11-24-virtual-cable.md) tasks 1-4 and Stage A on the frozen RC pass in the VM; owner decision (task 5).
 2. **Owner go-ahead to spend**, then buy the 1-year Sole Proprietor EV and finish identity validation (3-5 days). Prepare the Entra tenant and the Partner Center form beforehand.
 3. **Start the eSigner trial only when the certificate is issued**, so the 30 free days cover registration, the Signablefile.bin signing, the CAB signature and any resubmission ([signing guide](../../operations/virtual-cable-signing.md) Parts 2-6).
 4. **Stage B/C** with the Microsoft-signed package. Only then decide the app-signing key storage: eSigner annual, token, or keep releases unsigned for another cycle.
-5. **App signing:** add `-Sign` per [release signing](../active/release-signing-and-publication.md) after the key location is settled.
+5. **App signing:** add `-Sign` per [release signing](../archived/2026-11-24-release-signing-and-publication.md) after the key location is settled.
 
 ### Recommendation (revised 2026-11-21 after the Partner Center follow-up: see the follow-up below; ask OSSign first, buy nothing before written answers)
 
@@ -244,7 +244,7 @@ Development and loading tests happen only in an isolated test-signed VM.
 The EV certificate purchase and the first public driver release each need a
 separate user go-ahead. VB-Cable/Voicemeeter stay supported. Execution
 status is in the [active plan](../active/current.md); work packages in the
-[virtual cable plan](../active/virtual-cable.md); design in
+[virtual cable plan](../archived/2026-11-24-virtual-cable.md); design in
 [17 Virtual cable](../../spec/17-virtual-cable.md).
 
 ## Previous status (2026-09-19, superseded by DEC-18)
@@ -327,7 +327,7 @@ development, but it can be removed without spending money (see phase 1).
 | D. Stay on VB-Cable, improve guidance | Nothing new | Keeps today's permanent design; see "cheaper improvements" below. |
 
 SignPath Foundation (the app-signing lead in
-[release signing](../active/release-signing-and-publication.md)) produces
+[release signing](../archived/2026-11-24-release-signing-and-publication.md)) produces
 Authenticode signatures; on its own that is not the Microsoft kernel
 signature Windows requires. Azure Artifact Signing is not accepted for
 Hardware Program registration (Microsoft Q&A, 2026).
@@ -351,7 +351,7 @@ year** to keep a valid certificate for driver updates. The same EV
 certificate is an Authenticode certificate, so it can also sign the app
 and installer: this would replace the separate app-signing decision
 (Azure Artifact Signing, about $9.99/month, or SignPath Foundation) in
-[release signing](../active/release-signing-and-publication.md).
+[release signing](../archived/2026-11-24-release-signing-and-publication.md).
 
 **Route B (WHCP/HLK) adds:** no Microsoft fee, but an HLK environment
 (Microsoft provides a free VHLK virtual-machine image for the controller;

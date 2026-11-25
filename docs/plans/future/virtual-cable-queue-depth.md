@@ -4,7 +4,7 @@ Status (2026-10-28): **deferred by owner decision, not authorized.** The owner
 chose to keep the frozen RC3 driver (0.2.4, source `d2560715`) and accept the
 queue depths below, and asked that this be documented so it can be tackled
 when there is more time. Context: the
-[pre-purchase assurance plan](../active/virtual-cable.md#pre-purchase-assurance-plan-2026-10-28-user-request).
+[pre-purchase assurance plan](../archived/2026-11-24-virtual-cable.md#pre-purchase-assurance-plan-2026-10-28-user-request).
 Requirements touched: VCAB-24, VCAB-25, VCAB-30, VDEV-12.
 
 ## What is fixed in the signed driver

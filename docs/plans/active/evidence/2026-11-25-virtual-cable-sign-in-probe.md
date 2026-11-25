@@ -3,8 +3,8 @@
 Scope: one sign-in probe only, under the manager's limited VM slot. No Stage A
 block, no driver install or load, no measurement, no password change, no snapshot
 created, overwritten or deleted. Host was not idle (about 28-38 % non-VM CPU and
-WSL running), so no block was run. Plan: [virtual cable](../virtual-cable.md);
-[review fixes](../virtual-cable-review-fixes.md).
+WSL running), so no block was run. Plan: [virtual cable](../../archived/2026-11-24-virtual-cable.md);
+[review fixes](../../archived/2026-11-24-virtual-cable-review-fixes.md).
 
 ## What was checked
 

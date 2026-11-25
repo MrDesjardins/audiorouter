@@ -9,7 +9,7 @@ VCAB-25, VCAB-29, VDEV-10, SEC-08, UI-17.
 This archive closes the host implementation scope only. It does not close the
 attended app/VM gate, install a driver, or claim endpoint or audio qualification.
 The remaining gate is tracked in the
-[active virtual-cable plan](../active/virtual-cable.md).
+[active virtual-cable plan](2026-11-24-virtual-cable.md).
 
 ## Implementation
 

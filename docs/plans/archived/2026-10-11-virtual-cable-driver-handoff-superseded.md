@@ -1,6 +1,6 @@
 # Superseded virtual-cable driver handoff
 
-This handoff was current on 2026-10-10 but was superseded by the newer driver, engine, WP-09b, WP-10 and WP-11 records in [the active virtual-cable plan](../active/virtual-cable.md) and [the general active plan](../active/current.md). It is retained as historical context, not as an instruction to rerun its next steps. No milestone or driver qualification is completed by this archive.
+This handoff was current on 2026-10-10 but was superseded by the newer driver, engine, WP-09b, WP-10 and WP-11 records in [the active virtual-cable plan](2026-11-24-virtual-cable.md) and [the general active plan](../active/current.md). It is retained as historical context, not as an instruction to rerun its next steps. No milestone or driver qualification is completed by this archive.
 
 ---
 
@@ -98,7 +98,7 @@ review its ZIP before requesting any longer run.
   `unexplained-events`; the result does not establish the cause of every loss.
   Review nominal event dating against saved QPC clocks before attribution.
   The current ordered work and user-run gate are in the
-  [execution queue](../active/virtual-cable.md#execution-queue-after-r12-2026-10-10).
+  [execution queue](2026-11-24-virtual-cable.md#execution-queue-after-r12-2026-10-10).
   Both r11 archives and r12 are on the host; their offline review is complete.
 - **Follow-up host analysis:** nominal loss dates drift about 4.8 s over r12.
   QPC correlation leaves 119 impulses without a nearby all-four-route gap;
@@ -128,7 +128,7 @@ review its ZIP before requesting any longer run.
   PC. The ordered path (engine-route checks, repeated-start latency with a
   same-VM VB-Cable comparison, a traced one-hour deviation run, then
   production signing for bare-metal qualification here) is in the
-  [virtual cable plan](../active/virtual-cable.md) status section.
+  [virtual cable plan](2026-11-24-virtual-cable.md) status section.
 - The user prefers host-side verification first and one combined, fail-fast
   guest block per step.
 
@@ -161,7 +161,7 @@ Read the current files, in this order:
 
 1. Repository `AGENTS.md` and [documentation map](../../README.md).
 2. [General active plan](../active/current.md), especially DEC-18's current driver state.
-3. [Virtual cable active plan](../active/virtual-cable.md), including the latest active
+3. [Virtual cable active plan](2026-11-24-virtual-cable.md), including the latest active
    repair under Objective. Older dated sections contain superseded actions.
 4. [Spec 17](../../spec/17-virtual-cable.md), [M03/DEC-18 in delivery](../../spec/15-delivery.md),
    and [virtual cable testing](../../operations/virtual-cable-testing.md).

@@ -1,5 +1,9 @@
 # REST API and MCP quality review (2026-11-21)
 
+> **Archived 2026-11-24 — all findings fixed; assistant-recording and rename decisions and live checks.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
 ## Objective
 
 Owner request (2026-11-21): analyse the REST API and the MCP server for
@@ -487,7 +491,7 @@ finding in both reviews is implemented and covered on `main`; the local
 `fix/rust-small-defects` commits are also already in `main` through the #187
 integration branch, so nothing was cherry-picked. Full evidence, per-finding
 file/test references and command results:
-[`evidence/2026-11-24-api-mcp-plan-closure.md`](evidence/2026-11-24-api-mcp-plan-closure.md).
+[`evidence/2026-11-24-api-mcp-plan-closure.md`](../active/evidence/2026-11-24-api-mcp-plan-closure.md).
 
 - Findings 1-14: implementations at the cited files; the named regression
   tests pass (network-path refusal, retry-safe session creation, plain error

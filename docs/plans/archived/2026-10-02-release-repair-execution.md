@@ -278,7 +278,7 @@ Read [M08](../../milestones/M08-release.md) and the
 | Joe's input list | Old log showed nine 0xE000020B failures; inventory now skips only disappeared endpoints and logs the failed stage | Verify on Joe's PC; exact original endpoint/stage was absent from the old log |
 | Routing / recording / LAN | Existing Windows evidence and user-reported two-PC use; multi-path recorder repair validated by user | [Continuity](../active/evidence/2026-09-26-audio-continuity.md), [network](../active/evidence/2026-10-01-network-qualification.md), archive; refresh candidate hardware/soak evidence |
 | External app control | Existing REST supports active-session node names/IDs, flags and parameters | [Examples](../../operations/local-http-api.md); [request-builder proposal](../future/external-app-integrations.md) is future work |
-| Signing | User prefers SignPath if feasible; MIT license approved; enrollment/acceptance/hosted signing uncompleted | [Signing plan](../active/release-signing-and-publication.md); unsigned first release remains allowed under DEC-17 |
+| Signing | User prefers SignPath if feasible; MIT license approved; enrollment/acceptance/hosted signing uncompleted | [Signing plan](2026-11-24-release-signing-and-publication.md); unsigned first release remains allowed under DEC-17 |
 
 Latest executable:
 `C:\code\audiorouter\target\releases\v0.0.3\audiorouter-shell.exe`.

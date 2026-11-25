@@ -1,5 +1,9 @@
 # UI language support plan
 
+> **Archived 2026-11-24 — implementation complete; fluent review, Narrator, scaling and live checks.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
 Date: 2026-11-19. Status: foundation, everyday UI surfaces and the native tray
 text path implemented 2026-11-19 after the owner asked to execute the plan.
 Remaining slices and gates are listed under “Execution record” below.
@@ -862,20 +866,20 @@ Done:
   contrast, English and the development pseudo-locale; asserts document lang,
   no horizontal page overflow on Settings and the route, and captures full-page
   screenshots. Six of six passed on Edge. Evidence:
-  [2026-11-24-l10n-200-zoom](evidence/2026-11-24-l10n-200-zoom/README.md).
+  [2026-11-24-l10n-200-zoom](../active/evidence/2026-11-24-l10n-200-zoom/README.md).
 - **Chinese rendered audit rerun.** The opt-in fixture captured 59
   panels/views (105 screenshots). After the fixes above, the only remaining
   Latin match for the tool names is the fixture node ID `speechDenoise-1`.
   Remaining Latin lines are units, product/format names, paths, fixture data,
   language endonyms, harness notices and diagnostics log lines. Evidence:
-  [2026-11-24-chinese-ui-audit](evidence/2026-11-24-chinese-ui-audit/README.md).
+  [2026-11-24-chinese-ui-audit](../active/evidence/2026-11-24-chinese-ui-audit/README.md).
 - **Fluent-review queue.** A concise reviewer document lists the 88 new or
   changed keys (English text, screen context, placeholders) and the open wording
   decisions: the remaining `nœud`/`节点` terminology, the Play label
   (Lecture vs Démarrer), "graph" vs route in two refusals, Windows tab names,
   the wire permission scope, "bus", the owner's severity list, and French
   spacing. Evidence:
-  [2026-11-24-fluent-review-queue](evidence/2026-11-24-fluent-review-queue.md).
+  [2026-11-24-fluent-review-queue](../active/evidence/2026-11-24-fluent-review-queue.md).
 
 Checks (Windows 11, 2026-11-24, own worktree, from `ui/` unless noted):
 

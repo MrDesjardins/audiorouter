@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 /**
  * The words the app shows people. See "Glossary" in
- * docs/plans/active/ui-quality-review.md: a route is the graph on the canvas, a
+ * docs/plans/archived/2026-11-24-ui-quality-review.md: a route is the graph on the canvas, a
  * tool is a card on it, unsaved edits are the changes not saved yet, and an
  * input or output device is a real device. Backend and code keep their own terms.
  */

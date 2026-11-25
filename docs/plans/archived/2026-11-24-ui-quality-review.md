@@ -1,5 +1,9 @@
 # UI quality review — 2026-11-03
 
+> **Archived 2026-11-24 — agent rounds done; participant study, Narrator and attended checks.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
 ## Round 30 — packaged 0.0.32 attended session (2026-11-24)
 
 Built from `origin/main` `53e1de80e` with `tools/build-desktop.ps1`; shell
@@ -95,7 +99,7 @@ cancellation, a narrow 200 % window, and the participant study.
 ## Round 31 — portable halves of the Round 30 gaps (2026-11-24)
 
 Branch `plans/ui-obs`, base `02ca8dc9d`; code/test commit `d7228d849`.
-Evidence: [close-out record](evidence/2026-11-24-plans-ui-obs-closeout.md).
+Evidence: [close-out record](../active/evidence/2026-11-24-plans-ui-obs-closeout.md).
 No product defect was reproduced; two first-run failures were test-harness
 mistakes, corrected, not waived.
 
@@ -132,7 +136,7 @@ guide needs re-recording on `main`. The unmerged `improve/ui-spacing-errors`
 branch changes chart label spacing and would need its own refresh if merged.
 
 **Participant study.** Script and observation sheet are prepared, not run:
-[2026-11-24 participant study](evidence/2026-11-24-ui-quality-participant-study.md).
+[2026-11-24 participant study](../active/evidence/2026-11-24-ui-quality-participant-study.md).
 It carries the M08 criterion (four of five within ten minutes; all five identify
 Discord's sources), verbatim moderator text, the intervention rules and the
 per-participant table. It needs five real Windows participants.
@@ -268,7 +272,7 @@ unit test that fails without them.
 ## Round 28 — attended session and scores (2026-11-07)
 
 Evidence: the owner's attended session on the recorded and rebuilt exes
-(disposable profile), the fixes listed in [the active plan](current.md), PR
+(disposable profile), the fixes listed in [the active plan](../active/current.md), PR
 #122, and a full browser run on head `720a6d9d` (688 passed, 15 skipped,
 0 failed). A category rises only where today's evidence closes the gap the
 iteration-15 table recorded for it; nothing reaches 10 (no independent study).
@@ -340,7 +344,7 @@ with the first-time-user walk-through (step 5).
 ## Round 27 — dropdown, density and loading evidence (2026-11-07)
 
 **Final disposition:** software phase implemented and verified; the real-key
-blocker was cleared by the owner. The [execution record](../archived/2026-11-07-ui-round-27.md)
+blocker was cleared by the owner. The [execution record](2026-11-07-ui-round-27.md)
 contains the completion audit and retained native/attended limits. Earlier
 pending statements below record intermediate results, superseded by that
 record. Scores remain 112/140; M05/M08 and the wider 9/10 goal remain open.
@@ -2311,7 +2315,7 @@ Seventeenth slice results (Windows Edge route harness, 2026-11-07):
 - Plugin's silent portrait overview was refreshed. On/Off and return-to-top
   frames were visually inspected; capture completed with 120 frames and zero
   page errors. Final encoded media passed installed Firefox playback. Exact
-  [hash, metadata and playback evidence](evidence/2026-11-07-plugin-switch-guide.json)
+  [hash, metadata and playback evidence](../active/evidence/2026-11-07-plugin-switch-guide.json)
   identify it. Guide generation, coverage, media budgets and 13 site tests
   pass. Owned test servers were stopped; cached HTTP DEP0066 remains noted.
 - Next: VirtualCablePanel latency must distinguish unavailable from Off;
@@ -2433,7 +2437,7 @@ Fourteenth slice results (Windows Edge, 1440 by 1000 CSS pixels, 2026-11-07):
   observed ratios: dark 4.03, light 3.76, high contrast 3.93. Six state/theme
   screenshots were visually inspected, including original-resolution review
   of the high-contrast connecting state. No style change was warranted.
-  [Measurements and screenshot paths](evidence/2026-11-07-handle-contrast.json)
+  [Measurements and screenshot paths](../active/evidence/2026-11-07-handle-contrast.json)
   preserve the exact sampled scope: eight sending handles at rest and eight
   receiving handles during a real output drag in the disposable demo route.
 - Five browser tests pass, including sender/receiver affordances and planning
@@ -2511,7 +2515,7 @@ Twelfth slice results (Windows Edge route harness, 2026-11-07):
 - Both separate Duck configuration tours (level and game) were also refreshed
   in portrait with zero page errors. Four middle/end frames were visually
   inspected, final encoded clips passed Firefox playback, and hashes/capture
-  metadata are in the [configuration evidence](evidence/2026-11-07-duck-configuration-guides.json).
+  metadata are in the [configuration evidence](../active/evidence/2026-11-07-duck-configuration-guides.json).
   They remain explicitly silent, with no live Stats.cc or device claim. Site
   generation/13 tests, property coverage and all video-budget checks pass
   (202 references, 53,986,439 bytes). Owned test servers were stopped.
@@ -2542,7 +2546,7 @@ Eleventh slice audible-guide progress (2026-11-07):
   all 13 pass pointer-click playback and non-zero audio-output measurement
   in installed Firefox. This is synthetic production-DSP guide evidence,
   not attended microphone/device or physical audio evidence.
-- [Exact demo hashes, capture provenance and Firefox results](evidence/2026-11-07-chart-guide-demos.json)
+- [Exact demo hashes, capture provenance and Firefox results](../active/evidence/2026-11-07-chart-guide-demos.json)
   identify the refreshed media. All 51 per-property captures also completed;
   their source fixtures pass finite-sample/duration checks and are non-silent
   where marked audible. All 51 final encoded property clips passed Firefox
@@ -2558,7 +2562,7 @@ Eleventh slice audible-guide progress (2026-11-07):
   frequency. The nine guard tests are now part of normal site verification.
   Gate Hold was recaptured and visually verified at Hold = 600 ms with
   Threshold unchanged at -35 dB, replacing the rejected local artifact.
-- [Final property hashes, capture provenance and Firefox results](evidence/2026-11-07-chart-guide-properties.json)
+- [Final property hashes, capture provenance and Firefox results](../active/evidence/2026-11-07-chart-guide-properties.json)
   retain the exact 51 artifacts. Representative changed-field frames were
   inspected for Bass frequency, EQ filter type, Compressor ratio, Gate hold,
   Spectral Gate learning and Duck release, in addition to all 13 representative
@@ -2583,7 +2587,7 @@ Eleventh slice guide results (Windows Edge and installed Firefox, 2026-11-07):
   Final checker: 38 tools, 202 video references, 53,909,736 bytes; all meet
   format, eight-second duration and size checks. All 13 final encoded
   overviews passed actual pointer-click playback in installed Firefox.
-- [Capture metadata, final media hashes and Firefox results](evidence/2026-11-07-chart-guide-overviews.json)
+- [Capture metadata, final media hashes and Firefox results](../active/evidence/2026-11-07-chart-guide-overviews.json)
   identify the exact artifacts. Manifest, guide pages, social metadata and
   CSP were regenerated; the site quality check and property/catalog coverage
   passed. The first site check caught missing social regeneration; the full

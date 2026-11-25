@@ -3,8 +3,8 @@
 Scope: host-side analysis and host tooling only. No VM was started, no driver was
 loaded or installed, no host driver/security setting changed, and no kernel source
 was edited (the 0.2.5 package stays frozen). Requirement IDs: VCAB-20/24/25/27/28/30,
-VDEV-09, SEC-08, NFR-02. Plans: [virtual cable](../virtual-cable.md),
-[review fixes](../virtual-cable-review-fixes.md).
+VDEV-09, SEC-08, NFR-02. Plans: [virtual cable](../../archived/2026-11-24-virtual-cable.md),
+[review fixes](../../archived/2026-11-24-virtual-cable-review-fixes.md).
 
 ## 1. Verified state (checked at this commit, not copied from old notes)
 

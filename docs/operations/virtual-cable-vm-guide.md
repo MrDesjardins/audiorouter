@@ -5,7 +5,7 @@ driver in a virtual machine (VM) when you have never done it before. It
 covers stage A of the [test procedure](virtual-cable-testing.md): a
 test-signed driver in a disposable Windows 11 VM. The design is in
 [17 Virtual cable](../spec/17-virtual-cable.md); the work packages are in the
-[virtual cable plan](../plans/active/virtual-cable.md).
+[virtual cable plan](../plans/archived/2026-11-24-virtual-cable.md).
 
 **What you get out of it:** proof that the driver installs, shows its
 endpoints, carries audio both ways, survives hostile input, and uninstalls

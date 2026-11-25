@@ -120,7 +120,7 @@ only the local video project; `capture/` holds ignored disposable data.
 ## Next task (2026-10-01): sign the release and publish it
 
 The user asked for a plan to be executed by another agent:
-[release signing and publication](../active/release-signing-and-publication.md). State
+[release signing and publication](2026-11-24-release-signing-and-publication.md). State
 at handoff:
 - 0.0.2 (`3f5da9fb`) is unsigned and works on the user's two PCs, including
   network streaming;

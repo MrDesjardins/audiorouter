@@ -46,7 +46,7 @@ const render = (key: string, args: Record<string, string> = {}): string =>
 /**
  * Messages that differ from the old rules on purpose (the old rules judged the
  * whole rendered sentence, so a caught error's own words changed the colour).
- * Documented in docs/plans/active/ui-localization.md, 2026-11-24.
+ * Documented in docs/plans/archived/2026-11-24-ui-localization.md, 2026-11-24.
  */
 const DELIBERATE: Partial<Record<ToneKey, ActionMessageTone>> = {
   "g3Adv.signInFailed": "error",

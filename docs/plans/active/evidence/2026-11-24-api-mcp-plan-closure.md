@@ -3,8 +3,8 @@
 Worktree branch `plans/api-mcp`, based on `origin/main` at `53e1de80e`
 (PR #187, tree-identical to `origin/integration/overnight-2026-11-24`
 `1a9c3c7ca`). Scope: verify the fixes recorded in
-`docs/plans/active/api-mcp-quality.md` and
-`docs/plans/active/mcp-setup-ux.md`, port any useful unlanded work, and run
+`docs/plans/archived/2026-11-24-api-mcp-quality.md` and
+`docs/plans/archived/2026-11-24-mcp-setup-ux.md`, port any useful unlanded work, and run
 the required checks. No live audio, device, driver, packaged-shell, owner
 profile, external connector or OBS check was performed.
 

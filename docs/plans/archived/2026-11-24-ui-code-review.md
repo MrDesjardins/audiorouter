@@ -1,5 +1,9 @@
 # UI code review, 2026-11-22
 
+> **Archived 2026-11-24 — findings merged in PR #176; attended instrument and audio checks.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
 > **Status (2026-11-24).** All seven findings (R1–R7) are repaired and merged
 > to main in PR #176 (`37adfe111`). What remains is not implementation work:
 > the owned-backend packaged save/restart smoke (it needs the owner's app
@@ -359,9 +363,9 @@ passes 204 videos (re-run 2026-11-24), so the earlier guide limitation is
 closed on `main`. The portable follow-ups that overlapped the UI quality review
 (a lost-device message on a live route, a narrow window at 200 %, dropdown
 Escape/Tab, the OBS card in three themes) are covered in
-[the UI quality review, Round 31](ui-quality-review.md#round-31-portable-halves-of-the-round-30-gaps-2026-11-24),
+[the UI quality review, Round 31](2026-11-24-ui-quality-review.md#round-31-portable-halves-of-the-round-30-gaps-2026-11-24),
 with evidence in
-[2026-11-24 close-out](evidence/2026-11-24-plans-ui-obs-closeout.md).
+[2026-11-24 close-out](../active/evidence/2026-11-24-plans-ui-obs-closeout.md).
 
 What is left needs a person or the owner's machine and moves to the human-gated
 list:

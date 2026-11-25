@@ -1,5 +1,9 @@
 # Active plan — AudioRouter virtual cable (DEC-18)
 
+> **Archived 2026-11-24 — NOT passed: Stage A failures stand; VM, signing and bare-metal work.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
 Status 2026-10-28: driver RC3 0.2.4 (source `d2560715`, no driver commit
 since) passed Stage A in the VM except the items bound to Stage C; the EV
 certificate is not bought. The pre-purchase assurance plan is
@@ -8,20 +12,20 @@ below; the older status table follows it. VCAB-24/25 stay open until Stage C.
 Do not install the test-signed driver on the development PC.
 
 **2026-11-10 update: the RC3 freeze is ended by owner decision.** The
-review fixes in [virtual-cable-review-fixes.md](virtual-cable-review-fixes.md)
+review fixes in [virtual-cable-review-fixes.md](2026-11-24-virtual-cable-review-fixes.md)
 change kernel code; the next package is 0.2.5 and Stage A restarts on it.
 RC3 statements below remain history.
 
 **2026-11-21: Stage A ran on 0.2.5 (2026-11-11/12) and is not passed.** The
 package is frozen (commit `7c88895c2`, SYS `D2C26DD9…`, no PDB). Open gates and
 the second VM round are in the
-[gap analysis](evidence/2026-11-21-virtual-cable-stage-a-0.2.5-gap-analysis.md)
-and [review-fixes plan](virtual-cable-review-fixes.md#stage-a-on-025-gap-analysis-and-second-vm-round-2026-11-21).
+[gap analysis](../active/evidence/2026-11-21-virtual-cable-stage-a-0.2.5-gap-analysis.md)
+and [review-fixes plan](2026-11-24-virtual-cable-review-fixes.md#stage-a-on-025-gap-analysis-and-second-vm-round-2026-11-21).
 The pre-purchase task 4 and decision gate (task 5) run on 0.2.5 and stay open.
 
 **2026-11-24: the current status is consolidated in one page, and the driver and
 its review fixes are re-verified.**
-[Current status](evidence/2026-11-24-virtual-cable-current-status.md) records the
+[Current status](../active/evidence/2026-11-24-virtual-cable-current-status.md) records the
 verified freeze (no driver commit since `7c88895c2`, no PDB), every review-fix
 item with its code location and host test, the VCAB-24/25/27/28/30
 requirement-to-evidence gap, and the single remaining ordered VM block. The host
@@ -1365,7 +1369,7 @@ wrapper. Fresh GPT-6 Luna High WP-04 source review finds no blocker; 738
 driver checks, concurrency/stop/exhaustion, 58 wrapper checks and normal/
 diagnostic WDK x64 builds pass. Next is clean-source test-sign/package
 verification, then user-run short comparison. No continuity repair or
-hour qualification claim. The [r16 record](evidence/2026-10-10-m03-cable-driver-timing.md)
+hour qualification claim. The [r16 record](../active/evidence/2026-10-10-m03-cable-driver-timing.md)
 supersedes r15 next-action and pending implementation notes below.
 
 Authorized r16 preparation (2026-10-10): diagnostic-only compile flag;
@@ -1390,7 +1394,7 @@ before readiness (8.083/7.888 ms), short ready-to-running delays
 (0.504/0.650 ms maxima). Generic DPC events do not directly identify the
 AudioRouter timer callback. Stage losses are 29 before observed input, one
 between input/publication, 54 downstream. See
-[r15 evidence](evidence/2026-10-10-m03-cable-latency-preparation.md#r15-returned-focused-scheduling-review-2026-10-10).
+[r15 evidence](../active/evidence/2026-10-10-m03-cable-latency-preparation.md#r15-returned-focused-scheduling-review-2026-10-10).
 This supersedes pending r15 user-run instructions below.
 
 Exact next agent task (VCAB-20/24/25/28, VDEV-12): design bounded,
@@ -1439,7 +1443,7 @@ Next agent task: model notification/GetReadPacket timing at 128 frames and
 prepare a focused guest OS scheduling trace if necessary to distinguish DPC
 delivery, Windows audio-engine fetch and client wake. No unchanged short/hour
 rerun, buffer enlargement or speculative kernel recovery. See
-[r14 result](evidence/2026-10-10-m03-cable-latency-preparation.md#r14-returned-capture-reader-review-2026-10-10).
+[r14 result](../active/evidence/2026-10-10-m03-cable-latency-preparation.md#r14-returned-capture-reader-review-2026-10-10).
 
 Investigation implementation plan after r13: requirements VCAB-20/24/25/28,
 VDEV-12. The probe's render/capture std::threads lack COM initialization and
@@ -1472,7 +1476,7 @@ WAV; 14 losses occur before observed input and 39 after publication. The
 standing +30 ms r11 jump did not recur. Next, agent reviews capture packet
 delivery/retention and the probe's unregistered audio threads against the
 observed timing before choosing a repair. No new guest run is requested.
-The [r13 evidence](evidence/2026-10-10-m03-cable-latency-preparation.md#r13-returned-stage-trace-review-2026-10-10)
+The [r13 evidence](../active/evidence/2026-10-10-m03-cable-latency-preparation.md#r13-returned-stage-trace-review-2026-10-10)
 supersedes the pending r13 run instructions below. VCAB-24/25 remain open;
 preserve all counters, thresholds, existing bundles and host settings.
 
@@ -1587,7 +1591,7 @@ Ordered tasks:
 
 Status 2026-10-10: tasks 1–4 done on the host (relay stayed in the tool;
 the engine step is the library `CableRouteProcessor`); bundle r7 built
-([evidence](evidence/2026-10-10-m03-cable-latency-preparation.md#bundle-r7-engine-route-step-1-of-the-single-pc-path)).
+([evidence](../active/evidence/2026-10-10-m03-cable-latency-preparation.md#bundle-r7-engine-route-step-1-of-the-single-pc-path)).
 VM r7 (engine route): bit-exact and isolation pass; default latency
 jittered by one block (10 ms) because re-blocking emitted 0/1/1/2 blocks
 per input block. Repaired with a constant re-blocking delay and one block
@@ -1645,14 +1649,14 @@ r12 bundle is prepared at
 `7802c9b2`, based on
 `C:\VMs\ar-share\repair-20261010-slot-provenance`. Its 38-file manifest
 verifies and the test-signed SYS hash is unchanged (`10CF8E87…52381`); see
-[preparation evidence](evidence/2026-10-10-m03-cable-latency-preparation.md#bundle-r12-eight-cable-sustained-continuity-preparation-2026-10-10).
+[preparation evidence](../active/evidence/2026-10-10-m03-cable-latency-preparation.md#bundle-r12-eight-cable-sustained-continuity-preparation-2026-10-10).
 The guest run is a one-hour NEM deviation
 measurement of four simultaneous AudioRouter engine routes with eight cables,
 not VCAB-24 qualification. The user completed it; the report records 1,456
 lost impulses, zero corruption, major per-route clock gaps and cross-route
 loss clusters, but its gate is `unexplained-events` and qualification is false.
 The exact report and limitations are recorded in the
-[r12 result](evidence/2026-10-10-m03-cable-latency-preparation.md#one-hour-guest-result-r12-2026-10-10).
+[r12 result](../active/evidence/2026-10-10-m03-cable-latency-preparation.md#one-hour-guest-result-r12-2026-10-10).
 Next correlate each missing impulse index with raw clock gaps and counter
 deltas, then locate the standing delay using the r11 raw data/counters before
 designing latency recovery (spec 17). Do not repeat the unchanged hour-long
@@ -1660,7 +1664,7 @@ run or infer a root cause from the VM-wide classifier alone.
 
 **Step 4 — latency recovery: locate the standing delay (2026-10-11).**
 The user skipped VCAB-24/25 qualification (deviation recorded in the
-[driver timing evidence](evidence/2026-10-10-m03-cable-driver-timing.md#native-timer-qualification-unavailable-2026-10-11-user);
+[driver timing evidence](../active/evidence/2026-10-10-m03-cable-driver-timing.md#native-timer-qualification-unavailable-2026-10-11-user);
 not waived). Host analysis of the r18 hour (A→B), with the probe's
 in-run-median dating replicated per impulse
 (`python -I -B tools/vm/review-latency-steps.py <extracted continuity run dir>
@@ -1851,7 +1855,7 @@ per-tick render service, bounded DMA catch-up, consistent clock units and safe
 timer teardown. The second review's EoS ordering finding is also repaired.
 Host FIFO suite passes 447 checks; x64/ARM64 WDK/source acceptance and formatting/
 Clippy pass. ASan is unavailable (missing runtime library); Jev returned a
-network error. See the [full review and validation record](evidence/2026-10-09-m03-render-publication-review.md).
+network error. See the [full review and validation record](../active/evidence/2026-10-09-m03-render-publication-review.md).
 Next action: commit the reviewed source and prepare a single candidate.
 Runtime/latency/long-run gates remain pending; no further user test requested.
 
@@ -1893,7 +1897,7 @@ can introduce honest, counted silence; one-slot continuity is unqualified.
 EOS rejection is unchanged. Rollback: revert this isolated repair and
 retain the installed driver, clean snapshot and prior bundles unchanged.
 620 offline helper checks and x64/ARM64 WDK/catalog/source acceptance pass.
-See the [repair record](evidence/2026-10-10-m03-render-commit-validity.md).
+See the [repair record](../active/evidence/2026-10-10-m03-render-commit-validity.md).
 Repair committed/pushed as `28b989f5`; the clean-source candidate at
 `C:\VMs\ar-share\repair-20261010-render-commits` passes 33 package integrity
 checks and independent verification of all 32 manifest files. Checksums and
@@ -1923,7 +1927,7 @@ VM cannot qualify VCAB-24. A reversible, user-run [native VT-x session](../../op
 documents turning the hypervisor off for one boot and restoring WSL/Memory
 Integrity. VCAB-25 preparation is built and host-verified: pass-through relay,
 identity-coded impulse probe and [latency runbook](../../operations/virtual-cable-latency.md)
-([evidence](evidence/2026-10-10-m03-cable-latency-preparation.md)). VM r6
+([evidence](../active/evidence/2026-10-10-m03-cable-latency-preparation.md)). VM r6
 (guest quieted): proxy bit-exact and isolation (Cable B active) pass;
 default latency 33.39 ms p95 with 0.002 ms jitter but 56.94 ms in r5 (startup
 phase varies per run); low-latency periods fail under NEM. Native VT-x proved
@@ -2095,7 +2099,7 @@ with the driver work if a second worktree is used.
 - **Acceptance:** package folder produced in one command from a clean
   checkout; signature verification output recorded.
 - **Rollback:** revert the two scripts.
-- **Status:** complete 2026-10-05. [WP-02 evidence](evidence/2026-10-05-virtual-cable-wp02.md):
+- **Status:** complete 2026-10-05. [WP-02 evidence](../active/evidence/2026-10-05-virtual-cable-wp02.md):
   x64/ARM64 build acceptance, clean-tree one-command test package, valid INF,
   33 packaging/integrity checks. No loaded-driver or production-signing claim.
 
@@ -2129,7 +2133,7 @@ Logs: `target/driver-baseline-build.log`, `target/driver-baseline-rust.log`
 (local disposable evidence). Windows reported 10.0.26300.0; WDK tools
 10.0.28000.0 installed. CIM OS inventory denied access; no build number from
 CIM claimed. Final commands, artifact hashes, initial failures and limitations
-are recorded in [WP-02 evidence](evidence/2026-10-05-virtual-cable-wp02.md).
+are recorded in [WP-02 evidence](../active/evidence/2026-10-05-virtual-cable-wp02.md).
 
 ## WP-03 — VM smoke script (A1, A2, A3, A14)
 
@@ -2144,7 +2148,7 @@ are recorded in [WP-02 evidence](evidence/2026-10-05-virtual-cable-wp02.md).
   two render endpoints named `Speakers (AudioRouter Virtual Audio Device)`
   and two capture endpoints named `Line (AudioRouter Virtual Audio Device)`.
   The INF's per-interface names were not reflected. See the [VM failure and
-  naming evidence](evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md).
+  naming evidence](../active/evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md).
 - **Decision:** preserve the VCAB-02 endpoint names and strict helper
   classification. The interface friendly-name attempt still produced
   `Speakers (AudioRouter Virtual Cable)` and `Line (AudioRouter Virtual
@@ -2332,7 +2336,7 @@ Real `m03-driver-vm.ps1 -Package C:/does-not-exist` refused at VM identity befor
 boot query, inventory, output or package access; log
 `target/driver-vm-host-refusal.log`. The first attended smoke result and the
 2026-10-07 crash repair are recorded in
-[crash follow-up evidence](evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md).
+[crash follow-up evidence](../active/evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md).
 
 ### Higher-precision decision (2026-10-05, user)
 
@@ -2615,7 +2619,7 @@ kernel. Two defects fixed: Rust sent `METHOD_NEITHER` IOCTL codes the driver
 never dispatches, and a rate-mismatched capture-sink lease would still have
 played at the wrong speed. Checks: 206 host bridge checks, x64/ARM64 WDK
 acceptance, `cargo test -p audiorouter-windows-audio` 116 passed. Details:
-[WP-06 evidence](evidence/2026-10-05-virtual-cable-wp06.md). Not VM, endpoint
+[WP-06 evidence](../active/evidence/2026-10-05-virtual-cable-wp06.md). Not VM, endpoint
 or audio evidence.
 
 ## WP-07 — Elevated driver helper (17 §6)
@@ -3323,7 +3327,7 @@ require changing the driver.
 - **Acceptance:** VM run of all cable-only cases recorded (indicative);
   every metric has a value; failures are listed with numbers, not hidden.
 - **Status:** in progress (2026-10-11). Evidence: [portable analysis core
-  and real-sample bridge](evidence/2026-10-11-wp09b-cable-quality-analysis.md).
+  and real-sample bridge](../active/evidence/2026-10-11-wp09b-cable-quality-analysis.md).
   Added deterministic signal generation, float32 WAV decoding, bounded frame
   alignment, per-channel error metrics and sine-fit THD+N. The existing native
   WASAPI bit-exact probe can now save reference and captured WAVs, and the
@@ -3413,13 +3417,13 @@ dedicated probe and runner change; no data migration.
 - **Acceptance:** UI conventions in AGENTS.md; no layout shift while status
   changes.
 - **Status:** host implementation for slices 1 and 2 is archived in
-  [the WP-10 execution record](../archived/2026-10-11-WP-10-virtual-cable-ui.md).
+  [the WP-10 execution record](2026-10-11-WP-10-virtual-cable-ui.md).
   The attended app/VM acceptance remains open pending WP-11's signed package.
 
 ### WP-10 implementation archived; attended gate remains active
 
 The host implementation for both UI slices is archived in the
-[WP-10 execution record](../archived/2026-10-11-WP-10-virtual-cable-ui.md).
+[WP-10 execution record](2026-10-11-WP-10-virtual-cable-ui.md).
 This closes implementation only, not WP-10 acceptance. The installed app has
 not been verified with the real adjacent helper and signed package. Remaining
 checks are real UAC operation results, status refresh, cable count/name and
@@ -3558,7 +3562,7 @@ preflight; no Stage A qualification is claimed.
 | SEC-08, VDEV-07 | WP-04 | Unit tests, fuzzer, verifier, second user |
 | VDEV-08, NFR-16 | WP-07, WP-08 | Only the helper elevates; backend standard user |
 | VDEV-09 | WP-13 | Microsoft signer, stage B |
-| VDEV-09 development, SEC-08 packaging, ENG-05 | WP-02 | [Versioned test package](evidence/2026-10-05-virtual-cable-wp02.md); production gate remains WP-13 |
+| VDEV-09 development, SEC-08 packaging, ENG-05 | WP-02 | [Versioned test package](../active/evidence/2026-10-05-virtual-cable-wp02.md); production gate remains WP-13 |
 | VDEV-11 | WP-12, WP-14 | Discord, OBS |
 | NFR-02 | WP-12 | Impulse loopback p95 ≤ 160 ms, compared with VB-Cable |
 | VCAB-20/21/26 (bit-exact, conversions, isolation) | WP-05, WP-06, WP-09, WP-09b | Harness: noise compare, LSB error, crosstalk |
@@ -3622,7 +3626,7 @@ revert only the mixed-route implementation commit; the established cable-only
 bindings and worker service before code changes.
 
 The 2026-10-07 failure and repaired-package replay are recorded in
-[the crash follow-up evidence](evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md).
+[the crash follow-up evidence](../active/evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md).
 The repaired package identity matched in the VM and Windows completed the
 device start without a bugcheck, but the helper still found zero of four
 endpoints. A direct diagnostic inventory showed the four healthy devices were
@@ -3640,7 +3644,7 @@ Two interface-name retries failed. The diagnostic retry captured four healthy
 endpoint children, named `Speakers (AudioRouter Virtual Cable)` twice and
 `Line (AudioRouter Virtual Cable)` twice. This confirms the missing cable
 identity is in the bridge-pin naming path. Full evidence is in the
-[crash and endpoint-naming record](evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md).
+[crash and endpoint-naming record](../active/evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md).
 Do not proceed to tone or Verifier until the required endpoint names appear.
 Two clean smoke runs are still required before tone or Verifier sessions.
 
@@ -3885,7 +3889,7 @@ added live progress and raw counter snapshots. No kernel pacing change or
 counter waiver. Host tool tests 4/4, focused Clippy, Rust fmt checks and
 PowerShell output/counter regressions passed. Startup exposure and delayed
 callback starvation remain hypotheses requiring the diagnostic guest trace;
-see the [review record](evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md#2026-10-08-1956-short-run-underrun-and-additional-review).
+see the [review record](../active/evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md#2026-10-08-1956-short-run-underrun-and-additional-review).
 
 Diagnostic bundle staged in `C:\VMs\ar-share\diagnostics-20261008-tone-timing`
 from clean `5cb14067`: only the static-CRT tone tool and vm-checks.ps1, with
@@ -4090,7 +4094,7 @@ deactivate before cleanup; final render data is drained. Host regressions:
 11 tone/worker tests and 30 bridge tests passed, including a 160 ms blocked
 recording/control interval, explicit backpressure and a visible 120 ms producer
 stall. Details and limits are in the
-[harness record](evidence/2026-10-08-isolated-tone-harness.md).
+[harness record](../active/evidence/2026-10-08-isolated-tone-harness.md).
 
 The first 30-second isolated VM run exercised capture and render, but exited
 with `SampleSizeMismatch` during teardown. Its final counters were zero because
@@ -4116,14 +4120,14 @@ render overrun and one harness sequence gap. Its maximum render poll gap was
 11.186 ms; heartbeat and WAV operations were each below 1 ms. It requested a
 600-second run but did not complete the 10-minute gate. Full archived evidence,
 limits, and the scheduling follow-up are in the
-[render-overrun record](evidence/2026-10-08-m03-render-overrun.md). Before
+[render-overrun record](../active/evidence/2026-10-08-m03-render-overrun.md). Before
 retrying, the isolated workers were updated to request MMCSS `Pro Audio`,
 report fallback capability, and include sequence and timing details in any
 gap error. Focused host checks and workspace Clippy pass; this is not VM timing
 evidence. The updated tool-only bundle is staged at
 `C:\VMs\ar-share\diagnostics-20261008-mmcss-render`; its executable and driver
 hashes and the exact VM command are in the
-[render-overrun record](evidence/2026-10-08-m03-render-overrun.md). Run the
+[render-overrun record](../active/evidence/2026-10-08-m03-render-overrun.md). Run the
 30-second guest validation before another 10-minute attempt. Preserve the
 zero-counter acceptance criterion and installed VM driver.
 
@@ -4136,7 +4140,7 @@ error is tolerated after retirement begins. Keep runtime mapping errors and
 the zero-error gate unchanged. Host formatting, tests and Clippy pass. The new
 tool-only short retry is staged at
 `C:\VMs\ar-share\diagnostics-20261008-retirement-fix`; its exact command and
-hashes are in the [render-overrun record](evidence/2026-10-08-m03-render-overrun.md).
+hashes are in the [render-overrun record](../active/evidence/2026-10-08-m03-render-overrun.md).
 Do not run the 10-minute test until this retry passes.
 
 The next short retry had zero render blocks because Cable A Input was not
@@ -4145,7 +4149,7 @@ The tool correctly reported missing playback. The retry script now waits for
 readiness and gives a five-second countdown before its 30-second tone run;
 click Cable A Input Test while the run is active. The exact guest archive and
 result are recorded in the
-[render-overrun evidence](evidence/2026-10-08-m03-render-overrun.md).
+[render-overrun evidence](../active/evidence/2026-10-08-m03-render-overrun.md).
 The updated tool-only bundle is staged at
 `C:\VMs\ar-share\diagnostics-20261008-tone-ready`; in the VM, run
 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\diagnostics-20261008-tone-ready\retry-isolated-tone.ps1`.
@@ -4155,7 +4159,7 @@ the 10-minute gate, route a known file into Cable A Input and keep playback
 continuous for the full run. Use
 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step tone -ToneSeconds 600`,
 then run the collect step. Archive and detailed metrics are in the
-[render-overrun evidence](evidence/2026-10-08-m03-render-overrun.md).
+[render-overrun evidence](../active/evidence/2026-10-08-m03-render-overrun.md).
 
 The first 600-second run completed but failed the clean-run gate: capture
 underrun was 2,208 frames (46 ms), first observed at 67.193 seconds; maximum
@@ -4168,7 +4172,7 @@ run only with a known file looped continuously into Cable A Input, the VM in
 the foreground and no heavy host work. If the underrun recurs, investigate VM
 scheduling and capture buffering before changing the driver or its thresholds.
 Archive and details are in the
-[render-overrun evidence](evidence/2026-10-08-m03-render-overrun.md).
+[render-overrun evidence](../active/evidence/2026-10-08-m03-render-overrun.md).
 
 The next 600-second attempt failed during startup: at 17 ms the render reader
 first observed sequence 2 instead of 1, recorded one 480-frame overrun, and
@@ -4186,7 +4190,7 @@ path exited as expected. The tool-only VM bundle is staged at
 rebuilt or included. The guest short test remains pending. Keep the zero-error
 criterion and do not retry the 600-second gate until the short guest test
 passes. Full archive and run details are in the
-[render-overrun evidence](evidence/2026-10-08-m03-render-overrun.md).
+[render-overrun evidence](../active/evidence/2026-10-08-m03-render-overrun.md).
 
 That short retry confirmed startup polling was fixed but still observed
 sequence 2 followed by sequence 4 at 996 ms, with one 480-frame render
@@ -4210,7 +4214,7 @@ state is not recorded. For the next retry, prepare Media Player routed to
 Cable A Input but paused, start the 600-second command, then start playback
 when the first progress line appears. The clean 10-minute gate remains open.
 Archive and measurements are in the
-[render-overrun evidence](evidence/2026-10-08-m03-render-overrun.md).
+[render-overrun evidence](../active/evidence/2026-10-08-m03-render-overrun.md).
 
 **Agent (host, can start now):** WP-08 status detection and the
 `virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
@@ -4386,7 +4390,7 @@ conversion follow-up below); Rust tone example:
 15 tests; WDK x64 and ARM64 acceptance: pass; workspace/shell Clippy and fmt:
 pass. Documentation validation: 138 Markdown files / 746 local links; retest
 script parses in Windows PowerShell and refuses host execution. Details and limitations:
-[review evidence](evidence/2026-10-09-m03-packet-clock-review.md).
+[review evidence](../active/evidence/2026-10-09-m03-packet-clock-review.md).
 Next: build the identified candidate, then follow the
 [bounded VM procedure](../../operations/virtual-cable-packet-clock-retest.md).
 Original runtime failure remains unverified until the guest run; do not mark
@@ -4746,7 +4750,7 @@ crackles (user observation, not a digital-path measurement).
   owned-process wrapper and copy-only preparer. Windows host-safe checks pass:
   9 Rust regressions, 75 PowerShell checks, release build, workspace/shell
   Clippy and both format checks. No host audio stream or driver was opened.
-  See [preparation evidence](evidence/2026-10-09-m03-direct-audio-preparation.md).
+  See [preparation evidence](../active/evidence/2026-10-09-m03-direct-audio-preparation.md).
 - Published: clean source `c0bc9595`, 37 verified bundle files, all 35 base
   files unchanged, including every driver file. Share folder:
   `C:\VMs\ar-share\diagnostics-20261010-direct-audio`.
@@ -4816,7 +4820,7 @@ per-channel window metrics on short or long active intervals. Ten Rust tests
 and 117 orchestration checks pass, including short duration plus packet loss.
 The repaired analyzer reproduces failures on both original WAVs offline and
 retains their 29.71-second fitted intervals, phase breaks and packet bounds.
-See [direct r2 waveform evidence](evidence/2026-10-09-m03-direct-audio-preparation.md#direct-r2-recordings-and-reporting-repair-2026-10-09).
+See [direct r2 waveform evidence](../active/evidence/2026-10-09-m03-direct-audio-preparation.md#direct-r2-recordings-and-reporting-repair-2026-10-09).
 Next: locate the downstream Listen/speaker hiss separately from the measured
 shared pause. No new VM audio run is requested by this reporting repair.
 
@@ -4951,7 +4955,7 @@ gaps totaling 15,232 frames. These metadata anomalies occur despite exact
 sample agreement in the compared prefix; do not convert them into asserted
 sample loss or treat the virtual device position as an independently verified
 physical clock. Full checksums, reproduction and limits are in the
-[speaker evidence](evidence/2026-10-09-m03-direct-audio-preparation.md#guest-speaker-recording-review-2026-10-09).
+[speaker evidence](../active/evidence/2026-10-09-m03-direct-audio-preparation.md#guest-speaker-recording-review-2026-10-09).
 
 Decision (VCAB-12/20/24/29, VDEV-12): investigate the audible reproduction
 after this capture boundary separately from the measured bridge loss. Do
@@ -5056,7 +5060,7 @@ guest DMA. Both audio backends share that path. This provides a supported
 timing hypothesis; event overlap and the actual catch-up percentage are not
 established. Host power-event queries were denied; do not infer sleep or blame
 Hyper-V/WSL. Details and source/log hashes are in the
-[clock review](evidence/2026-10-09-m03-direct-audio-preparation.md#directsound-playback-with-capture-off-and-clock-review-2026-10-10).
+[clock review](../active/evidence/2026-10-09-m03-direct-audio-preparation.md#directsound-playback-with-capture-off-and-clock-review-2026-10-10).
 
 Next ordered work: stop playback, restore the default backend with the
 powered-off rollback, then review clock recovery against retained paired
@@ -5080,7 +5084,7 @@ to map it to the subjective scratches. Stream0's 3,101 underruns belong to
 the input stream and must not be reported as 3,101 speaker glitches. Later
 HostSuspend/HostResume and host endpoint changes extend the session; totals
 are not isolated to the short comparison. Evidence and limits are in the
-[shutdown review](evidence/2026-10-09-m03-direct-audio-preparation.md#rollback-verified-and-shutdown-statistics-reviewed-2026-10-10).
+[shutdown review](../active/evidence/2026-10-09-m03-direct-audio-preparation.md#rollback-verified-and-shutdown-statistics-reviewed-2026-10-10).
 
 Next: keep the VM off and review virtual HDA interrupt/clock recovery against
 retained timing data before preparing a candidate. No new test or driver patch
@@ -5095,6 +5099,6 @@ samples above it, two or more samples); one spike is not starvation, the owner's
 22 % total but 3.4 % non-VM. `-PoolMinutes` accepts 5-1440 (2 h default), the
 pool samples are copied to the share while the block runs, and the sampler runs
 26 h; bundle `rc-0.2.5-r7` is current. Details:
-[current status](evidence/2026-11-24-virtual-cable-current-status.md) and
-[review fixes](virtual-cable-review-fixes.md). Still no VM start, driver install
+[current status](../active/evidence/2026-11-24-virtual-cable-current-status.md) and
+[review fixes](2026-11-24-virtual-cable-review-fixes.md). Still no VM start, driver install
 or driver source change.

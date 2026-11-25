@@ -1,10 +1,14 @@
 # VST owner checks (open, 2026-11-18)
 
+> **Archived 2026-11-24 — moved in full; its checks are unrun.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
 These checks close the gates the automated runner cannot reach
 ([VST qualification](../../operations/vst-qualification.md#what-it-cannot-check)).
 They need the owner's screen, ears, hardware or sign-in, so no agent runs
 them unasked. Use the release candidate in
-[the evidence record](evidence/2026-11-18-vst-release-candidate.md) or a
+[the evidence record](../active/evidence/2026-11-18-vst-release-candidate.md) or a
 debug build of `work/vst-compatibility`. Before you start, close any other
 AudioRouter: only one desktop shell may run.
 
@@ -95,7 +99,7 @@ only run on the owner's PC so far (48 of 48 on 2026-11-18).
 
 No check on this page was run by the audit agent: all six need a person's
 screen, ears, hardware or sign-in. The completion-plan audit
-([evidence](evidence/2026-11-24-vst-plans-audit.md)) found no agent-doable VST
+([evidence](../active/evidence/2026-11-24-vst-plans-audit.md)) found no agent-doable VST
 software gap left, so these checks are the only remaining VST gates.
 
 The full de-duplicated list handed to the manager also carries gates that were

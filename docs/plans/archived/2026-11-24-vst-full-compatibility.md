@@ -1,12 +1,16 @@
 # Full VST2 and VST3 compatibility
 
+> **Archived 2026-11-24 — agent work done; owner, hardware and vendor checks.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
 Status: **approved 2026-11-13, in progress.** Owner request: "support ALL VST2
 and 3".
 
-**Taking over this work? Start with [the handoff page](vst-handoff.md):** what
+**Taking over this work? Start with [the handoff page](2026-11-24-vst-handoff.md):** what
 is done, what is open in order, how to check, and what needs the owner. The
 ordered implementation work for the remaining items is in the
-[completion work plan](vst-completion-work.md).
+[completion work plan](2026-11-24-vst-completion-work.md).
 
 ## Decision record (owner, 2026-11-13)
 
@@ -54,8 +58,8 @@ not run.
 | P6 (part) | editor opens and closes on a stopped session (real Dragonfly VST3 check); resize, keyboard focus and monitor/DPI remain open |
 | P5/P7/P9 | P5 sidechain and P9 release gates open; P7 deliberately deferred with a recorded decision |
 
-Related: [issue #136 plan](issue-136-vst-experience.md),
-[chain matrix](issue-136-vst2-chain-matrix.md). Requirements touched:
+Related: [issue #136 plan](2026-11-24-issue-136-vst-experience.md),
+[chain matrix](2026-11-24-issue-136-vst2-chain-matrix.md). Requirements touched:
 PLUG-01..07, DEC-08, GRAPH-14, UI-03/08, AUTO-18; milestones M06/M08.
 
 ## What "all" can mean
@@ -338,7 +342,7 @@ P2/P3 conformance gaps (opcodes and interfaces listed above), P4 layouts, P5
 sidechain, P7 shared VST3 worker and P9 release gate. Added later the same day
 (see the sections below): P2 step 1 (VST2 host callback), P6 step 1 (editor
 before Play) and the packaging check (next section). The design for P8b is in
-[vst-midi-instruments-design.md](vst-midi-instruments-design.md).
+[vst-midi-instruments-design.md](2026-11-24-vst-midi-instruments-design.md).
 
 ## P2 step 1 (2026-11-13): VST2 host callback
 
@@ -410,7 +414,7 @@ before Play) and the packaging check (next section). The design for P8b is in
 
 Committed on `feature/vst-plugin-experience` (nothing pushed, no PR): all of
 P8b except the items below. Evidence is in
-[vst-midi-instruments-design.md](vst-midi-instruments-design.md). Workspace
+[vst-midi-instruments-design.md](2026-11-24-vst-midi-instruments-design.md). Workspace
 tests, both Clippy runs, both `cargo fmt --check`, the contract drift check,
 UI typecheck, lint, format and 1065 unit tests, and the Instrument browser test
 in three themes all pass. P4 note: the VST2 worker already adapts mono/stereo
@@ -658,7 +662,7 @@ and the plugin only forwards MIDI, so its saved settings matter little.
 
 This file's progress table and older "not done" notes are historical; the
 reconciled state is the VS-01 table in
-[the completion work plan](vst-completion-work.md#reconciled-gap-list-vs-01-2026-11-18).
+[the completion work plan](2026-11-24-vst-completion-work.md#reconciled-gap-list-vs-01-2026-11-18).
 
 - P1, P2, P3, P4, P5, P6, P8a and P8b software work is implemented and tested on
   `main` (PR #164 plus #187). P7 remains deliberately deferred with its
@@ -677,6 +681,6 @@ reconciled state is the VS-01 table in
 - Rerun locally: formats, Clippy, workspace tests, both engine combination
   suites, fixture VST2 shell/bus/plan tests, docs validation and diff check all
   pass. Native VST3 tests were not rerun (no SDK checkout in this worktree).
-  See [audit evidence](evidence/2026-11-24-vst-plans-audit.md).
+  See [audit evidence](../active/evidence/2026-11-24-vst-plans-audit.md).
 - Disposition: **archive**; the owner/P9 and external gates move to the
   manager's `human-gated-tasks.md`.

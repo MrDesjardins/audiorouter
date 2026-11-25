@@ -1,5 +1,9 @@
 # MCP setup and connection UX — active execution plan
 
+> **Archived 2026-11-24 — shipped in PR #114; packaged look, owner profile and ChatGPT checks.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
 Status: implementation in progress on `feature/mcp-setup-ux`, isolated from the
 owner's dirty checkout. This plan covers a local desktop UX improvement only;
 the existing MCP protocol, transports, authorization semantics, and tool
@@ -278,7 +282,7 @@ zero warnings; `npm --prefix ui run build` (typecheck:all + vite) passes; the
 full UI suite passes (136 files, 1191 tests); `cargo test -p audiorouter-cli
 --test mcp_stdio` passes (5 tests); `node tools/docs/validate.mjs` passes (304
 Markdown files, 1697 links); `git diff --check` passes. Full record:
-[`evidence/2026-11-24-api-mcp-plan-closure.md`](evidence/2026-11-24-api-mcp-plan-closure.md).
+[`evidence/2026-11-24-api-mcp-plan-closure.md`](../active/evidence/2026-11-24-api-mcp-plan-closure.md).
 
 Not run here and left to the owner: a packaged-shell run, the owner's live
 profile, an external ChatGPT connector acceptance, and an OBS connection. The

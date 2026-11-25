@@ -1,7 +1,11 @@
 # Issue #136 - VST2 chain matrix with Blue Cat PatchWork
 
+> **Archived 2026-11-24 — non-Blue-Cat matrix done; the attended Blue Cat rerun.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
 Status: test written, first run recorded below. Parent plan:
-[issue #136 VST experience](issue-136-vst-experience.md). Branch
+[issue #136 VST experience](2026-11-24-issue-136-vst-experience.md). Branch
 `feature/vst-plugin-experience`. Requirements: PLUG-01..07, GRAPH-14, UI-08;
 milestones M06/M07.
 
@@ -131,6 +135,6 @@ What remains is human only and must not run unattended:
 - **Shell build by eye** with Pitchproof/ReaPlugs/Blue Cat and visible editors.
 
 No code changed in this audit; rerun evidence is in
-[the audit record](evidence/2026-11-24-vst-plans-audit.md). Disposition:
+[the audit record](../active/evidence/2026-11-24-vst-plans-audit.md). Disposition:
 **archive**; both remaining items move to the manager's
 `human-gated-tasks.md`.

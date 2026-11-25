@@ -4,7 +4,7 @@ import type { Page } from "@playwright/test";
 // Quit exits without asking the page, so unsaved edits go to a file through the
 // shell as they are made. The bridge is faked with localStorage, which survives
 // the reload that stands in for the next launch. The real exit is exercised
-// against the built exe (see Round 23 in docs/plans/active/ui-quality-review.md).
+// against the built exe (see Round 23 in docs/plans/archived/2026-11-24-ui-quality-review.md).
 const fakeShell = (page: Page) =>
   page.addInitScript(() => {
     localStorage.setItem("audiorouter.ui.first-run-done", "1");

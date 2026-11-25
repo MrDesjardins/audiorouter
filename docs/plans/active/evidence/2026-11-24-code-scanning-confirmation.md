@@ -1,6 +1,6 @@
 # Code-scanning confirmation — 2026-11-24
 
-Read-only verification for [code-scanning remediation](../code-scanning-remediation.md).
+Read-only verification for [code-scanning remediation](../../archived/2026-11-24-code-scanning-remediation.md).
 No alert was dismissed, reopened or edited; no code changed for this record.
 
 ## Open alerts

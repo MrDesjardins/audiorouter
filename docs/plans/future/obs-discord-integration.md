@@ -1,7 +1,7 @@
 # OBS and Discord setup help
 
 Status: stages D1, O1, D2 and O2 authorized by the owner on 2026-10-23 (UX and
-work order in the [active plan](../active/obs-discord.md)); X1 is not.
+work order in the [active plan](../archived/2026-11-24-obs-discord.md)); X1 is not.
 Investigation on
 2026-10-23 at the owner's request ("Investigate OBS. We can do exception for
 few very popular applications like OBS, Discord"). This exception is recorded

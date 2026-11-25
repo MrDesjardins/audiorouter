@@ -1,5 +1,9 @@
 # Code-scanning alert remediation — 2026-10-26
 
+> **Archived 2026-11-24 — zero open alerts; no gate remains.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
 ## Objective and baseline
 
 Reduce the open CodeQL alerts on AudioRouter's default branch by correcting
@@ -96,7 +100,7 @@ new-head report before any individual dismissals.
 ## Confirmation and disposition record (2026-11-24)
 
 Read-only verification; no alert action. Full record:
-[code-scanning confirmation](evidence/2026-11-24-code-scanning-confirmation.md).
+[code-scanning confirmation](../active/evidence/2026-11-24-code-scanning-confirmation.md).
 
 - Default-branch open alerts: **0**. History: 39 total, 2 `fixed` (#1 C++
   self-test, #3 browser-expression sanitization) and 37 `dismissed` (25

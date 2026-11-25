@@ -1,5 +1,9 @@
 # Plan: sign the Windows release and publish it on GitHub
 
+> **Archived 2026-11-24 — parked, not executed; the purchase and Microsoft verdict.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
 **Decision (2026-11-21, user): invest once, aim at the audio driver.**
 SignPath Foundation declined by email on 2026-11-16: it cannot waive its
 reputation requirement (a "not yet", not a technical or licence problem), and
@@ -16,7 +20,7 @@ for this plan:
 
 - **Primary route: the EV certificate**, bought under the driver track's
   pre-purchase gate (Stage A on the current driver package and the assurance
-  plan in [virtual-cable.md](virtual-cable.md)). Nothing is purchased or
+  plan in [virtual-cable.md](2026-11-24-virtual-cable.md)). Nothing is purchased or
   enrolled by this decision. When it exists, add `-Sign` to the release tooling
   with the key in a cloud signer or token that CI can use (SSL.com eSigner,
   Certum cloud or a token on a trusted runner: choose with the certificate, since
@@ -40,7 +44,7 @@ for this plan:
   `Trojan:Win32/Wacatac.H!ml`; a false-positive submission is pending at
   Microsoft (ID `eb70e424-324e-430b-a096-6e05574d16bb`, filed under the PUA
   category by form error). Evidence:
-  [v0.0.31 qualification](evidence/2026-11-19-release-qualification-v0.0.31.md).
+  [v0.0.31 qualification](../active/evidence/2026-11-19-release-qualification-v0.0.31.md).
   After a verdict, rerun the lifecycle without the guest's Defender exclusion.
 - **Purchase plan (research 2026-11-21):** prices, identity route, key storage and
   the recommended gated order are in
@@ -437,7 +441,7 @@ Checked read-only; nothing was bought, enrolled or submitted anew.
   unimplemented, as this plan already states.
 - The app release track is independent of a tag: 0.0.32 is merged on `main` but
   untagged, and the merged installer has only unsigned lifecycle evidence
-  ([record](evidence/2026-11-24-release-qualification-0.0.32.md)). Signing it or
+  ([record](../active/evidence/2026-11-24-release-qualification-0.0.32.md)). Signing it or
   publishing anything is not authorized by that result.
 
 Human decisions that unblock agent work, in order:

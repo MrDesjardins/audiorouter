@@ -122,7 +122,7 @@ Hesitations to watch for (from Round 30's agent rehearsal):
 
 ## What to record
 
-- Append a dated result section to `docs/plans/active/ui-quality-review.md`
+- Append a dated result section to `docs/plans/archived/2026-11-24-ui-quality-review.md`
   with the table, pass/fail against the criteria, and the exact build hash.
 - Keep recordings and sheets outside the repository; the repository gets only
   the de-identified table and quotes with participant consent.

@@ -1,5 +1,9 @@
 # Active plan — virtual cable driver review fixes (2026-11-10, owner request)
 
+> **Archived 2026-11-24 — NOT passed: Stage A freeze, A/B and live-update failures stand; VM runs.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
 Objective: act on the 2026-11-10 in-depth review of
 `drivers/audiorouter-virtual` so the cable is as reliable and fast as the
 design allows before the EV certificate is bought (WP-13).
@@ -13,7 +17,7 @@ The owner asked to "create a plan and fix everything" after the review.
 **This ends the RC3 freeze** (`d2560715`). Consequences, accepted by that
 request:
 
-- The RC3 hashes in [virtual-cable.md](virtual-cable.md) no longer describe
+- The RC3 hashes in [virtual-cable.md](2026-11-24-virtual-cable.md) no longer describe
   the next package; the next driver is a new RC (0.2.5) and needs Stage A
   again from `02-test-signing-ready`.
 - The pre-purchase task 4 (final r11 bundle) must run on the new RC, not RC3.
@@ -227,7 +231,7 @@ scan, the frame clock remainder and its read-packet carry, and the
    share, plus the probes in task 7 and a disable/enable with an open handle.
    If the bridge fails to appear after start, disable and re-enable the
    device: nothing retries control-device creation.
-3. Then resume the pre-purchase plan in [virtual-cable.md](virtual-cable.md)
+3. Then resume the pre-purchase plan in [virtual-cable.md](2026-11-24-virtual-cable.md)
    at task 4 with 0.2.5 in place of RC3.
 
 ### R1/R2 work and VM probes (2026-11-11)
@@ -624,7 +628,7 @@ Objective: say exactly what Stage A on 0.2.5 still requires, then prepare it.
 Requirement IDs: VCAB-20/24/25/27/28, VDEV-09, SEC-08, NFR-02. Authority: host
 read-only analysis and documentation. No VM start, driver load, build,
 purchase or signing step is authorized by this section. Evidence and numbers:
-[gap analysis](evidence/2026-11-21-virtual-cable-stage-a-0.2.5-gap-analysis.md).
+[gap analysis](../active/evidence/2026-11-21-virtual-cable-stage-a-0.2.5-gap-analysis.md).
 
 Package frozen: driver 0.2.5.0, commit `7c88895c2`, SYS `D2C26DD9…`, CAT
 `12F48561…`, INF `AE3212D0…`; no driver commit since; **no PDB exists** for it.
@@ -673,7 +677,7 @@ RC3 share `rc-0.2.4-base` and the 0.2.5 share `rc-0.2.5` stay untouched.
 Risks: the VM remains a NEM guest, so a stall can still hide a real difference;
 the A/B is the best host-side-first design, not proof. Block 4 can still end in
 a new RC, and the pre-purchase decision gate (task 5 of
-[virtual-cable.md](virtual-cable.md)) stays closed until then.
+[virtual-cable.md](2026-11-24-virtual-cable.md)) stays closed until then.
 
 Round-2 bundle (2026-11-21): `C:\VMs\ar-share\rc-0.2.5-r3`, 89 files, built from commit
 `9027b730c` on branch `docs/virtual-cable-stage-a-0.2.5` (later commits are documentation only),
@@ -684,14 +688,14 @@ live VM, RC3-after-0.2.5 binding in one guest session (checked in the helper sou
 through the parser (none on disk with a driver line), a real route output through the route-state check.
 The older bundle `rc-0.2.5-r2` is stale: do not use it.
 
-Round 2 ran on 2026-11-21 (see [results](evidence/2026-11-22-virtual-cable-stage-a-0.2.5-round2-results.md)): A/B FAIL by the pre-registered rule (confounded), pool PASS, Verifier fuzz froze the guest (core saved), live run alone 2026-11-22: REVIEW (update and remove under a playing route both return helper exit 5, restart required, route survives, no bugcheck; item 3 not verified). Freeze core analysed (see [freeze-core-analysis](evidence/2026-11-22-virtual-cable-stage-a-0.2.5-freeze-core-analysis.md)): nothing is stuck in the driver, the whole guest stopped (inference: NEM stall); A11 stays open. Control run done (fuzz with Verifier off, and with Verifier on Microsoft drivers only: both PASS, no freeze), so the VM is not shown to be the cause and the heartbeat-stall evidence is withdrawn. Repro attempt aborted: the host was starved (game running, 332 MB free, CPU 91 %) and the guest froze or stalled for minutes even with no driver, so VM results on a busy host prove nothing either way. Next action: run `-Blocks repro -FuzzSeconds 300 -ReproBoots 5` only on an idle host (no game, WSL stopped, >10 GB free) with `tools/vm/host-load.ps1` sampling, then the owner decides task 4 and whether exit 5 under a live route is acceptable.
+Round 2 ran on 2026-11-21 (see [results](../active/evidence/2026-11-22-virtual-cable-stage-a-0.2.5-round2-results.md)): A/B FAIL by the pre-registered rule (confounded), pool PASS, Verifier fuzz froze the guest (core saved), live run alone 2026-11-22: REVIEW (update and remove under a playing route both return helper exit 5, restart required, route survives, no bugcheck; item 3 not verified). Freeze core analysed (see [freeze-core-analysis](../active/evidence/2026-11-22-virtual-cable-stage-a-0.2.5-freeze-core-analysis.md)): nothing is stuck in the driver, the whole guest stopped (inference: NEM stall); A11 stays open. Control run done (fuzz with Verifier off, and with Verifier on Microsoft drivers only: both PASS, no freeze), so the VM is not shown to be the cause and the heartbeat-stall evidence is withdrawn. Repro attempt aborted: the host was starved (game running, 332 MB free, CPU 91 %) and the guest froze or stalled for minutes even with no driver, so VM results on a busy host prove nothing either way. Next action: run `-Blocks repro -FuzzSeconds 300 -ReproBoots 5` only on an idle host (no game, WSL stopped, >10 GB free) with `tools/vm/host-load.ps1` sampling, then the owner decides task 4 and whether exit 5 under a live route is acceptable.
 
 ## Host-side round-2 readiness and re-verification (2026-11-24, agent, host only)
 
 Objective: make the next VM night decidable and re-verify every review fix that
 the frozen 0.2.5 source claims, without touching the driver, the VM or the host's
 drivers. Requirement IDs: VCAB-24/25/27/28/30, SEC-08, VDEV-09, NFR-02. Evidence
-and the requirement map: [current status](evidence/2026-11-24-virtual-cable-current-status.md).
+and the requirement map: [current status](../active/evidence/2026-11-24-virtual-cable-current-status.md).
 
 Done:
 

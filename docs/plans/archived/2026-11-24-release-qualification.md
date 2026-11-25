@@ -1,5 +1,9 @@
 # Plan: app-only release qualification
 
+> **Archived 2026-11-24 — agent qualification done, RQ-05 partial; attended, hardware and Defender gates.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
 Prepared 2026-11-19. Status: executing (updated 2026-11-21). The candidate is
 frozen and RQ-01 to RQ-04 have passing evidence on a fresh disposable guest with
 a standard user, with one recorded deviation: a Defender exclusion for the
@@ -7,13 +11,13 @@ staging folder, because Defender quarantines the unsigned installer. RQ-05 is
 partial.
 
 **Execution state (2026-11-21):** see
-[the v0.0.31 record](evidence/2026-11-19-release-qualification-v0.0.31.md).
+[the v0.0.31 record](../active/evidence/2026-11-19-release-qualification-v0.0.31.md).
 v0.0.31 is already published (source `a4e92bb05`, installer `b94e5276…3a92`),
 supersedes every 0.0.30 candidate, and is the frozen candidate for RQ-01–06.
 Open: the downloaded-file unsigned-publisher prompt, offline installed operation,
 the v0.0.30 rollback fixture (host Defender detection), a second Windows build,
 and the Defender verdict (Microsoft submission pending; signing decision in
-[release signing](release-signing-and-publication.md)). **Superseded in part on
+[release signing](2026-11-24-release-signing-and-publication.md)). **Superseded in part on
 2026-11-24:** see [the 0.0.32 run and the requirement map](#2026-11-24---0032-bytes-remaining-gates-and-requirement-map).
 RQ-03's guest refusals passed on 2026-11-21; the older "synthetic only" sentence
 below is historical. **Superseded in part on
@@ -40,14 +44,14 @@ authorized by this document. No delegation is needed to execute it.
 
 ## Read first and evidence precedence
 
-- [Current priorities](current.md), [M08](../../milestones/M08-release.md),
+- [Current priorities](../active/current.md), [M08](../../milestones/M08-release.md),
   [DIST requirements and decisions](../../spec/15-delivery.md), and
   [quality requirements](../../spec/14-quality.md).
 - [Qualification runbook](../../operations/release-qualification.md),
   [verification profiles](../../operations/verification.md), and
-  [release signing boundary](release-signing-and-publication.md).
-- [Existing brief and final handoff](delegate-release-qualification.md) and
-  [2026-11-18/19 attempt evidence](evidence/2026-11-18-installer-process.md).
+  [release signing boundary](2026-11-24-release-signing-and-publication.md).
+- [Existing brief and final handoff](2026-11-24-delegate-release-qualification.md) and
+  [2026-11-18/19 attempt evidence](../active/evidence/2026-11-18-installer-process.md).
 - `tools/vm/installer-lifecycle*.ps1`, the lifecycle acceptance tests and
   `tools/release/prepare-artifacts.ps1` / `verify-artifacts.ps1` before execution.
 
@@ -315,7 +319,7 @@ against this harness revision.
 
 The owner allowed VM use for this session (four guest CPUs, minimal Defender
 exclusions, restore the baseline afterwards). Full record:
-[the 0.0.32 run](evidence/2026-11-24-release-qualification-0.0.32.md). No push,
+[the 0.0.32 run](../active/evidence/2026-11-24-release-qualification-0.0.32.md). No push,
 PR, tag, draft or publication was performed.
 
 ### Measured results
@@ -347,7 +351,7 @@ PR, tag, draft or publication was performed.
   "synthetic only" statement in *Established evidence* is historical: existing
   staging, existing app directory, administrator account and the host's
   signed-in check each refused with unchanged target state
-  ([v0.0.31 record, RQ-03](evidence/2026-11-19-release-qualification-v0.0.31.md#rq-03-real-guest-refusal-cases-passed-2026-11-21)).
+  ([v0.0.31 record, RQ-03](../active/evidence/2026-11-19-release-qualification-v0.0.31.md#rq-03-real-guest-refusal-cases-passed-2026-11-21)).
   The guest-side registry-hive assertion stays synthetic.
 - **RQ-05 offline operation (passed on 0.0.32, with the harness fix).** With the
   guest NAT link off: no DNS or TCP, all six installed executables at 0.0.32,
@@ -460,7 +464,7 @@ this plan is finished.
    DIST-08).
 4. **Defender verdict for v0.0.31 and the signing decision** (DIST-07, M08):
    Microsoft submission `eb70e424-...` pending; see
-   [release signing](release-signing-and-publication.md).
+   [release signing](2026-11-24-release-signing-and-publication.md).
 
 Optional environments, not gates now that the older guest covers the same cases:
 the fresh guest's standard-user credential (its console cannot be signed in

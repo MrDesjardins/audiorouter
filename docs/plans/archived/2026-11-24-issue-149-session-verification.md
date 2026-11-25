@@ -1,5 +1,9 @@
 # Issue 149 supplied-session verification
 
+> **Archived 2026-11-24 — portable coverage complete; the reporter-PC run.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
 ## Objective and scope
 
 Verify issue #149 against latest main (`8f42bf8de`), using the supplied

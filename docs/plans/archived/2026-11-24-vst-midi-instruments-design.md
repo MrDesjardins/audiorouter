@@ -1,11 +1,15 @@
 # MIDI input and instrument plugins: design (phase P8b)
 
+> **Archived 2026-11-24 — design implemented; hardware MIDI and listening checks.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
 Status: software steps 1-8 built and tested (2026-11-13/14) and merged to
 main in PR #164. The x86 instrument path was later exercised with the mda JX10
-control ([completion work plan](vst-completion-work.md)). Still open, owner
+control ([completion work plan](2026-11-24-vst-completion-work.md)). Still open, owner
 only: hardware MIDI keyboard (including unplug and replug), the audible
 Instrument guide video and the attended shell run (status note, 2026-11-24). Part of the
-[full VST compatibility plan](vst-full-compatibility.md); owner decision D1
+[full VST compatibility plan](2026-11-24-vst-full-compatibility.md); owner decision D1
 (2026-11-13): instruments and MIDI are in scope. The rules in AGENTS.md (every
 source works in every layout, REST and MCP kept current, guides for new tools)
 decide the order.
@@ -186,6 +190,6 @@ Open items are human only: a real hardware MIDI keyboard (including unplug and
 replug), the attended shell run with an instrument, and an audible Instrument
 guide recording. Local re-verification this date: formats, Clippy, workspace
 tests and both combination suites passed; see
-[audit evidence](evidence/2026-11-24-vst-plans-audit.md). Disposition:
+[audit evidence](../active/evidence/2026-11-24-vst-plans-audit.md). Disposition:
 **archive**; the three human checks move to the manager's
 `human-gated-tasks.md`.

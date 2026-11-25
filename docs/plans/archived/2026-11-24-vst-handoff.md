@@ -1,19 +1,23 @@
 # VST work: handoff for the next agent (2026-11-14)
 
+> **Archived 2026-11-24 — historical handoff; VST owner checks.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
 > **Superseded (status note, 2026-11-24).** This handoff is a historical
 > snapshot. The VST branch merged to main in PR #164 (`35ecd8e51`). P2, P3, P5
 > and P6 software work is implemented and tested on main. The current state
 > and the remaining owner-only checks are in the reconciled table of the
-> [completion work plan](vst-completion-work.md) and in
-> [VST owner checks](vst-owner-checks.md): editor focus and DPI by eye,
+> [completion work plan](2026-11-24-vst-completion-work.md) and in
+> [VST owner checks](2026-11-24-vst-owner-checks.md): editor focus and DPI by eye,
 > listening, sidechain ducking by ear, hardware MIDI, PolyMAX and signing.
 > The worktree paths, branch heads and "not all work is complete" statements
 > below no longer describe the repository.
 
-Read this page first, then [the plan](vst-full-compatibility.md) (decisions,
+Read this page first, then [the plan](2026-11-24-vst-full-compatibility.md) (decisions,
 phase definitions, evidence so far), the
-[completion work plan](vst-completion-work.md) (ordered remaining tasks) and
-[the instrument design](vst-midi-instruments-design.md). `AGENTS.md` rules
+[completion work plan](2026-11-24-vst-completion-work.md) (ordered remaining tasks) and
+[the instrument design](2026-11-24-vst-midi-instruments-design.md). `AGENTS.md` rules
 apply in full; the ones that bit this work are repeated under "Rules" below.
 
 ## Where the work is
@@ -23,10 +27,10 @@ programs/shell/preset import, P3 units/programs/multi-class qualification,
 P5 sidechain graph execution, P6 editor qualification and P9 release gates
 remain open. The metadata groundwork and real VST3/VST2 `DescribeBuses` worker paths
 are now implemented and tested; see the checkpoint in the
-[completion work plan](vst-completion-work.md). These do not finish P5.
+[completion work plan](2026-11-24-vst-completion-work.md). These do not finish P5.
 The checkout has uncommitted review and discovery work; the older clean-tree
 and head statements below are historical. The requested
-`C:/code/audiorouter/docs/plans/active/vst-full-compatibility.md` does not
+`C:/code/audiorouter/docs/plans/archived/2026-11-24-vst-full-compatibility.md` does not
 exist in the main checkout; the plan is in this VST worktree. Do not copy it
 into the unrelated resilience branch to make that path exist.
 
@@ -444,11 +448,11 @@ claimed here.
 ## Audit (2026-11-24)
 
 This page is historical and is superseded by the reconciled VS-01 table in
-[the completion work plan](vst-completion-work.md#reconciled-gap-list-vs-01-2026-11-18).
+[the completion work plan](2026-11-24-vst-completion-work.md#reconciled-gap-list-vs-01-2026-11-18).
 All P2/P3/P5/P6 software work listed as "open" above is implemented and tested;
 the portable hardening recorded here is in `main` via #187. The only remaining
 items are human, hardware, hosted-CI, signing or external-plugin gates. Local
 re-verification (formats, Clippy, workspace tests, both combination suites, the
 fixture VST2 shell/bus tests, docs validation, diff check) passed on this tree;
-see [audit evidence](evidence/2026-11-24-vst-plans-audit.md). Disposition:
+see [audit evidence](../active/evidence/2026-11-24-vst-plans-audit.md). Disposition:
 **archive**; do not use its worktree paths, branch heads or open lists.

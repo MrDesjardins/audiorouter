@@ -51,4 +51,4 @@ are the binaries the installer packaged (`src-tauri/target/release`):
   `DeviceAdministration`.
 - Not run: installing the NSIS package (the 2026-11-15 smoke covered 0.0.29),
   signing, the main CI workflow (it runs on the pull request), and the owner
-  checks in [vst-owner-checks.md](../vst-owner-checks.md).
+  checks in [vst-owner-checks.md](../../archived/2026-11-24-vst-owner-checks.md).

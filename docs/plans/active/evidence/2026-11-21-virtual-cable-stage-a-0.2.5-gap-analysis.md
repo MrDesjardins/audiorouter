@@ -4,7 +4,7 @@ Scope: read-only host analysis of the Stage A results already collected for driv
 0.2.5 on 2026-11-11/12, plus checks on the package bytes. No VM was started, no
 driver was loaded, nothing was built, no host setting changed. Requirement IDs:
 VCAB-20/24/25/27/28, VDEV-09, SEC-08, NFR-02. Plans:
-[virtual cable](../virtual-cable.md), [review fixes](../virtual-cable-review-fixes.md).
+[virtual cable](../../archived/2026-11-24-virtual-cable.md), [review fixes](../../archived/2026-11-24-virtual-cable-review-fixes.md).
 
 ## 1. What "restart Stage A on 0.2.5" meant, and what the record shows
 

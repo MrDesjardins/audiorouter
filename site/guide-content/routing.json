@@ -1159,7 +1159,7 @@
       "sources": [
         "ui/src/InstrumentNodeEditor.tsx",
         "ui/src/PluginPanels.tsx",
-        "docs/plans/active/vst-midi-instruments-design.md"
+        "docs/plans/archived/2026-11-24-vst-midi-instruments-design.md"
       ]
     },
     {

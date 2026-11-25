@@ -1,5 +1,9 @@
 # Active plan: OBS and Discord as a premium experience (2026-10-23)
 
+> **Archived 2026-11-24 — implementation merged; real OBS and Discord acceptance.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
 Owner request, 2026-10-23: "I like all these proposals. We just need to make
 sure it is smartly positioned inside the UI. Think of a nice UX/UI plan and
 let's do this goal of making OBS and Discord a premium experience."
@@ -702,7 +706,7 @@ has been requested or granted for this branch.
 
 The "Waiting" lists are now exercised where a fake server, fixtures or the
 browser can carry them. Evidence:
-[2026-11-24 close-out](evidence/2026-11-24-plans-ui-obs-closeout.md).
+[2026-11-24 close-out](../active/evidence/2026-11-24-plans-ui-obs-closeout.md).
 
 - **O1/O2 backend:** `cargo test -p audiorouter-control obs::tests` passed
   25/25 (fake v5 server: no-auth server, wrong/pasted password, saved

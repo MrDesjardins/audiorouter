@@ -1,17 +1,21 @@
 # AudioRouter execution plan after the game
 
-**Start signal:** the owner says the game is finished and asks the AI to execute this plan. The objective is to advance priorities 2–10 from the ranked roadmap and retain evidence for every completed check. Priority 1 has its own branch, local changes and acceptance plan. [Installer qualification](release-qualification.md)
+> **Archived 2026-11-24 — packages reconciled to their owning plans; remaining owner gates.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
+**Start signal:** the owner says the game is finished and asks the AI to execute this plan. The objective is to advance priorities 2–10 from the ranked roadmap and retain evidence for every completed check. Priority 1 has its own branch, local changes and acceptance plan. [Installer qualification](2026-11-24-release-qualification.md)
 
 ## Start and establish the baseline
 
-1. Read [AGENTS.md](../../../AGENTS.md), the [documentation map](../../README.md), the [active plan](current.md), and the milestones, specifications and decisions linked from each work package before touching that area. Inspect the worktree, branches and latest available main. The starting reference for this plan is `53e1de80e` (#187), including #181. Check later main commits and each plan’s newest execution record for completed work before assigning any task.
+1. Read [AGENTS.md](../../../AGENTS.md), the [documentation map](../../README.md), the [active plan](../active/current.md), and the milestones, specifications and decisions linked from each work package before touching that area. Inspect the worktree, branches and latest available main. The starting reference for this plan is `53e1de80e` (#187), including #181. Check later main commits and each plan’s newest execution record for completed work before assigning any task.
 2. Preserve the uncommitted `fix/packaged-shell-windows-snapshot` work and unrelated files. Use an isolated checkout based on the applicable main SHA for new code or builds. Preserve the owner’s ordinary database, WebView profile and saved routes. Use disposable profiles, explicit test endpoints, and an isolated pipe where the harness supports it.
 3. Inventory the test resources in one pass. Record Windows and toolchain versions, candidate and worker hashes, which audio endpoints and the default shell pipe are free, available licensed plugins and MIDI hardware, a disposable OBS profile, access to hosted artifacts, and the correct driver VM and snapshots. Treat game completion as the start signal. Verify the selected resources are idle before opening streams or launching the shell. Ask only for resources or decisions genuinely required, grouped where practical.
 4. Start package 2 as soon as the selected cable endpoints are available. Stage packages 3 and 4 for the same attended window. Collect the fixture and hosted evidence in 3, 6, 7 and 8 while waiting for hardware or human input. Run the driver block separately on its disposable VM. If one acceptance case is blocked, record its prerequisite and move to the next runnable case.
 
 ## 2. Live audio continuity and latency
 
-**Requirements:** ARCH-08, CAP-04, NFR-03. Read the current code-review and audio-health records. The 55.8-hour health summary and synthetic service timings are baseline evidence. The new work is live multi-input continuity, listening, and the pending live service and plugin cases. [Continuity plan](code-review-fixes.md) · [Audio-health record](evidence/2026-11-23-audio-health-after-latency-repair.md) · [M02](../../milestones/M02-audio-engine.md)
+**Requirements:** ARCH-08, CAP-04, NFR-03. Read the current code-review and audio-health records. The 55.8-hour health summary and synthetic service timings are baseline evidence. The new work is live multi-input continuity, listening, and the pending live service and plugin cases. [Continuity plan](../active/code-review-fixes.md) · [Audio-health record](../active/evidence/2026-11-23-audio-health-after-latency-repair.md) · [M02](../../milestones/M02-audio-engine.md)
 
 1. Build the release harness with `cargo test -p audiorouter-transport --test live_audio_continuity --release --locked --no-run`. Confirm all four endpoint IDs, formats, and that no voice call, stream or route holds the selected endpoints. The recorded eight-channel CABLE-B result endpoint is unsuitable for the stereo worker when configured that way. Use a free compatible alternate endpoint if available and record the actual IDs behind any fixed labels.
 2. In a dedicated test process, set `AUDIOROUTER_LIVE_CONTINUITY=1` and `AUDIOROUTER_CONTINUITY_SECONDS=20`. Set the exact test endpoint IDs in `AUDIOROUTER_CONTINUITY_TONE_RENDER_ID`, `AUDIOROUTER_CONTINUITY_ROUTE_CAPTURE_ID`, `AUDIOROUTER_CONTINUITY_ROUTE_RENDER_ID` and `AUDIOROUTER_CONTINUITY_RESULT_CAPTURE_ID`. Clear inherited optional mode and plugin overrides. Run `cargo test -p audiorouter-transport --test live_audio_continuity --release --locked -- live::live_backend_service_keeps_a_routed_tone_continuous --ignored --exact --nocapture`. Verify the run reports the intended worker. First set `AUDIOROUTER_CONTINUITY_CHAIN=gain`, then use the optimized chain `gain,parametricEq,graphicEq,bassTreble,dehum,compressor,gate,limiter,delay,meter`. Repeat if results are intermittent.
@@ -22,7 +26,7 @@
 
 ## 3. VST2 and VST3 compatibility
 
-**Requirements:** PLUG-01–07 and GRAPH-14. Reconcile the P2/P3/P5/P6/P9 lists against main, the VST handoff and current execution records. Pay particular attention to state and shell fixtures already covered by #187 and to local branches whose evidence may sit outside main. [VST handoff](vst-handoff.md) · [Completion plan](vst-completion-work.md) · [Owner checks](vst-owner-checks.md) · [M06](../../milestones/M06-plugins-pitch.md)
+**Requirements:** PLUG-01–07 and GRAPH-14. Reconcile the P2/P3/P5/P6/P9 lists against main, the VST handoff and current execution records. Pay particular attention to state and shell fixtures already covered by #187 and to local branches whose evidence may sit outside main. [VST handoff](2026-11-24-vst-handoff.md) · [Completion plan](2026-11-24-vst-completion-work.md) · [Owner checks](2026-11-24-vst-owner-checks.md) · [M06](../../milestones/M06-plugins-pitch.md)
 
 1. Run `powershell -NoProfile -ExecutionPolicy Bypass -File tools/vst-qualification/run.ps1 -Clean` in the isolated checkout with the pinned SDK, C++ build tools and i686 target. Retain `report.json`, census and per-case logs. Check the existing hosted nightly for the matching source SHA and i686 results. Use the documented workflow if a fresh authorized run is needed and possible.
 2. Use the matrix to select remaining P2/P3 gaps. Exercise program/preset save-reload, exact shell sub-ID state, and VST3 class/unit identity through the real worker and control-plane dispatch. Add a failing regression for each defect before fixing the owning layer. Record vendor-specific dispositions and worker/plugin versions.
@@ -33,7 +37,7 @@
 
 ## 4. Attended Windows UI qualification
 
-**Requirements:** UI-10/11/17/29 and the applicable M05 and M08 accessibility and usability cases. Start from the latest UI review round and its outstanding findings. [UI quality review](ui-quality-review.md) · [M05](../../milestones/M05-visual-editor.md) · [M08](../../milestones/M08-release.md)
+**Requirements:** UI-10/11/17/29 and the applicable M05 and M08 accessibility and usability cases. Start from the latest UI review round and its outstanding findings. [UI quality review](2026-11-24-ui-quality-review.md) · [M05](../../milestones/M05-visual-editor.md) · [M08](../../milestones/M08-release.md)
 
 1. Build the packaged shell from the selected source and verify the embedded UI is current. Launch with a disposable database and `WEBVIEW2_USER_DATA_FOLDER` once the default pipe is free. Verify startup, native bridge, and save/restart with that profile before the attended checks.
 2. Run a keyboard-only path through first launch, canvas, Properties, Settings and dialogs with Narrator. Capture announced names, focus movement, action results and refusal feedback. Check real Windows 150% and 200% scaling, physical-key capture cancellation, and dark, light and high-contrast layouts. Record the previous display/accessibility settings and restore them after testing.
@@ -44,7 +48,7 @@
 
 ## 5. AudioRouter virtual cable Stage A
 
-**Requirements:** DEC-18 and VCAB-24/25/27/28/30. Keep this independent of app-only qualification. The Stage A `round2` wrapper already exists and has host validation. Confirm its status against later evidence before changing it. [Stage A gap analysis](evidence/2026-11-21-virtual-cable-stage-a-0.2.5-gap-analysis.md) · [Driver handoff](virtual-cable-agent-handoff.md) · [VM guide](../../operations/virtual-cable-vm-guide.md)
+**Requirements:** DEC-18 and VCAB-24/25/27/28/30. Keep this independent of app-only qualification. The Stage A `round2` wrapper already exists and has host validation. Confirm its status against later evidence before changing it. [Stage A gap analysis](../active/evidence/2026-11-21-virtual-cable-stage-a-0.2.5-gap-analysis.md) · [Driver handoff](2026-11-24-virtual-cable-agent-handoff.md) · [VM guide](../../operations/virtual-cable-vm-guide.md)
 
 1. Confirm the disposable driver guest and its recoverable baseline, package and loaded SYS hashes, matching symbols, guest responsiveness and output path. Identify the owner’s VM window. Use the test-signed package inside that guest only.
 2. Follow the documented `round2` block order. Assess the paired RC3/0.2.5 render results using the predeclared per-shape criteria and valid-run minimum. Continue tagged-pool, VM verifier and recovery, then live update/unload last, with route-alive proof. Run the optional pause check only in the disposable VM under its documented conditions. Record it as a VM pause, with Windows sleep/resume tracked separately.
@@ -55,7 +59,7 @@
 
 ## 6. Application quality and maintenance
 
-**Requirements:** ENG-02–05, applicable NFRs and Q5–Q6. Q3.2 is recorded complete and #187 delivered Q4 contract, fault and fuzz coverage. Read later branch and hosted evidence before repeating those slices. [Application quality](application-quality.md) · [Code-scanning remediation](code-scanning-remediation.md)
+**Requirements:** ENG-02–05, applicable NFRs and Q5–Q6. Q3.2 is recorded complete and #187 delivered Q4 contract, fault and fuzz coverage. Read later branch and hosted evidence before repeating those slices. [Application quality](../active/application-quality.md) · [Code-scanning remediation](2026-11-24-code-scanning-remediation.md)
 
 1. Inspect hosted checks, annotations and current CodeQL dispositions for the actual SHA. Separate fixed, open, and unavailable items. Reconcile the low-severity audit, RES-6/10/11, and existing local follow-ups with main. Base any new defect work on a reproducing scenario and existing scope. Leave RES-10 restart policy at the owner decision.
 2. Extend existing Q5.1 trend output with first-pass failures, retry status, duration, source SHA and artifact links. Include regression age and escaped defects where data exist. Keep missing measurements explicit. Validate against retained passing, retry-passing and failing runs so a green retry cannot erase the first failure.
@@ -65,7 +69,7 @@
 
 ## 7. MCP setup and OBS/Discord acceptance
 
-**Requirements:** AUTO-06/18, UI-17 and the approved D1/O1/D2/O2 checks. The R2 permission and start repairs merged in #171/#174. Verify the existing workflows with a clean client and a packaged app. [MCP setup UX](mcp-setup-ux.md) · [API and MCP decisions](api-mcp-quality.md) · [OBS/Discord plan](obs-discord.md) · [M07](../../milestones/M07-automation-recovery.md)
+**Requirements:** AUTO-06/18, UI-17 and the approved D1/O1/D2/O2 checks. The R2 permission and start repairs merged in #171/#174. Verify the existing workflows with a clean client and a packaged app. [MCP setup UX](2026-11-24-mcp-setup-ux.md) · [API and MCP decisions](2026-11-24-api-mcp-quality.md) · [OBS/Discord plan](2026-11-24-obs-discord.md) · [M07](../../milestones/M07-automation-recovery.md)
 
 1. In an isolated packaged profile, follow the setup from the normal desktop entry point. Exercise enrollment, role display, a default-tool request over the real adapter, and revocation while connected. Confirm that each role’s expected allows and refusals match the backend policy and that a revoked client loses access. Use an owner-authorized test client for account-dependent connector checks.
 2. Back up a copied OBS profile and establish expected sources with distinct test signals. Verify app/device attribution, source separation and duplicate/wrong-device diagnostics. Exercise the preview, explicit confirmation and restore path for Fix in OBS on the copy. Compare the restored configuration to its baseline.
@@ -75,7 +79,7 @@
 
 ## 8. Localization qualification
 
-**Requirements:** L10N-01–08. Check current main, the later extraction branches, and open decisions before adding keys. English, French and Simplified Chinese catalog evidence already exists from development work. Track packaged evidence and fluent review separately. [Localization plan](ui-localization.md)
+**Requirements:** L10N-01–08. Check current main, the later extraction branches, and open decisions before adding keys. English, French and Simplified Chinese catalog evidence already exists from development work. Track packaged evidence and fluent review separately. [Localization plan](2026-11-24-ui-localization.md)
 
 1. Inventory remaining user-facing canvas, Properties, tool and backend status strings against the catalog and latest extraction. Reuse generated keys, language fallback and existing structured error codes, preserving severity, actions and interpolation. Fix confirmed gaps in small slices, with the English source and reviewed translations tracked together.
 2. Generate and validate catalogs with `npm --prefix ui run i18n:generate` and `npm --prefix ui run i18n:check`. Run focused UI tests, typecheck, format, lint and the language browser scenarios. Exercise live switching, missing-key fallback, a real backend refusal, persistence across restart and native tray language. Test every supported theme at 200% and verify Narrator using the packaged app.
@@ -105,7 +109,7 @@ For each package, update its linked execution record and the active plan after a
 
 For changes, use the repository's targeted verification and format/lint rules. Verify the real entry point, review the complete diff and read applicable hosted annotations. API or tool changes also require REST/MCP parity, contract drift checks and regenerated references. Preserve independent work when a case is blocked, and report any remaining owner action once useful work has been exhausted. Get explicit human approval before opening a PR for the reviewed branch and changes.
 
-**Resume command:** “The game is finished. Execute `docs/plans/active/post-game-execution.md`. Start with the cable preflight, then work through all runnable checks and bring me the remaining owner decisions together.”
+**Resume command:** “The game is finished. Execute `docs/plans/archived/2026-11-24-post-game-execution.md`. Start with the cable preflight, then work through all runnable checks and bring me the remaining owner decisions together.”
 
 ## Execution record (2026-11-24)
 
@@ -154,7 +158,7 @@ was free.
   window. `tools/vst-qualification/run.ps1` now skips **both** editor-lifecycle
   entries when `GITHUB_ACTIONS` is set, using the existing `SkipReason` path, and
   `docs/operations/vst-qualification.md` and
-  [VST completion](vst-completion-work.md) are updated. Editors remain attended
+  [VST completion](2026-11-24-vst-completion-work.md) are updated. Editors remain attended
   checks. The script parses cleanly; a hosted run is needed to confirm the skip
   (not triggered: the branch is unpushed).
 - Not run locally: the SDK/fixture/DPF build, attended editor/DPI/MIDI checks,
@@ -163,7 +167,7 @@ was free.
 
 ### Package 4 — packaged UI (Narrator, scaling, first-time rehearsal)
 
-Detail is in [UI quality review, Round 30](ui-quality-review.md).
+Detail is in [UI quality review, Round 30](2026-11-24-ui-quality-review.md).
 
 - Built the packaged shell from `53e1de80e` (shell SHA-256 `2C75BB45…`), verified
   it is newer than `ui/dist`, and passed the packaged smoke on an isolated
@@ -243,13 +247,13 @@ and this page does not duplicate it.
 
 | Package | Owning plan(s) | What the owning plan must carry |
 | --- | --- | --- |
-| 2. Live audio continuity and latency | [code-review-fixes.md](code-review-fixes.md) (automated continuity, service timing, commercial plugin) and [current.md](current.md) priority 6 (owner listening and cushion) | The **failed** 2026-11-24 CABLE-A repeat (3 of 6 routed results lost one ~11 ms block while the reference was clean; not provably isolated; diagnosis in the residual evidence), a clean isolated re-run once a quiet window exists, the portable concurrent Play/export/import timing (now recorded), the large-library live load, and the licensed commercial-plugin run. CABLE-B 8-channel is an owner decision. Owner listening and the 10 ms cushion are already recorded. |
-| 3. VST2/VST3 compatibility | [vst-completion-work.md](vst-completion-work.md), [vst-owner-checks.md](vst-owner-checks.md), [vst-handoff.md](vst-handoff.md), [vst-full-compatibility.md](vst-full-compatibility.md) | P2/P3/P5/P6/P9 dispositions; the headless editor skip needs a fresh hosted run; SDK/fixture/DPF builds, attended editor/DPI/MIDI checks and an i686 run; PLUG-01–07 evidence. |
-| 4. Attended Windows UI qualification | [ui-quality-review.md](ui-quality-review.md) and `current.md` priority 4 | The first-time-user study with participant records; live-route device-loss on the packaged exe; physical-key dropdown cancellation; narrow 200 % layout. Narrator, 150 %/200 % scaling and guide recapture are recorded. |
-| 5. Virtual cable Stage A | [virtual-cable.md](virtual-cable.md), [virtual-cable-agent-handoff.md](virtual-cable-agent-handoff.md), the 2026-11-21 gap analysis | The disposable-VM Stage A blocks (frame-clock revert, render underruns, live update/unload, tagged pool, A15), then Stage C, then the owner signing decision. Do not install the test-signed driver on this PC. |
-| 6. Application quality and maintenance | [application-quality.md](application-quality.md), [code-scanning-remediation.md](code-scanning-remediation.md), the resilience record | Q5.1 first-pass/retry trend and Q5.2 coverage baselines (the next code task); RES-10 plugin-worker restart stays an owner decision; the CodeQL refresh is current at `53e1de80e`. |
-| 7. MCP setup and OBS/Discord acceptance | [mcp-setup-ux.md](mcp-setup-ux.md), [obs-discord.md](obs-discord.md) | Packaged-profile enrollment, role display, a default-tool call over the real adapter and live revocation; the copied OBS profile check and Fix in OBS preview/restore; the attended Discord/OBS source-scope run. |
-| 8. Localization qualification | [ui-localization.md](ui-localization.md) | Fluent French and Simplified-Chinese review of the new goal strings and absorbed keys; packaged three-theme/200 %/Narrator evidence; any residual per-surface extraction. `i18n:check` is current. |
+| 2. Live audio continuity and latency | [code-review-fixes.md](../active/code-review-fixes.md) (automated continuity, service timing, commercial plugin) and [current.md](../active/current.md) priority 6 (owner listening and cushion) | The **failed** 2026-11-24 CABLE-A repeat (3 of 6 routed results lost one ~11 ms block while the reference was clean; not provably isolated; diagnosis in the residual evidence), a clean isolated re-run once a quiet window exists, the portable concurrent Play/export/import timing (now recorded), the large-library live load, and the licensed commercial-plugin run. CABLE-B 8-channel is an owner decision. Owner listening and the 10 ms cushion are already recorded. |
+| 3. VST2/VST3 compatibility | [vst-completion-work.md](2026-11-24-vst-completion-work.md), [vst-owner-checks.md](2026-11-24-vst-owner-checks.md), [vst-handoff.md](2026-11-24-vst-handoff.md), [vst-full-compatibility.md](2026-11-24-vst-full-compatibility.md) | P2/P3/P5/P6/P9 dispositions; the headless editor skip needs a fresh hosted run; SDK/fixture/DPF builds, attended editor/DPI/MIDI checks and an i686 run; PLUG-01–07 evidence. |
+| 4. Attended Windows UI qualification | [ui-quality-review.md](2026-11-24-ui-quality-review.md) and `current.md` priority 4 | The first-time-user study with participant records; live-route device-loss on the packaged exe; physical-key dropdown cancellation; narrow 200 % layout. Narrator, 150 %/200 % scaling and guide recapture are recorded. |
+| 5. Virtual cable Stage A | [virtual-cable.md](2026-11-24-virtual-cable.md), [virtual-cable-agent-handoff.md](2026-11-24-virtual-cable-agent-handoff.md), the 2026-11-21 gap analysis | The disposable-VM Stage A blocks (frame-clock revert, render underruns, live update/unload, tagged pool, A15), then Stage C, then the owner signing decision. Do not install the test-signed driver on this PC. |
+| 6. Application quality and maintenance | [application-quality.md](../active/application-quality.md), [code-scanning-remediation.md](2026-11-24-code-scanning-remediation.md), the resilience record | Q5.1 first-pass/retry trend and Q5.2 coverage baselines (the next code task); RES-10 plugin-worker restart stays an owner decision; the CodeQL refresh is current at `53e1de80e`. |
+| 7. MCP setup and OBS/Discord acceptance | [mcp-setup-ux.md](2026-11-24-mcp-setup-ux.md), [obs-discord.md](2026-11-24-obs-discord.md) | Packaged-profile enrollment, role display, a default-tool call over the real adapter and live revocation; the copied OBS profile check and Fix in OBS preview/restore; the attended Discord/OBS source-scope run. |
+| 8. Localization qualification | [ui-localization.md](2026-11-24-ui-localization.md) | Fluent French and Simplified-Chinese review of the new goal strings and absorbed keys; packaged three-theme/200 %/Narrator evidence; any residual per-surface extraction. `i18n:check` is current. |
 | 9. Signed in-app updater | [auto-update-tauri.md](../future/auto-update-tauri.md) | Future scope only: owner promotion, signing provider and key custody, feed host, channels, consent/restart, and signed upgrade/rollback evidence. |
 | 10. Broader UAD compatibility | [uad-plugin-support.md](../future/uad-plugin-support.md) | Future scope only: a bounded U1 inventory proposal and the owner's choice of UADx vs UAD-2/Apollo path, then licensed-title qualification. |
 

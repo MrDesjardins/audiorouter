@@ -466,7 +466,7 @@ not available. The plan traces PLUG-01–07, GRAPH-01–15, DSP-19, UI/API/MCP,
 state, security, quality and M05/M06/M07/M08 gates, including explicit VST3
 auxiliary-bus vs. VST2 single-stream boundaries and concrete editor, stopped
 setup, serial-vs-sum, and sidechain acceptance. See the
-[issue #136 execution plan](../active/issue-136-vst-experience.md) for decisions,
+[issue #136 execution plan](2026-11-24-issue-136-vst-experience.md) for decisions,
 test matrix, prerequisites, failure containment, rollback and current evidence.
 The follow-on verification has now built and validated the pinned AGain/mda
 fixtures, passed the real AGain sidechain-port dispatcher test, built the
@@ -482,8 +482,8 @@ occupied-key replace/keep flow, bounded VST3 unit/program display, safe
 context-menu stub and unsigned app-only installer install/uninstall smoke. A
 real five-unit Steinberg UTF16Name sample now passes the worker metadata test;
 `plugins.programs` also passes through `ControlPlane::dispatch` with the real
-worker registered on a fake running session. See [the plan](../active/vst-full-compatibility.md),
-[handoff](../active/vst-handoff.md) and the [completion work plan](../active/vst-completion-work.md)
+worker registered on a fake running session. See [the plan](2026-11-24-vst-full-compatibility.md),
+[handoff](2026-11-24-vst-handoff.md) and the [completion work plan](2026-11-24-vst-completion-work.md)
 for test results and remaining gates: real editor/DPI/pumped parent, owner
 endpoints, hosted i686 CI/annotations and signing.
 
@@ -2788,7 +2788,7 @@ Objective: investigate remaining CodeQL alerts while preserving SEC-10/13/15
 and API identity contracts. PR #74 merged the two verified tooling fixes.
 Current main 26de4a4f has 35 open alerts; the current Rust and JavaScript
 SARIF source/sink review is recorded in [the evidence](../active/evidence/2026-10-26-code-scanning-remediation.md#current-main-sarif-data-flow-review-2026-10-27).
-Requirements, validation and rollback: [remediation plan](../active/code-scanning-remediation.md).
+Requirements, validation and rollback: [remediation plan](2026-11-24-code-scanning-remediation.md).
 The follow-up found raw user-chosen session IDs in shell.jsonl; the branch
 replaces them with process-scoped keyed references and removes legacy IDs
 from exported bundles. Focused and full shell tests and both Clippy runs pass;
@@ -2837,7 +2837,7 @@ Same app-only unsigned prerelease profile as 0.0.22; no storage migration
   `cargo fmt --check` clean for both workspaces. Rust tests and both Clippy
   runs for the backend change were run on `fix/audio-file-media`; CI runs
   them on the combination. This qualifies the D1/D2 full-suite gate that
-  [the OBS and Discord plan](../active/obs-discord.md) left open.
+  [the OBS and Discord plan](2026-11-24-obs-discord.md) left open.
 - The five source branches are merged here; the owner deletes their remote
   copies.
 - Tasks: (1) owner approves and merges the PR; (2) annotated tag `v0.0.23`
@@ -3282,7 +3282,7 @@ Two flakes fixed on the release branch (owner reports, 2026-10-24):
 
 The owner authorized stages D1, O1, D2 and O2 of [OBS and Discord setup
 help](../future/obs-discord-integration.md) (DEC-22) and asked for a UX plan
-first. Tracked in its own plan: [OBS and Discord](../active/obs-discord.md). X1
+first. Tracked in its own plan: [OBS and Discord](2026-11-24-obs-discord.md). X1
 (Discord RPC) needs Discord's approval and is not authorized.
 
 Review repairs authorized and implemented 2026-10-23: collection/UUID-bound
@@ -3290,7 +3290,7 @@ OBS writes, effective voice-path checks, correct OBS default-device roles,
 and activity/track-aware duplication checks (SEC-15, UI-26, GRAPH-05/17).
 36 focused UI tests, scoped lint/format, Rust formatting and docs checks pass.
 Rust compile/tests, contracts drift and Edge remain on the owner's hold;
-see the [repair evidence and exact next checks](../active/obs-discord.md).
+see the [repair evidence and exact next checks](2026-11-24-obs-discord.md).
 
 Before-manual-test follow-up: fresh OBS inspections, stable/validated repair
 choices, visible Restore errors and stale-state handling; fixed conditional
@@ -6130,7 +6130,7 @@ r11 data before designing recovery (spec 17); do not rerun the unchanged
 one-hour test.
 
 Driver work is organized in the
-[execution queue](../active/virtual-cable.md#execution-queue-after-r12-2026-10-10):
+[execution queue](2026-11-24-virtual-cable.md#execution-queue-after-r12-2026-10-10):
 agent analyzes r12 timing/counters and localizes r11 standing delay on the
 host, then prepares a verified short VM diagnostic or recovery check. The
 saved r11 replay reproduces the 34.379→64.446 ms shift at impulse 148. Both
@@ -6185,7 +6185,7 @@ not a safe recovery. Host static build, 2,208 offline probe checks, 253
 repeated-start checks and 189 continuity checks pass. Next: verify a new r14
 bundle with identical SYS, then the short reader comparison; no hour run.
 
-Driver-agent resumption: read the [Claude / next-agent handoff](../active/virtual-cable-agent-handoff.md)
+Driver-agent resumption: read the [Claude / next-agent handoff](2026-11-24-virtual-cable-agent-handoff.md)
 first. It records the prepared candidate, exact next guest step, completed
 checks, open defects and host/VM safety boundaries as of 2026-10-10.
 
@@ -6209,7 +6209,7 @@ ARCH-04, SEC-01/10 and DIST-01–08 stay traceable through the release evidence.
 - Completed work of 2026-10-03 (0.0.6/0.0.7) is recorded in the
   [execution record](../archived/2026-10-03-releases-0.0.6-0.0.7.md). Earlier
   history is indexed in [archived plans](../archived/README.md).
-- Other active plan: [app/installer signing](../active/release-signing-and-publication.md),
+- Other active plan: [app/installer signing](2026-11-24-release-signing-and-publication.md),
   blocked on the user's provider choice and enrollment.
 
 ## Decision (2026-10-05, user): GPL-3.0-only with commercial licensing (DEC-19)
@@ -6238,7 +6238,7 @@ advises against it for software. Chosen: `GPL-3.0-only` for versions after
 
 **Current goal (2026-10-12): complete the driver.** The definition of done,
 the Stage A gap table, the critical path and the next action are in the
-[driver completion goal](../active/virtual-cable.md#goal-complete-the-driver-set-2026-10-12-user-request).
+[driver completion goal](2026-11-24-virtual-cable.md#goal-complete-the-driver-set-2026-10-12-user-request).
 The history below is earlier execution state.
 
 Current driver task (2026-10-09): qualify sustained tone continuity after the
@@ -6361,7 +6361,7 @@ Commands are in
 See the
 [packet-clock review](../active/evidence/2026-10-09-m03-packet-clock-review.md) and active
 virtual cable plan. The [earlier review record](../active/evidence/2026-10-09-m03-render-publication-review.md)
-and [virtual cable execution plan](../active/virtual-cable.md) record the guest's passing
+and [virtual cable execution plan](2026-11-24-virtual-cable.md) record the guest's passing
 smoke cycles, four-endpoint format inventory, and 30-second tone run. The
 first 10-minute attempt failed with earlier audio counter errors and a
 14m55s VirtualBox guest-execution stall. VirtualBox reports NEM “Snail” mode
@@ -6399,7 +6399,7 @@ costs and phases in the [driver track](../future/M03-driver-signing.md).
   created by the user; test signing only inside it. Nothing is installed or
   changed on the daily workstation.
 - **Execution plan with work packages WP-00…WP-15:**
-  [virtual cable plan](../active/virtual-cable.md). Design: [17 Virtual
+  [virtual cable plan](2026-11-24-virtual-cable.md). Design: [17 Virtual
   cable](../../spec/17-virtual-cable.md). Signing runbook:
   [virtual cable signing](../../operations/virtual-cable-signing.md).
   WP-01 host baseline passed; WP-02 package tooling complete (2026-10-05),
@@ -6410,7 +6410,7 @@ costs and phases in the [driver track](../future/M03-driver-signing.md).
 - WP-03 smoke tooling is prepared and WP-04 host bridge hardening is reviewed;
   their VM gates (install/remove, Verifier/fuzz, second-user denial) remain
   pending. WP-05 host endpoint, precision and format work is in progress; see
-  its execution record and evidence in the [virtual cable plan](../active/virtual-cable.md).
+  its execution record and evidence in the [virtual cable plan](2026-11-24-virtual-cable.md).
   Current WP-05 cable descriptors compile for x64/ARM64 and pass portable
   INF/conversion checks, but remain non-loadable until timing/cleanup work,
   WP-06 bridge/Rust compatibility and the VM gates are complete. Host builds
@@ -6419,7 +6419,7 @@ costs and phases in the [driver track](../future/M03-driver-signing.md).
   the first public driver release.
 - Cables: up to 8 (A–H), user enables 1–8, default 2; develop and test with
   2, qualify all 8 before signing (user, 2026-10-05).
-- Open choices: see WP-00 D2–D6 in the [virtual cable plan](../active/virtual-cable.md).
+- Open choices: see WP-00 D2–D6 in the [virtual cable plan](2026-11-24-virtual-cable.md).
 - Rollback: the driver is a separate optional package; releases without it
   keep today's VB-Cable workflow. Revert DEC-18 doc changes to return to
   DEC-16.

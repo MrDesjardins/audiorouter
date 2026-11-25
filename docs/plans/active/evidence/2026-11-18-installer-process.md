@@ -3,7 +3,7 @@
 Source checkout started at `33cdf58d4f577258e9d372c58ac5d7d3230f30f4`.
 The runner changes were local. Host Windows build 26300.9974, VirtualBox 7.2.20.
 The disposable release VM and snapshot UUIDs, artifact SHA-256 values, and
-remaining acceptance cases are recorded in the [execution plan](../delegate-release-qualification.md).
+remaining acceptance cases are recorded in the [execution plan](../../archived/2026-11-24-delegate-release-qualification.md).
 
 The injected test verified spaces and a trailing backslash in an argument,
 expected and fatal exit 23, a missing executable, a timeout with exit confirmed

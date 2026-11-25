@@ -20,7 +20,7 @@ use **Clear tool search** to restore the library. The floating unfed-route
 warning has **Dismiss route warning**; dismissing it changes no audio or layout,
 and a different affected-node set can show a new warning. Loading and reconnect
 screens retain the saved-session boundary rather than offering a demo graph.
-See the [UI review criteria and evidence](../plans/active/ui-quality-review.md)
+See the [UI review criteria and evidence](../plans/archived/2026-11-24-ui-quality-review.md)
 for current coverage and remaining work; the 9/10 goal is still in progress.
 
 These changes are on the UX development branch. Their packaged, visual and

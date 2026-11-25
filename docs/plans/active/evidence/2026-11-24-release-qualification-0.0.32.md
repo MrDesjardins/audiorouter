@@ -10,7 +10,7 @@ baseline afterwards.
 | Item | Value |
 | --- | --- |
 | Candidate | `AudioRouter_0.0.32_x64-setup.exe`, 24,472,180 bytes, SHA-256 `50bcdfc1f16e7ce4c8a04a6a73387c709b0d148d9aa00481cc3c58a86db7ceed` |
-| Candidate source | `0af71ca715333ae6c08c6e58c809f8b1f7bf514e` (consolidated 0.0.32, [release plan](../release-0.0.32.md)); no tag exists |
+| Candidate source | `0af71ca715333ae6c08c6e58c809f8b1f7bf514e` (consolidated 0.0.32, [release plan](../../archived/2026-11-24-release-0.0.32.md)); no tag exists |
 | Candidate path | `C:\code\audiorouter\target\releases\0.0.32-consolidated-preserved-0af71ca71\artifacts\` |
 | Previous | 0.0.29, SHA-256 `f2c43d115f04fdef00f55ef96862eba41d581464db24785cde5f69755ba209d8`, 23,083,014 bytes |
 | VM | `AR-ReleaseQualification-20261116`, UUID `87c31665-2022-49a2-a182-1a1ebb5e631c`, 4 CPUs, 8 GiB, audio `none`, guest Windows 11 |
