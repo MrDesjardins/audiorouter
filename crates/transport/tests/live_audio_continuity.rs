@@ -522,6 +522,59 @@ mod live {
         })
     }
 
+    /// Host-wide CPU busy percent between samples, so a print can say what
+    /// else the machine was doing at that second.
+    struct HostCpu {
+        last_idle: u64,
+        last_total: u64,
+    }
+
+    impl HostCpu {
+        fn new() -> Self {
+            let (idle, total) = Self::sample();
+            Self {
+                last_idle: idle,
+                last_total: total,
+            }
+        }
+
+        fn sample() -> (u64, u64) {
+            use windows::Win32::Foundation::FILETIME;
+            use windows::Win32::System::Threading::GetSystemTimes;
+            // SAFETY: FILETIME is plain old data; an all-zero value is a valid
+            // starting value for the call to overwrite.
+            let mut idle: FILETIME = unsafe { std::mem::zeroed() };
+            // SAFETY: same as `idle`.
+            let mut kernel: FILETIME = unsafe { std::mem::zeroed() };
+            // SAFETY: same as `idle`.
+            let mut user: FILETIME = unsafe { std::mem::zeroed() };
+            // SAFETY: all three pointers point at valid, writable FILETIMEs
+            // owned by this stack frame for the duration of the call.
+            unsafe {
+                GetSystemTimes(Some(&mut idle), Some(&mut kernel), Some(&mut user))
+                    .ok()
+                    .unwrap();
+            }
+            let ticks = |value: FILETIME| {
+                (u64::from(value.dwHighDateTime) << 32) | u64::from(value.dwLowDateTime)
+            };
+            (ticks(idle), ticks(kernel) + ticks(user))
+        }
+
+        fn busy_percent(&mut self) -> f64 {
+            let (idle, total) = Self::sample();
+            let idle_delta = idle.saturating_sub(self.last_idle);
+            let total_delta = total.saturating_sub(self.last_total);
+            self.last_idle = idle;
+            self.last_total = total;
+            if total_delta == 0 {
+                0.0
+            } else {
+                100.0 * total_delta.saturating_sub(idle_delta) as f64 / total_delta as f64
+            }
+        }
+    }
+
     struct Recording {
         left: Vec<f32>,
         discontinuity_flags: usize,
@@ -994,7 +1047,12 @@ mod live {
         // UI-like control load: 20 Hz diagnostics and a 10 Hz counter pump.
         let until = Instant::now() + Duration::from_secs(seconds);
         let mut last_service = Value::Null;
+        let mut last_thread = Value::Null;
         let mut last_underruns = Value::Null;
+        let mut last_quanta = Value::Null;
+        let mut underruns_seen = 0_u64;
+        let mut quanta_seen = 0_u64;
+        let mut host_cpu = HostCpu::new();
         let mut tick = 0_u64;
         // Optional CPU stress phase and a Stop/Play after it, both timed
         // from the start of measurement.
@@ -1069,7 +1127,7 @@ mod live {
                     eprintln!("t={elapsed:.1}s Stop/Play done (generation {generation})");
                 }
             }
-            rpc(&pipe, "system.diagnostics", Value::Null);
+            let diagnostics = rpc(&pipe, "system.diagnostics", Value::Null);
             if tick % 2 == 0 {
                 let pump = rpc(
                     &pipe,
@@ -1081,7 +1139,33 @@ mod live {
                     json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }),
                 );
                 last_service = pump["audioService"].clone();
+                last_thread = pump["audioThread"].clone();
                 last_underruns = pump["outputUnderruns"].clone();
+                last_quanta = pump["submittedQuanta"].clone();
+            }
+            if tick % 20 == 0 {
+                // One line a second: the output queue in ms and the worker
+                // counters beside a UTC timestamp and host CPU, so a gap can
+                // be compared with what the machine was doing.
+                let queue = diagnostics["nodeTelemetry"]
+                    .as_array()
+                    .and_then(|items| items.iter().find(|item| item["nodeId"] == "destination"))
+                    .and_then(|item| item["timing"]["delayMs"].as_f64());
+                let underruns = last_underruns.as_u64().unwrap_or(0);
+                let quanta = last_quanta.as_u64().unwrap_or(0);
+                let utc = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|elapsed| elapsed.as_millis())
+                    .unwrap_or(0);
+                eprintln!(
+                    "t={elapsed:.1}s utc_ms={utc} outputQueueMs={} outputUnderruns={underruns} (+{}) submittedQuanta={quanta} (+{}) cpuBusyPercent={:.0} audioThread={last_thread}",
+                    queue.map_or_else(|| String::from("null"), |value| format!("{value:.1}")),
+                    underruns.saturating_sub(underruns_seen),
+                    quanta.saturating_sub(quanta_seen),
+                    host_cpu.busy_percent(),
+                );
+                underruns_seen = underruns;
+                quanta_seen = quanta;
             }
             // `AUDIOROUTER_CONTINUITY_TOGGLE=<nodeId>` flips that node's Bypass
             // every 3 s while playing, exactly as the UI saves it.

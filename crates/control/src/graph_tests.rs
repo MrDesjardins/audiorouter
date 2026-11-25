@@ -837,17 +837,17 @@ fn live_edit_classification_distinguishes_parameters_flags_and_topology() {
 }
 
 /// Issue #149: the reporter toggled Mute and changed the Fun Voice Changer
-/// while an automatic save was in flight. Both edits are live ones (a flag-like
-/// parameter and a preset change), so the save that follows must commit from
-/// the just-written revision instead of locking on a revision conflict, the
-/// live classification must retain the route's sources, and the saved session
-/// must carry both edits. The in-flight coalescing itself is covered by the App
-/// regression `coalesces edits during automatic save`; "no new worker for an
-/// unchanged plugin" is covered by
+/// while an automatic save was in flight. The backend serves one request at a
+/// time, so this proves the serial case the window falls back to: the save
+/// that follows is built from the revision the first save wrote, so it commits
+/// instead of returning a revision conflict, while a plan still built from the
+/// old revision is refused. The in-flight overlap itself is the App regression
+/// `coalesces edits during automatic save`; "no new worker for an unchanged
+/// plugin" is covered by
 /// `merged_preparation_reuses_worker_and_defers_slider_changes_until_publication`
 /// and `only_requested_plugin_groups_start_and_fully_reused_groups_are_skipped`.
 #[test]
-fn mute_and_voice_change_during_a_running_save_keep_the_revision_unlocked() {
+fn a_second_save_based_on_the_first_saves_revision_commits_without_a_conflict() {
     use audiorouter_domain::voice_changer::{voice_preset_parameters, VOICE_PRESETS};
     let stereo = |name: &str, direction| Port {
         name: name.into(),
@@ -898,6 +898,43 @@ fn mute_and_voice_change_during_a_running_save_keep_the_revision_unlocked() {
     let mut plane = ControlPlane::default();
     plane.insert_session(route.clone()).unwrap();
     plane.session_start(&route.id).unwrap();
+    let session_id = route.id.clone();
+    let request_id = std::cell::Cell::new(0_u64);
+    let next_request_id = || {
+        request_id.set(request_id.get() + 1);
+        request_id.get()
+    };
+    let plan = |plane: &mut ControlPlane, base: u64, candidate: &Session| {
+        plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(next_request_id())),
+            method: "graph.plan".into(),
+            params: Some(json!({
+                "sessionId": session_id,
+                "baseRevision": base,
+                "candidate": candidate
+            })),
+        })
+    };
+    let commit = |plane: &mut ControlPlane, plan_id: &str, base: u64, key: &str| {
+        plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(next_request_id())),
+            method: "graph.commit".into(),
+            params: Some(json!({
+                "planId": plan_id,
+                "baseRevision": base,
+                "idempotencyKey": key
+            })),
+        })
+    };
+    let plan_id = |response: &JsonRpcResponse| {
+        assert!(response.error.is_none(), "{response:?}");
+        response.result.as_ref().unwrap()["planId"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
 
     // The user's first autosave: Mute on and a voice preset chosen.
     let mut first = route.clone();
@@ -916,14 +953,20 @@ fn mute_and_voice_change_during_a_running_save_keep_the_revision_unlocked() {
         .parameters = voice_preset_parameters(&VOICE_PRESETS[2])
         .into_iter()
         .collect();
-    let plan = plane.plan_graph(&route.id, 0, first.clone()).unwrap();
-    let committed = plane.commit_graph(&plan, 0, "issue149-save-1").unwrap();
-    assert_eq!(committed["revision"], 1, "{committed}");
+    let planned = plan(&mut plane, 0, &first);
+    let id = plan_id(&planned);
+    let committed = commit(&mut plane, &id, 0, "issue149-save-1");
+    assert!(committed.error.is_none(), "{committed:?}");
+    assert_eq!(
+        committed.result.as_ref().unwrap()["revision"],
+        1,
+        "{committed:?}"
+    );
     assert_eq!(classify_live_edit(&route, &first), LiveEdit::ParametersOnly);
     assert!(classify_live_edit(&route, &first).retains_sources());
 
-    // A second edit arrived while that save was running. It is based on the
-    // revision the first save just wrote, so it must not hit a revision lock.
+    // A second edit arrived while that save was running. The window saves it
+    // from the revision the first save just wrote; that must commit.
     let mut second = first.clone();
     second
         .nodes
@@ -932,14 +975,30 @@ fn mute_and_voice_change_during_a_running_save_keep_the_revision_unlocked() {
         .unwrap()
         .parameters
         .insert("pitchSemitones".into(), json!(4.0));
-    let plan = plane.plan_graph(&route.id, 1, second.clone()).unwrap();
-    let committed = plane.commit_graph(&plan, 1, "issue149-save-2").unwrap();
-    assert_eq!(committed["revision"], 2, "{committed}");
+    let planned = plan(&mut plane, 1, &second);
+    let id = plan_id(&planned);
+    let committed = commit(&mut plane, &id, 1, "issue149-save-2");
+    assert!(committed.error.is_none(), "{committed:?}");
+    assert_eq!(
+        committed.result.as_ref().unwrap()["revision"],
+        2,
+        "{committed:?}"
+    );
     assert_eq!(
         classify_live_edit(&first, &second),
         LiveEdit::ParametersOnly
     );
-    assert!(first.id == second.id && first.edges == second.edges);
+
+    // A request still built from the old revision is refused, so this case can
+    // fail: the second save is not accepted just because it comes after the
+    // first.
+    let stale = plan(&mut plane, 0, &second);
+    let error = stale.error.expect("a stale plan must be refused");
+    assert_eq!(
+        error.data.as_ref().unwrap()["code"],
+        "revisionConflict",
+        "{error:?}"
+    );
 
     let saved = plane.get_session(&route.id).unwrap().clone();
     let mute = saved
