@@ -51,6 +51,7 @@ import {
   uiError,
   notReadyNode,
   isRevisionConflict,
+  isSessionNotStopped,
   SnapshotCache,
   type ApplicationRow,
   type RecorderStatus,
@@ -1167,7 +1168,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         recordUiDiagnostic(`Exact-name input binding updated for ${node.id}; revision ${result.revision}`);
         return;
       } catch (error) {
-        if (error instanceof Error && error.message.includes("session to be stopped")) {
+        if (isSessionNotStopped(error)) {
           attemptedDeviceRebinds.current.delete(attemptKey);
         }
         if (currentSessionIdRef.current === saved.id) {

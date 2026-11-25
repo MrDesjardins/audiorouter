@@ -556,9 +556,7 @@ impl ControlPlane {
                 .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
                 || self.native_worker_attached_to(session_id)
             {
-                return Err(ControlError::InvalidRequest(
-                    "this graph commit requires its session to be stopped".into(),
-                ));
+                return Err(ControlError::SessionNotStopped);
             }
         }
         let result = match self

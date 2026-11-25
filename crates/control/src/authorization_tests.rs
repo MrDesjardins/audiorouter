@@ -257,6 +257,23 @@ fn stored_recording_and_plugin_reads_need_only_read_and_writes_keep_their_scope(
 }
 
 #[test]
+fn a_permission_refusal_reports_the_scope_it_required() {
+    let mut plane = ControlPlane::default();
+    let response = plane.dispatch_authorized(
+        JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "nativeEndpoints.prepare".into(),
+            params: Some(json!({})),
+        },
+        &ClientGrant::for_role(ClientRole::Observer),
+    );
+    let data = response.error.expect("refused").data.expect("error data");
+    assert_eq!(data["code"], "permissionDenied");
+    assert_eq!(data["permissionScope"], "deviceAdministration");
+}
+
+#[test]
 fn a_client_cannot_revoke_its_own_access_but_can_revoke_another() {
     let mut plane = ControlPlane::default();
     let grant = ClientGrant::with_scopes([PermissionScope::DeviceAdministration]);

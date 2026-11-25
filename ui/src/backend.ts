@@ -198,6 +198,11 @@ export function isRevisionConflict(error: unknown): boolean {
   return error instanceof AudioRouterRpcError && error.data?.code === "revisionConflict";
 }
 
+/** A commit that needs its session stopped first, identified by its code. */
+export function isSessionNotStopped(error: unknown): boolean {
+  return error instanceof AudioRouterRpcError && error.data?.code === "sessionNotStopped";
+}
+
 export type UiBackendSnapshot = {
   status: StatusSnapshot;
   diagnostics: DiagnosticsSnapshot;

@@ -661,6 +661,7 @@ export type PermissionScope =
   | "sessionControl"
   | "capture"
   | "record"
+  | "pluginScan"
   | "startupWrite"
   | "deviceAdministration"
   | "integrationWrite"
@@ -1460,6 +1461,8 @@ export interface ApplicationErrorData {
   resourceIds: EntityId[];
   retryable: boolean;
   remediation: string;
+  /** The permission scope a `permissionDenied` refusal required, when known. */
+  permissionScope?: PermissionScope;
   /** Unsigned Windows HRESULT when the failure originated in the audio API. */
   hresult?: number;
   retryAfterMs?: number;

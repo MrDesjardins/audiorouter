@@ -360,11 +360,9 @@ fn graph_commit_can_require_its_session_to_be_stopped_for_recovery_edits() {
             "requireStoppedSessionId":"feedback"
         }),
     ));
-    assert!(response
-        .error
-        .unwrap()
-        .message
-        .contains("session to be stopped"));
+    let error = response.error.unwrap();
+    assert!(error.message.contains("session to be stopped"));
+    assert_eq!(error.data.unwrap()["code"], "sessionNotStopped");
     assert_eq!(plane.get_session(&original.id).unwrap().revision, 0);
 }
 

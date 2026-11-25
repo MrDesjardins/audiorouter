@@ -239,6 +239,10 @@ pub enum ControlError {
     /// Stop and Play. The old route is still playing and intact; distinct
     /// from a failed preparation, which must never stop it.
     RestartRequired(String),
+    /// A commit that requires its session stopped met a running one. The
+    /// stable code lets an adapter retry after the user stops it, without
+    /// reading the sentence.
+    SessionNotStopped,
     IdempotencyConflict,
     /// The same-key request was recorded by an earlier backend lifetime, and
     /// its outcome claims a runtime state this process cannot honour (a route
@@ -264,6 +268,9 @@ impl std::fmt::Display for ControlError {
             | Self::RestartRequired(message)
             | Self::Audio { message, .. }
             | Self::NodeNotReady { message, .. } => write!(f, "{message}"),
+            Self::SessionNotStopped => {
+                write!(f, "this graph commit requires its session to be stopped")
+            }
             Self::PluginScan(error) => match error {
                 audiorouter_plugin_host::ScanError::InvalidRoot => {
                     write!(f, "The plugin folder does not exist or is not a folder.")
@@ -900,7 +907,7 @@ impl ControlPlane {
                 format!("permission denied: {:?}", spec.permission),
             );
             if let Some(error) = response.error.as_mut() {
-                error.data = Some(application_error_data("permissionDenied"));
+                error.data = Some(permission_denied_data(spec.permission));
             }
             return response;
         }
@@ -921,7 +928,7 @@ impl ControlPlane {
                     ),
                 );
                 if let Some(error) = response.error.as_mut() {
-                    let mut data = application_error_data("permissionDenied");
+                    let mut data = permission_denied_data(PermissionScope::DeviceAdministration);
                     data["fieldPath"] = json!(pointer);
                     error.data = Some(data);
                 }
@@ -946,7 +953,7 @@ impl ControlPlane {
                 "A client cannot revoke its own access. Remove it from another client or the AudioRouter window.",
             );
             if let Some(error) = response.error.as_mut() {
-                let mut data = application_error_data("permissionDenied");
+                let mut data = permission_denied_data(PermissionScope::DeviceAdministration);
                 data["fieldPath"] = json!("/clientId");
                 error.data = Some(data);
             }
@@ -965,7 +972,7 @@ impl ControlPlane {
                 "permission denied: GraphWrite is required to preview an edited route",
             );
             if let Some(error) = response.error.as_mut() {
-                error.data = Some(application_error_data("permissionDenied"));
+                error.data = Some(permission_denied_data(PermissionScope::GraphWrite));
             }
             return response;
         }
@@ -1190,6 +1197,7 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
         ControlError::IdempotencyExpired(_) => "idempotencyConflict",
         ControlError::InvalidRequest(_) => "invalidRequest",
         ControlError::RestartRequired(_) => "invalidRequest",
+        ControlError::SessionNotStopped => "sessionNotStopped",
         ControlError::Audio { code, .. } => code,
         ControlError::PluginScan(error) => error.code(),
         ControlError::NodeNotReady { .. } => "nodeNotReady",
@@ -1219,6 +1227,12 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
         _ => None,
     };
     let mut response = JsonRpcResponse::failure(id, -32000, message);
+    if matches!(error, ControlError::SessionNotStopped) {
+        // Invalid input, as this refusal was before it gained a stable code.
+        if let Some(error) = response.error.as_mut() {
+            error.code = -32602;
+        }
+    }
     if let Some(error) = response.error.as_mut() {
         let mut data = application_error_data(code);
         if let Some((hresult, retryable, remediation, operation, resource_ids)) = audio_details {
@@ -1264,6 +1278,7 @@ fn application_error_data(code: &str) -> Value {
             false,
             "request the required permission scope for the target operation",
         ),
+        "sessionNotStopped" => (false, "stop the named session, then commit the graph again"),
         "invalidRoot" | "tooManyCandidates" | "tooManyDirectories" | "cancelled" => (
             false,
             "choose a valid configured directory or explicitly retry the scan",
@@ -1291,6 +1306,14 @@ fn application_error_data(code: &str) -> Value {
         "retryable": retryable,
         "remediation": remediation
     })
+}
+
+/// A `permissionDenied` refusal with the exact scope it required, so an
+/// adapter can decide what to offer without reading the English message.
+fn permission_denied_data(scope: PermissionScope) -> Value {
+    let mut data = application_error_data("permissionDenied");
+    data["permissionScope"] = json!(scope);
+    data
 }
 
 #[cfg(test)]

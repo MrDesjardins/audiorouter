@@ -5,6 +5,7 @@ import {
   createLiveBackendFromTransport,
   formatUiError,
   isRevisionConflict,
+  isSessionNotStopped,
   rememberDeviceNames,
   SnapshotCache,
   type UiBackend,
@@ -213,6 +214,23 @@ describe("UI error formatting", () => {
       "Another save changed this route, so your save was not applied. Your edits are kept. Compare them with the latest saved route, then save again.",
     );
     expect(isRevisionConflict(new Error("revisionConflict"))).toBe(false);
+  });
+
+  it("recognizes the stopped-session refusal from structured data", () => {
+    const error = new AudioRouterRpcError({
+      code: -32602,
+      message: "this graph commit requires its session to be stopped",
+      data: {
+        code: "sessionNotStopped",
+        fieldPath: null,
+        resourceIds: [],
+        retryable: false,
+        remediation: "stop the named session",
+      },
+    });
+    expect(isSessionNotStopped(error)).toBe(true);
+    expect(isSessionNotStopped(new Error("this graph commit requires its session to be stopped"))).toBe(false);
+    expect(isSessionNotStopped(new Error("session to be stopped"))).toBe(false);
   });
 
   it("names the required permission once when the message has no scope", () => {

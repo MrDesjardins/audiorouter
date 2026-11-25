@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
+import { AudioRouterRpcError } from "@audiorouter/contracts";
 import type { UiBackend } from "./backend";
 import { useMessages } from "./i18n/useMessages";
 import type { MessageKey } from "./i18n/generated/messageKeys";
 
 /** Play was refused because the user has not yet allowed this app to open
- * audio devices (device administration of the desktop shell). */
+ * audio devices (device administration of the desktop shell). The backend
+ * reports the required scope, so this never reads the English message. */
 export function isDeviceAccessDenied(error: unknown): boolean {
-  return error instanceof Error && /permission denied:\s*DeviceAdministration/i.test(error.message);
+  return error instanceof AudioRouterRpcError && error.data?.permissionScope === "deviceAdministration";
 }
 
 const ACCESS_CHANGED_EVENT = "audiorouter:device-access";
