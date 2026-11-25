@@ -1,0 +1,30 @@
+cargo :     Finished `release` profile [optimized] target(s) in 0.49s
+At line:9 char:1
++ cargo test -p audiorouter-transport --test live_audio_continuity --re ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Finished `r...get(s) in 0.49s:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+     Running tests\live_audio_continuity.rs (target\release\deps\live_audio_continuity-8b777f43e301c398.exe)
+
+running 1 test
+tone render buffer: 2400 frames
+prepared: {"branchNodeIds":["destination"],"generation":1,"pathCount":1,"renderEndpointIds":["{0.0.0.00000000}.{03498a2
+a-ef6a-4dd4-b9ba-72e22f567d7a}"],"sessionId":"continuity","sourceNodeIds":["source"],"state":"configured-stopped"}
+started:
+{"generation":1,"preview":false,"runtime":"native","savedRevision":0,"sessionId":"continuity","state":"running"}
+service phase maxima (wait, dispatch, pump): [4.0478ms, 2.1493ms, 213.1┬╡s]
+chain: [Gain]; audio service: {"active":true,"lateGaps":0,"maxGapMicros":4158,"passes":18259}; output underruns: 1
+  "source" timing={"delayMs":15.116740675147264} plugin=null network=null processor=null
+  "tool-0" timing={"delayMs":0.0,"processingUsAvg":0.5762363682475272,"processingUsMax":198.7} plugin=null
+network=null processor=null
+  "destination" timing={"delayMs":28.14452427073048} plugin=null network=null processor=null
+reference (CABLE Output): 20.0 s analysed, peak 0.0500, 0 glitches, 0 silent runs (0 samples), 0 WASAPI discontinuity
+flags
+  glitches per 5 s: [0, 0, 0, 0, 0]
+routed result (CABLE-B Output): 20.0 s analysed, peak 0.0500, 0 glitches, 0 silent runs (0 samples), 0 WASAPI
+discontinuity flags
+  glitches per 5 s: [0, 0, 0, 0, 0]
+test live::live_backend_service_keeps_a_routed_tone_continuous ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 22.09s

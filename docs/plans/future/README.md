@@ -12,7 +12,7 @@ The two repository code reviews were promoted on 2026-11-01 and moved to
 
 The AudioRouter-owned virtual-cable track was reopened by the user on
 2026-10-05 (DEC-18). Engineering and qualification status are in the
-[active virtual-cable plan](../active/virtual-cable.md). The production
+[active virtual-cable plan](../archived/2026-11-24-virtual-cable.md). The production
 certificate purchase and first public driver release still need separate
 user go-ahead; [M03-driver-signing.md](M03-driver-signing.md) preserves the
 signing and release strategy.
@@ -43,7 +43,7 @@ path for rationale and acceptance; [active execution](../active/current.md)
 owns final qualification. Native, Narrator/scaling, participant and performance
 gates remain open; broader navigation redesign is still deferred.
 
-[Application quality and regression prevention](../active/application-quality.md) records
+[Application quality and regression prevention](../archived/2026-11-24-application-quality.md) records
 the owner-requested plan (2026-10-21): consistent merge gates, state-transition
 and fault tests, production/packaged UI verification, backend/audio regression
 coverage, reliability trends and release/rollback qualification. Implementation was authorized on 2026-10-21 and is now active.
@@ -85,7 +85,7 @@ VST2 hosting is an explicitly authorized but gated M06 extension. Consult the
 | [Stream Deck extensions](stream-deck-extensions.md) | Optional dials, reduced-scope pairing/grants, lighter/faster updates, atomic scenes and profile polish; core plugin is complete | Pick a specific extension; hardware-specific latency/CPU or usability claims need a corresponding device check |
 | [Code review follow-ups after 0.0.21](review-fixes-0.0.21.md) | All nine 0.0.21 review findings and the Edge flakes, with how each was resolved (2026-10-23) | Resolved; kept as the record until the next release ships it |
 | [UAD plugin support](uad-plugin-support.md) | Use every UAD family a customer owns where technically possible (UADx/Spark, UAD-2 DSP, Apollo Console routing), with general host fixes: class choice, mono/stereo negotiation, latency reporting, VST3 editors, licence diagnostics | Owner chooses the UAD-2 hardware route and authorizes U1 (inventory, no code); PLUG-01/PLUG-05 changes need decision records |
-| [OBS and Discord setup help](obs-discord-integration.md) | See which apps use each device, guided setup by goal, an OBS check (voice twice, wrong device) and an optional confirmed "fix it in OBS"; findings from the 2026-10-23 investigation | D1, O1, D2, O2 authorized 2026-10-23 and active ([plan](../active/obs-discord.md)); X1 (Discord RPC) needs Discord approval |
+| [OBS and Discord setup help](obs-discord-integration.md) | See which apps use each device, guided setup by goal, an OBS check (voice twice, wrong device) and an optional confirmed "fix it in OBS"; findings from the 2026-10-23 investigation | D1, O1, D2, O2 authorized 2026-10-23 and active ([plan](../archived/2026-11-24-obs-discord.md)); X1 (Discord RPC) needs Discord approval |
 | [Wave Link parity candidates](wave-link-parity.md) | Wave Link 3.x features compared with AudioRouter (listen to any mix, mixer grid, app groups, Output Switch, Sound Check, hidden devices, level target zone…), with effort and risk | App picker/groups (#4), level target zone (#11) and hidden devices (#14) merged; Sound Check (#10) merged in PR #60; Output Switch (#17) merged in PR #61 ([record](../archived/2026-11-01-output-switch.md)); its owner hardware test is open. First round [archived](../archived/2026-11-01-wave-link-parity-first-round.md) |
 | [Spatial audio extensions](spatial-audio.md) | Per-speaker angle/distance, head tracking, height/object audio and personalized HRTFs; complete attended listening for existing modes | Define reproducible algorithm, listening/measurement criteria and latency for each extension |
 | Native ARM64 Windows | Support ARM laptops | Driver, plugin architecture, shell, and hardware test matrix funded; still Windows-only |

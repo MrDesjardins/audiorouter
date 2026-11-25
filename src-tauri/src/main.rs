@@ -2652,16 +2652,25 @@ fn install_panic_log() {
 
 fn main() {
     install_panic_log();
+    let pipe_name =
+        std::env::var("AUDIOROUTER_CONTROL_PIPE").unwrap_or_else(|_| DEFAULT_PIPE_NAME.to_owned());
+    let database_path = std::env::var_os("AUDIOROUTER_DATABASE")
+        .map(std::path::PathBuf::from)
+        .map(Ok)
+        .unwrap_or_else(default_database_path)
+        .unwrap_or_default();
     // Claim the desktop before opening storage, enrolling, forwarding RPCs or
     // starting recovery supervision. Test/external-pipe clients own no backend.
     #[cfg(windows)]
+    let startup_language = resolved_saved_language(&database_path);
+    #[cfg(windows)]
     let _instance_guard = if std::env::var_os("AUDIOROUTER_CONTROL_PIPE").is_none() {
         // Already running (often in the tray): bring that window forward.
-        if instance_windows::show_running_instance() {
+        if instance_windows::show_running_instance(&startup_language) {
             log_instance_check("shown");
             return;
         }
-        match instance_windows::claim_or_recover() {
+        match instance_windows::claim_or_recover(&startup_language) {
             Ok(Some(guard)) => {
                 log_instance_check("ready");
                 Some(guard)
@@ -2679,13 +2688,6 @@ fn main() {
     } else {
         None
     };
-    let pipe_name =
-        std::env::var("AUDIOROUTER_CONTROL_PIPE").unwrap_or_else(|_| DEFAULT_PIPE_NAME.to_owned());
-    let database_path = std::env::var_os("AUDIOROUTER_DATABASE")
-        .map(std::path::PathBuf::from)
-        .map(Ok)
-        .unwrap_or_else(default_database_path)
-        .unwrap_or_default();
     let state = ShellState {
         pipe_name,
         session_id: DESKTOP_SESSION_ID.to_owned(),
@@ -4025,6 +4027,44 @@ mod tests {
         let response = forward_rpc_request(&request, &pipe_name).unwrap();
         assert!(response.error.is_none());
         assert_eq!(response.result.unwrap()["protocolVersion"]["major"], 1);
+        server.join().unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_permission_refusal_keeps_its_scope_through_the_shell_transport() {
+        let pipe_name = format!(r"\\.\pipe\audiorouter-shell-scope-{}", std::process::id());
+        let server = {
+            let pipe_name = pipe_name.clone();
+            std::thread::spawn(move || {
+                audiorouter_transport::serve_control_connections_as_role(
+                    &pipe_name,
+                    1,
+                    ControlPlane::new("shell-scope-test"),
+                    audiorouter_control::ClientRole::Observer,
+                )
+                .unwrap();
+            })
+        };
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "nativeEndpoints.prepare".into(),
+            params: Some(json!({
+                "sessionId": "session-scope",
+                "captureEndpointId": "capture-scope",
+                "renderEndpointId": "render-scope"
+            })),
+        };
+        let response = forward_rpc_request(&request, &pipe_name).unwrap();
+        let error = response.error.expect("Observer must be refused");
+        assert_eq!(error.code, -32001);
+        let data = error.data.expect("a refusal carries its data");
+        assert_eq!(data["code"], "permissionDenied");
+        assert_eq!(
+            data["permissionScope"], "deviceAdministration",
+            "the shell transport must preserve the structured scope"
+        );
         server.join().unwrap();
     }
 

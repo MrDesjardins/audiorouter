@@ -264,7 +264,6 @@ export const ENGLISH_MESSAGES = {
     "copyError": "Could not copy. Select the ID and copy it manually.",
     "offNote": "This tool is off. Effects pass sound through; inputs and outputs contribute silence.",
     "bypassNote": "This tool is bypassed. Its processing and live analysis are inactive; bypassed inputs, outputs and Mixers contribute silence.",
-    "exclusiveNote": "Another program has exclusive use of this device. Close it, then press Play again.",
     "fileOpened": "Opened \"{{name}}\" as a new session.",
     "fileRenamed": "A session with the same ID already existed here, so the copy is marked (imported); nothing was replaced.",
     "fileAssets": "Restored {{media}} and {{plugins}}.",
@@ -280,7 +279,6 @@ export const ENGLISH_MESSAGES = {
     "canvasRedo": "Redid the canvas layout change.",
     "live": "Live readings",
     "waitingPlay": "Waiting for Play",
-    "deviceBusy": "Device busy",
     "liveStatus": "Live",
     "noReadings": "No readings",
     "refreshInputs": "Refresh available inputs",
@@ -1027,7 +1025,21 @@ export const ENGLISH_MESSAGES = {
     "restorePaused": "Restore paused: unavailable saved sessions need recovery.",
     "restoredAll": "Playing again after a restart",
     "restoredPartial": "Restored {{restored}} of {{total}} routes after a restart",
-    "restoreFailed": "Restore failed: the audio engine did not start"
+    "restoreFailed": "Restore failed: the audio engine did not start",
+    "instanceInstruction": "There is already an instance running. Please close it.",
+    "instanceContent": "You can close the existing AudioRouter window normally, then open this version again. If the old app is stuck, force close it below to continue with this version.",
+    "instanceForceClose": "Force close old instance and continue\nStops its audio. Unsaved changes and unfinished recordings may be lost.",
+    "instanceCloseAndReopen": "There is already an instance running. Please close it and open AudioRouter again.",
+    "instanceStarting": "There is already an instance starting. Please close it or wait, then try again.",
+    "instanceCouldNotClose": "Could not close the old app. Close it in Task Manager, then try again.",
+    "instanceStillClosing": "The old app is still closing. Please wait and open AudioRouter again.",
+    "instanceVerifyUser": "Could not verify this Windows user.",
+    "instanceCheckOwnership": "Could not check AudioRouter instance ownership.",
+    "instanceCheckApps": "Could not check running apps. Please close AudioRouter and try again.",
+    "instanceCheckSession": "Could not check this Windows session.",
+    "instanceOtherSession": "AudioRouter is running in another Windows session. Please close it there and try again.",
+    "instanceCloseBlocked": "There is already an instance running. Please close it. Windows would not allow this app to close it automatically.",
+    "instanceExtraInstances": "Please close the extra AudioRouter instances and try again."
   },
   "goalGuide": {
     "summary": "Choose a setup goal",
@@ -3357,6 +3369,8 @@ export const ENGLISH_MESSAGES = {
     "selectedPath": "Selected the discovered path; inspect it explicitly when ready.",
     "scanEyebrow": "VST3 and VST2 discovery",
     "scanHeading": "Plugin scan",
+    "guidePlugin": "VST plugin",
+    "guideInstrument": "Instrument",
     "absDir": "Absolute plugin directory",
     "scanDir": "Scan directory",
     "loadLast": "Load last scan",
@@ -3972,5 +3986,21 @@ export const ENGLISH_MESSAGES = {
   },
   "svgHandle": {
     "hint": "{{label}}: {{value}} {{unit}}. Drag, or use the arrow keys (Shift for bigger steps)."
+  },
+  "backendErrors": {
+    "alreadyPrepared": "Audio is already prepared in this app. Stop playback, then try Play again. If it still cannot start, close AudioRouter and reopen it.",
+    "mediaNotReady": "An audio file is not ready yet, so the route was not saved. Wait until the file finishes importing, or choose it again, then press Save.",
+    "settingInvalid": "A tool setting ({{name}}) has a value AudioRouter cannot use, so the route was not saved. Check the tool's Properties, then press Save.",
+    "revisionConflict": "Another save changed this route, so your save was not applied. Your edits are kept. Compare them with the latest saved route, then save again.",
+    "deviceInvalidated": "The selected audio device changed or disconnected. Stop audio, refresh the device list, then select the exact input and output again. Play will reopen those devices. If one is missing, reconnect it before retrying.",
+    "deviceInUseNamed": "\"{{device}}\" is in use by another application, which has taken it exclusively. Close or reconfigure that application, or stop apps from locking it: Windows Sound settings → {{tab}} → {{device}} → Properties → Advanced → untick \"Allow applications to take exclusive control\". Then press Play again.",
+    "deviceInUseNamedWithTwin": "\"{{device}}\" is in use by another application, which has taken it exclusively. This is a VB-Cable: an application playing to its twin \"{{twin}}\" (the same cable) also blocks it, so set that application to \"{{device}}\" instead. Close or reconfigure that application, or stop apps from locking it: Windows Sound settings → {{tab}} → {{device}} → Properties → Advanced → untick \"Allow applications to take exclusive control\". Then press Play again.",
+    "deviceInUse": "The selected audio device is in use by another application. Choose a different device in the Properties of the output tool, or release this exact device in the application using it, then prepare it again.",
+    "unsupportedTopology": "This route includes an audio combination the current engine cannot play. Try a route from a separate Test Signal to the output device, or remove one source and connect the remaining source directly to the output. Your saved route was not changed.",
+    "permissionDenied": "Permission denied: this app is not granted the {{scope}} permission needed for this action, so the backend refused it. Nothing was changed.",
+    "scopeRequired": "required",
+    "retry": " Retry may succeed.",
+    "windowsPlaybackTab": "Playback",
+    "windowsRecordingTab": "Recording"
   }
 } as const;

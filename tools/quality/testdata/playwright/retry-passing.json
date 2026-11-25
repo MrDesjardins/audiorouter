@@ -1,0 +1,49 @@
+{
+  "stats": { "duration": 61000, "expected": 2, "skipped": 0, "unexpected": 0, "flaky": 1 },
+  "suites": [
+    {
+      "title": "retry-passing.pw.ts",
+      "specs": [
+        {
+          "title": "a steady pass",
+          "file": "e2e/retry-passing.pw.ts",
+          "line": 3,
+          "tests": [
+            {
+              "expectedStatus": "passed",
+              "status": "expected",
+              "results": [{ "status": "passed", "retry": 0, "duration": 4 }]
+            }
+          ]
+        },
+        {
+          "title": "a flaky pass that fails its first attempt",
+          "file": "e2e/retry-passing.pw.ts",
+          "line": 7,
+          "tests": [
+            {
+              "expectedStatus": "passed",
+              "status": "flaky",
+              "results": [
+                { "status": "failed", "retry": 0, "duration": 3 },
+                { "status": "passed", "retry": 1, "duration": 5 }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "another steady pass",
+          "file": "e2e/retry-passing.pw.ts",
+          "line": 11,
+          "tests": [
+            {
+              "expectedStatus": "passed",
+              "status": "expected",
+              "results": [{ "status": "passed", "retry": 0, "duration": 6 }]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

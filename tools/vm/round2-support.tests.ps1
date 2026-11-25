@@ -13,7 +13,7 @@ function Assert-That([string] $Name, [bool] $Condition, [string] $Detail = '') {
 
 # 1. Every script parses and is ASCII-only (PowerShell 5.1 reads BOM-less files as Windows-1252).
 foreach ($name in 'round2-support.ps1', 'round2-support.tests.ps1', 'round2-restart-render.ps1', 'round2-pause-watcher.ps1',
-    'prepare-round2-bundle.ps1', 'run-stage-a.ps1', 'vm-checks.ps1') {
+    'prepare-round2-bundle.ps1', 'run-stage-a.ps1', 'vm-checks.ps1', 'host-load.ps1', 'round2-host-preflight.ps1') {
     $path = Join-Path $PSScriptRoot $name
     $errors = $null
     [void][Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$errors)
@@ -30,7 +30,7 @@ function Get-ScriptAst([string] $FileName) {
 $functionFilter = { param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] }
 $commandFilter = { param($n) $n -is [Management.Automation.Language.CommandAst] }
 $supportFunctions = @('round2-support.ps1', 'paired-trace-support.ps1' | ForEach-Object { (Get-ScriptAst $_).FindAll($functionFilter, $true) } | ForEach-Object { $_.Name })
-foreach ($name in 'run-stage-a.ps1', 'round2-support.ps1', 'round2-restart-render.ps1', 'round2-pause-watcher.ps1', 'prepare-round2-bundle.ps1') {
+foreach ($name in 'run-stage-a.ps1', 'round2-support.ps1', 'round2-restart-render.ps1', 'round2-pause-watcher.ps1', 'prepare-round2-bundle.ps1', 'host-load.ps1', 'round2-host-preflight.ps1') {
     $ast = Get-ScriptAst $name
     $defined = @($ast.FindAll($functionFilter, $true) | ForEach-Object { $_.Name }) + $supportFunctions
     $unknown = @()
@@ -166,6 +166,128 @@ Assert-That 'pool tags: driver tag columns are present and numeric' ($sample.MNW
 Initialize-PoolTagReader
 $known = @([AudioRouterPoolTags]::Read() | Where-Object { $_.Tag -in 'Ntfn', 'File', 'Thre', 'Proc', 'MmCa', 'Even' })
 Assert-That 'pool tags: well-known kernel tags decode as text' ($known.Count -ge 2) "found $($known.Count)"
+
+# 6. Host-load rows: the PC sampler's CSV, judged by row position, not clock.
+#    CPU has three columns so the guest's own vCPUs are not host starvation.
+function New-HostLoadCsv([double[]] $Total, [double[]] $Other, [double[]] $Vm, [double[]] $Avail) {
+    $lines = @('utc,cpu_pct,cpu_other_pct,vm_cpu_pct,avail_mb,pages_sec')
+    $base = [DateTime]::UtcNow.Date.AddHours(22)
+    for ($i = 0; $i -lt $Total.Count; $i++) {
+        $utc = $base.AddSeconds(20 * $i).ToString('yyyy-MM-ddTHH:mm:ssZ', [Globalization.CultureInfo]::InvariantCulture)
+        $lines += '{0},{1},{2},{3},{4},1' -f $utc, [int]$Total[$i], [int]$Other[$i], [int]$Vm[$i], [int]$Avail[$i]
+    }
+    return $lines
+}
+$csv = @(
+    'utc,cpu_pct,cpu_other_pct,vm_cpu_pct,avail_mb,pages_sec',
+    '2026-11-24T22:00:00Z,17,0,17,12000,100',
+    '2026-11-24T22:00:20Z,90,89,1,332,90000',
+    '2026-11-24T22:00:40Z,18,2,16,11000,50',
+    '2026-11-24T22:01:00Z,17,1,16,11500,40',
+    '2026-11-24T22:01:20Z,7,3',
+    '2026-11-24T22:01:40Z,7,-1,0,9000,3',
+    '2026-11-24T22:02:00Z,5,11200,40',
+    'garbage line',
+    ''
+)
+$rows = @(Get-HostLoadRows $csv)
+Assert-That 'host load: short, negative and garbage rows are ignored' ($rows.Count -eq 5) "$($rows.Count)"
+Assert-That 'host load: total, non-VM and VM CPU are parsed' ($rows[0].Utc.Hour -eq 22 -and $rows[0].CpuPercent -eq 17 -and $rows[0].OtherCpuPercent -eq 0 -and $rows[0].VmCpuPercent -eq 17 -and $rows[0].AvailableMb -eq 12000 -and $rows[0].PagesPerSec -eq 100 -and $rows[0].HasBreakdown)
+Assert-That 'host load: an old four-column row is read as total-only' (-not $rows[4].HasBreakdown -and $rows[4].OtherCpuPercent -eq 5 -and $rows[4].VmCpuPercent -eq 0)
+$two = Get-HostLoadWindow -Rows $rows -From 0 -To 2
+Assert-That 'host load: a window by row position takes the right rows' ($two.Count -eq 2 -and $two.MeanOtherCpuPercent -eq 44.5 -and $two.MaxOtherCpuPercent -eq 89 -and $two.WorstCpuPercent -eq 90 -and $two.MinAvailableMb -eq 332 -and $two.MedianAvailableMb -eq 6166 -and $two.LastUtc.Minute -eq 0)
+$tail = Get-HostLoadWindow -Rows $rows -From 2
+Assert-That 'host load: From without To reads to the end and flags legacy rows' ($tail.Count -eq 3 -and -not $tail.HasBreakdown) "$($tail.Count)"
+
+# Owner-rule cases the manager asked for. Guest-only load is not starvation.
+$guestOnly = @(Get-HostLoadRows (New-HostLoadCsv (@(0..9 | ForEach-Object { 17 })) (@(0..9 | ForEach-Object { 0 })) (@(0..9 | ForEach-Object { 17 })) (@(0..9 | ForEach-Object { 8000 }))))
+$guestVerdict = Get-HostLoadVerdict (Get-HostLoadWindow -Rows $guestOnly)
+Assert-That 'host load: a busy guest alone (17 % total, 0 % other) is Idle' ($guestVerdict.Verdict -eq 'Idle') $guestVerdict.Detail
+$sustained = @(Get-HostLoadRows (New-HostLoadCsv (@(0..9 | ForEach-Object { 40 })) (@(0..9 | ForEach-Object { 24 })) (@(0..9 | ForEach-Object { 16 })) (@(0..9 | ForEach-Object { 8000 }))))
+$sustainedVerdict = Get-HostLoadVerdict (Get-HostLoadWindow -Rows $sustained)
+Assert-That 'host load: sustained non-VM CPU above 20 % is Starved' ($sustainedVerdict.Verdict -eq 'Starved' -and $sustainedVerdict.Detail -match 'sustained') $sustainedVerdict.Detail
+# One spike in ten 20-second samples does not move a mean or a 50 % fraction.
+$oneSpike = @(3, 3, 3, 3, 3, 3, 3, 3, 3, 89)
+$spikeRows = @(Get-HostLoadRows (New-HostLoadCsv @(0..9 | ForEach-Object { 40 }) $oneSpike (@(0..9 | ForEach-Object { 0 })) (@(0..9 | ForEach-Object { 8000 }))))
+$spikeVerdict = Get-HostLoadVerdict (Get-HostLoadWindow -Rows $spikeRows)
+Assert-That 'host load: one CPU spike in a block is not starvation' ($spikeVerdict.Verdict -eq 'Idle') $spikeVerdict.Detail
+# Even a three-sample window with one 95 % sample is not sustained.
+$shortSpike = @(Get-HostLoadRows (New-HostLoadCsv @(5, 95, 5) @(5, 95, 5) @(0, 0, 0) @(8000, 8000, 8000)))
+$shortVerdict = Get-HostLoadVerdict (Get-HostLoadWindow -Rows $shortSpike)
+Assert-That 'host load: one spike in a short window is still not sustained' ($shortVerdict.Verdict -eq 'Idle') $shortVerdict.Detail
+$single = @(Get-HostLoadRows (New-HostLoadCsv @(95) @(95) @(0) @(8000)))
+Assert-That 'host load: a single sample is NoData, never Starved or Idle' ((Get-HostLoadVerdict (Get-HostLoadWindow -Rows $single)).Verdict -eq 'NoData')
+# Memory: the floor is judged on the median, so one dip is not starvation.
+$dip = @(3000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000)
+$dipRows = @(Get-HostLoadRows (New-HostLoadCsv (@(0..9 | ForEach-Object { 5 })) (@(0..9 | ForEach-Object { 2 })) (@(0..9 | ForEach-Object { 3 })) $dip))
+$dipVerdict = Get-HostLoadVerdict (Get-HostLoadWindow -Rows $dipRows)
+Assert-That 'host load: one memory dip does not deny an idle host' ($dipVerdict.Verdict -eq 'Idle') $dipVerdict.Detail
+$lowMemory = @(Get-HostLoadRows (New-HostLoadCsv (@(0..9 | ForEach-Object { 5 })) (@(0..9 | ForEach-Object { 2 })) (@(0..9 | ForEach-Object { 3 })) (@(0..9 | ForEach-Object { 4000 }))))
+Assert-That 'host load: memory held below 6000 MB is Starved' ((Get-HostLoadVerdict (Get-HostLoadWindow -Rows $lowMemory)).Verdict -eq 'Starved')
+$limits = @(Get-HostLoadRows (New-HostLoadCsv (@(0..9 | ForEach-Object { 20 })) (@(0..9 | ForEach-Object { 20 })) (@(0..9 | ForEach-Object { 0 })) (@(0..9 | ForEach-Object { 6000 }))))
+Assert-That 'host load: the rule limits themselves are still Idle' ((Get-HostLoadVerdict (Get-HostLoadWindow -Rows $limits)).Verdict -eq 'Idle')
+$legacyLines = @('utc,cpu_pct,avail_mb,pages_sec') + @(0..9 | ForEach-Object { '2026-11-24T23:00:{0:D2}Z,30,8000,1' -f $_ })
+$legacy = @(Get-HostLoadRows $legacyLines)
+$legacyVerdict = Get-HostLoadVerdict (Get-HostLoadWindow -Rows $legacy)
+Assert-That 'host load: old total-only rows still apply the 20 % rule' ($legacyVerdict.Verdict -eq 'Starved' -and $legacyVerdict.Detail -match 'legacy rows') $legacyVerdict.Detail
+Assert-That 'host load: an empty window is NoData, never PASS' ((Get-HostLoadVerdict (Get-HostLoadWindow -Rows $rows -From 9)).Verdict -eq 'NoData')
+
+# The guest must require the sampler and record host load per block, not rely
+# on a night's operator memory.
+$runnerText = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'run-stage-a.ps1') -Raw
+Assert-That 'runner: round2 stops without a host-load sampler' ($runnerText -match 'host-load sampler' -and $runnerText -match "'SKIP' 'the host-load sampler check did not pass")
+Assert-That 'runner: each round2 block records host load' ($runnerText -match 'Add-HostLoadResult "\$block block" \$from')
+Assert-That 'runner: an unexpected restart is classified against host load' ($runnerText -match 'until the restart')
+# A 24 h pool run: allowed by the parameter, its state survives the JSON
+# round-trip, its samples are copied to the share, and the sampler outlasts it.
+$longSeries = 0..2879 | ForEach-Object { [pscustomobject]@{ Minutes = $_ / 2.0; Bytes = 134MB } }
+Assert-That 'pool: a 24 h tagged series (2,880 samples) grades flat' ((Get-SeriesGrowthMiBPerHour $longSeries) -eq 0)
+$stateBack = ([ordered]@{ session = 'round2'; done = @('x'); results = @(); current = $null; crashed = $false; startedUtc = '2026-11-24T00:00:00Z'; hostRows = 1234 } | ConvertTo-Json -Depth 5 | ConvertFrom-Json)
+Assert-That 'pool: the run state keeps hostRows and its session across a restart' ($stateBack.hostRows -eq 1234 -and $stateBack.session -eq 'round2')
+Assert-That 'pool: -PoolMinutes allows 1440 and defaults to 120' ($runnerText -match '\[ValidateRange\(5, 1440\)\]\[int\] \$PoolMinutes = 120')
+Assert-That 'pool: the samples are copied to the share while the block runs' ($runnerText -match 'Copy-Item -LiteralPath \$csv -Destination \(Join-Path \$peer .pool-tags\.csv.\)')
+$samplerText = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'host-load.ps1') -Raw
+Assert-That 'sampler: up to 48 h and the six-column format' ($samplerText -match 'ValidateRange\(1, 2880\)' -and $samplerText -match 'cpu_other_pct')
+$preflightText = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'round2-host-preflight.ps1') -Raw
+Assert-That 'preflight: the sampler window outlasts a 24 h run' ($preflightText -match '\$SamplerMinutes = 1560')
+
+# 7. Host preflight: the idle gate and the sampler check (library mode only).
+. (Join-Path $PSScriptRoot 'round2-host-preflight.ps1') -LibraryOnly
+$idle = [pscustomobject]@{ Verdict = 'Idle'; Detail = 'ok' }
+$busy = [pscustomobject]@{ Verdict = 'Starved'; Detail = 'cpu 91' }
+Assert-That 'preflight: an idle PC has no reasons' (@(Get-PreflightReasons -Verdict $idle -Wsl @()).Count -eq 0)
+Assert-That 'preflight: a busy PC is refused with its reason' (((@(Get-PreflightReasons -Verdict $busy -Wsl @())) -join '; ') -match 'cpu 91')
+Assert-That 'preflight: a running WSL distro is refused' (((@(Get-PreflightReasons -Verdict $idle -Wsl @('Ubuntu Running'))) -join '; ') -match 'wsl --shutdown')
+$live = Measure-HostIdle -Seconds 2 -IntervalSeconds 1
+Assert-That 'preflight: a live measurement returns a usable window' ($live.Count -ge 1 -and $live.MeanOtherCpuPercent -ge 0 -and $live.MedianAvailableMb -ge 0) "count $($live.Count)"
+Assert-That 'preflight: a missing sampler file is not running' (-not (Test-SamplerRunning -Path (Join-Path ([IO.Path]::GetTempPath()) 'no-such-host-load.csv')))
+$tempCsv = Join-Path ([IO.Path]::GetTempPath()) 'round2-host-load-test.csv'
+'utc,cpu_pct,cpu_other_pct,vm_cpu_pct,avail_mb,pages_sec' | Set-Content -LiteralPath $tempCsv -Encoding ASCII
+(Get-Item -LiteralPath $tempCsv).LastWriteTime = (Get-Date).AddMinutes(-10)
+Assert-That 'preflight: a stale sampler file is not running' (-not (Test-SamplerRunning -Path $tempCsv))
+(Get-Item -LiteralPath $tempCsv).LastWriteTime = (Get-Date)
+Assert-That 'preflight: a fresh sampler file is running' (Test-SamplerRunning -Path $tempCsv)
+Remove-Item -LiteralPath $tempCsv -Force -ErrorAction SilentlyContinue
+Assert-That 'preflight: heavy-process and WSL probes return arrays' ($null -ne @(Get-HeavyProcesses) -and $null -ne @(Get-RunningWsl))
+
+# 7b. The real sampler writes the six-column format (short run, then stopped).
+$sampleCsv = Join-Path ([IO.Path]::GetTempPath()) 'round2-sampler-format.csv'
+Remove-Item -LiteralPath $sampleCsv -Force -ErrorAction SilentlyContinue
+$sampler = Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `
+    -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'host-load.ps1'),
+        '-OutputPath', $sampleCsv, '-Minutes', '1', '-IntervalSeconds', '5') -WindowStyle Hidden -PassThru
+try {
+    $deadline = (Get-Date).AddSeconds(20)
+    $samplerRows = @()
+    do {
+        Start-Sleep -Seconds 1
+        if (Test-Path -LiteralPath $sampleCsv) { $samplerRows = @(Get-HostLoadRows @(Get-Content -LiteralPath $sampleCsv)) }
+    } while ($samplerRows.Count -lt 2 -and (Get-Date) -lt $deadline)
+    Assert-That 'sampler: writes two or more six-column rows' ($samplerRows.Count -ge 2 -and $samplerRows[0].HasBreakdown -and $samplerRows[0].VmCpuPercent -ge 0) "$($samplerRows.Count) rows"
+} finally {
+    if (-not $sampler.HasExited) { Stop-Process -Id $sampler.Id -Force -ErrorAction SilentlyContinue }
+    Remove-Item -LiteralPath $sampleCsv -Force -ErrorAction SilentlyContinue
+}
 
 if ($script:failures -gt 0) { Write-Host "`n$($script:failures) check(s) failed." -ForegroundColor Red; exit 1 }
 Write-Host "`nAll round-2 host checks passed."

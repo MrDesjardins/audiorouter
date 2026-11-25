@@ -47,11 +47,14 @@ audiorouter apps list --json
 audiorouter session create C:\path\gaming-session.json --database C:\path\audiorouter.sqlite --idempotency-key create-gaming --json
 audiorouter graph plan <session-id> --base-revision 0 --file C:\path\gaming-graph.json --output C:\path\gaming.plan.json --database C:\path\audiorouter.sqlite --json
 audiorouter graph apply C:\path\gaming.plan.json --idempotency-key apply-gaming --database C:\path\audiorouter.sqlite --json
-audiorouter session start <session-id> --database C:\path\audiorouter.sqlite --idempotency-key start-gaming --json
+$startKey = "start-gaming-" + [guid]::NewGuid().ToString('N')
+audiorouter session start <session-id> --database C:\path\audiorouter.sqlite --idempotency-key $startKey --json
 audiorouter routes inspect <session-id> <voice-node-id> --database C:\path\audiorouter.sqlite --json
 audiorouter watch <session-id> --database C:\path\audiorouter.sqlite --after 0 --limit 100 --category graph.committed --json
 audiorouter export <session-id> --database C:\path\audiorouter.sqlite --json
 ```
+
+Use a **new** idempotency key for every new runtime action (start, play, toggle, record, mute). Reuse a key only to retry the same request: within one app run the retry returns the recorded outcome, and after an app restart a recorded "playing"/"recording" outcome is refused with `idempotencyConflict` instead of starting audio again. A durable graph apply may reuse its key to recover a timed-out commit.
 
 Separate device provisioning happens before graph planning if buses do not exist. Commands requiring paths accept `--file` and stdin with explicit length limits. Do not require credentials in command arguments or include them in command examples.
 

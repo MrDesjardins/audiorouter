@@ -1,0 +1,5104 @@
+# Active plan — AudioRouter virtual cable (DEC-18)
+
+> **Archived 2026-11-24 — NOT passed: Stage A failures stand; VM, signing and bare-metal work.** Open gates, including failed
+> checks, are in [human-gated tasks](../active/human-gated-tasks.md); archiving
+> passes none of them.
+
+Status 2026-10-28: driver RC3 0.2.4 (source `d2560715`, no driver commit
+since) passed Stage A in the VM except the items bound to Stage C; the EV
+certificate is not bought. The pre-purchase assurance plan is
+[Pre-purchase assurance](#pre-purchase-assurance-plan-2026-10-28-user-request)
+below; the older status table follows it. VCAB-24/25 stay open until Stage C.
+Do not install the test-signed driver on the development PC.
+
+**2026-11-10 update: the RC3 freeze is ended by owner decision.** The
+review fixes in [virtual-cable-review-fixes.md](2026-11-24-virtual-cable-review-fixes.md)
+change kernel code; the next package is 0.2.5 and Stage A restarts on it.
+RC3 statements below remain history.
+
+**2026-11-21: Stage A ran on 0.2.5 (2026-11-11/12) and is not passed.** The
+package is frozen (commit `7c88895c2`, SYS `D2C26DD9…`, no PDB). Open gates and
+the second VM round are in the
+[gap analysis](../active/evidence/2026-11-21-virtual-cable-stage-a-0.2.5-gap-analysis.md)
+and [review-fixes plan](2026-11-24-virtual-cable-review-fixes.md#stage-a-on-025-gap-analysis-and-second-vm-round-2026-11-21).
+The pre-purchase task 4 and decision gate (task 5) run on 0.2.5 and stay open.
+
+**2026-11-24: the current status is consolidated in one page, and the driver and
+its review fixes are re-verified.**
+[Current status](../active/evidence/2026-11-24-virtual-cable-current-status.md) records the
+verified freeze (no driver commit since `7c88895c2`, no PDB), every review-fix
+item with its code location and host test, the VCAB-24/25/27/28/30
+requirement-to-evidence gap, and the single remaining ordered VM block. The host
+driver suite passes 10,915,246 checks and the Rust R1 regression passes. The
+round-2 guest run now refuses to start without the host-load sampler and records
+host CPU/memory per block, so a freeze on a busy PC can no longer be mistaken for
+a driver defect. No VM was started and no driver was installed on 2026-11-24.
+Remaining work is qualification on human/hardware gates (VM night, then Stage C);
+see the current-status page and `human-gated-tasks.md`.
+
+- WP-09b portable capture-analysis and reporting code is in place; the required
+  endpoint measurement matrix has not been run.
+- WP-10 host implementation is archived. The attended app gate needs the signed
+  package and disposable VM.
+- WP-11 host packaging preparation is recorded below. The production-signed
+  driver payload and NSIS install/update/uninstall VM sequence remain open.
+- Next authorized non-driver implementation: WP-09 mixed-clock cable plus
+  physical-device route support in the user-mode engine, prerequisite to the
+  Game → Discord route template. Do not change kernel-driver code in that work.
+
+Older driver investigations below are preserved as execution history. Follow
+only tasks explicitly labelled as current in the active plan and resume from
+its next-action section.
+
+## Pre-purchase assurance plan (2026-10-28, user request)
+
+Objective: before buying the EV certificate (WP-13), be able to say that
+nothing still open can force a driver rebuild, and that every VM result is
+either a pass or an attributed VM deviation with a Stage C rule. Requirement
+IDs: VCAB-01–05, 10/11, 20–30, VDEV-01/03/04/07/11/12, SEC-08, NFR-02.
+Authority: planning only; no driver change, purchase or host install is
+authorized by this section.
+
+### What the record supports (read before deciding)
+
+The owner remembers "all VM tests were conclusive". The record says: every
+*automated* Stage A check passes or has an attributed VM cause, but **a VM
+cannot give complete assurance**, and several items are not passes:
+
+| Item | State | Why it is not a pass |
+| --- | --- | --- |
+| VCAB-24 sustained no-glitch, A5 zero counters | VM deviation | Losses coincide with guest-wide stalls (VirtualBox NEM); driver counts each; no corruption. Only bare metal can show zero. |
+| VCAB-25 latency vs VB-Cable | Indicative (p50 36.7–39.7 ms) | VB-Cable comparison in the same VM never run. |
+| A12 Discord/OBS see the cable | Not run | Needs apps and accounts in the guest. |
+| A15 30-min eight-route run | VM-correlated | r10: 125 s guest freeze expired every lease; 3 borderline events. |
+| A16 96 kHz | REVIEW | First removal on the product route (1,344 frames at a 15 ms stall); sweep and THD+N hurt by single jumps. |
+| Cable-route reconnect (3 reopens) | Not VM-qualified | Added 2026-10-16 after r10. |
+| A13 AudioRouter session rebind after update | Not shown | Names/format migrate; session bind untested. |
+| Stage B (Secure Boot + Memory Integrity, Microsoft signature) | Impossible before signing | Needs the signed package. |
+| HVCI compatibility, InfVerif on the final INF, RC3 PDB | Not recorded | See task 3. |
+
+The owner's only PC is the bare-metal machine, and it can load the driver only
+once signed. So the certificate is the price of the binding continuity and
+latency evidence. The plan therefore does not try to prove those in the VM; it
+makes sure **a Stage C miss cannot cost a second signing round unless it is a
+kernel-side defect**, and that the cost of a second round is low (below).
+
+### Stakes if a second round is needed
+
+Attestation submissions are free; the EV certificate must be valid at
+submission and lasts up to ~458 days ([signing guide](../../operations/virtual-cable-signing.md),
+[driver track](../future/M03-driver-signing.md)). A kernel fix found during
+Stage B/C within that window costs time (new RC, Stage A rerun, resubmit), not
+a second certificate. Confirm the expired-certificate and resubmission rules in
+the Part 4 written answer before buying.
+
+### Tasks (ordered)
+
+1. **Freeze check (agent, host, ~30 min).** Confirm `git log
+   d2560715..HEAD -- drivers/audiorouter-virtual` is empty and the RC3 SYS/CAT/INF
+   SHA-256 values above still match the share `C:\VMs\ar-share\rc-0.2.4-base`.
+   Rebuild 0.2.4 from `d2560715` and compare with the RC3 SYS (differences
+   limited to timestamp and debug identifiers) so a matching `.pdb` can be
+   kept. Cost of a mismatch: submit without symbols (signing guide Part 5).
+2. **Kernel-fixed versus user-tunable (agent, read-only, ~1 session).** For each
+   Stage C risk, state in this plan whether the remedy is kernel (rebuild and
+   re-sign) or user mode/registry (no new signature). First reading of
+   `bridgeio.h`: lease duration is chosen by the caller (`LeaseMs`, bounded by
+   a registry-configurable `MaxLeaseMs`), block frames by the caller (≤ 4096),
+   minimum period by registry. To confirm in source before relying on it:
+
+   | Stage C finding | Remedy layer (to confirm) |
+   | --- | --- |
+   | Lease expiry on long hitches | user mode (lease length, reconnect) |
+   | 96 kHz stall headroom | user mode if depth is caller-set; kernel if a fixed slot count limits it |
+   | Min/default period, latency | registry (`CONFIG_FROM_REGISTRY`) |
+   | Timer/DPC cost, packet validity, newest-packet read policy | kernel |
+   | Pool growth, DPC max (VCAB-27/28) | kernel |
+
+   Any "kernel" row that Stage C could plausibly trip, and that the VM cannot
+   exercise, is a **pre-purchase decision**: show margin from the existing
+   models/traces, or change it now and re-freeze (this restarts Stage A on the
+   new RC, so decide deliberately). Output: a table with source line references.
+3. **Cheap checks not yet recorded (agent, host, ~half a day).**
+   - `infverif /v /h /rulever 25h2` on the packaged RC3 INF (spec 17 §5 requires
+     zero errors); record warnings.
+   - HVCI readiness: ExAllocatePool2 is already used (non-executable pool);
+     additionally scan the SYS sections for writable+executable, and run Driver
+     Verifier standard plus the code-integrity checks in the VM. The host runs
+     Memory Integrity, so a failure would first hurt the daily PC.
+   - Static analysis the WHCP path needs anyway (Code Analysis / CodeQL for
+     drivers) on the frozen source; record findings, fix none without a decision.
+   - Check whether the VirtualBox guest can run Secure Boot plus Memory
+     Integrity at all (it needs nested virtualization under NEM). If it cannot,
+     **Stage B collapses into Stage C on the main PC**; record that, and make
+     the restore path (restore point, Safe Mode removal) the Stage B
+     prerequisite.
+4. **Final Stage A run, bundle r11 (user, ~4 h unattended).** One bundle with
+   the RC3 driver byte for byte, the current helper/app build and the
+   `m03_bridge_tone` exit-gap fix, from `02-test-signing-ready`
+   (`run-stage-a.ps1 -Session all`). Additions in this run:
+   - cable-route reconnect: kill the lease with a freeze or a lease expiry and
+     show three reopens then a plain message (host analogue exists; this is the
+     VM proof);
+   - A13 rebind: with a running AudioRouter session on Cable A/B, `update` then
+     show the session binds by bus after the new IDs;
+   - VB-Cable comparison in the same VM (install VB-Cable, same impulse test).
+     Only the **ratio** is meaningful; the absolute numbers are VM numbers;
+   - A12 attended (short): Discord and OBS in the guest select Cable B Output
+     and receive the tone. If accounts cannot be used in the guest, defer A12 to
+     Stage C and record it as such.
+   Pass criterion: same verdicts as r10 or better, no bugcheck, every FAIL
+   attributed to a measured guest-wide stall.
+5. **Decision gate (owner).** Review the tasks 1–4 record. Go if: task 2 shows
+   no unaddressed kernel-side Stage C risk, task 3 has no HVCI/InfVerif defect,
+   task 4 has no new FAIL. Then proceed with WP-13 (signing guide Parts 0–6).
+   Otherwise change the driver, freeze a new RC and repeat from Stage A.
+6. **Stage B and C with decision rules (after signing).** Run Stage B (or its
+   collapsed form, task 3) and Stage C as in the testing procedure. Rules set
+   now so a result is judged against a number, not a feeling:
+
+   | Stage C result | Action |
+   | --- | --- |
+   | Kernel-side defect (corruption, wrong-speed audio, bugcheck, pool growth, DPC max over budget, BattlEye refusal) | New RC, Stage A, resubmit (free within the certificate's validity) |
+   | Zero counters and zero glitches in 1 h on 8 cables under 80 % load | VCAB-24/30 pass; close the VM deviations |
+   | Glitches with counters rising but no kernel defect and a user-mode cause (lease, depth, reconnect) | Fix in the app/helper/registry; no new signature |
+   | Latency above VB-Cable by a small margin | Record numbers; owner decision (DEC-14 method) before release |
+   | Driver DPC or CPU over VCAB-27 | Kernel fix or recorded owner decision with numbers |
+
+### Validation matrix
+
+| Requirement | Task | Evidence (record in this section's Progress; split into an evidence file when it grows) |
+| --- | --- | --- |
+| Frozen RC (VCAB-05, DIST) | 1 | Hash comparison, rebuild diff, PDB result |
+| Rebuild-risk classification | 2 | Table with source references |
+| SEC-08, VDEV-09 prerequisites | 3 | infverif output, section scan, Verifier, analysis report |
+| VDEV-11 | 4 | A12 result or deferral note |
+| VCAB-25 (relative) | 4 | VB-Cable vs cable impulse ratio, same VM |
+| VCAB-24/25/27/28/30 binding | 6 | Stage C measurements against the rules above |
+
+### Risks
+
+- A VM attribution is an inference; only bare metal confirms it. Mitigated by
+  task 2 (remedy layer) and the stakes paragraph, not eliminated.
+- Task 3 may find an HVCI or analysis defect: that changes the driver and
+  restarts Stage A.
+- Microsoft's "testing purposes only" wording for attestation (signing guide
+  Part 0): the written answer (Part 4) should precede purchase, not only the
+  first public release. Recommended, since it costs nothing.
+- Collapsed Stage B puts the first Secure-Boot load on the daily PC; needs the
+  restore point and the Safe Mode removal path in hand.
+
+### Rollback
+
+Tasks 1–3 are read-only on the host. Task 4 is VM-only (restore the
+`02-test-signing-ready` checkpoint). Nothing here changes the host driver
+store, test signing, Secure Boot or default devices.
+
+### Progress (2026-10-28, host, read-only)
+
+- **Task 1, partly done.** `git log d2560715..origin/main --
+  drivers/audiorouter-virtual` is empty (driver frozen). The share
+  `C:\VMs\ar-share\rc-0.2.4-base\driver` SYS/CAT/INF SHA-256 values equal the
+  RC3 table above (`AF3B4E5E…`, `C755E7AF…`, `E29D89DC…`). Not done: the 0.2.4
+  rebuild and PDB comparison (WDK build; ask the owner first).
+- **Task 3, partly done.**
+  - Section scan of RC3 `audioroutervirtual.sys`: 9 sections, none both
+    writable and executable (`.text`, `fothk`, `PAGE`, `INIT` execute only;
+    `.data` writes only); DllCharacteristics `0x4160` = ASLR, high-entropy ASLR,
+    NX-compatible, Control Flow Guard. Pool allocations use `ExAllocatePool2`
+    (non-executable by default). This is static evidence, not an HVCI run.
+  - The packaged `infverif.log` reports "INF is VALID" with rules from OS build
+    10.0.28000. Rerun with the `25h2` rule version of spec 17 §5 on the final
+    package before submission.
+  - Not done: Driver Verifier code-integrity run (VM), Code Analysis/CodeQL, and
+    the Secure Boot plus Memory Integrity feasibility check in the VirtualBox
+    guest.
+- **Task 2, first result (source reading; confirm with a trace before relying
+  on it).**
+
+  | Stage C finding | Remedy layer | Basis |
+  | --- | --- | --- |
+  | Lease expiry on long hitches | user mode | `LeaseMs` is in the OPEN request, 1 ms to 60 s (`bridgeio.h` validation); the app's reconnect already exists |
+  | 96 kHz stall headroom (r10: 15 ms stall removed audio) | user mode up to a kernel ceiling, at a latency cost | Both directions have kernel-fixed depths. Render: `Capacity = min(4, 32768 / (frames × channels))` (`renderqueue.h`), so retained frames are `min(4 × quantum, 32768 / channels)`. Capture: two blocks (`captureBlocks[2] = { m_BridgeScratch, m_BridgePrefetch }`, `minwavertstream.cpp`), about 2 × quantum. Quantum is the caller's `FramesPerQuantum` (≤ 4096). Which side dropped in r10 is not established (the capture side's 2 × 480 frames is only 10 ms at 96 kHz, so it fits a 15 ms stall) |
+  | Minimum/default period, latency | registry | `bridgeio.h`: `CONFIG_FROM_REGISTRY` covers `CableCount`, period limits and `MaxLeaseMs` |
+  | Timer/DPC cost, packet validity, newest-packet read policy | kernel | Fixed in `minwavertstream.cpp`/`streamtiming.h`; a defect needs a new RC |
+  | Pool growth, DPC maximum (VCAB-27/28) | kernel | VM pool growth was flat (A8 ×2); DPC cost is unmeasured on real hardware |
+
+  Pre-purchase decision this exposes: the render queue (4 blocks, and a
+  32,768-sample ceiling) and the two-block capture queue, plus the Windows
+  packet size (1 or 2 notifications per buffer), are the kernel-fixed limits
+  that bound stall tolerance. Corrected headroom (2026-10-28, after review):
+  - 8 channels: render retention tops out at **4,096 frames** once the quantum
+    reaches 1,024 (about 43 ms at 96 kHz, 85 ms at 48 kHz); a larger quantum
+    then only adds latency.
+  - 2 channels: the ceiling is 16,384 frames, reached only at the maximum
+    4,096-frame quantum; at 480 frames it is 4 × 480 = 1,920 frames (20 ms at
+    96 kHz, 40 ms at 48 kHz).
+  - Capture is shallower: about 2 × quantum (10 ms at 96 kHz with 480-frame
+    blocks).
+  The stalls seen so far fit within these figures except at 96 kHz with small
+  quanta. Beyond them, more tolerance is a kernel change.
+
+- **Owner decision (2026-10-28, "Approved"; the agent read it as covering both
+  questions asked):** the 0.2.4 rebuild may run, and the queue depths are
+  accepted as is. **The cap acceptance was given against the agent's first,
+  incorrect "proportional headroom" wording; the corrected figures above must
+  be reconfirmed by the owner before it counts.** Raising the depths would
+  restart Stage A.
+- **Owner decision, reconfirmed (2026-10-28):** accept the corrected depths;
+  the frozen RC3 stays. Deeper queues are recorded as deferred future work in
+  [Virtual cable: deeper driver queues](../future/virtual-cable-queue-depth.md),
+  to be tackled when there is more time.
+- **Task 1 rebuild result (2026-10-28, host, WDK 10.0.28000.0, no diagnostics,
+  test-signed).** 0.2.4 rebuilt from `d2560715` in two throwaway worktrees
+  (removed afterward; the owner's tree was untouched):
+  - Build path `C:\code\audiorouter\.worktrees\rc3-rebuild` (23 characters
+    longer than the original): `.text`, `fothk`, `PAGE`, `INIT` and `.data`
+    identical to RC3. `.rdata` and `.pdata` differ because the longer PDB path
+    shifts the unwind data that follows it, not because the code changed.
+  - Build path `C:\code\rc3-rebuild` (same length as `C:\code\audiorouter`):
+    the SYS differs from RC3 in 6 header bytes (timestamp, checksum), 32
+    bytes of the debug directory (timestamps, PDB GUID, the path text) and
+    the signature. Every section, including `.rdata` and `.pdata`, matches
+    otherwise. Rebuilt SYS SHA-256 begins `19F0A27F…`; RC3 is `AF3B4E5E…`.
+  - **The RC3 binary is reproducible from source up to debug identity.** The
+    rebuilt PDB carries a different GUID (`e5202766-…` against RC3's
+    `56318f76-…`) and a different path, so as built it does not match the RC3
+    SYS. The output of the equal-path build was deleted and only a hash prefix
+    kept, so no PDB is currently held.
+  - Consequence for WP-13 (signing guide Part 5): submit the **original RC3
+    SYS, CAT and INF** (the bytes Stage A tested). Do not submit the rebuilt
+    SYS. Symbols are optional: (a) fallback, submit without symbols;
+    (b) untested option, repeat the equal-path build keeping its output and try
+    to force-match its PDB to the RC3 SYS (rewrite GUID and age, for example
+    with `chkmatch -m`; the debug-directory path text also differs). Verify
+    with `symchk` before relying on it. Not blocking for purchase. Keep each
+    package's PDB with its SYS from now on (already a guide rule).
+- **Task 3, `infverif` at the spec's rule version:** `/rulever 25h2` (rules
+  from OS build 10.0.26200) on the RC3 INF: **INF is VALID**, no errors or
+  warnings.
+
+- **Task 3, static analysis (2026-10-28, host, throwaway worktree at
+  `d2560715`, MSBuild `RunCodeAnalysis` with `DriverRecommendedRules.ruleset`,
+  exit 0, 174 warnings, worktree and log deleted afterward).** No defect found
+  that affects the frozen driver; any fix would be a driver change and is
+  deferred to a future driver change:
+  - C26495 uninitialized members (about 77 unique: `minwavertstream.h` 51,
+    `minwavert.h` 14, `common.cpp` 9, `savedata.cpp` 3): inherited SysVAD code.
+  - C28252/C28253 annotation mismatch on the AudioRouter-added
+    `BridgeControlCreateClose` and `BridgeControlDeviceControl`
+    (`adapter.cpp` 691/715/1094): annotation only, no behavior.
+  - C6387 `adapter.cpp` 1698/1723 (`AddStreamResource` argument could be
+    NULL) and C28193 `common.cpp` 2745 (unexamined `ntStatus`): SysVAD upstream.
+  - C6101 `minwavertstream.cpp` 51: `WriteBridgeSample` leaves an out parameter
+    unwritten on an unsupported format; its call site (line 1795) is guarded
+    by `IsBridgePcmFormat`, so it is unreachable for validated formats.
+  - C28160 `newdelete.cpp` 45/62: placement `operator new` takes caller-supplied
+    `POOL_FLAGS`; the source never uses `POOL_FLAG_NON_PAGED_EXECUTE`.
+  - Still open: dynamic HVCI confirmation is possible only at Stage B or C
+    (VirtualBox NEM cannot run VBS/HVCI). The RC3 section scan (no writable
+    plus executable sections, DllCharacteristics 0x4160) and `infverif` are
+    above.
+- **Task 4, bundle r11 prepared (2026-10-28/29, host).** Source commit
+  `deaa407a` (branch `docs/virtual-cable-assurance`). Built with
+  `prepare-vm-share.ps1 -ReuseDriverShare C:\VMs\ar-share\rc-0.2.4-base`, then
+  `prepare-cable-latency-update.ps1`; both exited 0.
+  - Base `C:\VMs\ar-share\rc-0.2.4-r11-base`, bundle
+    `C:\VMs\ar-share\rc-0.2.4-r11`.
+  - `MANIFEST.txt` SHA-256
+    `a4bfd5241ed6f9f9db780c3b31ebeba28f9b4c863e8a5a9685051da8eb968379`.
+  - `driver\` SYS, CAT and INF hashes equal the RC3 values (`AF3B4E5E…`,
+    `C755E7AF…`, `E29D89DC…`) and `driver-next\` equals the 0.2.5 package
+    (`6184DC57…` SYS), compared against `rc-0.2.4-base` file by file: no driver
+    byte changed.
+  - New tooling: `run-cable-reconnect.ps1`, `run-cable-vbcompare.ps1`, the
+    `extras` session of `run-stage-a.ps1`, and the `--stall-at-s` /
+    `--tolerate-reconnect` options of `m03_cable_session`. Host checks:
+    clippy `-D warnings` exit 0, rustfmt clean, `--check` reconnect run exit 0,
+    grading tested on synthetic results. Not yet run in the guest.
+  - **Owner-run block (VM `AR-DriverTest`, user-run, reversible by the
+    checkpoint):** restore `02-test-signing-ready`; copy `rc-0.2.4-r11` to
+    `C:\ar`; in an elevated PowerShell run
+    `run-stage-a.ps1 -Session all` first (unchanged sessions), restore the
+    checkpoint, then `run-stage-a.ps1 -Session extras` (reconnect at 4000 and
+    6500 ms, A13 update/repair, bit-exact after update, reconnect on the updated
+    driver, VB-Cable comparison if VB-Cable is installed, no-bugcheck, remove).
+    Then the attended A12 steps in `virtual-cable-vm-guide.md`. Send the
+    `.zip` outputs and the printed hashes back.
+  - VM-only checks still to add by hand: Secure Boot plus Memory Integrity
+    feasibility and a Driver Verifier code-integrity run. Neither has been
+    attempted; no verifier flag has been verified, so none is claimed.
+
+### Next action
+
+1. Owner: run the r11 block above in the VM and send the outputs.
+2. Agent: grade the returns, record them here, and prepare the go/no-go summary
+   (task 5). The Microsoft written question (signing guide Part 4) is the
+   owner's to send before the certificate purchase.
+3. Agent: when the owner names the next working branch, bring
+   `docs/virtual-cable-assurance` in (cherry-pick or merge); remove the
+   `target` junction in `.worktrees/vc-assurance` first.
+
+## Goal: complete the driver (set 2026-10-12, user request)
+
+The user asked to close the loop on the driver. Definition of done: one
+frozen driver build, the **release candidate (RC)**, passes Stage A in the VM
+(A1–A16) and then becomes the Microsoft-signed package. AudioRouter installs it
+with one UAC prompt, and it passes Stage C binding measurements on this PC.
+It never needs a rebuild for a known gap ("sign once", 17 §1). WP-15
+(beta, release) follows from there and is not part of this goal.
+
+### Where the driver actually is (from the evidence below)
+
+The driver and its host-side product are functionally complete. Since
+2026-10-11 the open items are all **qualification**, plus one decision.
+
+| Stage A check | State | Evidence or gap |
+| --- | --- | --- |
+| A1–A3, A14 install/names/remove | **Pass ×2 on RC3 0.2.4** | Stage A run 3, 2026-10-12 (earlier: WP-03 smokes 2026-10-08/10) |
+| A4/A5/A6 audio both ways, clean, silence | **RC3:** tool and product route stream both ways; stall counters rise; 8 ch 96 kHz clean with zero counters; bit-exact 2 and 8 ch; zero-counter 2-ch runs blocked only by VM descheduling | **A5 zero counters: VM deviation, Stage C** (user decision 2026-10-13) |
+| A7 crash recovery | Pass | r24 |
+| A8 pool leak (1 h), A9 reboot keeps IDs | **Pass on RC3** (A8: 0.069 MiB/h r9, −0.293 MiB/h r10, 60 min each; A9: 4 IDs equal, r6) | — |
+| A10 Driver Verifier, A11 fuzzer + second user | **Pass on RC3** (r9 and r10: 30-min fuzz under Verifier, 0 unexpected; crash recovery 3/3; other-session user refused, same-session "lease held"; no bugcheck) | A10 tone runs: a guest freeze after the Verifier restart expired the lease (r9 4.1 s, r10 39.5 s; VM, see results) |
+| A12 Discord/OBS see the cable | **Not run** | — |
+| A13 upgrade N → N+1 keeps names and migrated settings (helper `update`, `repair`); endpoint IDs change by design (VCAB-05) | **Pass on RC3** (0.2.4 → 0.2.5, same devnode, 96 kHz migrated, repair) | AudioRouter session rebind after the update not yet run |
+| A15 all 8 cables | **Count and crosstalk pass on RC3** (2 → 8 → 2; 56 pairs at digital zero, r9 and r10) | 30-min four-route run: 0 corrupted, driver counted every loss; losses from VM stalls and the relay's later trims; r10 also a 125 s guest freeze that expired every lease (VM, Stage C) |
+| A16 quality matrix | **RC3 product route, r9/r10:** float32 bit-exact at 44.1/48/96 kHz × 1/2/8 ch (failures are inserted silent blocks, except one r10 96 kHz removal at a 15 ms route stall); PCM16/24/32 N/A (Windows mixes float32); sweeps 44.1/48 kHz pass (r10); THD+N −153 dB (r7) | 96 kHz sweep and THD+N failed on single stream jumps (r9 drops, r10 inserted blocks; VM); VB-Cable comparison not run |
+| VCAB-24 no glitches (sustained) | **Cannot pass in this VM** | NEM stalls (r12–r26); bound to Stage C |
+| VCAB-25 latency vs VB-Cable | Indicative only | r6/r23; VB-Cable comparison not run |
+
+Every VM run so far used a build with `AR_TIMING_DIAGNOSTICS` compiled in
+(r20–r29). Stage A has never run on a normal build. The RC must be a
+normal build, and Stage A must run on exactly that binary.
+
+### Decision needed first (sign once)
+
+**8-channel cables (VCAB-11, VCAB-20 at 8 ch, A15/A16 8-ch cases).** These
+were deferred on 2026-10-11 because Windows disables speaker setup for the
+line-level cable endpoints. The driver's 8-channel path exists but no endpoint
+can be switched to it. Because the driver is signed once, the only open
+question that could force a driver change has to be settled **before** the
+freeze. Options:
+
+- (a) **Spike, then freeze (recommended).** Run a short VM experiment:
+  can user-mode code (the elevated helper, via `IPolicyConfig::SetDeviceFormat`
+  or the endpoint property store) set a cable endpoint to 8 channels, and
+  does audio then flow bit-exact? If yes, no driver change is needed and
+  8 channels become a helper/app feature after signing. If no, decide
+  whether the RC needs a topology change before freezing.
+- (b) Freeze now with stereo-only endpoints. Record VCAB-11/VCAB-20 at
+  8 ch as accepted deviations in 17 §8, and drop the 8-ch cases from A15/A16
+  for this release. A later fix would need a second signing round.
+
+### Critical path
+
+1. **Decision above**, and the spike if (a). VM, user-run, about 30 min.
+2. **Freeze the RC.** Normal build (no timing diagnostics), new version
+   number, clean tree, checksummed. Also build an N+1 package with the
+   same source and a bumped version, for A13. Add `update`/`repair` to
+   `vm-checks.ps1` session 3. Agent work on the host; no driver source
+   change unless step 1 requires one.
+3. **Stage A on the RC (WP-12)** in the VM, in sessions the user runs from the
+   `02-test-signing-ready` checkpoint. Order: A1–A7 (repeat on the RC);
+   A9 reboot; A13 upgrade/repair; A15 eight cables; A16 quality matrix with
+   a VB-Cable latency comparison in the same VM; A12 apps; A10 Verifier
+   repeating A4–A7; A11 fuzzer and second user; A8 one-hour pool check,
+   which can run alongside the 1-hour 8-cable traced run. VCAB-24 is
+   recorded as a documented VM deviation: every loss must coincide with a
+   traced guest-wide stall and be counted by the driver. It is not a pass.
+4. **Gate: user go-ahead to spend money (WP-13).** EV certificate,
+   Partner Center attestation of the exact RC, then Stage B in a clean VM
+   with Secure Boot and Memory Integrity on.
+5. **WP-11 + WP-10 attended gate** with the signed payload in the VM:
+   NSIS install, Setup → Install cable (one UAC), update, uninstall
+   keep/remove.
+6. **Stage C on this PC (WP-14)** with the signed package only, as a
+   normal user install (restore point first): binding VCAB-24/25/27/28/30
+   measurements, physical-loopback drift (needs WP-09 mixed-clock), and one
+   week of daily use. A missed target needs a fix or a recorded user
+   decision with numbers.
+
+**Parallel, not on the driver's critical path:** WP-09 mixed-clock routes
+(Game → Discord template). This is user-mode only and is needed before
+Stage C's drift case and before release, but not before signing. The
+domain bus set and `virtualDevices.*` deprecation (WP-08) are also
+user-mode follow-ups.
+
+**Decision (user, 2026-10-12): option (a), run the spike.** Reason: the
+app's own Surround to headphones feature (CAP-14) reads a 7.1 virtual cable
+playback side. Today that is VB-Cable set to 7.1. Without 8-channel
+AudioRouter cables, those users would still need VB-Cable, which defeats
+DEC-18.
+
+**Resolved (2026-10-12): no open question forces a driver change.** The
+spike found and fixed the one driver blocker (r32, 0.1.7: Windows honours
+the stored format; 8 ch bit-exact). The rest of 8-channel support is
+user-mode or spec work (app control via `IPolicyConfig`, VCAB-11 wording,
+`PKEY_AudioEndpoint_PhysicalSpeakers` for games, CAP-14) and does not block
+the freeze. VCAB-05 was settled by decision (driver updates change IDs).
+
+### RC freeze (step 2, started 2026-10-12, user request)
+
+- RC = driver **0.2.0**, a normal build (no `AR_TIMING_DIAGNOSTICS`) of the
+  r32 driver source, test-signed for Stage A. A13 uses **0.2.1**, the same
+  commit built again. Agent choice of numbers: above every test build the
+  VM has seen (≤ 0.1.8), and a minor bump marks the first release
+  candidate. Stage A starts from the `02-test-signing-ready` checkpoint, so
+  no downgrade from 0.1.8 is involved.
+- Tooling for it: `prepare-vm-share.ps1 -NextVersion` builds `driver-next\`
+  from the same clean commit (both normal builds, checked);
+  `prepare-cable-latency-update.ps1` then layers the cable runners on that
+  share and keeps both driver packages byte-identical. `vm-checks.ps1`
+  gains `update`, `update-verify`, `repair` (A13: same devnode, N+1
+  installed, cables present, a 96 kHz format on Cable B Output migrates;
+  IDs printed, not compared) and accepts exit 5 on `install`. VM guide
+  session 3 lists them.
+- The signed release later must be built from the same commit as the
+  tested RC (driver source unchanged); only the signature differs.
+
+**RC 0.2.0 frozen (2026-10-12).** Source `4b371657` (clean; driver source
+identical to `e95c4bcd`). Share `C:\VMs\ar-share\rc-0.2.0` (base
+`rc-0.2.0-base` from `prepare-vm-share.ps1 -Version 0.2.0 -NextVersion
+0.2.1`, then `prepare-cable-latency-update.ps1`); both packages passed the
+33 package checks; `timingDiagnostics: false`, `signed: test`.
+
+| Package | SYS SHA-256 | CAT SHA-256 | INF SHA-256 |
+| --- | --- | --- | --- |
+| `driver` 0.2.0.0 | `DA85C21DB920A2060887BF9CB46388508161EE584DC3D1430D5C6FEAD65ECB74` | `D2E7859D2683426DE1D44A4557EB89917E11FBED869494FEA05D4D09DD6D1BA8` | `3E2D10E7EB6DB5E792C0DB59133F53FEEC1CE3C6CE7ED6A1F33CBB23DEA1CE37` |
+| `driver-next` 0.2.1.0 | `326935EADF84D2EA80AEB31B15DC96F1570887DF485D48D3CE595225D5B74F08` | `4E80D05D70A1290AE9E7B50BE1498BD167B853CA1F1E7E6A8967659F262213BB` | `CBF4D21D0602A4F8F6E0B25033C5EA7D04AC67EA20764C41A1CFF2E54FBC042E` |
+
+MANIFEST SHA-256 `7ED02337C5B662337E14D134A40259CD26039876A6AEF5CFCF8C3CF635B824A4`.
+Any later driver source change invalidates this RC and its Stage A
+evidence. Next: Stage A sessions (step 3), each from the
+`02-test-signing-ready` checkpoint, bundle copied to `C:\ar\rc-0.2.0`.
+
+**RC 0.2.0 Stage A run 1 (2026-10-12, from `02-test-signing-ready`):**
+`preflight` PASS 15; `smoke` PASS twice (A1–A3, A14); `install` PASS
+(exit 0, 4 endpoints, idempotent); `status` PASS (0.2.0.0, 60/60 formats);
+`cables` PASS (2 → 8 → 2, A/B IDs unchanged, C–H gone); **`rename` FAIL**.
+Two defects, the second withdraws RC 0.2.0:
+1. **Helper crash on `configure --name`** (user mode, not the driver):
+   exit `0xC0000374` heap corruption. Full dump (LocalDumps, VM only,
+   removed after) resolved with `cdb` and the matching PDB: `RtlFreeHeap`
+   from dropping the `Vec<u16>` `text` in
+   `WindowsPlatform::set_endpoint_description`; the block was already
+   freed. The endpoint property store's `SetValue` frees the `VT_LPWSTR`
+   it is given, so the Rust-owned buffer was freed twice. Never exercised
+   before (only fake-platform tests). Fix: pass a `CoTaskMemAlloc` copy and
+   never free it in the helper. State had already saved `1: "Discord"`.
+   Evidence `Z:\rc-0.2.0\diag-rename\` (events, WER report, dump).
+2. **Capture cables default to 44.1 kHz mono on a fresh install** (render
+   correctly 48 kHz float stereo; `format-show.txt`). VCAB-11 default
+   violated. Cause (inference, consistent with every observation): the
+   capture `EP\0` sections were associated with `KSNODETYPE_ANY`, while the
+   capture bridge pins use per-cable categories (`CableXCapturePinCategory`),
+   so Windows never applied the capture `OEMFormat` and fell back to the
+   first data range; render associates `KSNODETYPE_ANALOG_CONNECTOR`, which
+   matches its bridge pin, and got the OEM default. Before r32 the
+   proposed default (`PROPOSEDATAFORMAT2`) hid this. Fix: capture `EP\0`
+   association = `%GUID.CableXCapturePinCategory%` (generator, INX,
+   acceptance test). INF change → the package changes → new RC.
+Also fixed: the INF generator now keeps each file's line endings, so
+`-Check` passes on a clean checkout (the topology header no longer churns).
+Host: helper 28 tests, Clippy `-D warnings`, rustfmt clean;
+`m03-inf-gen.ps1` and `m03-driver-build.ps1` pass. Next: RC2 = 0.2.2
+(A13: 0.2.3), Stage A run again from the checkpoint; it must show 48 kHz
+stereo on all four endpoints after `install` and `rename` passing.
+
+**RC2 0.2.2 frozen (2026-10-12).** Source `6fc8e669` (clean). Share
+`C:\VMs\ar-share\rc-0.2.2` (base `rc-0.2.2-base`); both packages: 33
+package checks, `timingDiagnostics: false`, test-signed; the packaged INF
+has 16 capture associations to `CableXCapturePinCategory`. Helper SHA-256
+`93EF5E7105CFF1551BBF81AB73994B838035EEE01A4A8BBEC68BBBEEE56D444D`.
+
+| Package | SYS SHA-256 | CAT SHA-256 | INF SHA-256 |
+| --- | --- | --- | --- |
+| `driver` 0.2.2.0 | `3B2BE1E6DCCF5005FDFB23B9DC42F479F68C980243FF3867CAD0CBC567E7004B` | `4FF0EE5721D838877CA5B662975A69AA434C9381DDBDF0BA105CF3DBEACA91CD` | `D9C06F7ED3E3BE53B2A0A2474EFCA6B391E0102F655ED82B06A5EEE202B5786C` |
+| `driver-next` 0.2.3.0 | `721E99BD608B093C158F677A65CC88F1FF4290558FE06B8DBDD71DB53E8FA09A` | `C6A4DAAF08ED0A6ACCDB7EED7C90870295C4696E872E92439E129004BA09FF56` | `4877E64A103CC5A75122D36B438A90F8C76A01A5E473DC8A972DEF1DE97E294E` |
+
+MANIFEST SHA-256 `1BE8E244DC6CFEBCD74E94B9BA316EC15F73ADA20E9BA38FE69B40B4051E8F94`.
+
+**RC2 Stage A run 2 (2026-10-12):** steps 1–2 passed again, but a fresh
+install still gave both capture cables 44.1 kHz mono
+(`Z:\rc-0.2.2\fresh-install-formats.txt`): the association theory was
+wrong. `cables` PASS; `rename` FAIL cleanly (exit 3, "set the endpoint
+name: Access is denied", no crash: the double-free fix holds). **RC2
+withdrawn.**
+- **Actual cause of the default:** Microsoft's PKEY_AudioEngine_OEMFormat
+  page specifies a 48-byte `StgSerializePropVariant` blob: `41,00,00,00`
+  (VT_BLOB), `28,00,00,00` (size 40), then the WAVEFORMATEXTENSIBLE. r32
+  wrote only the 40-byte structure, so Windows ignored the OEM default on
+  every cable; render was 48 kHz stereo by Windows' own choice, capture fell
+  back to the first data range. Fix: the 8-byte header in the generator and
+  INX; the acceptance test asserts the exact 48-byte line. The per-cable
+  capture association stays (Microsoft documents the association as the
+  endpoint's KS pin category, which it now names).
+- **Rename denied (user mode, not RC-blocking):** writing
+  `PKEY_Device_FriendlyName` through the endpoint property store is refused
+  even elevated, so 17 §5.5's rename design does not work. The driver does
+  not read names (17 §5.5 decision); Windows takes them from the INF's
+  `MediaCategories` entries, so a fix stays in the helper (for example,
+  rewrite the per-cable `MediaCategories` name and restart the device) and
+  needs a spec decision. Also 17 §8 (VDEV-01 row: renaming changes only
+  AudioRouter's label) contradicts §5.5. Stage A skips `rename` until then;
+  running it saves the name in helper state, which `update` would re-apply.
+Next: RC3 = 0.2.4 (A13: 0.2.5).
+
+**RC3 0.2.4 frozen (2026-10-12).** Source `d2560715` (clean). Share
+`C:\VMs\ar-share\rc-0.2.4` (base `rc-0.2.4-base`); both packages: 33
+package checks, `timingDiagnostics: false`, test-signed; the packaged INF
+has 32 OEM-format lines with the `41,00,00,00,28,00,00,00` header.
+
+| Package | SYS SHA-256 | CAT SHA-256 | INF SHA-256 |
+| --- | --- | --- | --- |
+| `driver` 0.2.4.0 | `AF3B4E5EDEA301220EC0BE0CF1675E1723874A3464BE3ADF517E80D61B1F39B1` | `C755E7AFA9423A8CEECC3FA69870ABBD9E9BD93153615F70945BD087A1F6D0A2` | `E29D89DC95ADDAEAA1C8180868FB6094D0B68E1F5F4FCD30B3453053CDB2E9E4` |
+| `driver-next` 0.2.5.0 | `6184DC57F18AB03EC3B03E3E0FF1B18685AB78AFA0BC486A4FFD681ACD9C6514` | `1AFA9319DFB5F3729FD8375DFF70687F28DFD5CC135A47FF52AED69EB0C3C2DF` | `1558AFC5874D39677F779F4422FF847AFE8FD7715CF59C93CF4D1761A09CF429` |
+
+MANIFEST SHA-256 `6D0E8B8B4AFB9571EFD7051099B679F57791ADED028B1CB9B8621A0640AAA9DB`.
+
+**RC3 Stage A run 3 (2026-10-12, from `02-test-signing-ready`): all steps
+pass.** Evidence `C:\VMs\ar-share\rc-0.2.4\evidence-20261012-204816.zip`
+plus `fresh-install-formats.txt`. `preflight` 15/15; `smoke` ×2 (A1–A3,
+A14); `install` 3/3; `status` 2/2 (0.2.4.0, 60/60 formats); **fresh-install
+default: all four cables 48 kHz, 2 ch, float32, mask 0x3** (VCAB-11 default;
+the serialized OEM format works); `cables` 5/5 (A15 count); `update` 4/4
+(Cable B Output marked 96 kHz; helper update to 0.2.5.0 exit 5, same
+devnode `ROOT\MEDIA\0000`, superseded `oem5.inf` removed); restart;
+`update-verify` 6/6 (0.2.5.0, same devnode, cables present, **96 kHz
+migrated**, restored 48 kHz; all four IDs new, as VCAB-05 now allows);
+`repair` 3/3 (exit 0, same devnode, four endpoints); `remove` 2/2;
+`collect`. `rename` skipped (open helper defect above). A13 passes on
+RC3; the AudioRouter session rebind after an update remains to show.
+
+Remaining Stage A on RC3 (same frozen packages, each from the checkpoint):
+session 2 audio (A4–A6 tone/stall/8-ch, product-route bit-exact at 2 and
+8 ch, A7 kill, A9 reboot keeps IDs); session 4 Driver Verifier + 30-min
+fuzz (A10, A11); session 5 second user (A11); A8 one-hour pool; A12
+Discord/OBS; A15 30-min eight-route run; A16 quality matrix with a VB-Cable
+latency comparison. Open user-mode item: the rename design (spec decision).
+
+**Decision (user, 2026-10-12): rename option (b), names are AudioRouter
+labels.** Recommended over rewriting the INF `MediaCategories` names
+(option a) because (a) changes the `DeviceDesc` the helper identifies
+cables by, needs a UAC prompt plus a device restart per rename, relies on
+undocumented refresh behaviour, and is reset by every driver update.
+Implemented (user mode only; driver and RC3 packages unchanged):
+- Helper: the Windows name write (`set_endpoint_description`) and every
+  `apply_names` call are removed; `configure --name` stores the label only,
+  with no restart; `status` reports `cableNames`; unused `context`
+  parameters dropped. Tests: configure keeps Windows names and stores the
+  label; a simulated Windows Sound-settings rename still classifies the
+  cable; `status` reports labels. 28 helper tests, Clippy (workspace crate
+  and `src-tauri`), rustfmt clean.
+- UI: the Setup cable list gets a fixed note (labels only; how to rename
+  in Windows Sound settings). Lint 0 errors (25 existing warnings),
+  typecheck, 17 panel tests; the three-theme browser test now asserts the
+  note and saves `<theme>-cable-names.png` (checked visually in dark, light
+  and high contrast).
+- Spec 17: VCAB-02 renaming paragraph, `Cables\<n>\Name` row (not used),
+  §5.5 names decision, §6 `configure`, §7.4 Setup panel, §8 VDEV-01 row.
+- `vm-checks.ps1 rename`: label stored (status `cableNames`), Windows names
+  and IDs unchanged.
+- `prepare-vm-share.ps1 -ReuseDriverShare` copies frozen packages byte for
+  byte (clean tree; refuses a package whose driver source differs from
+  HEAD), so remaining Stage A sessions use RC3's exact binaries with the
+  current helper.
+VM still to show: `rename` passes, and a cable renamed in Windows Sound
+settings is still found by the helper (`status`) and AudioRouter.
+
+Bundle `C:\VMs\ar-share\rc-0.2.4-r2` (source `6cb9b6e7`; base
+`rc-0.2.4-r2-base` from `-ReuseDriverShare rc-0.2.4-base`): driver and
+driver-next SYS/CAT/INF byte-identical to RC3 (hashes above, compared);
+helper SHA-256 `E654314AEE4BD57B7A701757E72C1E5EF9B2852DB2823475135EC3A15E71B623`;
+MANIFEST SHA-256 `2BEE7553DA1A0A08B4B1A95463F971517EAAFF6C6128165F7C83652CA1DD570D`.
+Use it for every remaining RC3 Stage A session.
+
+**r2 rename check (2026-10-12, guest):** `install` exit 5 (a restart was
+pending from the previous `remove`; the idempotency check wrongly required
+`alreadyInstalled` before the restart, now skipped after exit 5). After the
+user renamed Cable B Output to "Voice chat" in `mmsys.cpl`, `status` FAILED:
+`needsRepair`, inventory FAIL. The rename rewrote the endpoint
+description, which the helper classified by. Fix (user mode): new
+`EndpointDisplayInfo::filter_reference`, the connected KS filter's
+reference string via the documented DeviceTopology API; the helper
+classifies by it first (`classify_filter_reference`:
+`wavecable|topologycable` + `a–h` + `render|capture`), then by description
+and name; `m03_cable_inventory` matches the same way and reports
+`filterReference`. Host evidence: on VB-Cable endpoints the call returns
+the topology filter reference (`vbaudiovacbwdm2022_in1_topo_…`). Tests:
+helper 30 (new: filter-reference classification, renamed endpoint still
+found), inventory 3, windows-audio 141; Clippy workspace and `src-tauri`,
+rustfmt clean. `remove` passed. Spec 17 §5.5 updated.
+Bundle `C:\VMs\ar-share\rc-0.2.4-r3` (source `19be028f`, `-ReuseDriverShare
+rc-0.2.4-base`; driver files identical to RC3, compared): helper SHA-256
+`3A8B2F226C71059C23EB1DF3A4E39AB29D617FBE0C461E79A7F243DD4BF7D74D`,
+MANIFEST SHA-256 `31A3E1F317884EFB029335806AC6183178E4E9122768E00D66BCEB1B9D7F8897`.
+It supersedes r2 for the remaining RC3 sessions.
+
+**r3 rename check (2026-10-12, guest): PASS.** `status` PASS; `rename`
+PASS 4/4 (configure exit 0, label `{"1":"Discord"}` stored, Windows names
+unchanged, Cable B IDs unchanged); the user then renamed Cable B Output to
+"Voice chat" in `mmsys.cpl`; `status` PASS (`installed`, four endpoints,
+"Voice chat (AudioRouter Virtual Cable)" listed, inventory 60/60 formats);
+`remove` PASS. Option (b) and filter-reference identity confirmed on RC3.
+
+**Next action: RC3 Stage A session 2 (audio; A4–A7, A9), prepared
+2026-10-12, user runs it 2026-10-13.** Bundle `rc-0.2.4-r3`, guest
+`AR-DriverTest`, Administrator PowerShell, about 45 minutes. Each runner
+copies its evidence zip to `Z:\rc-0.2.4-r3`.
+1. Restore `02-test-signing-ready`, start the VM, then:
+   `robocopy.exe 'Z:\rc-0.2.4-r3' 'C:\ar\rc-0.2.4-r3' /E /R:1 /W:1`, `cd
+   C:\ar\rc-0.2.4-r3`, `vm-checks.ps1 -Step preflight`, `-Step install`
+   (restart if it asks), `-Step status`; stop on any FAIL.
+2. Listening (omitted from the first version of this runbook): `mmsys.cpl`
+   → Recording → AudioRouter Cable B Output → Properties → Listen → Listen
+   to this device, playback through the VM's speakers (never a cable). It
+   keeps Cable B's capture side running, which the tone tool needs. Then
+   `-Step tone -ToneSeconds 30` first, then driver tool checks: `-Step tone`
+   (10 min, A4 tool, A5), `-Step tone-stall` (counters must rise), `-Step
+   tone-8ch` (8 ch 96 kHz lease).
+3. Product route: `run-cable-tone.ps1 -Minutes 10` (continuity),
+   `run-cable-bitexact.ps1 -Channels 2`, then `tools\m03_cable_format.exe
+   set --channels 8`, `run-cable-bitexact.ps1 -Channels 8`,
+   `m03_cable_format set --channels 2`, then `run-cable-kill.ps1` (A7).
+4. A9: save `m03_cable_format show` IDs to `Z:\rc-0.2.4-r3\a9-before.txt`,
+   restart, save again to `a9-after.txt`, compare (must be equal), then
+   `-Step status`, `-Step remove`, `-Step collect`, copy `evidence-*.zip`
+   to `Z:\rc-0.2.4-r3`.
+Interpretation: install/status/tone-stall/kill/A9 are pass/fail on RC3.
+Continuity and bit-exact losses in this VM are expected only as the known
+NEM stall pattern (single lost blocks, both channel counts); record them
+with the sample summary (mismatches, first mismatch frame), do not rerun
+unchanged, and keep VCAB-24 bound to Stage C. Any loss pattern that differs
+(repeated offsets, a channel-count-only failure, counter increases in the
+clean `tone`) is a finding to analyse before more sessions.
+
+Session 2 attempt 1 (2026-10-13): `preflight` 15/15, `install` 3/3 (exit
+0, idempotent), `status` 2/2 PASS. `tone`, `tone-stall`, `tone-8ch` FAIL
+with exit 1 and all counters zero (no streaming). Causes (from `tone.txt`):
+the 10-minute run's control loop stalled 3.3 s right after start, beyond
+the 2 s lease, so the driver expired the lease and refused the next call
+(`0x80070016`, the Win32 form of `STATUS_INVALID_DEVICE_STATE`; correct
+driver behaviour); `tone-stall` reported "no capture consumer acknowledged
+the primed block; enable Listen" because the runbook omitted the Listen
+step. Not a driver finding. Repeat from step 2 with Listen enabled.
+
+Attempt 2 (2026-10-13): with Listen on, a 30-s `tone` streamed but exited
+1, "no render audio recorded; play the Cable A Input test during the run"
+(the tool needs sound played into Cable A Input; add to the runbook: Sound
+panel → Cable A Input → Properties → Advanced → Test during each run).
+Capture underruns 41,664 frames with 163 ms pump gaps. Then
+`quiet-guest.ps1 -Apply` (as in every earlier VM audio run since r5; CPU
+5–8 % for 60 s) and a 30-s `tone` with Test clicks: tool exit 0, WAV
+730,560 frames, but counters non-zero: capture underrun 26,160; render
+underrun 22,560 / overrun 19,344; packets accepted 1,518, late 20, overrun
+13; sequence gaps, non-finite samples and format mismatches 0. Maximum
+pump gaps 112 ms on capture and render and 117 ms on the control loop at
+the same time; capture blocks 2,948 of ~3,000 (≈52 × 480 frames ≈ the
+underrun count). Attribution: guest-wide descheduling (validated lesson
+2026-10-10), every loss counted by the driver, no corruption. Proposed to
+the user: record A5's zero-counter clean run as a VM deviation bound to
+Stage C, like VCAB-24 (awaiting decision); continue the rest of session 2.
+`tone-stall` PASS (counters rose: capture underrun 22,992, render 960;
+no corruption). `tone-8ch` first FAILED with 33,658 capture
+`format_mismatches` because the cables ran 48 kHz stereo while the tool
+leases 8 ch / 96 kHz (correct driver behaviour since r32 honours the stored
+format); with both cables set to 8 ch / 96 kHz it finished exit 0,
+`format_mismatches` 0, 1,093 render packets accepted, underruns 11,520 /
+8,640 with simultaneous ~131 ms gaps (VM).
+Product route (same session, quieted guest): continuity 10 min each
+(`tone-8e8aa79e…zip`): 997 Hz 447 glitches / 171 silent runs, 47 Hz 408 /
+147, both clustered in bursts (first glitches all near 235.4 s and 75.7 s);
+reference capture 0 glitches; route forwarded 60,230 / 60,249 blocks with
+0 dropped and 22–23 silence; verdict VM (VCAB-24, Stage C). Bit-exact 2 ch:
+one mid-run shift from noise frame 234,992 (VM pattern). Bit-exact 8 ch
+(both cables 48 kHz / 8 ch): **0 mismatched samples, analyzer bit-exact**;
+FAIL only from the single start-of-stream flag. **A7 kill PASS** (3
+repeats, replacement route running ~3.6 s after each kill; `kill-abbe441b…zip`).
+A9 not yet run; the user repeats session 2 from the checkpoint with
+`run-stage-a.ps1` (r4) as its first real test.
+
+**Unattended session runner (user request 2026-10-13).** The user asked for
+more automatic VM sessions. `tools/vm/run-stage-a.ps1 -Session audio`
+(shipped in bundles by `prepare-cable-latency-update.ps1`) runs session 2
+end to end: preflight/install (exit 5 → registers a one-time logon task,
+restarts, resumes), status, quiet guest, the four driver tone steps with
+background `m00-probe` feeders (records Cable B Output, plays a tone into
+Cable A Input; replaces Listen and Test clicks), 8 ch / 96 kHz for
+`tone-8ch` and 8 ch for the 8-ch bit-exact (always restored), product
+continuity, bit-exact 2 and 8 ch, A7 kill, A9 restart with ID comparison,
+status, remove, revert quieting, collect; one summary table and
+`stage-a-audio-*.zip` on Z:. Verdicts: PASS/FAIL for must-pass checks; VM
+for zero-counter, continuity and single-block bit-exact losses (bound to
+Stage C). Host checks: parses; the endpoint-index lookup tested against
+the probe's real inventory (VB-Cable names). First real run is in the VM.
+Bundle `C:\VMs\ar-share\rc-0.2.4-r4` (source `6c7a0be4`, `-ReuseDriverShare rc-0.2.4-base`; driver files identical to RC3, compared; contains `run-stage-a.ps1`), MANIFEST SHA-256 `8D70A4C96167BE9F6A1D1764EC83E72C5954C977CA6B483794238085CA5A6552`. It supersedes r3.
+
+Runner first run (r4, 2026-10-13): install and status PASS, then two runner bugs: `quiet guest` FAIL because a child's stderr warning ("Get-MpPreference : Provider load failure") became a terminating error under `Stop` with `2>&1` (lesson 2026-10-03); all four tone steps FAIL because a trailing comma made the second feeder `Start-Process` part of the first one's `-RedirectStandardError` value. The tone tool never ran; the user stopped the run. Fix: every child script and native tool runs through `Invoke-Child`/`Invoke-Native` with `Continue` and exit codes; feeders start as two statements. Host test of both patterns under `Stop` (scratch script): stderr captured, exit code 3 preserved, two feeders started.
+
+**RC3 Stage A session 2 via the runner (r5, 2026-10-13): complete; graded
+from the evidence, not the runner's table.** The runner printed FAIL 0,
+but its table was wrong in three places (fixed below). Real results
+(`stage-a-audio-20261013-181109.zip`, `evidence-20261013-180926.zip` and
+the run zips in `Z:\rc-0.2.4-r5`):
+
+| Check | Evidence | Verdict |
+| --- | --- | --- |
+| install (driver already present), status | 0.2.4.0, 60/60 formats | PASS |
+| tone 30 s / 10 min (A4 tool, A5) | capture underrun 12,096 / 187,344; all workers paused 271 / 384 ms at once; no corruption | VM |
+| tone stall | counters rose | PASS |
+| **tone 8 ch 96 kHz** | **all counters zero**, worst gap 5.7 ms, 6,000 packets | PASS (clean) |
+| product continuity 10 min each | 96 / 22 glitches (997 / 47 Hz), reference 0; route dropped 1 of 60,200 | VM |
+| bit-exact 2 ch and 8 ch | bit-exact, max error 0.0, 960,000 frames; only the start flag | PASS |
+| A7 kill | `Passed: true`, 3 repeats | PASS |
+| **A9 restart keeps IDs** | 4 IDs equal after the automatic restart | PASS |
+| status after restart, remove | | PASS |
+
+The clean 8-ch run shows the driver produces zero counters whenever the
+guest is not descheduled. `quiet guest` reported "already applied": the
+broken r4 run had applied part of it before Defender's provider failed;
+the final revert restored everything.
+Runner fixes after this run: (1) `Read-Checks` unrolls `summary.json`
+(PowerShell 5.1 `ConvertFrom-Json` returns the array as one object, so a
+failed counter check read as passed); (2) continuity, bit-exact and kill
+are graded from each run's `result.json`/`metrics.json` (`Grade-Continuity`,
+`Grade-BitExact`, `Grade-Kill`), since `run-cable-tone` exits 0 after a
+measured fail; bit-exact passes on exact samples with at most the one
+start flag and no drops or overflow; (3) an existing quiet-guest state
+counts as applied; `quiet-guest.ps1` retries `Get-MpPreference` for a minute
+and skips Defender exclusions with a warning instead of aborting. Host
+test: the runner's own grading functions, loaded from its AST, graded the
+real r5 evidence 9/9 as above (including a missing result → FAIL).
+Bundle `C:\VMs\ar-share\rc-0.2.4-r6` (source `9afcf670`, `-ReuseDriverShare rc-0.2.4-base`; driver files identical to RC3, compared), MANIFEST SHA-256 `B4A38E53F9A7C06B6F73714823AA11666D0876F09F9056D556D651FBF2F6CB68`; supersedes r5. Session 2 needs no rerun.
+
+**Decision (user, 2026-10-13): A5's zero-counter clean run is a VM deviation**, recorded like VCAB-24 and proven in Stage C on real hardware. Basis: in the VM, losses occur only during guest-wide descheduling (all workers paused together, 112–384 ms), the driver counts every loss, nothing is corrupted, and a run without such pauses (8 ch 96 kHz) had zero counters. Testing doc A5 row updated.
+
+**Runner extended to all remaining Stage A sessions (2026-10-13, user
+request).** `run-stage-a.ps1 -Session users|eight|quality|pool|hardening|all`
+(audio unchanged):
+- users (A11): a temporary standard account `artest2` (random password)
+  tries `m03_bridge_tone` while this account holds the bridge; PASS needs
+  "AccessDenied … in use by another Windows user" and a non-zero exit; the
+  account and profile are removed afterwards.
+- eight (A15): `vm-checks cables`, `run-cable-continuity -Minutes 30` (eight
+  cables, four routes; `clean` PASS, `all-events-vm-wide` VM, else FAIL;
+  the cable count must be restored), `run-cable-isolation-matrix` (56
+  ordered pairs; PASS when every pair passes −140 dBFS).
+- quality (A16): float32 bit-exact at 44.1/48/96 kHz × 1/2/8 ch; PCM16/24/32
+  at the three rates (N/A when Windows keeps mixing in float32: "negotiated
+  float32"); sweeps at three rates and THD+N (REVIEW on failure); latency
+  recorded (INFO, judged in Stage C); formats restored to 48 kHz stereo.
+- pool (A8): a render-only tone into Cable A Input with nothing reading,
+  `PoolNonpagedBytes` every 30 s for 60 min; least-squares growth after a
+  5-min warm-up: ≤ 1 MiB/h PASS, ≤ 8 MiB/h REVIEW (whole-system counter),
+  else FAIL.
+- hardening (A10, A11): Verifier on → restart → Verifier active → tone,
+  stall, bit-exact 2 ch, kill under Verifier → `fuzz` 30 min → Verifier off
+  → restart.
+- Every session ends with a bugcheck check (System events 1001/41, crash
+  dumps since the run started) and removal. The logon task now stays
+  registered for the whole run; the running step is saved before it runs,
+  so an unplanned restart marks it FAIL, copies dumps, skips later ordinary
+  steps and still runs the `-AlwaysRun` steps (Verifier off, bugcheck
+  check, removal, revert quieting).
+- `m03_cable_format set --encoding float32|pcm16|pcm24|pcm32` sets integer
+  device formats (PCM24 in a 32-bit container) and `show` prints the
+  encoding; 4 tests, Clippy, rustfmt clean.
+- Host test (scratch script loading the runner's own functions from its
+  AST): 26/26 verdicts as expected, real r5 evidence plus synthetic result
+  files for each new grader, the prefix lookup, and the crash skip rule.
+- A12 (Discord/OBS select the cable) is not automated: it needs the apps
+  and accounts in the guest; it is better done with the signed package on
+  real hardware (Stage C) or as a short attended step.
+VM guide: "Unattended Stage A runner" section.
+Bundle `C:\VMs\ar-share\rc-0.2.4-r7` (source `a24fec7a`, `-ReuseDriverShare rc-0.2.4-base`; driver files identical to RC3, compared; the bundled `m03_cable_format` accepts `--encoding`), MANIFEST SHA-256 `F031B488943123A7F75BAF61F453EFCE617D585A9EF9672E8E1AF8EB8986A9D1`; supersedes r6. **Next action:** from `02-test-signing-ready`, `run-stage-a.ps1 -Session all` (about 3½ hours, unattended apart from logging back in after each restart).
+
+**`-Session all` on r7 (2026-10-13, in progress), first findings:**
+- users (A11) FAIL: user 2 got 0x80070020 (sharing violation = "lease
+  held"), not access denied. Cause: the driver keys lease ownership on the
+  Windows session (`IoGetRequestorSessionId`, `bridgeio.h`
+  `AudioRouterOpenOwnershipStatus`): same session → SHARING_VIOLATION,
+  other session → ACCESS_DENIED. The runner's `Start-Process -Credential`
+  (runas) stays in the console session, so the driver correctly answered
+  "lease held"; the A11 cross-session case was never exercised. Also
+  `ExitCode` read empty (no cached process handle). Fix: the users session
+  now checks both: (a) same session via runas → must be 0x80070020; (b)
+  another session via an elevated scheduled task (session 0; elevated
+  because the bridge SDDL admits SY, BA and IU only) → must be 0x80070005
+  after the device opened (`driver:` line), so the lease's session rule is
+  what refuses it; plus user 1's tool must finish (exit 0). The temporary
+  account is added to Administrators only for the batch logon and removed.
+  Note for later (not a defect today): two accounts in one desktop session
+  are isolated only by "lease held", not by user identity.
+- eight (A15) no verdict: `run-cable-continuity` stopped with "Lost-run
+  report is incomplete". The probe printed at most 256 lost runs
+  (`main.cpp`); each route had ~1,000. Per-route totals: lost 1,599 /
+  1,722 / 1,637 / 1,671 of ~137,970 impulses (1.16–1.25 %), corrupted 0,
+  capture-sink counters 0 on all four routes — the same share on every
+  route, the VM-wide stall signature, but unattributed. Fix: the probe lists
+  up to 65,536 runs; the runner's error now states the counts;
+  `Grade-EightCables` reports a missing verdict as REVIEW with the runner's
+  error instead of "losses outside VM-wide stalls". Probe self-test 2,208
+  checks; runner grading test 27/27 (new no-verdict case); the task's
+  `cmd.exe` quoting checked with a stand-in command.
+- Bundle `C:\VMs\ar-share\rc-0.2.4-r8` (source `3901b4ce`, `-ReuseDriverShare rc-0.2.4-base`; driver files identical to RC3, compared), MANIFEST SHA-256 `0EB7471377A71AE0E965A320FFE8E267983E8B4A950A4E5423ED00CF32DBBA45`. After the r7 `all` run finishes (its quality, pool and hardening results stay valid), rerun `-Session users` and `-Session eight` from r8.
+
+**`-Session all` on r7 finished (2026-10-13 22:07), results** (`stage-a-all-20261013-215942.zip`, per-test zips in the r7 share). No bugcheck in any session; install, status and remove passed in all six.
+- eight: crosstalk 56 ordered pairs PASS (worst −1000 dBFS, i.e. digital
+  zero); cable count 2→8→2 PASS.
+- hardening: Verifier on and active; tone stall PASS; crash recovery 3/3
+  PASS; **IOCTL fuzz 30 min under Verifier PASS** (33.3 M calls, 0
+  unexpected, leases exercised). The 30 s tone FAILED with "no capture
+  consumer acknowledged the primed block": it is the first step after the
+  Verifier restart and the Cable B capture feeder was not streaming yet
+  after the fixed 2 s wait (runner timing, not the driver). Bit-exact 2 ch
+  under Verifier: VM stall pattern (dropped 21,120 frames).
+- quality: float32 48 kHz 2 ch and 8 ch bit-exact PASS; THD+N −153 dB PASS;
+  latency recorded for Stage C (p50 39.7 ms). Findings:
+  1. **Product defect: a cable route moves no audio at 44.1 or 96 kHz.**
+     All 13 runs at 44.1/96 kHz show the product route "running" with
+     `renderBlocks 0, captureBlocks 0, failure null` for the whole run; the
+     capture is silence (RMS error 0.289 = the noise's own RMS). Cause:
+     `crates/control/src/cable_routes.rs` opens both bridge leases at the
+     fixed `CABLE_ROUTE_RATE_HZ = 48_000`; the driver refuses a lease whose
+     rate differs from the stream's (17 §5.2: wrong speed is worse than
+     silence) and counts `FormatMismatches`, which the route never reads.
+     Spec 17 §7.3 already requires a cable-only route at the cables' rate
+     (44.1/48/96 kHz). Earlier 96 kHz passes used the tone tool's own
+     leases, not the product route.
+  2. PCM32: the runner ran the float64 PCM analyzer before checking the
+     negotiated format; Windows mixes PCM devices as float32 in shared mode,
+     so the analyzer refused the WAV. PCM16/24 were graded N/A for that
+     reason; PCM32 must be too.
+  3. Sweeps: `run-cable-sweep.ps1` required `flagged 0`; every capture
+     flags its first packet (start discontinuity), which the bit-exact
+     grading already accepts. 48 kHz sweep otherwise ran normally.
+  4. 48 kHz 1 ch: one route silence block mid-run (VM late block at 2–3 s,
+     11 ms service gap) shifted the rest; VM pattern, rerun.
+- pool (A8): the 60-min samples are flat (172.0–174.7 MB, no trend), but the
+  render feeder had exited before the end and its log was overwritten by a
+  later step, so the run does not count. Rerun with per-step feeder logs and
+  a restarted feeder.
+- users and eight 30 min: the r7 defects already fixed in r8 (above).
+
+Repairs (2026-10-13): the product route reads both cables' Windows mix
+formats (endpoint found by filter reference), runs at their common rate,
+refuses mismatched rates or channel counts with a clear reason, and stops
+with a reason when the driver reports a format mismatch (cable format
+changed while playing); runner: PCM checks the negotiated format first,
+sweeps accept the first-packet flag, feeders wait until the capture feeder
+streams and keep per-step logs, the pool feeder is restarted and counted.
+Checks: control 249 tests pass (new: filter match, common rate, refusals);
+workspace Clippy and `cargo fmt --check` clean; `Grade-BitExact` against the
+19 real r7 results grades every 44.1/96 kHz run FAIL ("route moved no
+audio"), 48 kHz 2/8 ch PASS. Bundle `C:\VMs\ar-share\rc-0.2.4-r9` (source
+`1c87f9ce`, `-ReuseDriverShare rc-0.2.4-base`; driver files identical to
+RC3, compared), MANIFEST SHA-256
+`C9B0978031457DF4709974D6164A1B19F661C0F794E333EB739CC8BE3BEF6694`;
+supersedes r8.
+
+**`-Session all` on r9 finished (2026-10-14 08:34), results**
+(`stage-a-all-20261014-083427.zip`, `evidence-20261014-083105.zip` and the
+per-test zips in the r9 share). No bugcheck in any session; install, status
+and remove passed in all five; quieting reverted. Runner: FAIL 2, both
+attributed to the VM below.
+- users (A11) PASS: same session → 0x80070020 "lease held"; another Windows
+  session → access denied by the lease's session rule after the device
+  opened; user 1's tool finished.
+- eight (A15): cable count 2→8→2 PASS; crosstalk 56 pairs PASS (digital
+  zero). 30-min four-route run: runner FAIL `unexplained-events`. Per route
+  lost 665–819 of ~179,000 impulses (0.4 %), corrupted 0, driver counters
+  non-zero on every route. 1,534 of 2,026 loss events coincide with
+  VM-wide stalls. The other 492 are single impulses at a steady ~5/min per
+  route from minute ~12, and per route they equal the pass-through relay's
+  `trimmed` count (129/131, 30/32, 156/160, 177/177): the relay inserts
+  silence when a stall starves it and later trims one block to win the
+  delay back, dropping one impulse each time. Verdict: VM (stall plus its
+  recovery), Stage C.
+- quality (A16): **the r7 product defect is fixed** — every 44.1/96 kHz
+  route moves audio. Bit-exact PASS at 44.1 kHz 8 ch, 48 kHz 1/2 ch, 96 kHz
+  1 ch. The five VM verdicts were checked sample by sample (scratch
+  re-aligner): each is one or two inserted 480-frame blocks of pure digital
+  silence (route underrun, mostly in the first 0.1 s), after which the
+  capture equals the reference exactly; nothing lost or altered. PCM16/24/32
+  N/A (Windows mixes them as float32). Sweep 44.1 kHz: **analyzer defect**,
+  `m03-cable-quality` panicked (index 882000 of 882000): the 44.1 kHz
+  analysis window is odd (11,025 frames), so the last point's window ended
+  one frame past the reference; 48/96 kHz windows are even. Fixed by
+  clamping the window start; regression
+  `sweep_response_windows_stay_inside_the_reference_at_every_rate` fails
+  without the fix; the real r9 44.1 kHz WAVs now analyze at 0.0 dB
+  deviation (pass). Sweeps 48/96 kHz: capture drops (480 and 111,360
+  frames), VM. THD+N −22 dB: that capture dropped 5,760 frames (one gap
+  ruins a whole-window THD+N; r7 measured −153 dB); VM. Latency INFO p50
+  39.0 ms, p95 39.3 ms, jitter 0.9 ms (Stage C).
+- pool (A8) PASS: 110 samples over 60 min, growth 0.069 MiB/h, range
+  2.01 MiB; the feeder ran throughout.
+- hardening (A10/A11): Verifier on and active; stall PASS; crash recovery
+  3/3 PASS (route 2 running ~3.7 s after each kill); **IOCTL fuzz 30 min
+  under Verifier PASS** (47.2 M calls, 0 unexpected, 23,733 opens);
+  Verifier off; no bugcheck. Bit-exact 2 ch under Verifier: capture
+  dropped 10,944 frames (VM). The 30 s tone FAILED with exit 1: at 11 s the
+  whole tool froze for 4.1 s (capture, render and control pump gaps
+  4.07–4.14 s, a minute after the Verifier restart); the driver expired
+  the ~1 s lease (deactivated at 15.7 s) and the next IOCTL got
+  0x80070016. That is the lease rule working; verdict VM.
+
+Runner repairs after r9 (2026-10-14): `run-cable-continuity.ps1`
+`Resolve-EventCauses` gives each event a cause after all routes are
+collected: `vm-wide` (unchanged test), `cross-route` (every other route has
+an event within 1 s), `relay-trim` (single-impulse losses up to the relay's
+`trimmed` count when trims do not exceed silence insertions, plus counter
+increases within 1.5 s of such a loss on the same route), else
+`unexplained`; new verdict `vm-correlated` when nothing is unexplained but
+some events are cross-route or trims (graded VM with the counts;
+`unexplained-events` stays FAIL). `run-stage-a.ps1` `Get-ToneLeaseFreeze`:
+a failed tone run grades VM only when the control loop and both pumps all
+froze longer than the tool's 2 s lease and no format mismatch was counted.
+Host test (scratch script loading both scripts' functions from their AST),
+18/18: r9 eight-cable run → `vm-correlated` (VM-wide 1,911, cross-route
+43, relay trim 487, unexplained 0 of 2,441 events); r9 Verifier tone → VM
+(4.1 s freeze); still FAIL with no relay counts, trims above silence, more
+single losses than trims, an isolated 12-impulse loss, a 1.5 s freeze, one
+pump frozen, or no tone log. Takes effect in the next bundle; RC3 Stage A
+needs no rerun for it.
+
+Stage A status on RC3 after r9: every automated check passes or has a
+documented VM attribution; open are A12 (Discord/OBS, attended or Stage C)
+and the VB-Cable latency comparison (VCAB-25, Stage C).
+
+**WP-13 preparation (2026-10-14, user request: detailed signing guide).**
+`docs/operations/virtual-cable-signing.md` rewritten as a step-by-step guide
+with facts re-read 2026-10-14 (SSL.com Sole Proprietor EV $359/yr; eSigner
+$100/month or $900/yr with a free first 30 days, YubiKey $379; certificates
+capped at 458 days since March 2026; registration and `Signablefile.bin`
+steps per Microsoft's 2026-08-11 page). Two findings:
+1. Microsoft's driver-signing pages describe attestation signing as "for
+   testing purposes only" (wording since 2023; page dated 2026-03-23). The
+   Code Signing Agreement does not forbid self-distribution: it requires code
+   "ready for release for general public distribution" and licenses
+   distribution of the signature. Risk recorded; the guide has the user ask
+   Partner Center support in writing before the first public release, with
+   WHCP/HLK as the fallback (time, not money).
+2. RC3's `.pdb` was not kept: the 0.2.5 (`driver-next`) build overwrote
+   `Source\Main\x64\Release\AudioRouterVirtual.pdb` (`symchk`: mismatched
+   for the 0.2.4 `.sys`, passes for 0.2.5). Plan for the CAB (Part 5): rebuild
+   0.2.4 from `d2560715` and include its `.pdb` only if the rebuilt `.sys`
+   differs from RC3 only in timestamps and debug identifiers; otherwise
+   submit without symbols. Future packages must keep their own `.pdb`.
+
+**Next action:** the user buys the EV certificate and registers (guide
+Parts 0–4). Agent, meanwhile: the Part 5 CAB tooling (rebuild comparison,
+`.ddf`/`makecab`, hash checks) and keeping each package's `.pdb`.
+
+**Bundle r10 (2026-10-14, stability round):** the user-mode bridge client
+now maps the shared region as `memmap2::MmapRaw` and moves bytes only
+through volatile load/store helpers (`f02aa839`; the P3-1 aliasing item).
+Same protocol and layout; host: windows-audio 141, control 249, Clippy and
+fmt clean. Because the cable route and every bridge tool use this code,
+r10 reruns `-Session all` to requalify it, and also carries the r9 runner
+repairs (relay-trim and lease-freeze attribution) and the 44.1 kHz sweep
+analyzer fix. Bundle `C:\VMs\ar-share\rc-0.2.4-r10` (source `f02aa839`,
+`-ReuseDriverShare rc-0.2.4-base`; driver SYS/CAT/INF hashes equal to
+RC3), MANIFEST SHA-256
+`9D7863C42BCEF6C326301AC7BE59E5DBDE08FFC0F766020F92AA5E2588C7A398`;
+supersedes r9. Pass criterion: the same verdicts as r9 or better (no new
+FAIL, bit-exact runs fail only by inserted silent blocks, no bugcheck).
+
+**`-Session all` on r10 finished (2026-10-14 13:31), results**
+(`stage-a-all-20261014-133148.zip`, `evidence-20261014-132619.zip` and the
+per-test zips in the r10 share). No bugcheck in any session; install, status
+and remove passed in all five; quieting reverted. Runner: FAIL 2, both
+graded VM by hand below; **no regression from the raw map**.
+- users (A11) PASS, as r9.
+- eight (A15): count 2→8→2 PASS; crosstalk 56 pairs at digital zero PASS.
+  Four-route run: runner FAIL `unexplained-events` (VM-wide 4,445,
+  cross-route 116, relay trim 200, unexplained 3; corrupted 0). At ~25.7 min
+  every route process and every probe froze together for 125 s (each
+  route's control loop and pumps 125.2 s; the probes' impulse clocks paused
+  with no index skipped); the 2 s leases expired by design and all four
+  routes exited 0x80070016. One "unexplained" event is that route's lost
+  tail. The other two are borderline: a counter increase inside a VM-wide
+  stall cluster (651–661 s), and a 2-impulse loss beside trims on three
+  routes, 1.06 s from the fourth (window 1.0 s). Verdict: VM, Stage C.
+- quality (A16): bit-exact PASS at 44.1 kHz 2/8 ch, 48 kHz 2 ch, 96 kHz 1 ch;
+  48 kHz 1 ch bit-exact but the probe dropped 22,080 frames (VM). Re-aligned
+  sample by sample (scratch walker): 44.1 kHz 1 ch, 48 kHz 8 ch and 96 kHz 8 ch
+  are each one inserted 480-frame block of digital zero, then exact.
+  **96 kHz 2 ch is the first removal seen on the product route:** at 14.5 s,
+  384 frames of zero, then the stream resumes 960 frames ahead (1,344 frames
+  missing); no probe drop, and the relay counted no silence or drop in the
+  window. It coincides with the route's only large service gap (15 ms at
+  t = 18 s); at 96 kHz a 480-frame block is 5 ms, so a 15 ms stall
+  outlasts the bridge depth and the driver drops (counted, bounded). VM,
+  Stage C; on bare metal check stall headroom at 96 kHz. PCM N/A. Sweeps
+  44.1/48 kHz PASS (the analyzer fix works on real data); 96 kHz REVIEW
+  0.32 dB and THD+N REVIEW −21.5 dB: re-aligned, the sweep has two
+  inserted silent blocks at the start and the tone one at 4.8 s, otherwise
+  bit-exact; a whole-window measure cannot survive one jump (VM). Latency
+  INFO p50 36.7 ms, p95 37.1 ms, jitter 0.9 ms (r9: 39.0 ms).
+- pool (A8) PASS: 110 samples, growth −0.293 MiB/h, range 1.81 MiB.
+- hardening (A10/A11): Verifier on/active/off PASS; crash recovery 3/3 PASS;
+  **IOCTL fuzz 30 min under Verifier PASS** (no crash, no unexpected
+  result). 30 s tone VM (counters). Bit-exact 2 ch: the probe dropped 11,520
+  frames (r9: 10,944), VM. The tone **stall** run FAILED with exit 1: both
+  pumps froze 39.5 s from ~25.5 s, a minute after the hardening restart
+  (r9: 4.1 s in the same place, before the raw map); driver render overrun
+  1,927,680 and capture underrun 1,928,256 frames = 40.2 s (the cable
+  position follows QPC, so the counters run on through a guest freeze).
+  The lease expired and deactivation got 0x80070016. The runner's lease-
+  freeze rule missed it because `m03_bridge_tone` measured its control gap
+  only at the top of the loop: after a freeze longer than the run, the loop
+  ended on its time condition first (reported 279 ms). Fixed: the tool now
+  also counts the gap at loop exit (`m03_bridge_tone` 24 tests pass, Clippy
+  and fmt clean); takes effect in the next bundle. Verdict: VM.
+- hardening rerun, bundle r11 (2026-10-30, results
+  `stage-a-hardening-20261030-170157.zip`, 0 FAIL): Verifier on/active/off
+  PASS; crash recovery 3/3 PASS; **IOCTL fuzz 30 min under Verifier PASS**
+  (30,355,553 calls, 0 unexpected, 22,311 opens); no bugcheck event and no
+  dump. Tone VM (non-zero glitch counters); tone stall VM (the tool froze
+  4.0 s, lease expired by design, 0x80070016); bit-exact 2 ch VM (dropped
+  15,840 frames). A10 and A11 pass on the decisive checks.
+  Earlier the same day, one attempt hung in the 30 s tone step under
+  Verifier (about 14:20; all four vCPUs busy, UI dead, no log activity;
+  VM power-off after about 7 h). Not reproduced in the next full run and the
+  10-29 run completed the same step. Core dump kept on the host
+  (`hang-20261030.elf`, VirtualBox ELF; WinDbg cannot open it). The guest now
+  has `NMICrashDump=1` and kernel dumps, so a repeat can be forced with
+  `VBoxManage debugvm AR-DriverTest injectnmi` and read with WinDbg. Open:
+  unreproduced, cause unknown. Forced power-offs make `run-stage-a.ps1` score
+  the resume as an unplanned restart (tone FAIL, later steps SKIP, no
+  bugcheck FAIL); rerun fresh instead of grading that zip.
+
+Product finding (no fix yet, decision needed): the app's cable route
+(`cable_routes.rs` `service_cable_route`) stops the session when a lease
+heartbeat fails, with the technical text "cable lease heartbeat failed:
+…", and the user must press Play. Any whole-system freeze over 2 s (a GPU
+driver reset, a long hitch) does this; the driver's `LeaseNotActive` user
+message even says "the route will reconnect", which nothing does. Options:
+reconnect a cable-only route automatically a bounded number of times, or
+keep the stop and show a plain message.
+**Decided 2026-10-16 (owner): retries, then a message.** Implemented in
+`cable_routes.rs` (three reopens at 1, 2, 4 s; spec 17 §7.3); the reopen is
+not yet VM-qualified (see the active plan).
+
+### 8-channel spike (prepared 2026-10-12)
+
+Tool: `crates/windows-audio/examples/m03_cable_format.rs`. `show` prints each
+AudioRouter endpoint's mix format, stored device format and
+`PKEY_AudioEndpoint_PhysicalSpeakers` (read-only).
+`set --channels N [--rate R] [--endpoint NAME]...` calls the undocumented
+`IPolicyConfig::SetDeviceFormat`, the call the Sound control panel's Default
+Format list uses. It defaults to Cable A Input and Cable B Output at 48 kHz
+float32, then re-reads `GetMixFormat`. Exit 0 only when every endpoint now
+reports N channels, R Hz and the standard mask (0x63F for 8 channels). It
+refuses non-AudioRouter endpoints. `set --channels 2` restores.
+`prepare-cable-latency-update.ps1` builds it with the static CRT and ships it as
+`tools\m03_cable_format.exe`. The existing `run-cable-bitexact.ps1 -Channels 8`
+then measures the 8-channel product route.
+
+Host checks (2026-10-12, Windows cargo from a temporary clone): 3 unit
+tests pass; Clippy with `-D warnings` is clean for the example; the preparer
+parses. `cargo fmt --check` is clean. Not run: the tool against a real
+endpoint, and the bundle preparer itself. No AudioRouter endpoint exists on
+the host, and the driver must not be installed there.
+
+Bundle r31 built (2026-10-12, host, clean tree at `47cd09cf`): driver
+`target\r31-driver-47cd09cf` (0.1.4.0, test-signed, timing diagnostics,
+`dirty: false`; build exit 0), then
+`C:\VMs\ar-share\diagnostics-20261012-eight-channel-r31`, MANIFEST.txt SHA-256
+`E150948909E72E1297C999976614C6E68339C4361E376AC5C1CCDA53A48E4CDA`. The
+bundled `tools\m03_cable_format.exe` has no VCRUNTIME140.dll import; on the
+host `show` exits 1 with "no active AudioRouter endpoint", as expected. Step 1
+below is done; step 2 (guest) is next.
+
+Guest result so far (2026-10-12, non-elevated shell, `set --channels 8`):
+both endpoints accept 48 kHz/8 ch float32 in an exclusive `IsFormatSupported`
+check (S_OK) and `SetDeviceFormat` returns S_OK without elevation; the stored
+device format becomes 8 ch, mask 0x63F. But the shared mix format re-read
+500 ms later stays 2 ch, mask 0x3, on both the render and capture endpoint
+(tool exit FAIL). `PKEY_AudioEndpoint_PhysicalSpeakers` is not set. Next
+diagnostic: re-read after a delay and after an `audiosrv` restart, before any
+code or driver change.
+
+Follow-up (2026-10-12): a later `show` and a full guest restart (elevated
+shell confirmed; `Restart-Service audiosrv` was refused) leave every cable's
+mix format at 48 kHz, 2 ch, mask 0x3. Decisive: Cable A Output's stored
+device format is 44.1 kHz, 1 ch (set earlier, presumably in Sound settings),
+yet its mix format is also 48 kHz stereo. Windows ignores the stored device
+format on these endpoints entirely, so the Sound settings Default Format is
+ineffective too. Probable cause (code inspection, unproven): the cable wave
+filters implement `KSPROPERTY_PIN_PROPOSEDATAFORMAT2` (GET), inherited from
+SYSVAD, which returns the per-mode default `CableSupportedModes` =
+`CableSupportedFormats[19]` (48 kHz float stereo); the engine takes the
+driver's proposed default for the mode over the stored format. A fix is a
+driver change and needs the user's decision: drop the GET handler on the
+cable filters (with an INF OEM default of 48 kHz float stereo), or make it
+return the stored or helper-chosen format.
+
+Guest restored (2026-10-12): `set --channels 2` returns S_OK and PASS on
+Cable A Input and Cable B Output; both device formats are back to 48 kHz,
+2 ch, mask 0x3. Cable A Output (44.1 kHz, 1 ch, pre-existing) was left as
+found. Outputs: `Z:\diagnostics-20261012-eight-channel-r31\*.txt`. The
+8-channel bit-exact run was not attempted (the mix format never reached 8 ch).
+
+**Decision (user, 2026-10-12): option 1, drop the proposed default.** The
+user was told this is necessary but not sufficient for 8-channel cables:
+render endpoints still have no Windows speaker setup (line-level connector),
+so 8 channels are set by the app through `IPolicyConfig` (works without
+elevation), which needs a spec 17 §8 / VCAB-11 update once proven; games
+may also need `PKEY_AudioEndpoint_PhysicalSpeakers` (untested); the app
+control and CAP-14 on AudioRouter cables are not authorized yet; VCAB-01
+(eight cables) is unaffected.
+
+**Repair r32 (driver 0.1.7).** 0.1.5/0.1.6 were the reverted r28/r29
+packages, so this source takes 0.1.7 to keep package identities distinct.
+- `Source/Filters/cablewavtable.h`: the cable wave filters no longer list
+  `KSPROPERTY_PIN_PROPOSEDATAFORMAT2`; `PROPOSEDATAFORMAT` (SET, format
+  support) stays. Speaker/mic SYSVAD tables are untouched.
+- `tools/m03-inf-gen/generate.ps1` and the regenerated INX: every cable
+  endpoint section (8 cables × render/capture × wave/topology) writes
+  `PKEY_AudioEngine_OEMFormat` = 48 kHz IEEE float stereo
+  WAVEFORMATEXTENSIBLE (40 bytes; key `{E4870E26-…ED04},3`, checked against
+  the 10.0.28000.0 `mmdeviceapi.h`). It only seeds an endpoint without a
+  stored format; existing endpoints keep theirs.
+- `tests/acceptance/m03-inf-gen.ps1` asserts the key identity and the exact
+  line in all 32 sections.
+
+Host (2026-10-12): `m03-inf-gen.ps1` passes; driver unit tests 88,167 checks
+pass; `m03-driver-build.ps1` (x64 compile, signability, catalog) passes. Not
+host-testable: whether Windows then honours the stored format.
+
+VM procedure (guest, elevated, from the r32 bundle):
+1. `vm-checks.ps1 -Step install` (upgrade 0.1.4 → 0.1.7, exit 5 = restart
+   required), restart, `-Step status` (expect `driver=0.1.7.0`, PASS).
+2. `m03_cable_format show`. Decisive check: Cable A Output's stored
+   44.1 kHz/1 ch should now be its mix format. If every mix format is
+   still 48 kHz stereo, the hypothesis is wrong: stop, roll back.
+3. `set --channels 8` must PASS; then `run-cable-bitexact.ps1 -Channels 8`.
+4. Note Sound settings → Advanced lists (render and capture).
+5. Restore `set --channels 2`, and Cable A Output to 48 kHz stereo.
+Rollback: `-Step remove`, then `-Step install` from the r31 bundle (0.1.4,
+same source as r20), restart.
+
+r32 bundle `C:\VMs\ar-share\repair-20261012-oem-format-r32` (source
+`e95c4bcd`, clean; 0.1.7.0 test-signed with timing diagnostics, DriverVer
+10/12/2026; packaged INF carries 33 `OEMFormat` references), SYS SHA-256
+`42D8B407CAF7EDFC5ED5A8FABE5F87BC42BAE026BE38202AD0D8DB727C783513`,
+MANIFEST SHA-256 `EDCB24A4978B45FA839D0839288B7D77332DC8E6068DEBF72BF081E0EAC6A53A`.
+**r32 guest result, part 1 (2026-10-12).** `-Step install` exit 5 (restart
+required, expected for an upgrade), restart, `-Step status` PASS
+(`driver=0.1.7.0`, 4 endpoints, 60/60 formats, min period ≤ 128 frames;
+Cable A Output's periods now 441/118 frames, i.e. 44.1 kHz). `show`: Cable A
+Output's mix format is now 44.1 kHz, 1 ch, matching its stored device
+format. **Hypothesis confirmed: Windows honours the stored format once the
+cable filters stop proposing a default.** New defect to settle before the
+RC freeze: **all four endpoint IDs changed** in the 0.1.4 → 0.1.7 upgrade
+(A Input `{9381b095…}` → `{7121d5d2…}`, A Output `{93873238…}` →
+`{fcb8406b…}`, B Input `{bcba620f…}` → `{207df4b8…}`, B Output
+`{99d4614d…}` → `{3d4d847e…}`), though Cable A Output's stored format
+carried over. VCAB-05 requires stable IDs across driver updates. Unknown
+whether this upgrade's INF endpoint-property change caused it or every
+upgrade does (A13 would show it); investigate with an N → N+1 upgrade of
+identical source.
+
+r32 part 2: `set --channels 8` → S_OK and **PASS on both Cable A Input and
+Cable B Output: mix format 48 kHz, 8 ch, float32, mask 0x63F**, matching the
+device format (`3-set8.txt`). Physical speakers still not set.
+
+r32 part 3: `run-cable-bitexact.ps1 -Channels 8` (product route, Cable A
+Input → Cable B Output, both 48 kHz/8 ch float32 mask 0x63F): **samples
+bit-exact on all 8 channels** (960,000 compared frames, 0 mismatches, max
+error 0.0 in both the native probe and the analyzer; 24,000 silence frames
+all zero; 0 dropped capture frames, 0 overflow). Verdict FAIL only because
+the runner requires zero flagged capture packets and one packet carried
+`DATA_DISCONTINUITY` or `TIMESTAMP_ERROR` (the probe does not record which
+or when; it lies outside the compared window). Route: 2,240 render / 2,219
+capture blocks, 2,200 forwarded, 37 dropped, 19 silence, 0 sequence gaps —
+startup alignment, to compare against a stereo control. Evidence:
+`Z:\repair-20261012-oem-format-r32\bitexact-float32-48000hz-8ch-2a8d4e6a91454d8497677af6631a0b18.zip`
+(SHA-256 `84C5D180…82E6`). Next: one 8-ch repeat and one 2-ch control run
+on the same driver to tell a startup flag from an 8-ch defect.
+
+r32 part 4, 8-ch repeat: **not bit-exact.** Exact up to reference frame
+476,432 (~9.9 s), then every sample differs; a host-side search (inline C#
+over the WAVs) finds the capture shifted by exactly **−480 frames** (one
+10 ms block missing) from there to the end, with 144 all-zero frames near
+the boundary. Values are otherwise exact. Capture flagged 1, dropped 0,
+overflow 0 again; route 36 dropped / 18 silence / 2,201 forwarded, 0
+sequence gaps. The runner's summary line hides sample mismatches (it prints
+only the capture counters). Evidence:
+`bitexact-float32-48000hz-8ch-6aa1044ccf3c4f77a03fd450b8c17d71.zip`
+(SHA-256 `FBD2A797…A1C5`). Open: whether this is the known VirtualBox-NEM
+block loss (lesson 2026-10-10) or 8-ch specific; the 2-ch control decides.
+
+r32 part 5, 2-ch control (same driver, both endpoints restored to 48 kHz
+stereo): **also not bit-exact, and worse**: capture dropped 1,920 frames,
+flagged 3; samples exact to noise frame 500,000, then 920,000 mismatched
+(shifted); route 36 dropped / 19 silence / 2,198 forwarded, 0 sequence gaps.
+Evidence `bitexact-float32-48000hz-2ch-bb29624046dc41faaf4ad6d2dfb28ce0.zip`.
+**Conclusion: the mid-run block loss is not 8-channel specific.** It matches
+the known VirtualBox-NEM scheduling loss (validated lesson 2026-10-10;
+VCAB-24 is already a documented VM deviation). r32 changed no streaming
+code, but no stereo product-route run of this runner on 0.1.4 exists for a
+direct comparison. 8-channel pass-through is therefore shown to work
+(one fully bit-exact 20 s run; the other run exact apart from one lost
+block); clean continuity must be qualified on bare metal (Stage C), as for
+stereo. Restore done: Cable A Input, Cable B Output and Cable A Output all
+48 kHz, 2 ch, mask 0x3 (`5-restore*.txt`). Tooling: `run-cable-bitexact.ps1`
+now prints the mismatched-sample count, first mismatch and analyzer verdict
+in its summary (it previously showed only capture counters).
+
+**8-channel status after r32.** Driver blocker removed: the stored device
+format now applies, 8 ch reaches apps on render and capture, and samples
+pass through exactly. Remaining before CAP-14 can use AudioRouter cables:
+(1) **endpoint IDs changed on the 0.1.4 → 0.1.7 upgrade (VCAB-05)**,
+investigate first; (2) spec 17 §8 / VCAB-11 update: channel count chosen in
+the app via `IPolicyConfig` (no elevation needed), not Sound settings;
+(3) `PKEY_AudioEndpoint_PhysicalSpeakers` for games, untested; (4) app
+control and CAP-14 integration, not authorized; (5) Sound settings Advanced
+lists after r32 not yet observed.
+
+**Endpoint ID investigation (2026-10-12).** Guest read-only collection in
+`Z:\repair-20261012-oem-format-r32\id-diagnostics` (MMDevices export,
+pnputil, PnP list, setupapi.dev.log, install evidence). Findings:
+- The helper's upgrade is an in-place `UpdateDriverForPlugAndPlayDevices`
+  on the same devnode `ROOT\MEDIA\0000` (setupapi: "Update Device Driver -
+  ROOT\MEDIA\0000", old 0.1.4.0 → 0.1.7.0; reboot only because "Driver did
+  not unload"). No device was removed or recreated.
+- The IDs changed **twice**: immediately after the install, before the
+  restart (`helper-install-again.json`: `{7eda5309…}`, `{e51eed07…}`,
+  `{c79fb8b3…}`, `{8df95182…}`), and again after the restart (`{7121d5d2…}`
+  set). The four 0.1.4 keys are deleted from MMDevices, not left
+  NOTPRESENT. Stored settings migrated (Cable A Output kept 44.1 kHz/1 ch).
+- Each endpoint key records `{83da6326-97a6-4088-9453-a1923f573b29},3`
+  (device configuration ID) =
+  `oem7.inf:ed86ca112b7e020c:AUDIOROUTERVIRTUAL_SA.NT:0.1.7.0:ROOT\AudioRouterVirtual`,
+  plus the interface path `\\?\root#media#0000#{6994ad04…}\wavecablearender`
+  (unchanged by design). Hypothesis (unproven): AudioEndpointBuilder
+  regenerates endpoints when the driver configuration changes, so every
+  driver update would change the IDs; the second change at restart is not
+  explained by it.
+- No earlier run ever compared IDs across an upgrade, so this is probably
+  not a 0.1.7 regression.
+
+Discriminating test, bundle r33 `C:\VMs\ar-share\diagnostics-20261012-id-stability-r33`
+(source `53728526`; driver source identical to `e95c4bcd`/0.1.7, version
+only: 0.1.8.0, DriverVer 10/12/2026, test-signed, timing diagnostics), SYS
+SHA-256 `7DDEEBF5F4E0B63AA247E851C99B68E02AEBD2FF5747F96E2A99BCE01EC6EBA0`,
+MANIFEST SHA-256 `DC2F6E1AFE2788EB52EDFDBDE487439AC5E67A2126B2AA817DAF32C9F7BA6C33`:
+(A) plain restart on 0.1.7, IDs compared; (B) 0.1.7 → 0.1.8 update, IDs
+before restart and after restart. If (A) is stable and (B) changes IDs,
+every update changes them and VCAB-05 needs a different mechanism or a
+spec decision. The guest stays on 0.1.8 (same source); later bundles must
+be ≥ 0.1.9.
+
+**r33 result (2026-10-12): every driver update changes the endpoint IDs.**
+(A) Plain restart on 0.1.7: all four IDs unchanged (`A2-ids-after-restart.txt`).
+(B) 0.1.7 → 0.1.8, identical driver source: IDs changed at install
+(A Input `{6ae3ca09…}`, A Output `{fe0a175f…}`, B Input `{aff39ac5…}`,
+B Output `{c364a4df…}`) and again after the restart (`{26c6b736…}`,
+`{6c5c3b90…}`, `{f5446a29…}`, `{f3458ee8…}`); status PASS on 0.1.8.0; the
+0.1.7 keys are deleted. This is documented Windows behaviour: Microsoft's
+endpoint ID strings page states the ID changes when the user upgrades the
+device driver and stays unchanged across restarts; the endpoint builder
+algorithm page says user settings migrate only while the reference string
+and connector pin ID stay the same (ours do; the 44.1 kHz setting migrated).
+No API keeps an ID through a driver update. **VCAB-05's "across driver
+updates" is not achievable as written** and needs a user decision and a
+spec 17 change. Driver updates are already decoupled from app releases
+(DEC-18), AudioRouter resolves cables by name/busId, and Windows migrates
+endpoint settings; third-party apps that store an endpoint ID (Discord,
+OBS) will need the cable reselected after a driver update.
+
+**Decision (user, 2026-10-12): accept new endpoint IDs on driver updates.**
+Spec changes: 17 VCAB-05 (IDs persist across reboots, count changes and
+app-only updates; driver updates migrate names and settings to new IDs),
+§5.1, §6 `update` (report the new IDs), §7.5 (Setup and release-note
+reselect notice), §8 deviation row for VDEV-03, §10 risk row; 06 VDEV-03
+note; 15 risk row; testing A13 expectation (same devnode, names present,
+new IDs, migrated device format, sessions bind by bus). Follow-up
+implementation (not started): the Setup update notice and its release-note
+text; confirm the helper's `update`/`install` JSON lists the new IDs.
+
+Side finding (pre-existing, not fixed): `generate.ps1 -Check` reports the
+topology header stale on a clean checkout (`core.autocrlf=input` leaves LF;
+the generator writes CRLF in its region). Content is identical; it passes
+only right after `-Update`.
+
+**Resume on Windows (next action):**
+
+1. Host, in the repo, after `git pull` on a clean tree: build the bundle the
+   same way as r20–r30. The driver source is unchanged since r20, so the guest's
+   installed 0.1.4.0 is not reinstalled. The test signer is the already
+   trusted `FF6876FB…AD40`.
+   `powershell -File drivers\audiorouter-virtual\build.ps1 -Version 0.1.4 -TimingDiagnostics -TestSign -Output target\r31-driver-<commit>`
+   (a trailing exit 1 is the expected host trust-chain check), then
+   `powershell -File tools\vm\prepare-cable-latency-update.ps1 -BaseBundle C:\VMs\ar-share\repair-20261010-slot-provenance -Destination C:\VMs\ar-share\diagnostics-20261012-eight-channel-r31 -TimingDriverPackage target\r31-driver-<commit>`.
+   Record the MANIFEST SHA-256 here.
+2. Guest `AR-DriverTest` (driver 0.1.4.0 installed), elevated PowerShell,
+   after copying the bundle to `C:\ar\...`:
+   - `tools\m03_cable_format.exe show` saves the "before" state.
+   - `tools\m03_cable_format.exe set --channels 8` must print PASS for both
+     endpoints. Record the `SetDeviceFormat` HRESULTs. Also try it once from a
+     **non-elevated** shell: it matters whether the app can do this without
+     the elevated helper.
+   - Sound settings → Cable A Input → Properties: note what Windows now
+     shows. Optionally, a 7.1 test file played into Cable A Input.
+   - `.\run-cable-bitexact.ps1 -Channels 8` must report a bit-exact float32
+     8-channel route (VCAB-20 at 8 ch, diagnostic).
+   - Restore: `tools\m03_cable_format.exe set --channels 2`, then `show`.
+     Fallback: helper `remove` and reinstall (endpoints recreated at the INF
+     default), or the `02-test-signing-ready` checkpoint.
+3. Interpret the result:
+   - PASS plus bit-exact: no driver change. 8 channels become a helper/app
+     feature (VCAB-11 via the app, not Sound settings; update 17 §8). Go to
+     step 2 of the critical path (freeze the RC).
+   - `SetDeviceFormat` fails or the mix format stays stereo: stop. Record
+     the HRESULTs and ask the user before any driver topology change.
+
+Rollback: the spike only changes the two endpoints' device format in the VM.
+`set --channels 2` restores it.
+
+## Historical driver investigation notes — superseded
+
+### Execution queue after r12 — 2026-10-10
+
+Implementation completed: r16 opt-in diagnostic, model and short comparison
+wrapper. Fresh GPT-6 Luna High WP-04 source review finds no blocker; 738
+driver checks, concurrency/stop/exhaustion, 58 wrapper checks and normal/
+diagnostic WDK x64 builds pass. Next is clean-source test-sign/package
+verification, then user-run short comparison. No continuity repair or
+hour qualification claim. The [r16 record](../active/evidence/2026-10-10-m03-cable-driver-timing.md)
+supersedes r15 next-action and pending implementation notes below.
+
+Authorized r16 preparation (2026-10-10): diagnostic-only compile flag;
+fixed append-only nonpaged records for timer entry/advance/notification and
+GetReadPacket entry/return, monotonic stream IDs and raw QPC ticks. Export
+only after STOP drains admitted writers, through an exact-length bounded
+METHOD_BUFFERED IOCTL restricted by admin privilege and FILE_OBJECT owner.
+Normal builds exclude declarations, storage and calls. Record exhaustion
+and contention explicitly; neither changes audio behavior. Check late timer,
+late fetch, coalescing, slot reuse, bounds and cleanup, obtain independent
+WP-04 review, build normal/diagnostic x64, test-sign only the diagnostic
+package and verify a new immutable bundle. Guest runner owns only its
+diagnostic handle and one short audio child; archives failure evidence and
+never installs on the host. Rollback uses retained 492d8ca8 guest package.
+Hour-long/native qualification waits for a measured meaningful repair;
+r16 instrumentation alone cannot pass VCAB-24/25.
+
+Latest result: r15 scheduler archive is complete, hash verified and reviewed.
+84/1,000 impulses lost; p95 19.076 ms, jitter 7.390 ms. ETW lost/rejected
+events zero. Capture probe and associated audiodg threads have long waits
+before readiness (8.083/7.888 ms), short ready-to-running delays
+(0.504/0.650 ms maxima). Generic DPC events do not directly identify the
+AudioRouter timer callback. Stage losses are 29 before observed input, one
+between input/publication, 54 downstream. See
+[r15 evidence](../active/evidence/2026-10-10-m03-cable-latency-preparation.md#r15-returned-focused-scheduling-review-2026-10-10).
+This supersedes pending r15 user-run instructions below.
+
+Exact next agent task (VCAB-20/24/25/28, VDEV-12): design bounded,
+preallocated opt-in timestamps for timer entry, packet-count advance,
+notification and GetReadPacket entry/return, with per-stream identities and
+one clock. Model late timer, late fetch, coalesced notification, slot reuse
+and trace exhaustion before implementation. Check the r15 input/publication
+loss at impulse 720 against the existing relay observations separately.
+Obtain required fresh-context WP-04 review before kernel instrumentation;
+do not choose a timer or queue repair from readiness correlation alone.
+Validation must cover disabled-path equivalence, no callback allocation,
+blocking or file logging, bounded publication, trace exhaustion and stream
+teardown. Only after review/build/package verification prepare one short
+guest comparison. Rollback: instrumentation disabled/original 492d8ca8 SYS
+and retained r15 tools. No priority/buffer/security/host setting changes or
+unchanged guest/hour retry. Qualification gates remain open/failed.
+
+Next-step plan (after r14, user authorized): VCAB-20/24/25/28, VDEV-12.
+Model 48 kHz/128-frame capture with 1 ms DMA service, physical slot reuse,
+OS fetch delay and client queue retention. Check exact/late boundaries and
+show which observations remain ambiguous. Prepare a guest-only wrapper
+around one 1,000-impulse low-latency engine run using the already guest-proven
+minimal scheduling WPR profile. Keep raw capture/route rows and worker IDs;
+save scheduler ETL and redirected run evidence under one owned archive.
+Refuse busy/unknown WPR state, preserve failure evidence, stop only the
+unique recording instance and use child watchdogs. Validate model, wrapper
+ownership/failures and runner mode selection on host without audio/WPR.
+Commit and prepare a verified new bundle with unchanged SYS. Rollback: r14
+and owned recorder stop/cancel; no host/driver/buffer/security changes.
+
+r15 ready: clean source `42111f71`, independently verified 39-entry manifest
+at `C:\VMs\ar-share\diagnostics-20261010-cable-scheduling-r15`; SYS unchanged.
+Next action: user runs the
+[focused scheduling block](../../operations/virtual-cable-latency.md#focused-capture-scheduling-trace-after-r14)
+inside AR-DriverTest once, then agent reviews ETL coverage/loss and QPC gaps.
+
+Latest r14 review: archive/hash verified; COM/MMCSS succeeded, all worker
+errors and trace misses zero. Default losses 0/0/0, but p95 42.30/35.82/41.40
+ms exceeds the 40 ms target in two starts. Low-latency losses 35/27/20,
+versus r13 19/16/17: scheduling registration did not solve loss. Stage/WAV
+comparison retains 19 losses before observed input, zero between input and
+sink publication, 63 downstream. Capture position gaps total 35,712 frames;
+26,880 occur across read intervals ≤5 ms. One 70.607 ms shared pause occurs,
+but starts 2/3 lose audio with reader gaps no greater than 6.310/5.607 ms.
+Next agent task: model notification/GetReadPacket timing at 128 frames and
+prepare a focused guest OS scheduling trace if necessary to distinguish DPC
+delivery, Windows audio-engine fetch and client wake. No unchanged short/hour
+rerun, buffer enlargement or speculative kernel recovery. See
+[r14 result](../active/evidence/2026-10-10-m03-cable-latency-preparation.md#r14-returned-capture-reader-review-2026-10-10).
+
+Investigation implementation plan after r13: requirements VCAB-20/24/25/28,
+VDEV-12. The probe's render/capture std::threads lack COM initialization and
+MMCSS registration. Add thread-owned COM/MMCSS guards and startup readiness;
+registration failure invalidates the diagnostic before stream start. Add
+bounded capture packet observations (device position, frames, flags, packet
+QPC, read QPC and wake QPC) to the existing opt-in short raw trace. Preserve
+original counters/latency thresholds and identify API/trace errors explicitly.
+File output remains after join. Check static build, offline pairing and
+trace serialization, affected runner checks and docs; package a fresh source
+identified bundle with unchanged SYS. Rollback: r13 tools. Driver review:
+GetReadPacket returns the newest completed slot; the older slot may already
+be partially overwritten, so returning it to recover losses is not justified.
+Next short guest result must distinguish reader delays from upstream packet
+delivery, rather than repeat the unchanged hour qualification.
+
+r14 is ready: source `95614628`, new share folder
+`C:\VMs\ar-share\diagnostics-20261010-cable-capture-reader-r14`;
+all 38 manifest entries independently verified and SYS unchanged. Static
+build, import gate, 2,208 probe checks, 253 repeated-start checks, 189
+continuity checks and docs validation pass. Exact next task: user runs the
+[two-minute capture reader comparison](../../operations/virtual-cable-latency.md#capture-reader-scheduling-comparison-after-r13)
+once, then agent reviews packet read timing and losses. The r13 pending-run
+instructions below are historical.
+
+Latest action (r13 returned): the short trace is complete and checksum
+verified. Default losses are 0/1/0; low-latency losses 19/16/17. All observed
+input pulses survive through sink publication, corroborated by the source
+WAV; 14 losses occur before observed input and 39 after publication. The
+standing +30 ms r11 jump did not recur. Next, agent reviews capture packet
+delivery/retention and the probe's unregistered audio threads against the
+observed timing before choosing a repair. No new guest run is requested.
+The [r13 evidence](../active/evidence/2026-10-10-m03-cable-latency-preparation.md#r13-returned-stage-trace-review-2026-10-10)
+supersedes the pending r13 run instructions below. VCAB-24/25 remain open;
+preserve all counters, thresholds, existing bundles and host settings.
+
+Objective: explain the remaining impulse losses and locate persistent delay
+before changing latency recovery. Requirements: VCAB-20/24/25/28, VDEV-12;
+spec 17's approved bounded, counted recovery decision governs any later repair.
+VCAB-24 and VCAB-25 remain open. The user operates guest tests; the agent does
+offline host analysis, code preparation and checks.
+
+Prerequisites available: r12 continuity archive and both r11 repeated-start
+archives in `C:\VMs\ar-share`; r11 archive hashes reverified against the
+recorded evidence. The existing probe's read-only `cable-impulse-reanalyze`
+mode reproduces r11 engine default start 2: 34.379 ms initially, 64.446 ms
+from impulse 148, two losses, no render-clock discontinuity (host replay exit
+0). Original archives remain the source evidence.
+
+| Order | Owner | Work and completion evidence | User action |
+|---|---|---|---|
+| 1 | Agent, host | Correlate r12 losses with saved render/arrival QPC clocks, per-route progress and packet/counter deltas. Validate event dating first: the existing VM-wide classifier dates losses from launch wall time plus nominal impulse index, so render skips and launch uncertainty can distort long-run attribution. Produce a reproducible event table with explicit uncertainty and unresolved events. | None; reports are present. |
+| 2 | Agent, host | Reconstruct r11 default start 2 around impulse 148 and compare clean starts. Trace Windows positions, driver ring/provenance, bridge publication and relay depth. Record the owning layer or the specific missing observable; a persistent +30 ms is reproduced, but its location is not established. | None while saved evidence suffices. |
+| 3 | Agent, host | If the owning layer is established, document recovery limits/counters/rollback, implement there, and check on-time preservation, bounded drops, silence/privacy and timing regressions. If the evidence cannot locate it, prepare a short diagnostic that measures the missing observable instead. | Wait for a verified bundle and command. |
+| 4 | Agent prepares; user runs in VM | Verify the bundle manifest and source/driver hashes, then supply one fail-fast Administrator PowerShell block inside AR-DriverTest. First run is a bounded reproduction/recovery check (about 3 minutes using repeated starts, or a shorter targeted trace if attribution is still blocked). Compare latency before/after the disturbance and every loss/counter delta. | Run only the new block once provided; send output/archive. |
+| 5 | Agent reviews; user later qualifies | Review the short result before increasing duration. Repeat the 8-cable hour run only after a meaningful repair or diagnostic improvement; native qualification/signing remains a separate gate. | No hour-long repeat now. |
+
+Validation: offline reports must reproduce published loss totals and timing
+levels, preserve original QPC units, expose synchronization uncertainty, and
+avoid equating nearby gaps with proven cause. Any implementation needs owning
+layer regression checks, pinned formatting/Clippy and affected acceptance
+checks before a guest bundle. Guest results are Windows evidence; timing-model
+checks alone cannot close audio qualification.
+
+Rollback: keep candidate `492d8ca8` and its verified slot-provenance bundle;
+retain current cable-count restoration. Preserve Hyper-V/WSL, host security
+and VM audio configuration. No buffer enlargement, suppressed counters or
+threshold relaxation. Status: host correlation and waveform localization
+completed as described below; the next guest action is the short r13
+route/submission trace, after its bundle manifest is verified.
+
+Ready for the user: r13 at
+`C:\VMs\ar-share\diagnostics-20261010-cable-stage-trace-r13`, source
+`a4949be8`. Manifest verifies 38 files; signed SYS is byte-identical to the
+installed slot-provenance candidate. Run the
+[two-minute trace block](../../operations/virtual-cable-latency.md#short-routesubmission-trace-after-r12)
+inside AR-DriverTest. No reinstall is needed. The next agent action after
+the archive arrives is to map each submit/device-frame displacement and
+route input/output observation around loss/latency shifts, then choose the
+owning-layer recovery using that evidence.
+
+Implementation decision (2026-10-10, user requested improvement): r11's
+saved Cable A bridge WAV has impulse 146 at frame 71,104 and impulse 148 at
+73,024 (48 kHz); impulse 147 is absent. After accounting for the skipped
+impulse, subsequent payload is shifted by 960 frames (20 ms) before the
+engine. End-to-end latency shifts by about 30 ms. This narrows the location
+but does not prove a 30 ms queue exists in the driver. The probe generates
+payload using submitted frame count and dates it using device-clock frame
+count; these can diverge through underruns. Diagnose their relationship
+before dropping valid audio to recover a possibly misdated delay.
+
+Ordered implementation: (1) add opt-in, preallocated render-submission
+snapshots to the probe's raw report, bracketing padding reads with device
+clock readings; (2) add opt-in, bounded route input/output impulse traces
+using the common QPC timeline, with relay depth/silence/drop counts; (3)
+enable both with a short repeated-start runner switch, preserving existing
+results/counters; (4) run probe self-tests, trace/runner regressions, format,
+Clippy, docs validation and static VM builds; (5) prepare a verified new
+diagnostic bundle and one guest block. The trace is restricted to ≤60-second
+stereo 48 kHz/480-frame runs; overflow makes the trace invalid. All file
+output occurs after the audio workers stop. No kernel change is justified
+yet; rollback is removal of the opt-in diagnostic changes and use of r12.
+
+Host result: `review-cable-continuity.py` reproduces all 1,456 losses from the
+saved r12 archive. Nominal dates drift by 4.808–4.862 s relative to in-run QPC
+dates. With progress interval ends anchored to driver QPC counters (10 MHz
+in the reviewed guest), 597 of 705 loss runs have nearby ≥20 ms gaps in all
+four routes; 119 impulses remain without that correlation, versus 1,041 in
+the original nominal report. These are timing correlations with inherited
+payload/device-frame dating uncertainty, not a root-cause finding or a pass.
+The runner now records/uses explicit normalized QPC snapshot and loss times,
+rejects mixed timing bases, and rejects a truncated loss list. The short r13
+trace is necessary to distinguish submitted-payload starvation from actual
+queued latency before recovery can safely discard audio. Host checks and
+the exact next guest block are recorded in the preparation evidence/runbook.
+
+User approved step 1: repeat the VCAB-20 bit-exact and VCAB-26 isolation
+checks through the AudioRouter engine instead of the proxy relay.
+
+Finding before implementation: no working Cable A → engine → Cable B path
+exists. The control crate's virtual-node plumbing predates the eight-cable
+driver (WP-08/WP-09 not started): `NativeBridgeInputWorker` renders the
+engine output to a physical endpoint, and the capture-sink tap
+(`NativeBridgeRealtimeWriter`) publishes without waiting for the consumer
+acknowledgement, which overwrites the single slot under load (see the
+WP-09 pacing note). Step 1 is therefore the first slice of WP-09.
+
+Ordered tasks:
+1. Portable engine test: a `VirtualRenderSource → VirtualCaptureSink`
+   session compiled by the engine and run through `RealtimeScheduler` is
+   bit-exact for float32 noise on the 2^-24 grid, silence and −0.0.
+2. `audiorouter-windows-audio`: a reusable cable route worker. One
+   realtime thread reads Cable A's render-source slot and runs the engine
+   scheduler; a second publishes to Cable B's capture sink only after the
+   consumer acknowledged the previous block (as `m03_bridge_tone`). The
+   bounded relay (preallocated, drop-oldest, counted) moves into the
+   library with its tests; nothing in the audio threads allocates, logs or
+   waits on locks.
+3. VM tool `m03_engine_route` (example) that builds the session, compiles it
+   with the engine and runs the worker; `run-cable-latency.ps1 -Route
+   engine` uses it instead of `m03_bridge_tone --passthrough`; acceptance
+   checks extended.
+4. Host checks: unit tests, fmt, Clippy (workspace), acceptance scripts;
+   then one VM bundle (r7) and one guest command.
+
+Status 2026-10-10: tasks 1–4 done on the host (relay stayed in the tool;
+the engine step is the library `CableRouteProcessor`); bundle r7 built
+([evidence](../active/evidence/2026-10-10-m03-cable-latency-preparation.md#bundle-r7-engine-route-step-1-of-the-single-pc-path)).
+VM r7 (engine route): bit-exact and isolation pass; default latency
+jittered by one block (10 ms) because re-blocking emitted 0/1/1/2 blocks
+per input block. Repaired with a constant re-blocking delay and one block
+out per block in (evidence, third VM run). VM r8 confirmed the repair:
+bit-exact and isolation pass; default latency is flat within each steady
+stretch (25.272 ms before a ~51 ms VM-wide stall, 50.273–50.275 ms after);
+the stall's +25 ms sits in endpoint buffering outside the route (route
+queue depth unchanged). Lesson recorded in AGENTS.md. **Step 1 done** for
+the stereo engine processing path; 8 channels wait for engine width.
+
+Step 2 (user approved 2026-10-10): the probe reports steady levels in
+impulse order (`cable_segments`, `cable_steady_level_ms`; 146 self-test
+checks); `run-cable-latency-starts.ps1 -Route engine|vbcable` measures
+fresh starts in both period modes (acceptance 112 checks); runbook section
+"Repeated starts and the VB-Cable comparison". VB-Cable is installed by
+the user inside the VM only. Comparison caveat: VB-Cable is measured
+Input → Output with no route, which favours it. Next: bundle r9, engine
+run, VB-Cable install, VB-Cable run; compare median steady levels per
+mode (VCAB-25: ≤ 5 ms worse than VB-Cable).
+
+r9 results (indicative, NEM): default periods, clean starts: engine route
+33.9–42.0 ms vs VB-Cable Input → Output 48.4–51.5 ms, so the route is not
+worse than VB-Cable. Low-latency: no clean engine start. Measurement flaw
+found: the probe dates impulses from one end-of-run anchor, so levels
+before a render-side disturbance are unreliable (VB-Cable −3.9 ms; the r8
+reading is withdrawn). Next: probe dates impulses from in-run render-clock
+samples and reports render discontinuities; then rerun both routes.
+Done on the host (bundle r10, `a5ebd0f9`). r10: VB-Cable's position wobble
+fooled the two-sample stall detector; repaired with median-offset dating
+and raw data saved per run (bundle r11, `cc36d285`). Next: the user reruns
+both routes; later method changes are checked on the saved raw data on the
+host first.
+
+r11 (indicative, NEM): default periods, clean starts: engine route median
+38.6 ms (36.4–44.0) vs VB-Cable 54.6 ms (46.2–61.5); low-latency engine p50
+16.6–18.2 ms but no clean start (losses). Earlier ~150 ms low-latency values
+were dating artefacts. **Step 2 done.** Open decision: a cable keeps a
+standing +30 ms after late OS render delivery (engine start 2); whether to
+shed standing delay is a latency-recovery design decision.
+
+**Decision (user, 2026-10-10): yes, recover latency.** A cable path drops
+excess audio (bounded, counted, at a block boundary) to return to its
+normal delay after a disturbance, instead of keeping a standing delay.
+Recorded in spec 17 ("Latency recovery"). Before implementing: locate
+where the standing delay is held (driver render ring, bridge, route relay
+or Windows engine) from r11 raw data and counters, then choose the owning
+layer, add host timing-model tests and run the repeated-start latency
+check again. Next: step 3, the traced one-hour 8-cable deviation run, then
+the latency-recovery design.
+
+Step 3 preparation (2026-10-10): the host runner and 153-check acceptance
+test are committed in `24ab269a`; host acceptance passes all 153 checks. The
+r12 bundle is prepared at
+`C:\VMs\ar-share\diagnostics-20261010-cable-continuity-r12` from clean source
+`7802c9b2`, based on
+`C:\VMs\ar-share\repair-20261010-slot-provenance`. Its 38-file manifest
+verifies and the test-signed SYS hash is unchanged (`10CF8E87…52381`); see
+[preparation evidence](../active/evidence/2026-10-10-m03-cable-latency-preparation.md#bundle-r12-eight-cable-sustained-continuity-preparation-2026-10-10).
+The guest run is a one-hour NEM deviation
+measurement of four simultaneous AudioRouter engine routes with eight cables,
+not VCAB-24 qualification. The user completed it; the report records 1,456
+lost impulses, zero corruption, major per-route clock gaps and cross-route
+loss clusters, but its gate is `unexplained-events` and qualification is false.
+The exact report and limitations are recorded in the
+[r12 result](../active/evidence/2026-10-10-m03-cable-latency-preparation.md#one-hour-guest-result-r12-2026-10-10).
+Next correlate each missing impulse index with raw clock gaps and counter
+deltas, then locate the standing delay using the r11 raw data/counters before
+designing latency recovery (spec 17). Do not repeat the unchanged hour-long
+run or infer a root cause from the VM-wide classifier alone.
+
+**Step 4 — latency recovery: locate the standing delay (2026-10-11).**
+The user skipped VCAB-24/25 qualification (deviation recorded in the
+[driver timing evidence](../active/evidence/2026-10-10-m03-cable-driver-timing.md#native-timer-qualification-unavailable-2026-10-11-user);
+not waived). Host analysis of the r18 hour (A→B), with the probe's
+in-run-median dating replicated per impulse
+(`python -I -B tools/vm/review-latency-steps.py <extracted continuity run dir>
+A-to-B`): latency starts at 38.5 ms and rises in about 10 ms
+(one 480-frame block) steps to 50, 65 and up to 71 ms, and returns only
+partly (ends at 59.7 ms). Most steps coincide with disturbances (render
+underrun/overrun, capture underrun, late writes, 25–120 ms gaps). Some
+(t = 30 s, 540 s) have no counter change. The counters cannot say which
+stage holds the extra blocks.
+
+Ordered tasks:
+1. User runs one guest block: `run-cable-latency-starts.ps1 -Route engine
+   -TraceRoute -PeriodMode default -Starts 10 -Impulses 1000` from the r20
+   bundle (no new build; trace ≤60 s, 480-frame stereo).
+2. Host: for every sustained step (> 4 ms), split the delay per impulse
+   into emission → route input (render stage observation), route input →
+   sink publication, and publication → probe arrival. This needs the
+   r13 stage join (`target/r13-stage-review/inspect.py` method) plus
+   render-clock dating. The stage whose interval grows owns the standing
+   delay.
+3. Then design the bounded drop in that layer (spec 17 latency recovery),
+   with host timing-model tests first (validated lesson 2026-10-10: model
+   OS timing before a VM run).
+Validation: the step must be attributed in at least one traced start;
+otherwise rerun with more starts, not a different repair. Rollback:
+analysis only; no driver/route change until task 3 is reviewed.
+
+**Task 1–2 result (2026-10-11).** Archive
+`C:\VMs\ar-share\diagnostics-20261011-notification-lock-r20\starts-engine-17eacfee30a94f64896f8a0be34f276e.zip`,
+SHA-256 `E603AF0A8A2ACFD5E7EDB70740C7FD3A9C5C19E7417E0646734506ED4692DFB3`
+(matches the guest). Ten traced default-mode starts, 1,000 impulses each,
+r20 driver (`driver_version: [0, 1, 4, 0]` in all ten), every route trace
+`missed=0`, SysMain running. Nine clean starts, 2 lost impulses in total,
+0 corrupted. Three starts step by one block. Command:
+`python -I -B tools/vm/review-latency-stages.py <extracted dir>`.
+
+| Start | Total | Emission → route in | Route in → out | Out → arrival | Counters at the step |
+|---|---|---|---|---|---|
+| 6 | 34.72 → 44.60 | +0.04 | **+10.45** | +0.25 | relay silence 19 → 20; no driver anomaly |
+| 10 | 35.07 → 44.89 | −0.09 | **+9.97** | +0.13 | relay silence 19 → 20; no driver anomaly |
+| 4 | 43.61 → 53.66 | **+11.73** | −0.28 | −1.25 | render late 1, packet overrun 1, render underrun 1,440 (others 480), 2 lost |
+
+Out → arrival (Cable B, Windows capture, probe buffer) is constant at
+about 22 ms in every start. The standing delay is held in two places:
+
+1. **The route relay** (starts 6 and 10, attributed). `relay_take` sends
+   silence when no block is ready and keeps every later block; it drops
+   only when all three relay blocks are full. One early capture tick
+   therefore leaves one block queued for the rest of the stream (+10 ms).
+   The relay is in the VM tool (`m03_bridge_tone/workers.rs`); WP-09's
+   product route will need the same rule.
+2. **Before the route input** (start 4). The delay between Cable A's
+   render clock and the route reading the block grew by one block after one
+   late `SetWritePacket` and one packet overrun. The driver's private render
+   queue (`renderqueue.h`, up to 4 blocks) keeps a block whenever the lease
+   reader has not yet acknowledged the previous one. It never sheds a
+   standing block, so it is the likely holder. Not yet proven: the driver
+   does not report queue depth, and the Windows engine could also shift
+   the client stream.
+
+Recovery design (spec 17 latency recovery), one shared rule: a FIFO
+between a producer and a consumer at the same nominal block rate drops one
+queued block (counted) only when its depth has stayed ≥ 1 at every
+consumer take for a full window (proposed 100 blocks, about 1 s at
+480 frames). So a standing excess block is shed and a transient burst is
+not. On-time audio is never dropped: the depth floor proves the block was
+queued for the whole window. Order:
+- (a) a portable, allocation-free `StandingDelayTrim` in
+  `audiorouter-windows-audio` with unit tests (steady, single silence
+  insert, burst, jitter, never more than one drop per window), used by the
+  tool relay;
+- (b) ~~the driver render queue~~: dropped, see the correction below;
+- (c) one traced guest block on a new bundle to confirm every step returns
+  to the starting level, with drops counted.
+WP-09's product route reuses (a).
+
+(a) done (2026-10-11): `StandingDelayTrim` and
+`STANDING_DELAY_WINDOW_BLOCKS` (100) in `crates/windows-audio/src/cable_route.rs`;
+the tool relay's capture side drops and counts a standing block
+(`pass-through relay: … trimmed=N`). Model tests: on-time audio untouched;
+one silence insert sheds exactly one block and returns to the normal wait;
+a late burst after two silences sheds two; an early block or in-period
+jitter sheds none; at most one drop per window; a producer three blocks
+ahead is brought back in three windows. Relay test: the standing block is
+shed and the depth returns to zero. Host: `cargo test -p
+audiorouter-windows-audio` (lib 132 passed, 3 ignored; tool 24 passed),
+fmt check and workspace Clippy clean.
+
+**Correction (2026-10-11): start 4 is a clock-dating artefact; (b)
+dropped.** The probe's `submit` rows give the moment each impulse was
+handed to Windows. Write → arrival (what a user hears from the app's
+write) at the three steps: start 4 84.33 → 84.18 ms (−0.15, no real
+change); start 6 74.97 → 84.87 (+9.89); start 10 75.48 → 85.32 (+9.84).
+At start 4's step the render clock position jumped about 480 frames ahead
+of the written frames (written-ahead-of-device 2,112 → 1,614–1,673 frames,
+padding unchanged at 576). Windows counted one glitch block in the
+stream position after the late write, so clock-dated latency rose while the
+audio did not move. The driver render queue cannot hold a standing block
+anyway: the reader acknowledges within 1–2 ms and the next 1 ms tick
+publishes the queued block. The only real standing delay measured is the
+relay's (a). r11's "+30 ms after one late `SetWritePacket`" was clock-dated
+too and is likely the same artefact. `review-latency-stages.py` now
+prints write → arrival.
+
+Next (c): rebuild the unchanged r20 driver from this commit (bundle
+packaging requires one source commit), prepare bundle r21 with the
+trimming tool, and have the user run the same traced block. Pass: every
+real step (write → arrival) returns to its starting level within about
+one window, with `trimmed=` equal to the extra silence inserts, 0
+corrupted, and no step in write → arrival without a matching trim.
+
+r21 bundle ready: source `73c9090a`, `target/r21-driver-73c9090a`
+(0.1.4.0 test-signed, timing diagnostics compiled in, clean tree; same
+driver source as r20, so the guest's installed 0.1.4.0 is not reinstalled;
+33 package checks pass), SYS SHA-256
+`F9CD1F381725AB452EC2D0931325FF892BF9791C93BB713F26CF10D655740050`. Bundle
+`C:\VMsr-share\diagnostics-20261011-latency-trim-r21`, MANIFEST
+SHA-256 `D964632B6DED1F8D5EEF48F5616840C55175E51DF393F048D7831E91A98FB497`,
+41/41 entries verified; its tone tool prints `trimmed=`. Guest command:
+`run-cable-latency-starts.ps1 -Route engine -TraceRoute -PeriodMode default
+-Starts 10 -Impulses 1000` from that bundle (copy from Z: first).
+
+**(c) result (2026-10-11) — latency recovery works for the relay.** Archive
+`C:\VMsr-share\diagnostics-20261011-latency-trim-r21\starts-engine-7098814725e642afa6651350ff065ad4.zip`,
+SHA-256 `A57E2C280D88507D99C39C4CCF3FD55B855617E5F55B49CFADF1457397FC7AE4`
+(matches the guest). `driver_version: [0, 1, 4, 0]` in all ten, route
+traces `missed=0`, `Passed=true`, 0 corrupted. Default mode: median steady
+36.2 ms, median clean p50 37.5 ms, 5 clean starts.
+
+| Start | Real step up (write → arrival) | Back to start level | Relay silence | trimmed |
+|---|---|---|---|---|
+| 4 | +9.79 ms at impulse 119 | −10.02 at 220 (1.0 s) | 18 → 19 | 1 |
+| 8 | +9.82 at 71; +10.01 at 592 | −9.89 at 172; −10.16 at 724 | 19 → 21 | 2 |
+| 9 | +9.91 at 540; +5.48 at 848 | −10.08 at 724; back at 989 | 19 → 21 | 2 |
+
+Every real one-block step returned to the starting level about one window
+later (1.0–1.8 s), and `trimmed` equals the extra silence inserts in
+every start. No start without a trim kept a step. Losses: 9 / 10,000. Five
+are the trimmed blocks themselves (one impulse per 480-frame block, as
+the spec accepts: a counted glitch instead of lasting delay). Four are
+start-up losses in starts 3 and 7 (impulses 54–65), unrelated to
+trimming. Compare r20 without trimming: three of ten starts kept +10 ms
+to the end. Limits: VM, default period only; low-latency mode and the
+product route (WP-09) are not yet covered. The relay rule lives in the
+library for WP-09 to reuse. Step 4 of the single-PC path is done for
+the measured holder.
+
+Scope label for results: engine compile and realtime processing between the
+cables; not yet the control/backend lifecycle (session start/stop, lease
+supervision, UI), which stays in WP-09. Requirement IDs: VCAB-20, VCAB-26,
+VCAB-25 (indicative), VDEV-12. Rollback: revert these commits; the driver
+and the proxy route are unchanged.
+
+## Completed render publication review — historical record
+
+User confirmed playback was already running and requested source analysis and
+an owning-layer repair before any further VM retry. This supersedes the final
+"pause Media Player" workaround below. Already-running playback is supported.
+Scope: VCAB-20/24/25/27/28, VDEV-12, SEC-08; Stage A tone continuity.
+
+Source finding: `ReadBytes` can finish several bridge quanta in one locked
+callback; the publisher replaces the sole shared slot each time. An armed
+reader cannot acknowledge between those writes. The 18 ms first-read gap
+is consistent with this defect; existing archives do not identify the exact
+callback schedule. A test that waits for each reader acknowledgement cannot
+exercise it. Also review time-unit guards and timer/resource lifetime.
+
+Ordered repair: retain completed render quanta in bounded private storage,
+publish only after an exact acknowledgement, fence publication by expected
+lease generation, and service transport independently of notification cadence.
+Reuse existing stream storage, preserve protocol 1.1 and honest loss counters;
+no acceptance threshold change. Handle queue capacity, lease replacement,
+pause/EOS/STOP and DMA catch-up explicitly. Document the internal buffering
+decision in spec 17. Fresh-context kernel review is required by WP-04.
+
+Verification after the code repair: deterministic production-helper cases for
+back-to-back completion without intervening reader execution, exact samples,
+bounded overflow, hostile acknowledgements and generation turnover; host-only
+WDK build and source guards. No driver load or new VM run in this task.
+Earlier capture loss during a 65 ms guest scheduling gap remains a separate
+open issue; this repair cannot claim arbitrary scheduler stalls are lossless.
+Rollback: revert this repair and retain the existing VM snapshot and evidence;
+never replace the installed package automatically.
+
+Implemented and reviewed: private FIFO in existing storage, exact ack flow
+control, expected-generation publication/counters, initial OPEN pointer-last,
+per-tick render service, bounded DMA catch-up, consistent clock units and safe
+timer teardown. The second review's EoS ordering finding is also repaired.
+Host FIFO suite passes 447 checks; x64/ARM64 WDK/source acceptance and formatting/
+Clippy pass. ASan is unavailable (missing runtime library); Jev returned a
+network error. See the [full review and validation record](../active/evidence/2026-10-09-m03-render-publication-review.md).
+Next action: commit the reviewed source and prepare a single candidate.
+Runtime/latency/long-run gates remain pending; no further user test requested.
+
+## Objective
+
+### Committed repair: render packet validity (2026-10-10)
+
+User requests the next engineering step before another VM test. Scope:
+VCAB-12/20/24/27/28, VDEV-12; event-driven render DMA underflow handling.
+Review finds `ReadBytes` converts elapsed DMA without checking which logical
+packets Windows committed through `SetWritePacket`. A missed write can expose
+the previous circular-buffer lap. The timer's later ETW underrun does not
+increment bridge counters. Microsoft documents this replay behavior and its
+optional silence mitigation; AudioRouter must not silently qualify stale data.
+This source defect is not proven to cause the saved 12-second phase breaks
+and is separate from the virtual HDA speaker scratches.
+
+Ordered tasks: (1) model packet validity with a production helper and reproduce
+uncommitted/stale packet reuse; (2) silence only unavailable event-mode frames
+and count each as render underrun, preserving packet clock and valid samples;
+(3) make accepted OS packet commits and validity state atomic with DMA position;
+(4) regress startup, duplicate/late commits, rollover, PAUSE/STOP, long stalls,
+format/buffer boundaries and existing polling behavior; (5) fresh kernel review,
+host-only x64/ARM64 WDK build/source guards and focused native-free tests;
+(6) document counter semantics, commit and prepare one checksummed candidate
+only after review. No buffer growth, ABI change or acceptance relaxation.
+
+Prerequisites: existing source/build tools and saved private evidence are
+available; VM is off with original default/WAS and HDA restored. Real audio,
+driver loading, waveform continuity and latency validation require the user
+inside AR-DriverTest; no host audio endpoint or driver is opened by the agent.
+Fresh-context review found and confirmed the packet-validity and atomicity
+defects. The guarded reader and shared-helper regressions are implemented;
+review found no remaining source blocker within this scope. Compatibility
+decision: strict validity latches after the first accepted `SetWritePacket`,
+preserving legacy event/polling clients. Earlier consumption remains outside
+that protection. One-slot commits invalidate the current physical slot and
+can introduce honest, counted silence; one-slot continuity is unqualified.
+EOS rejection is unchanged. Rollback: revert this isolated repair and
+retain the installed driver, clean snapshot and prior bundles unchanged.
+620 offline helper checks and x64/ARM64 WDK/catalog/source acceptance pass.
+See the [repair record](../active/evidence/2026-10-10-m03-render-commit-validity.md).
+Repair committed/pushed as `28b989f5`; the clean-source candidate at
+`C:\VMs\ar-share\repair-20261010-render-commits` passes 33 package integrity
+checks and independent verification of all 32 manifest files. Checksums and
+exact guest command are in the repair record. Both clean guest smokes passed
+2026-10-10 (`evidence-20261010-102200.zip`, `evidence-20261010-102855.zip`;
+install, four endpoints, removal, baseline restored; no audio streamed).
+Install/status also passed (60/60 formats, 128/480/480 periods; driver left
+installed). Direct audio r3 run **failed**: the new silence substitution
+removed ~15 % of Cable A audio (all render underrun comes from the
+`!committed` branch), including in stall-free seconds, while r2's previous
+driver delivered clean Cable A; shared 90–460 ms stalls also recurred. See
+the repair record's r3 section. User approved the follow-up the same day:
+per-physical-slot provenance recorded before progress (late-written audio
+plays, stale laps never replay) plus `SetWritePacket` outcome counters
+(capability 0x40). Host evidence (694 offline checks with a render timing
+model, x64/ARM64 WDK acceptance, Rust tests/Clippy) is in the repair
+record. Fresh-context kernel review: no blocker; its findings are fixed or
+documented (repair record). Candidate `492d8ca8` and r4 direct bundle are
+built and verified. VM 2026-10-10: two clean smokes, install/status and the
+30-second direct run passed (all error counters 0, 3,000 packets accepted on
+time, waveforms exact). The 300-second direct bundle (`ed47836c`) is built
+and host-verified. Its run failed from VM-wide stalls (first ~63 s plus one
+at 121 s; clean from 121 s to 300 s; driver counted every loss). Next action:
+the traced 300-second run attributed its losses to late timer delivery
+during guest Defender/Windows Update bursts under NEM (repair record). This
+VM cannot qualify VCAB-24. A reversible, user-run [native VT-x session](../../operations/virtual-cable-native-vtx-session.md)
+documents turning the hypervisor off for one boot and restoring WSL/Memory
+Integrity. VCAB-25 preparation is built and host-verified: pass-through relay,
+identity-coded impulse probe and [latency runbook](../../operations/virtual-cable-latency.md)
+([evidence](../active/evidence/2026-10-10-m03-cable-latency-preparation.md)). VM r6
+(guest quieted): proxy bit-exact and isolation (Cable B active) pass;
+default latency 33.39 ms p95 with 0.002 ms jitter but 56.94 ms in r5 (startup
+phase varies per run); low-latency periods fail under NEM. Native VT-x proved
+impractical on this PC (VBS kept by Windows Hello ESS); host restored and
+verified. **Constraint (user, 2026-10-10): this is the only PC; no separate
+test PC.** Path under that constraint:
+1. VM, short runs (work reliably under NEM): repeat VCAB-20/26 through the
+   real AudioRouter engine route instead of the proxy relay.
+2. VM: repeated-start latency mode (N starts, p95 across starts) and the
+   same measurement on VB-Cable installed in the same VM, for the VCAB-25
+   "≤ 5 ms worse than VB-Cable on the same PC" comparison.
+3. VM: one-hour 8-cable run with scheduling trace; every loss must coincide
+   with a traced guest-wide stall and be counted by the driver. This is a
+   documented VCAB-24 deviation, not a pass.
+4. User decision (cost): production (attestation) driver signing. Only a
+   production-signed driver may run on this PC; the final bare-metal
+   VCAB-24/25/27 qualification then runs here, as a normal user install
+   (Secure Boot and Memory Integrity on), with a restore point and the
+   uninstall path verified first in the VM. The test-signed driver never
+   runs on the host.
+Do not rerun r3 unchanged.
+
+Ship AudioRouter-owned virtual cables (up to 8, Cable A–H; 2 enabled by
+default, the user picks 1–8) with the app, with studio-grade sound
+(bit-exact float path, no hidden processing) and low latency, and built so
+that the signed driver rarely or never needs to change ("sign once", 17 §1),
+installed with one click and one UAC prompt, so users no longer need
+VB-Cable. Requirement IDs: VCAB-01–12, VCAB-20–30 (performance and sound quality), VDEV-01–12 (with the deviations in
+17 §8), SEC-08, NFR-02, NFR-16, DIST-01/02/03/06/07, UI-17.
+
+## Rules for any agent working on this plan
+
+1. Read `AGENTS.md`, this file, [17](../../spec/17-virtual-cable.md) and the
+   [testing procedure](../../operations/virtual-cable-testing.md) completely
+   first.
+2. **Never install, load or test the driver on the host PC** until stage C,
+   and then only the Microsoft-signed package. Never run `bcdedit`, change
+   Secure Boot, HVCI or test signing on the host. Driver loading happens only
+   in the VM `AR-DriverTest`, which the user operates; the agent prepares
+   scripts and packages and reads the evidence the user copies back.
+3. Do one work package (WP) at a time, in order, unless the dependency table
+   says two can run in parallel. Before coding a WP, write its "Status" line
+   here as `in progress` with the date.
+4. Each WP ends with: tests listed in the WP run and passing (exact command,
+   environment and result recorded under "Evidence"), diff reviewed, docs
+   updated, files committed **by name** (validated lesson 2026-10-04).
+5. Never report a check as passed that was not run. A VM result is not a
+   stage C result; a build is not a load test.
+6. Keep the kernel change small and reviewed; every `unsafe` Rust block and
+   every kernel function touching user memory gets a comment with its
+   invariants (AGENTS.md architecture rules).
+7. **Performance and sound quality come first** (user, 2026-10-05). A WP
+   that touches the audio path runs the relevant VCAB-20–30 checks, not only
+   functional tests, and records the numbers. Never trade a quality target
+   for convenience without the user's decision.
+8. **Sign once.** Anything that may need to change after release goes into
+   the registry configuration (17 §5.5), the protocol extension/capabilities
+   (17 §5.2) or AudioRouter itself — not into a future driver build.
+9. If a WP finds the design wrong, stop, record the finding here, propose the
+   change to 17, and ask the user before continuing.
+
+## Open decisions (WP-00) — proposed defaults, user to confirm
+
+| ID | Question | Proposed default |
+| --- | --- | --- |
+| D1 | How many cables in the first release? | **Decided 2026-10-05:** up to 8 (A–H, 16 endpoints), user enables the first N (1–8, default 2); develop and test with 2, qualify all 8 before signing (A15) |
+| D2 | Endpoint names | `AudioRouter Cable A Input` / `AudioRouter Cable A Output` (and B), VB-Cable style |
+| D3 | Where install is offered | First-run guide and Setup → Virtual cables; never automatic |
+| D4 | On app uninstall | Ask; default "keep the cables" |
+| D5 | Formats | **Decided 2026-10-05:** 44.1/48/96 kHz, 1–8 channels, float32 (default) and PCM 16/24/32; default 48 kHz float stereo |
+| D6 | Accept the deviations in 17 §8 ("first N of 8" instead of freely created/deleted buses; Windows names not renameable) | Yes for first release |
+
+Status: waiting for the user. WP-02 onward may start with the defaults; a
+changed answer is applied before WP-05.
+
+## Dependencies
+
+Execution authorization (2026-10-05): user requested all steps possible on this
+computer. Finish each WP's host implementation/checks in order, record its VM
+gate as pending, and proceed with independent downstream host preparation.
+This does not authorize loading a test driver on the host or waive VM,
+hardware, signing, purchase or publication gates. Kernel security review still
+uses the fresh agent context required by WP-04.
+
+```text
+WP-01 (VM) ─┬─► WP-02 (test-signed build) ─► WP-03 (VM smoke script)
+            │                                   │
+            │   WP-04 (security fixes) ─────────┤
+            │   WP-05 (4 endpoints/formats) ────┤
+            │   WP-06 (protocol 1.1 + Rust) ────┤
+            │                                   ▼
+            │   WP-07 (helper) ─► WP-08 (status/API) ─► WP-09 (engine) ─► WP-09b (quality harness) ─► WP-10 (UI) ─► WP-11 (installer)
+            │                                   │
+            └──────────────────────────────────►WP-12 (stage A full) ─► WP-13 (signing, $) ─► WP-14 (main PC) ─► WP-15 (beta + release)
+```
+
+WP-04, WP-05 and WP-06 all edit the driver; do them one after another in
+that order (one writer per tree). WP-07 can start after WP-03 in parallel
+with the driver work if a second worktree is used.
+
+---
+
+## WP-01 — Windows development PC and test VM
+
+- **Who:** user (agent guides). **Where:** Windows host + VM. **Cost:** $0.
+- **Prerequisites:** Windows 11 Pro/Enterprise; Visual Studio 2022 with
+  "Desktop development with C++"; the Windows Driver Kit (WDK) matching the
+  installed Windows SDK; Rust, Node.js, Git (as in the README); a Windows 11
+  ISO; 16 GB+ RAM and 100 GB free disk.
+- **Steps:** follow [testing → Stage A one-time host setup](../../operations/virtual-cable-testing.md#one-time-host-setup-main-pc-administrator-powershell)
+  and "Prepare the VM for test signing". Create checkpoints
+  `01-clean-windows` and `02-test-signing-ready`.
+- **Also on the host:** run `tests/acceptance/m03-driver-build.ps1` to prove
+  the existing driver still builds, and `cargo test -p audiorouter-windows-audio`
+  to get a baseline.
+- **Acceptance:** VM boots with "Test Mode" shown on the desktop; the host
+  shows Secure Boot unchanged (`Confirm-SecureBootUEFI` returns the same as
+  before); both checkpoints exist; driver build passes.
+- **Evidence:** a short note in this file (Windows build numbers, WDK
+  version, VM name, checkpoint names, build result).
+- **Rollback:** delete the VM; disable the Hyper-V feature.
+- **Status:** in progress 2026-10-05 (host baseline); VM evidence pending.
+  2026-10-06 finding: the development PC runs **Windows 11 Home** (EditionID
+  `Core`, build 26300, HVCI/VBS on), which has no Hyper-V. The VM is set up
+  with **VirtualBox** through Windows Hypervisor Platform instead, following
+  the [VM guide](../../operations/virtual-cable-vm-guide.md); snapshots
+  `01-clean-windows` and `02-test-signing-ready` replace the Hyper-V
+  checkpoints. `tools/vm/prepare-vm-share.ps1` builds every VM file (ran end
+  to end on this host into a scratch folder: package, integrity checks,
+  static-CRT tools, fuzzer, scripts, manifest) and `tools/vm/vm-checks.ps1`
+  runs each session step in the VM.
+
+## WP-02 — Test-signed driver package
+
+- **Who:** agent on the Windows host. **Requirements:** VDEV-09 (dev side),
+  SEC-08.
+- **Files:** `drivers/audiorouter-virtual/build.ps1`, new
+  `drivers/audiorouter-virtual/sign-test.ps1`, `.gitignore`.
+- **Steps:**
+  1. Add `-Version <X.Y.Z>` to `build.ps1`; stamp `DriverVer` in the
+     generated INF (today hard-coded `02/22/2016, 1.0.0.1` in
+     `Source/Main/AudioRouterVirtual.inx`) using the WDK `StampInf` step or
+     MSBuild property `/p:StampInfDriverVer=...`. Today's date, version
+     `X.Y.Z.0`.
+  2. Keep `/p:SignMode=Off` for the plain build. New `sign-test.ps1 -Package
+     <dir>`:
+     - create, if missing, a self-signed code-signing certificate
+       `CN=AudioRouter Test Driver` in `Cert:\CurrentUser\My` (use the
+       existing `WDKTestCert` if present);
+     - sign the `.sys` first (embedding its signature changes its bytes),
+       then run `Inf2Cat /driver:<dir> /os:10_X64` (Windows 11 uses the 10 OS
+       code family in Inf2Cat; verify the accepted values with
+       `Inf2Cat /?`);
+     - sign the `.cat` with the selected test certificate's exact thumbprint;
+       SHA-256, optional RFC 3161 timestamp URL (offline by default);
+     - export only the public certificate to `<dir>\AudioRouterTest.cer`.
+  3. Output layout (both for tests and later for the release):
+     `audioroutervirtual.inf`, `audioroutervirtual.sys`,
+     `audioroutervirtual.cat`, `LICENSE-MS-PL.txt`, `package.json`
+     (`{ version, builtAt, gitCommit, signed: "unsigned" | "test" | "microsoft" }`,
+     plus driverVersion, platform, configuration and dirty-tree flag).
+  4. `build.ps1 -TestSign` performs build plus signing in one command.
+     Never commit `.pfx`, `.cer`, `.sys` or `.cat` files; add to
+     `.gitignore`.
+- **Tests:** `signtool verify /pa /v` on the `.sys` and `.cat` (expected:
+  chain to the test root, which is untrusted on the host — that is
+  correct); `InfVerif /v /h <inf>` (record warnings; errors must be zero
+  before WP-13).
+- **Acceptance:** package folder produced in one command from a clean
+  checkout; signature verification output recorded.
+- **Rollback:** revert the two scripts.
+- **Status:** complete 2026-10-05. [WP-02 evidence](../active/evidence/2026-10-05-virtual-cable-wp02.md):
+  x64/ARM64 build acceptance, clean-tree one-command test package, valid INF,
+  33 packaging/integrity checks. No loaded-driver or production-signing claim.
+
+### Execution record (2026-10-05)
+
+User authorized starting this plan with testability, performance and sound
+quality as priorities. D2–D4/D6 remain proposed defaults, as WP-00 permits;
+this tooling does not settle product decisions. Work on the host is build-only.
+The Hyper-V cmdlets are unavailable in this session; VM/checkpoint and host
+Secure Boot evidence have not been supplied. WP-01 is not complete. Independent
+package preparation proceeds; no loaded-driver or audio gate is waived.
+
+Requirements/scenarios: VDEV-09 development packaging, SEC-08 isolation,
+ENG-05 provenance; WP-02 stamped INF, unsigned build, test-signed SYS/catalog,
+public certificate export, signature/integrity checks and invalid-input tests.
+
+Ordered tasks: (1) baseline existing x64 acceptance and windows-audio tests;
+(2) validate version/output and stage exact configuration artifacts with WDK
+StampInf and metadata; (3) sign SYS before generating its catalog, sign catalog,
+export only CER, record verification without trusting a root on the host;
+(4) test pure packaging rules and real WDK tools, inspect diff, document and
+commit exact paths. No audio-path changes in WP-02; VCAB-20–30 measurements
+start with the WPs that touch audio. Rollback: revert package tooling commits;
+delete only the exact generated package; leave existing host trust/boot/audio
+configuration intact. A newly created test certificate stays in CurrentUser/My,
+never Root/TrustedPublisher, and its key is non-exportable.
+
+Validation/evidence: baseline x64 `m03-driver-build.ps1` passed; Windows Rust
+`cargo test -p audiorouter-windows-audio`: 110 passed, 2 live tests ignored.
+Logs: `target/driver-baseline-build.log`, `target/driver-baseline-rust.log`
+(local disposable evidence). Windows reported 10.0.26300.0; WDK tools
+10.0.28000.0 installed. CIM OS inventory denied access; no build number from
+CIM claimed. Final commands, artifact hashes, initial failures and limitations
+are recorded in [WP-02 evidence](../active/evidence/2026-10-05-virtual-cable-wp02.md).
+
+## WP-03 — VM smoke script (A1, A2, A3, A14)
+
+### VCAB-02 endpoint naming repair (2026-10-08, user authorized)
+
+- **Objective:** make Windows expose the four enabled endpoints with cable-
+  and direction-specific names so the helper can recognize Cable A/B and
+  users can select the devices as specified.
+- **Requirements:** VCAB-01/02, VDEV-01/03; Stage A A2/A3/A14.
+- **Prerequisites/evidence:** clean VM after successful helper removal;
+  repaired x64 package starts without a bugcheck. Direct VM inventory showed
+  two render endpoints named `Speakers (AudioRouter Virtual Audio Device)`
+  and two capture endpoints named `Line (AudioRouter Virtual Audio Device)`.
+  The INF's per-interface names were not reflected. See the [VM failure and
+  naming evidence](../active/evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md).
+- **Decision:** preserve the VCAB-02 endpoint names and strict helper
+  classification. The interface friendly-name attempt still produced
+  `Speakers (AudioRouter Virtual Cable)` and `Line (AudioRouter Virtual
+  Cable)`, two each. Per the Windows audio naming documentation, endpoint
+  names come from bridge-pin categories/names; speaker form-factor names are
+  fixed. Use unique custom pin categories, registered in the device software
+  key, for each cable and direction. This changes endpoint form-factor labels
+  from generic Speakers/Line to the specified virtual cable names while
+  preserving render/capture data flow and strict helper classification.
+- **Ordered work:** (1) add 16 deterministic pin-category GUIDs to the cable
+  manifest and generate matching INF registrations and C declarations; (2)
+  assign a per-cable topology descriptor/category to each bridge pin; (3) add
+  build guards for generated GUID/string parity and descriptor wiring; (4)
+  build, sign and stage an x64 test package; (5) have the user run a focused
+  inventory, then two clean-checkpoint smoke runs only after the four names
+  match.
+- **Validation matrix:** host driver build and table checks; acceptance INF/
+  property guards; VM `Get-PnpDevice` names and helper install/remove; then
+  A1/A2/A3/A14 twice. No host driver load. VM tone/Verifier remain blocked
+  until endpoint naming and both smoke runs pass.
+- **Risk:** custom pin categories may use a generic Windows icon/form factor.
+  Confirm endpoint creation and direction in the VM, and preserve unique
+  exact cable/direction names and endpoint IDs across package updates.
+- **Rollback:** restore the previous test package in the VM checkpoint and
+  revert only the naming property and its focused acceptance checks.
+- **Status:** initial naming and install/remove gate passed twice on
+  2026-10-08 with clean package `5f61df3c`. See the latest two-run evidence
+  below. Rename, persistence, formats, audio and Verifier remain pending.
+
+### Render-name follow-up (2026-10-08, VM evidence)
+
+- **Finding:** the retried package created four healthy endpoint children.
+  Both capture endpoints expose their cable-specific names, while both render
+  endpoints are `Speakers (AudioRouter Virtual Cable)`. The helper therefore
+  sees only two identifiable endpoints. Its remove command succeeded and the
+  before/after snapshots match. Evidence:
+  `C:\VMs\ar-share\evidence-20261008-172141.zip`, especially
+  `20261008-172014-smoke\runner\endpoint-names-on-install-failure.json`,
+  `helper-remove.json`, and the baseline snapshots.
+- **Correction:** the prior assumption that a custom category would replace
+  the render speaker label was disproved. Microsoft documents the speaker
+  endpoint label as fixed. The render bridge currently uses a custom category
+  yet Windows still exposes the fixed `Speakers` name.
+- **Ordered work:** use `KSNODETYPE_ANALOG_CONNECTOR` for the render bridge
+  and a per-cable bridge-pin `Name` GUID registered in the device software
+  key. Keep capture's observed per-cable category naming and the helper's
+  strict flow/name checks. Add source/INF generation guards, rebuild and
+  stage a fresh package, then use the VM to verify all four names and clean
+  removal before repeating A1/A2/A3/A14.
+- **Validation:** driver build, INF generation, package signature and hash
+  checks, plus focused driver and VM-guard checks. The render-name behavior
+  remains unqualified until observed in a new VM installation.
+- **Rollback:** restore `02-test-signing-ready` and retry the prior reviewed
+  package if this test package fails. Do not load it on the host.
+
+#### Review before VM retry (2026-10-08)
+
+Review scope: the pending category package, native helper classification,
+failure evidence, and copy/paste retry. Requirements VCAB-02, VDEV-03,
+Stage A A2/A3/A14. Found a reproducible mismatch: the Rust helper rejects
+`AudioRouter Cable A Input (AudioRouter Virtual Cable)` while the VM guard
+accepts it. Also, failure evidence can mask the original install exception,
+and interactive retry commands do not form one terminating script block.
+Ordered repair: align strict Rust/PowerShell name classification with shared
+fixtures; preserve the original exception when collecting failure evidence;
+wrap the retry and check package hashes before smoke; rebuild a fresh share.
+Validate the reproduced rejection before repair, focused helper regressions,
+VM guards, driver/INF checks, package manifest hashes, docs and Jev.
+Rollback: restore the clean VM snapshot and keep the earlier share untouched.
+Runtime naming, rename persistence and custom-category app compatibility
+remain VM gates; host checks do not establish them.
+Additional finding: native rename writes `PKEY_Device_DeviceDesc`, the very
+category description supplying the new cable identity. Preserve that property
+and update only the display friendly name; classify from the unchanged device
+description, check actual render/capture direction, and regress renamed
+metadata separately from display parsing. This stays within VCAB-02/VDEV-03.
+The Windows display inventory also includes historical/disabled endpoints
+despite its function name. Filter helper results by active MMDevice state and
+actual data flow; regress stale, missing-state and wrong-flow records.
+Review repairs and host checks completed: helper 28 tests, native Clippy,
+formatting, VM guards 274, driver checks 215, WDK/INF/catalog build, generator,
+docs, package integrity 33 and all 29 staged manifest hashes. The required
+Jev source review is incomplete: network access failed, and automatic review
+rejected exporting the source diff; user approval was requested. Fresh share:
+`C:\VMs\ar-share\repair-20261008-reviewed`. See the linked failure evidence
+for exact package hashes, limitations and failed attempts. Next VM task is
+Session 1 via `retry-smoke.ps1`; two clean runs remain required.
+
+### Crash follow-up (2026-10-07, user authorized repair and continuation)
+
+The user's Stage A `smoke` run installed the test-signed driver, found zero
+AudioRouter endpoints, then Windows bugchecked with `SYSTEM_SERVICE_EXCEPTION`
+0x3B / access violation. The copied mini dump
+`C:\VMs\ar-share\100726-6484-01.dmp` places the fault in `ks.sys` while it
+walks the driver's `CableStreamDataRanges` pointer list. AudioRouter's ten
+`KSDATARANGE_AUDIO` values all set `KSDATARANGE_ATTRIBUTES`, but the list only
+contained one `PinDataRangeAttributeList` pointer after all ten ranges. The
+Microsoft Sysvad format table interleaves that attribute-list pointer after
+each flagged range. This was a real descriptor-table defect and was corrected,
+but the second replay bugchecked with the corrected 20-entry table present;
+the defect alone does not explain the crash.
+
+- Requirements/scenarios: VCAB-02 (endpoint enumeration), VCAB-10/11 (format
+  enumeration), VDEV-09 (test package); Stage A A2/A3 and crash-free install.
+- Prerequisites: the dump and test-signed driver from the smoke run; current
+  Windows WDK; VM snapshot `02-test-signing-ready`. No host driver load.
+- Ordered work: (1) match dump symbols to the local build and compare the
+  KS range-list convention with Microsoft's Sysvad sample; (2) interleave
+  one attribute-list pointer after each attributed range and assert the
+  expected pointer-list shape in host acceptance; (3) build and package a new
+  test-signed x64 driver; (4) prepare a fresh VM share and rerun preflight,
+  then smoke from the clean test-signing snapshot; (5) only after A2/A3 pass,
+  continue the next authorized VM session.
+- Validation: `drivers/audiorouter-virtual/tests/build-tests.ps1`,
+  `tests/acceptance/m03-driver-build.ps1 -Platform x64`,
+  `tools/vm/prepare-vm-share.ps1`, and in-VM `vm-checks.ps1 -Step smoke`.
+  The final VM install must enumerate all four endpoints and produce no new
+  bugcheck. Existing failed-run evidence is retained.
+- Rollback: restore `02-test-signing-ready` and use the previous package only
+  for reproducing the recorded failure; revert the pointer-table/test changes
+  if the corrected table fails static checks. Never load the test driver on
+  the host.
+- Status: blocked on host diagnosis after the 2026-10-07 VM replay; see
+  the outcome below and linked evidence.
+
+- **Who:** agent writes; user runs in the VM.
+- **Files:** new `tests/acceptance/m03-driver-vm.ps1`.
+- **Behavior:**
+  - refuses to run unless `bcdedit /enum {current}` shows `testsigning Yes`
+    **and** the computer name or a marker file `C:\ar\IS_TEST_VM` exists
+    (so it cannot run on the host by mistake);
+  - parameters: `-Package <dir>`, `-Evidence <dir>` (default
+    `C:\ar\evidence\<timestamp>`), `-KeepInstalled`;
+  - A1: saves `pnputil /enum-drivers`, `pnputil /enum-devices /class MEDIA`,
+    `Get-PnpDevice -Class AudioEndpoint -PresentOnly | Select FriendlyName,
+    InstanceId, Status`, default devices (via `Get-CimInstance
+    Win32_SoundDevice` and the AudioRouter CLI `devices list --json` when
+    available);
+  - A2: `drivers/audiorouter-virtual/manage.ps1 -Install -Preview`, then
+    `-Install -AllowDriverInstall` (later replaced by the helper, WP-07);
+  - A3: waits up to 30 s for endpoints whose names start with `AudioRouter`
+    (prototype names until WP-05; then the four VCAB-02 names) and fails if
+    not all expected endpoints are present and `Status = OK`;
+  - A14 (unless `-KeepInstalled`): uninstalls and compares with A1; fails on
+    any leftover `oem*.inf` with provider `AudioRouter Project` or any
+    `ROOT\AudioRouterVirtual` device;
+  - writes `summary.json` (`{ checks: [{ id, passed, detail }], package }`).
+- **Acceptance:** user runs it twice from checkpoint `02-test-signing-ready`
+  with the WP-02 package; both pass; evidence copied to
+  `docs/plans/active/evidence/<date>-virtual-cable-wp03.md` (text summary;
+  no audio).
+- **Expected first result:** the prototype creates its device only through
+  the Software Device probe or `devcon`-style creation. If A3 fails because
+  no device node exists, add a VM-only `-CreateRootDevice` step using
+  `pnputil /add-driver <inf> /install` plus a root device creation (WDK
+  `devcon install <inf> ROOT\AudioRouterVirtual`; `devcon.exe` is in the
+  WDK tools folder). The product helper (WP-07) replaces this.
+- **Rollback:** restore the VM checkpoint.
+- **Status:** host implementation/checks done 2026-10-05; VM run 1 on
+  2026-10-07 installed the package, found no endpoints and bugchecked during
+  KS format enumeration. The first table repair added the expected
+  per-format attribute pointers and passed host build/guard checks, but the
+  2026-10-07 replay from the test-signing checkpoint bugchecked again as
+  Windows started `ROOT\MEDIA\0000`. The host shared package contains the
+  20-entry table, but the second dump's stack passes a count of 11 at that
+  table and an earlier runner summary reports the pre-repair build time. The
+  second runner crashed before writing its package summary, so the VM-loaded
+  package is unconfirmed and may be stale. First verify the VM package's
+  manifest and SYS hash; do not rerun smoke until the exact repaired image is
+  confirmed. Two clean checkpoint runs are still required.
+
+Implementation steps: separate pure guard and baseline comparison helpers;
+reject host execution before package/files/inventory mutations; capture PnP,
+driver store and actual default endpoint IDs; stage a verified test package
+under the developer wrapper's allowed driver root; install with exact ownership
+state, optional explicit root creation; bounded endpoint check; finally remove
+only recorded package/device and compare baseline, retaining JSON failure
+evidence. Host checks: guard matrix, comparison regressions, parser check and
+real host refusal. VM checks: A1/A2/A3/A14 twice from the checkpoint (pending).
+Rollback: revert scripts; in VM restore the checkpoint if compensation fails.
+
+Evidence: Windows PowerShell `m03-driver-vm-guards.ps1` passed 16 checks
+(identity/signing matrix, baseline deltas, parser, read-only MMDevice defaults).
+Real `m03-driver-vm.ps1 -Package C:/does-not-exist` refused at VM identity before
+boot query, inventory, output or package access; log
+`target/driver-vm-host-refusal.log`. The first attended smoke result and the
+2026-10-07 crash repair are recorded in
+[crash follow-up evidence](../active/evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md).
+
+### Higher-precision decision (2026-10-05, user)
+
+Host experiment: PCM32 `1073741889 / 2^31` cast to float32 and converted
+back gives `1073741952` (63 LSB error). Float32 cannot satisfy VCAB-12's
+exact PCM32 conversion and VCAB-21's ≤1 LSB round trip. User selected:
+**keep PCM32 ≤1 LSB; redesign bridge and engine around higher precision**.
+VCAB-21 is preserved; do not relax it. Before WP-05/06/09 implement revised
+17 requirements: float64 transport/internal cable path, explicit precision
+negotiation and bounded 256 KiB maximum payload; exact conversions and
+no implicit narrowing into legacy float32 stages. Record remaining design
+decisions/tests as each WP reaches that seam. Existing physical/VB-Cable
+paths remain outside this driver change until explicitly migrated.
+
+## WP-04 — Driver security fixes (17 §5.3)
+
+- **Who:** agent on the host; user runs VM checks.
+- **Files:** `drivers/audiorouter-virtual/Source/Inc/bridgeio.h`,
+  `Source/Main/adapter.cpp`, `Source/Main/minwavertstream.{h,cpp}`;
+  `tests/acceptance/m03-driver-build.ps1`; new
+  `drivers/audiorouter-virtual/tests/` (user-mode unit tests for the pure
+  helpers) and `tools/m03-bridge-fuzz/` (user-mode IOCTL fuzzer).
+- **Steps:**
+  1. Fix the double-fetch in `AudioRouterCopyBridgeBlock`: one volatile copy
+     of the header into a local; validate and use only the local; single
+     pass per sample (read, check finite, store). Add a comment explaining
+     why.
+  2. Object type check: pass `*MmSectionObjectType` to
+     `ObReferenceObjectByHandle`; require mapped size == required size.
+  3. Exact IOCTL buffer lengths.
+  4. SDDL change to `D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;IU)` plus
+     ownership: store session ID and `FILE_OBJECT` at OPEN; check on
+     HEARTBEAT/CLOSE; `STATUS_SHARING_VIOLATION` for a held lease;
+     `STATUS_ACCESS_DENIED` for another session; zero the shared buffers and
+     scratch state on release.
+  5. Unit tests: make the pure functions in `bridgeio.h` compile in user mode
+     behind a small shim header (`tests/km_shim.h` defining `NTSTATUS`,
+     `STATUS_*`, `RtlCopyMemory`, `C_ASSERT`, SAL macros) so they can be
+     tested with a normal C++ test executable on the host (built by
+     `tests/build-tests.ps1` with MSVC). Cases: valid block; frames/channels
+     at limits; payload mismatch; view too small; NaN/Inf; header changed
+     between validation and copy (simulate by a callback that mutates a copy
+     — the fixed code must not read the shared header twice, so assert the
+     local copy is used); bus ID with embedded NUL; reserved fields.
+  6. Fuzzer `tools/m03-bridge-fuzz`: opens `\\.\AudioRouterVirtualBridge`,
+     sends random sizes/values for every IOCTL, races heartbeat/close from two
+     threads, maps undersized sections, swaps section handles for other
+     object types (event, file); runs for a set duration.
+- **Tests:** host: unit tests pass, driver builds. VM (user): fuzzer 30 min
+  with Driver Verifier on (`verifier /standard /driver audioroutervirtual.sys`)
+  → no bug check; a second Windows user in the VM cannot take an active
+  lease (A11).
+- **Acceptance:** all above pass; a written review of every kernel function
+  that touches user memory (list in the evidence file) by a fresh agent
+  context (independent review, AGENTS.md).
+- **Rollback:** revert the commits; the prototype is unshipped.
+- **Status:** host implementation and build checks complete 2026-10-05;
+  independent review has no remaining source finding; VM qualification pending.
+
+WP-04 host follow-up: keep lease control serialization at PASSIVE_LEVEL; align
+copy/publish direction guards with the capture-sink consumer and render-source
+producer; return active lease generation with shape; separately track the
+capture-sink reader's generation and clear its scratch/reset its sequence on
+turnover. Retain and enforce a strictly increasing per-direction generation
+high-water mark across close/expiry. The fuzzer's undersized-section case uses
+a valid 2-channel request whose 1056-byte extent exceeds its 64-byte section.
+Host checks: `build-tests.ps1` passed 49 checks and measured 0.122 us/block;
+`m03-driver-build.ps1` passed for x64 and ARM64; docs validation passed 122
+Markdown files/647 links; the host VM guard refused as intended. Fresh review
+confirmed fixes to all source findings. ASan linking is unavailable because
+`clang_rt.asan_static_runtime_thunk-x86_64.lib` is absent from the installed
+MSVC toolchain. The microbenchmark is not kernel DPC evidence. VM Driver
+Verifier/fuzz and A11 second-user checks remain pending and block WP completion.
+
+Steps/validation: single-read header/payload copy with fail-closed finite checks;
+user-mode MSVC shim tests including hostile mutation; typed section handles,
+exact logical quantum size with bounded OS page-rounded mapping, serialized
+control operations at PASSIVE_LEVEL for cross-direction section exclusivity,
+file/session-owned leases and post-rundown scrubbing; callback direction
+guards match endpoint roles; lease-generation changes scrub scratch and reset
+sequence state even for same-shape replacement. VM-only fuzzer compiled,
+including a real undersized section-object case. Host checks passed 45 unit
+checks, x64 and ARM64 WDK acceptance. Initial fresh-review findings prompted
+these fixes; follow-up review pending. Host microbenchmark is not kernel DPC
+evidence. Rollback: revert WP-04 changes; no driver is loaded on the host.
+VM Verifier/fuzz/second-user checks remain pending and block WP completion.
+
+## WP-05 — Eight cables, registry configuration, formats, timing, sample cleanup (17 §5.1, §5.4, §5.5, VCAB-01/02/10–12)
+
+WP-05 execution record (2026-10-05): objective is 16 stable Cable A–H
+render/capture endpoints with a registry-selected first N enabled, exact
+format conversion, bounded timing and sample-state cleanup. Requirements:
+VCAB-01/02/10/11/12, VDEV-01/03/04/05, NFR-16. Use WP-00 proposed D2/D3/D4/D6
+defaults unless the user changes them; D5 format family is recorded, with the
+user's PCM32 ≤1 LSB decision requiring a float64 bridge/internal representation
+and no silent narrowing. Prerequisites/evidence: Windows x64 and ARM64 WDK
+build acceptance available; WP-03/04 VM load, endpoint, Verifier and audio
+evidence remain pending and are not inferred from builds. Steps: (1) add pure
+host-tested format/conversion and cable-list/registry-bound helpers; (2) define
+the stable endpoint/bus/direction map and generate INF names/interfaces from
+one canonical list; (3) add CableCount registry read with default/range clamp
+and install only first N pairs; (4) replace sample topologies/formats and
+remove sample-only paths; (5) integrate double-precision bridge conversion,
+QPC position and period constraints where supported; (6) run unit tests, INF
+validation and x64/ARM64 builds; fresh-review diff and preserve VM/audio gates.
+Validation matrix: host helper tests cover all format edges and counts 1/2/8,
+INF generator determinism and InfVerif, WDK builds both architectures; VM A3/
+A9, 2→8→2 stable IDs, all rate/channel/format inventory, 1-hour QPC drift,
+and sound-quality harness remain pending. Rollback: revert only WP-05 paths;
+never install/load on the host. Evidence path:
+`docs/plans/active/evidence/2026-10-05-virtual-cable-wp05.md`.
+
+Host progress update (2026-10-05): canonical cable list/INF generation,
+CableCount default/range read, first-N installation loops, 8-pair enum and
+double bridge conversion helpers are implemented. The cable pairs now use
+direct render/capture WaveRT tables for all 60 rate/channel/encoding
+combinations and minimal speaker/line-in topologies without microphone-array
+properties or inserted volume/mute processing. INF generator, 132 host
+bridge/conversion/format checks, x64 and ARM64 WDK acceptance, and VM-only
+fuzzer build pass. Host implementation remains non-releasable: VM gates are
+still outstanding. The intermediate package remains prohibited from loading.
+See the evidence record for exact commands and limitations.
+
+Timing follow-up (2026-10-05): WaveRT notification cadence now stores and
+compares packet intervals in 100 ns units derived from DMA bytes per second,
+avoiding millisecond truncation for short periods while retaining timer
+overshoot across ticks. The static acceptance guard now checks the high
+resolution interval path. x64/ARM64 WDK acceptance and 132 portable bridge
+checks passed; this is compile/host evidence only. The 1-hour VM QPC drift and
+tone-continuity measurements remain pending.
+
+Sample-path cleanup follow-up (2026-10-05): removed the synthetic capture tone,
+its tone-generation utility and registry controls, and all per-stream SaveData
+initialization, allocation, stop-wait, and DRM hooks. Shared SaveData worker
+pool setup/teardown remains in common-device lifecycle code, which carries the
+adapter's existing shared-state and Bluetooth HFP constraints; WaveRT streams
+no longer reference or call it. x64/ARM64 WDK acceptance, 132 portable bridge
+checks, source-reference scan, and docs link validation pass. VM period/drift
+and audio-quality gates remain pending.
+
+Scratch-state follow-up (2026-10-05): generation and shape changes invalidate
+scratch through frame/offset/sequence bounds only. Removed the full 256 KiB
+scratch zero from audio callbacks; each successful block read overwrites every
+sample consumed, and each published block is completely rewritten before send.
+Acceptance rejects callback-wide scratch clears. x64/ARM64 WDK acceptance,
+132 portable bridge checks, and docs validation pass. Registry-controlled
+friendly names and Min/DefaultPeriodFrames remain unimplemented; WP-05 is not
+closed. Endpoint, one-hour drift and audio-quality VM gates remain pending.
+
+- **Who:** agent on the host; user runs VM checks.
+- **Files:** `Source/Filters/minipairs.h`, new
+  `Source/Filters/cablewavtable.h` and `cabletopo*.{h,cpp}` (replacing
+  `speakerwavtable.h`, `micarraywavtable.h`, `micarray*` and
+  `speakertop*` files), `Source/Inc/definitions.h`,
+  `Source/Main/AudioRouterVirtual.inx`, `Source/Main/minwavertstream.cpp`
+  (format conversion), project files (`*.vcxproj`), removal of
+  `Source/Utilities/ToneGenerator.*` and `savedata.*`.
+- **Steps:**
+  1. Define the 16 `ENDPOINT_MINIPAIR`s (8 cables × render/capture) with a
+     macro per cable index, and the endpoint → (bus, direction) table.
+  1a. Read `CableCount` (HKR, default 2, range 1–8) at `StartDevice` and
+     register only the first N cables. New `tools/m03-inf-gen` generates
+     the 16 INF interface sections and strings from one list.
+  1b. Read all 17 §5.5 values (names, period limits, lease and silence
+     limits) with range checks and compiled defaults; set endpoint names
+     from `Cables\<n>\Name` (verify the renaming mechanism; record which one
+     works and keep endpoint IDs stable).
+  2. Data ranges per 17 VCAB-11: 44.1/48/96 kHz; 1, 2, 4, 6, 8 channels with
+     standard masks; float32, PCM 16, PCM 24-in-32, PCM 32. Default format
+     48 kHz float32 stereo.
+  3. Conversion per VCAB-12 (float copy bit-exact; integer exact; float →
+     integer round-to-nearest + clamp, no dither); `__forceinline` per
+     format; unit-test every conversion, including ±full scale, −0.0, NaN,
+     Inf and denormals, in the WP-04 test project.
+  3a. Timing per 17 §5.4: position from `KeQueryPerformanceCounter` with
+     exact 64-bit arithmetic, high-resolution notification timer per stream,
+     no timer when stopped, packet-size constraints for 128-frame periods.
+  4. INF: generated interface sections, friendly names per VCAB-02, `HKR,,CableCount,0x00010001,2` in `.HW`, generic
+     topology node types, remove `SWD\AudioRouterVirtual`, remove the WDF
+     section if KMDF is not linked.
+  5. Remove sample-only code and registry parameters.
+- **Tests:** host build + `InfVerif /h`; VM: WP-03 script with the default
+  count (2 cables → 4 endpoints with the exact names, A3); set `CableCount`
+  to 8 in the VM registry and restart the device (Device Manager → disable/
+  enable) → 16 endpoints; back to 2 → the Cable A/B endpoint IDs are
+  unchanged; rename Cable B in the registry → new name shown, same
+  endpoint ID; `m00-native-format-inventory.ps1` lists every rate ×
+  channel × format; `IAudioClient3::GetSharedModeEnginePeriod` reports a
+  minimum of 128 frames; a 1-hour stream shows no position drift against
+  QPC (|error| < 1 frame).
+- **Acceptance:** endpoint count follows `CableCount`; names come from the
+  registry; IDs stable across count changes and renames; all formats open in
+  shared mode; low-latency period available; uninstall clean.
+- **Rollback:** revert.
+- **Status:** host work complete 2026-10-06 (endpoints, CableCount, formats, conversion, timing, cleanup; registry `MinPeriodFrames`/`DefaultPeriodFrames`/`MaxLeaseMs`; low-latency packet constraints on every cable wave interface). Decisions recorded in 17 §5.5: names are applied by the helper (endpoint description), the default period is reported only, stale-silence holds by construction. VM qualification (endpoint names, 60-format inventory, ≤128-frame period, 2→8→2 IDs) pending; `m03_cable_inventory` measures it.
+
+## WP-06 — Bridge protocol 1.1, counters, Rust client (17 §5.2)
+
+- **Files:** `bridgeio.h`, `adapter.cpp`, `minwavertstream.cpp`;
+  `crates/windows-audio/src/lib.rs` (`NativeBridgeOpenRequest`,
+  `NativeBridgeControlClient`, constants), its tests.
+- **Steps:**
+  1. 16 lease slots indexed by `(bus 0–7, direction)`; streams use their
+     endpoint's bus index (WP-05 table) when publishing/reading.
+  2. Bus ID parsing (`cable-a` … `cable-h`; not-enabled cable →
+     `STATUS_DEVICE_NOT_CONNECTED`), version negotiation, QUERY IOCTL with
+     `AR_BRIDGE_DRIVER_INFO` (capabilities, supported rates, period limits).
+  2a. Optional 64-byte open extension (flags + reserved, unknown bits →
+     `STATUS_NOT_SUPPORTED`); `AR_BRIDGE_MAX_CHANNELS` = 8; 128-byte shared
+     header with driver-written counters (17 §5.2); `SampleRateHz` taken
+     from the stream, mismatch with the lease → `FormatMismatches` counter
+     and silence, never a wrong-speed stream.
+  3. Rust: `NativeBridgeControlClient::query()`, capability checks with
+     graceful fallback, counter reader on the mapped header, bus ID in open requests,
+     `STATUS_REVISION_MISMATCH` / `SHARING_VIOLATION` / `ACCESS_DENIED`
+     mapped to distinct error variants; offset test against the C header
+     (parse the `C_ASSERT` values or hard-code with a comment pointing to
+     the header).
+  4. A small CLI tool `tools/m03-bridge-tone` (Rust, Windows-only): writes a
+     997 Hz and a 47 Hz tone into `(cable-b, CAPTURE_SINK)` and reads
+     `(cable-a, RENDER_SOURCE)` into a WAV; used by VM tests before the
+     engine integration exists.
+- **Tests:** `cargo test -p audiorouter-windows-audio` on the host (portable
+  parts); VM: `m03-bridge-tone` → a recording app (e.g. `ffmpeg -f dshow`
+  or the AudioRouter WASAPI probe) on `Cable B Output` captures the tone
+  without glitches; tone played into `Cable A Input` with the probe arrives
+  in the WAV (A4 precursor). Two cables at once, no crosstalk (tone A ≠ tone
+  B).
+- **Acceptance:** both directions on both cables; float32 tone in →
+  identical samples out (bit-exact, VCAB-20 precursor); crosstalk below
+  −140 dBFS; counters stay zero in a clean 10-minute run and increase when
+  the tool deliberately stalls; 8-channel and 96 kHz leases work; version
+  mismatch and unknown-flag paths tested.
+- **Rollback:** revert; protocol 1.0 users do not exist outside the repo.
+- **Status:** host work complete 2026-10-05 (stable bus slots, float64 transport, OPEN extension, QUERY, 128-byte header with stream counters, Rust client/query/error mapping, 8-channel driver path, VM tone tool). Open: all VM acceptance below; VM integration remains gated by WP-03/04. The tone tool lives at `crates/windows-audio/examples/m03_bridge_tone.rs` instead of `tools/m03-bridge-tone` (an example of the client crate needs no new workspace crate or lockfile entry).
+
+WP-06 execution record (2026-10-05): objective is one safe, versioned 16-lease
+bridge contract with float64 payload support and a Rust client that preserves
+VCAB-21 PCM32 precision. Requirements: VCAB-10/12/20/21/26, SEC-08, NFR-16.
+Prerequisites: WP-05 core tables, conversion, timing and scratch-state host
+work are implemented; registry name/period configuration and WP-03/04 VM
+evidence remain pending. This downstream protocol slice is being prepared
+while those explicit WP-05 gaps stay open; no driver load or
+quality gate is inferred. Tasks: (1) inspect the current C ABI, slot selection,
+per-lease sample-rate and generation rules; (2) extend protocol to 16 stable
+slots with cable identity, precision negotiation, counters and exact QUERY/
+open IOCTL validation; (3) mirror layout/capabilities/errors in Rust, with
+portable offset, negotiation, bounds and conversion tests; (4) run Rust tests,
+x64/ARM64 WDK acceptance and security/static checks, update evidence, inspect
+the exact diff and commit named paths. Validation matrix: header/layout parity,
+unknown/old protocol rejection, all 16 slot identities, PCM32 precision,
+malformed/racing bridge payload regression, Cargo package tests and both WDK
+builds; VM multi-cable/format/crosstalk/audio tests remain pending. Risks:
+protocol header-size drift, sample-rate mismatch, and callback contention.
+Rollback: revert only WP-06 paths; keep the intermediate package unloaded.
+
+WP-06 host progress update (2026-10-05): introduced testable exact `cable-a`
+through `cable-h` parsing and pure `(bus, direction) -> slot` mapping across
+16 unique slots; OPEN rejects unknown and disabled IDs. WaveRT reads/publishes
+using the endpoint's stable cable index and clears stale capture state on a
+lease sample-rate mismatch. The Windows Rust control encoder now emits driver
+protocol 1.1 independently of the internal AudioBridge protocol 1.0 and
+rejects non-cable IDs. C host tests cover all buses/slots; Rust ABI test checks
+version, bus bytes and direction. x64/ARM64 WDK builds pass. Remaining WP-06:
+float64 mapped-region/session support now carries double payloads and exposes
+`write_f64`/`read_into_f64`; the legacy f32 adapter widens values in the wire
+mapping. The Rust regression round-trips PCM32 value 1,073,741,889 exactly.
+Remaining WP-06: negotiated open extension and QUERY/capability/counter
+contracts. No claim of end-to-end PCM32 precision until the WP-09 float64
+engine path is complete.
+
+WP-06 negotiation/counters update (2026-10-05, host-only): OPEN now requires
+the 64-byte extension with `FLOAT64` (prefix-only OPEN, unknown flags and
+reserved words → `STATUS_NOT_SUPPORTED`); QUERY returns `AR_BRIDGE_DRIVER_INFO`
+with only implemented capabilities and the build-stamped version; the shared
+header is 128 bytes with driver-written counters, `SampleBytes` and the
+consumer's `ReaderSequence`. Decision recorded in 17 §5.2 "As implemented":
+the first driver has float64 transport only, so no float32 path exists in the
+kernel. Two defects fixed: Rust sent `METHOD_NEITHER` IOCTL codes the driver
+never dispatches, and a rate-mismatched capture-sink lease would still have
+played at the wrong speed. Checks: 206 host bridge checks, x64/ARM64 WDK
+acceptance, `cargo test -p audiorouter-windows-audio` 116 passed. Details:
+[WP-06 evidence](../active/evidence/2026-10-05-virtual-cable-wp06.md). Not VM, endpoint
+or audio evidence.
+
+## WP-07 — Elevated driver helper (17 §6)
+
+- **Files:** new `crates/driver-helper/` (`Cargo.toml`, `src/main.rs`,
+  `build.rs` embedding the manifest with `requireAdministrator`), workspace
+  `Cargo.toml` member list.
+- **Steps:** implement `status`, `install`, `update`, `repair`, `set-cables`, `configure`, `remove`
+  exactly as 17 §6, including `WinVerifyTrust` (9.1), state and log files,
+  exit codes, rollback, default-device snapshot (`IMMDeviceEnumerator::
+  GetDefaultAudioEndpoint` for eRender/eCapture × eConsole/eCommunications;
+  read only).
+- **Tests:** portable unit tests for argument validation, state file
+  read/write (atomic replace), result JSON schema; VM (user, debug build
+  with `AUDIOROUTER_ALLOW_TEST_DRIVER=1`): install → status → update (bump
+  version, same device instance ID and same four endpoint IDs) → repair
+  (after deleting the device in Device Manager) → `set-cables --count 8`
+  (16 endpoints) → `--count 3` (A–C keep their IDs, D–H gone) →
+  `configure --name 2="Discord" --param MinPeriodFrames=256` (name shown,
+  IDs unchanged, period limit applied; out-of-range values refused) →
+  remove → baseline match.
+  Release build refuses the test-signed package (exit 2).
+- **Acceptance:** all VM cases pass twice from the checkpoint; WP-03 script
+  switched to use the helper; `manage.ps1` and the helper produce the same
+  end state.
+- **Rollback:** remove the crate.
+- **Status:** host implementation complete 2026-10-06 (`crates/driver-helper`,
+  25 unit tests with a fake platform; release binary embeds
+  `requireAdministrator`; never run on the host). VM acceptance pending:
+  `vm-checks.ps1` sessions 1–3 exercise install/idempotent install/status/
+  set-cables/configure/remove, and the WP-03 runner gained `-Helper`. Not yet
+  exercised: `update` with a bumped version and `repair` after deleting the
+  device (add to session 3 when a second package version is built).
+
+## WP-08 — Status detection, API, CLI, shell commands (17 §7.1–7.2)
+
+- **Files:** `crates/windows-audio/src/` (new `virtual_cable.rs`),
+  `crates/control/src/lib.rs` (method registry `API_METHODS`, schema,
+  `virtualDevices.*` deprecation), `crates/domain/src/lib.rs` (buses
+  `cable-a` … `cable-h`, enabled set from status), `crates/cli/src/lib.rs`
+  (`virtual-cable status|install|set-count|remove`), `src-tauri/src/main.rs` (shell
+  commands that start the helper with `ShellExecuteExW` `runas` and wait),
+  `src-tauri/src/http_api.rs` (status route only), `contracts/src/index.ts`,
+  `docs/operations/api-reference.md`, `docs/spec/10-api.md`.
+- **Tests:** control unit tests for status mapping (fake inventory),
+  deprecation responses, permission scopes (MCP/HTTP cannot install);
+  shell test that the helper path resolves next to the shell executable and
+  never from `PATH`; `fresh_install_shell` still passes (validated lesson
+  2026-10-01).
+- **Acceptance:** `audiorouter-cli virtual-cable status --json` in the VM
+  reports `installed` with the enabled cables' endpoint IDs after WP-07 install and
+  `notInstalled` after remove.
+- **Status:** step 1 (read-only status) implemented 2026-10-11 (user
+  approved). The shell install/update/repair/remove commands, the
+  `virtualDevices.*` deprecation and the domain bus set are still open.
+
+### WP-08 step 1 — read-only `virtualCable.status` (2026-10-11)
+
+- `crates/driver-helper`: `status_report` / `StatusReport` hold the
+  helper's existing read-only detection: the device and installed driver
+  version (SetupAPI/CfgMgr), the configured cable count, endpoints by
+  device instance, the bridge QUERY, and `classify_status`'s five states.
+  The helper's `status` command now formats that report; its JSON and its
+  28 tests are unchanged.
+- `crates/control/src/virtual_cable.rs`: `virtualCable.status` (read
+  scope, read-only, 2 s cache) returns `{state, driverVersion, protocol,
+  cableCount, cables:[{busId, renderEndpointId, captureEndpointId,
+  present}]}`. A standard user who cannot read the helper's install record
+  in ProgramData is treated as having none; it only matters when the
+  device is gone. Registered in `API_METHODS` (124), the input and output
+  schemas, authorization, the contract (`VirtualCableStatus`), the CLI
+  (`virtual-cable status`), HTTP (`GET /api/v1/virtualCable/status`
+  alias; the OpenAPI GET now merges with the method's POST entry on the
+  same path, test added), `docs/operations/api-reference.md` and spec 10.
+- Checks: control 244 passed, 9 ignored (3 new status tests: mapping,
+  missing endpoint, cache); domain 73; helper 28; CLI suites; shell
+  `http_api` 10 passed; contract drift (124 methods) and typechecks;
+  docs validation; workspace and `src-tauri` Clippy; fmt. On the host
+  without a driver, `audiorouter-cli virtual-cable status --json` reports
+  `notInstalled`. Lock files gained only the `audiorouter-driver-helper`
+  dependency, format version kept at 3.
+- VM acceptance: the bundle preparer now ships a static
+  `tools\audiorouter-cli.exe` and runs its status once on the host.
+  Guest: `audiorouter-cli --json virtual-cable status` must report
+  `installed`, driver 0.1.4.0, protocol 1.1, and two cables with both
+  endpoint IDs. r30 bundle
+  `C:\VMs\ar-share\diagnostics-20261011-cable-status-r30` (source
+  `177e558d`, same driver source as r20, 0.1.4.0; 33 package checks pass;
+  the host CLI status check passed while packaging), MANIFEST SHA-256
+  `52BC22996D2478EB0ACDB5FD8840BE1278CF057437B3A629B322F8D7BE2327C6`,
+  46/46 verified.
+- **VM acceptance passed (2026-10-11).** In a standard-user (not elevated)
+  PowerShell in the guest, `audiorouter-cli.exe --json virtual-cable status`
+  reported `state: installed`, `driverVersion: 0.1.4.0`, `protocol: 1.1`
+  (so the bridge answered QUERY), `cableCount: 2`, and `cable-a` /
+  `cable-b` each with both endpoint IDs and `present: true` (Cable A render
+  `{0.0.0.00000000}.{9381b095-7d2a-4d6a-b4d9-1e042a749638}`, capture
+  `{0.0.1.00000000}.{93873238-b62e-41fe-a11b-6b551c6ba2f8}`). The
+  `notInstalled` half of the acceptance is covered on the host, which has
+  no driver. A guest run after `-Step remove` is still open, deferred until
+  a removal is needed anyway. Next: WP-10 first slice (Setup → Virtual
+  cables panel, library availability, Pass-through template).
+
+## WP-09 — Engine: Virtual Render Source / Virtual Capture Sink (17 §7.3)
+
+- **Files:** `crates/engine/src/lib.rs`, `crates/control/src/lib.rs`,
+  `crates/engine/tests/tool_combinations.rs`, live tests in
+  `crates/control` (guarded like the existing `live_*` tests).
+- **Tests:**
+  - portable: compile/plan tests with fake bridges (both node kinds, with
+    Mixer, Duck, bypass, connected Mixers);
+  - VM: `live_backend_service_keeps_a_routed_tone_continuous` adapted for
+    `Cable A Input → graph → Cable B Output` with reference capture, zero
+    glitches at 997 Hz and 47 Hz for 10 minutes (lesson 2026-09-26);
+  - VM: kill the backend during a tone → `Cable B Output` silent within
+    500 ms (A7); restart → no old audio.
+  - portable: a cable-only route (all ends AudioRouter cables, same rate)
+    compiles **without** drift correction or resampler stages; a route with
+    a physical device compiles with them (17 §7.3);
+  - portable: resampler 44.1/96 ↔ 48 kHz against VCAB-22 (sweep, 997 Hz
+    THD+N, aliasing) in the deterministic-audio harness;
+  - VM: bit-exact pass-through Cable A Input → Cable A Output, float32 noise,
+    48 kHz stereo and 8 channels (VCAB-20);
+  - VM: counters visible in `system.diagnostics`.
+- **Acceptance:** above pass; no new allocation or lock in the audio path
+  (review); same-rate cable routes never touch the resampler.
+- **Status:** started 2026-10-11 (user approved). Requirement IDs:
+  VCAB-03/04, VCAB-20, VCAB-24/25 (indicative), VDEV-04/12, NFR-01,
+  spec 17 §7.3 and latency recovery.
+
+### WP-09 execution plan (2026-10-11)
+
+Starting point (code inspection): `NativeBridgeInputWorker` and
+`NativeBridgeOutputWorker` exist, but each is paced by a physical
+endpoint. Session start refuses `VirtualRenderSource` ("cannot feed a
+multi-path session yet"). `VirtualCaptureSink` exists only as a branch tap
+(`virtual_route_tap_set`, `NativeBridgeRealtimeWriter`), which publishes
+without waiting for the reader's acknowledgement. The control plane's
+`virtual_buses` registry predates the eight fixed cables. The only working
+cable → engine → cable path is the VM tool `m03_bridge_tone --engine`
+(two realtime threads, relay, `StandingDelayTrim`). The driver is
+`\\.\AudioRouterVirtualBridge` with buses `cable-a` … `cable-h`, and
+`NativeBridgeDriverInfo` reports the enabled cable count, so WP-09 does not
+wait for WP-08's full status API.
+
+Ordered slices:
+1. **Library `CableRouteWorker`** (`crates/windows-audio`). It owns the
+   render-source and capture-sink mapped views, a `CableRouteProcessor`
+   (compiled graph), a preallocated relay with `StandingDelayTrim`, and two
+   MMCSS threads. Render thread: read each published block, run the
+   engine, forward to the relay. Capture thread: publish the next relay
+   block only after the reader acknowledged the previous one (silence,
+   counted, when none is ready). It provides counters (forwarded, silence,
+   dropped, trimmed, engine processed/silent, render sequence gaps), a
+   failure flag, and stop/join. Lease activation, heartbeats and
+   deactivation stay with the caller's control thread. The audio loops
+   never allocate, lock, log or wait beyond a 1 ms sleep. Host tests run
+   over temporary mappings (no driver): bit-exact float32-grid noise
+   through the route; FIFO order; a silence insert is trimmed; a stalled
+   reader drops oldest, never overwrites an unacknowledged block; stop
+   joins with a retiring mapping. The VM tool stays unchanged as the
+   reference until slice 4 passes.
+2. **Engine** (`crates/engine`): add both node kinds to
+   `tests/tool_combinations.rs` as source/sink. Test that a cable-only
+   route compiles with no drift-correction or resampler stage (§7.3).
+3. **Control** (`crates/control`): start a cable-only session (one enabled
+   `VirtualRenderSource` → graph → one `VirtualCaptureSink`, 48 kHz,
+   stereo; other shapes refused with a clear error). Prepare both leases
+   on the fixed device, compile the graph, start the worker, heartbeat at
+   `LeaseMs / 4` from the backend's service loop, publish counters in
+   `system.diagnostics`, and stop/release on session stop and backend exit.
+   A protected path fails to silence. Portable tests with fake bindings
+   where the control seams allow; Windows build/Clippy.
+4. **VM**: product route through the backend (CLI session start) with the
+   cable probe: continuity, latency vs the tool route, and killing the
+   backend makes Cable B silent within 500 ms with no old audio after
+   restart (A7).
+Rollback: each slice is its own commit; the tool route and existing
+physical paths are untouched.
+
+Slice 1 done (2026-10-11): `crates/windows-audio/src/cable_route_worker.rs`
+(`CableRouteWorker`, `CableRouteWorkerConfig`, `CableRouteCounters`).
+Host tests over temporary mappings: float32-grid noise through the
+compiled route is bit-exact and in order after the constant 96-frame
+re-blocking delay (60 blocks, no drops or trims); a reader that never
+acknowledges keeps the primed block intact (nothing published past it,
+relay bounded); an idle source yields counted silence. 20/20 repeated
+runs pass; crate Clippy and fmt clean. The VM tool is unchanged.
+
+Slice 2 done (2026-10-11): `crates/engine/tests/cable_route.rs`
+`cable_route_accepts_every_tool_chain`. All 20 built-in tools (Duck with
+its key-less round trigger) in 60 4–6-tool chains between
+`VirtualRenderSource` and `VirtualCaptureSink` compile through the
+single-graph compiler the worker uses, process finite audio, and are
+bit-exact when every tool is bypassed. No drift correction or resampler
+can occur: the single-graph runtime has no such `ProcessingStage`. Drift
+and rate conversion exist only in the multi-path control code for
+physical devices, so a same-rate cable route never touches them (§7.3).
+Not covered: multi-source layouts (Mixer, keyed Duck, connected Mixers)
+between cables. Those need the multi-path compiler and are outside slice
+3's one-source scope; the multi-path tool suite keeps physical layouts.
+
+Slice 3 implemented and reviewed (2026-10-11): `crates/control/src/cable_routes.rs`.
+- `cable_route_shape` accepts exactly one enabled `VirtualRenderSource` and
+  one `VirtualCaptureSink` on different cables (`cable-a`…`cable-h`, stereo),
+  with only built-in one-in/one-out tools between. Any other enabled node
+  (physical device, Mixer, plugin, recorder, network…) is refused with a
+  plain reason.
+- `nativePaths.prepare` records the route; no OS resource is opened.
+  `session.start` queries the driver (installed, compatible, both cables
+  enabled), compiles the graph at 48 kHz, creates both mappings (capture
+  primed with silence), starts `CableRouteWorker`, waits for it to arm,
+  then activates render and capture leases on
+  `\.\AudioRouterVirtualBridge`. A failure rolls back the runtime and
+  leaves nothing open.
+- The backend service pass heartbeats both leases every 500 ms (LeaseMs/4)
+  and tears the route down on a worker or heartbeat failure. The capture
+  lease closes, so the cable goes silent (DEC-10). Session stop retires,
+  deactivates, joins and closes; backend exit does the same through `Drop`.
+- Live edits while playing return `restartRequired` ("apply after Stop and
+  Play"); the edit is saved.
+- Status: adapter kind `cable-route`. `system.diagnostics.cableRoute`
+  carries state, failure and worker counters (schema and
+  `contracts/src/index.ts` updated; optional for older backends).
+
+Host checks: shape tests and a no-driver test (prepare records the route;
+Start fails with "the AudioRouter cable driver is not available"; the
+session stays stopped; no mapping file left). Control suite 238 passed,
+9 ignored. Contract drift check and UI typecheck pass. Workspace and
+`src-tauri` Clippy and fmt are clean.
+
+Slice 4 preparation: `crates/control/examples/m03_cable_session.rs` runs the
+product route through the real dispatcher (`nativePaths.prepare`,
+`session.start`, the backend service pass every 1 ms, `system.diagnostics`
+each second, `session.stop`). `run-cable-latency-starts.ps1 -Route
+product` uses it (acceptance: 332 checks, including product pass and a
+missing tool). `prepare-cable-latency-update.ps1` builds it with the
+static CRT (imports only system DLLs) and bundles it.
+
+Independent review (fresh-context agent, read-only), worker `2bc7cc53`
+and slice 3. The realtime loops, flow control, schema and contract are
+correct. All findings fixed:
+- **Blocking:** a failed start kept the cable preparation. A later
+  physical-device Play could then fail in `start_cable_route` and leave
+  the multi-input worker running. Fixed: a failed start clears it,
+  `nativePaths.prepare` replaces a stale one, and `prepare_cable_route`
+  refuses next to any attached native worker.
+- **Blocking:** privacy mute did not reach cable routes. Fixed:
+  `CableRouteWorker::set_privacy_muted` makes the capture thread publish
+  silence while the relay keeps its timing. It is applied at start and by
+  `safety.setPrivacyMute` (new worker test).
+- Activation failure deleted mapped files before joining the worker.
+  Fixed: the worker is joined first, then the files are removed.
+- Any header error while retiring is now a normal stop (the driver zeroes
+  the whole view at CLOSE), not only `SampleSizeMismatch`.
+- A failed route now stops its runtime and emits `runtime.stopped`.
+- Crash recovery and session delete stop the cable route.
+- Final counters are read after the join (`stop_with_counters`).
+Not changed (pre-existing): the bridge region reads header and payload
+through `&[u8]` while the driver may write them; the seqlock state guards
+it in practice, but in Rust's model it is a data race. Rechecks: control
+239 passed, 9 ignored; windows-audio lib 136 passed, 3 ignored; worker
+tests 10/10 repeats; workspace and `src-tauri` Clippy and fmt clean.
+
+Slice 3 committed `b8d51a2f`. r22 bundle for slice 4: source `b8d51a2f`,
+`target/r22-driver-b8d51a2f` (0.1.4.0 test-signed with timing diagnostics,
+driver source unchanged since r20 so the guest does not reinstall; 33
+package checks pass). SYS SHA-256
+`6C7AEF68459B69A4B236335E7DACEAFD30D3A45B7EEE7E8FCE2FD1DE73F52182`. Bundle
+`C:\VMsr-share\diagnostics-20261011-product-route-r22`, MANIFEST SHA-256
+`FA1162EDC4C599F46EB05225779564B1197C4ABDA0CC4B8E0FAF08694D34AB70`, 42/42
+entries verified, includes `tools\m03_cable_session.exe`. Guest command:
+`run-cable-latency-starts.ps1 -Route product -Starts 5 -Impulses 1000`
+(both period modes). Pass: every start reaches `cable route running`, 0
+corrupted, latency and losses in the engine route's range (r21 default
+median steady 36.2 ms), counters in `final cableRoute`, and a clean
+stop. Still open after it: the A7 kill test, the 10-minute 997/47 Hz
+continuity test, 8 channels (engine width) and multi-cable layouts.
+
+r22 guest attempt (2026-10-11), archive
+`starts-product-1f3a231e0443486e918ebdbc4eae6a87.zip`, SHA-256
+`6A90A7843D6805D50EBEEF4BACE8709FAF0A981B0D9D6838F1268C353EE0A4CA`: the
+product route prepared and started on the real driver (`session.start` →
+`runtime: native`, `state: running`, Cable A → Cable B). Then the VM
+tool's own `system.diagnostics` call sent null params ("method params must
+be an object") and exited 1, so no measurement ran. It was a tool bug, not
+a route bug: on the host, Start fails before that line, so the host run
+never reached it. Fixed in `7d03168e`: the calls send `{}`, and the new
+`--check` mode runs every request except `session.start` (verified on the
+host). Bundling now runs it. r23 bundle:
+`C:\VMsr-share\diagnostics-20261011-product-route-r23`, MANIFEST SHA-256
+`B5C31B2B867A2E305DEB4FE0F016FF123A4DA907B4DC365BFE4C1D039FFBBD80`, 42/42
+verified; same driver source. Same guest command from the r23 bundle.
+
+**Slice 4 result, r23 (2026-10-11) — the product route works end to end.**
+Archive `C:\VMsr-share\diagnostics-20261011-product-route-r23\starts-product-527100dd28314c8383022a5387596b09.zip`,
+SHA-256 `97530B886E2FF929D2A6BE9975D52A84D2FCC20BBE4E214648AEA9F5F36B3DC9`
+(matches the guest). `Passed=true`. All ten route processes and probes
+exited 0: the route prepared, started, was serviced, reported counters and
+stopped through the control plane. 0 corrupted impulses, 0 render
+sequence gaps, 0 engine-silent quanta in every start.
+
+| Mode | Median steady | Steady range | Clean starts | Lost / 5,000 | Relay trims / drops |
+|---|---|---|---|---|---|
+| default | 42.1 ms | 35.1–45.1 ms | 3 of 5 | 8 | trims 3 (start 1) |
+| low latency | 44.0 ms | 41.9–49.7 ms | 0 of 5 | 188 | trims 4 + 2, drops 1 + 2 |
+
+Default mode is in the tool route's range (r20/r21 steady 34.7–43.5 ms).
+Low-latency loss (3.8 %) is in the same regime as the tool route's
+low-latency loss in this VM (r13 about 4.5 %: the known capture timing
+issue), but latency is 44 ms instead of about 17 ms. The product route
+always uses 480-frame bridge blocks, while the tool used 128-frame blocks
+in low-latency mode.
+
+**Open decision (next):** the product route's bridge block size. Options:
+(a) always 128 frames (lowest latency, about 4× the wake-ups); (b) follow
+the driver's configured default period (`DefaultPeriodFrames`, 480 now);
+(c) a per-route setting. Low latency is a product goal (VCAB-25, ≤ 5 ms
+worse than VB-Cable), so (b) with the driver default lowered when the user
+picks low latency is the likely fit. To be decided before WP-10 exposes
+it. Remaining slice 4 work: the A7 kill test (Cable B silent within
+500 ms after the backend dies, no old audio after restart), the 10-minute
+997/47 Hz continuity test, and 8 channels / multi-cable layouts (engine
+width).
+
+**Decision (user, 2026-10-11): cable routes follow the cable setting.** A
+route's bridge block is the driver's `DefaultPeriodFrames` (QUERY
+`default_period_frames`), as spec 17 §5.5 already states ("AudioRouter
+uses the value as its own preferred period when it opens a cable"). If
+the driver reports 0 or a value outside 128–960, the route uses 480
+frames. A future low-latency switch (WP-10) lowers that one value through
+the elevated helper (`configure DefaultPeriodFrames=128`, already
+implemented, range 128–960), for every cable route. Implemented:
+`cable_route_block_frames` (unit test for in-range, 0 and out-of-range
+values), and `blockFrames` in `system.diagnostics.cableRoute` (schema and
+contract). Control suite 240 passed, 9 ignored; Clippy and the contract
+typecheck are clean. The VM driver reports 480 today, so r23's numbers
+stand. A VM check of a 128-frame configuration (helper configure, device
+restart, product route in low-latency mode) belongs with WP-10's switch.
+
+**A7 kill test preparation (2026-10-11).** `tools/vm/run-cable-kill.ps1`
+(guest): per repeat it starts the product route (`m03_cable_session`),
+then 1,500 probe impulses into Cable A Input with Cable B Output captured.
+About 4 s in it force-kills the route (`Process.Kill`, TerminateProcess:
+no clean stop), QPC-dated on the probe's clock. 3.5 s later, past the
+2 s lease timeout, it starts a new route and records kill/restart times in
+`result.json`. Host verdict, `tools/vm/review-cable-kill.py`:
+- the last arrival is at most 500 ms after the kill, with nothing more
+  until the restart;
+- after the restart, every arrival pairs with an impulse emitted after the
+  restart request, at the new route's steady delay ± 15 ms (codes repeat
+  every 16 impulses, so stale audio is recognised by timing);
+- the restarted route carries audio.
+`tests/acceptance/m03-cable-kill.ps1`: 6 checks (syntax, kill/QPC/lease
+wait present, no qualification claim, review self-test with 4 synthetic
+cases, host guard). The bundle preparer ships the runner. r24 bundle
+`C:\VMsr-share\diagnostics-20261011-cable-kill-r24` (source `bdf965af`,
+same driver source; 33 package checks pass), MANIFEST SHA-256
+`C31C0A799736EDCE23F11FD0074B4E3C3B926F8E9BD1940B552A1A4C0FD7AB9A`, 43/43
+verified. Guest command: `run-cable-kill.ps1` (3 repeats).
+
+**A7 result, r24 (2026-10-11) — PASS.** Archive
+`C:\VMsr-share\diagnostics-20261011-cable-kill-r24\kill-bdb05502e8794465b0ab944e34ec5bd1.zip`,
+SHA-256 `B734DFFAA76472ED243E2D14ED2A188EA528460CE4A3B278B46BBA42A325C66E`
+(matches the guest). Runner `Passed=true`; three repeats, every probe
+exit 0, route 1 force-killed (exit −1), route 2 running 3.6 s after the
+kill. Command: `python -I -B tools/vm/review-cable-kill.py <extracted dir>`.
+
+| Repeat | Last Cable B audio after the kill | Delay before kill | After restart | Arrivals after restart |
+|---|---|---|---|---|
+| 1 | 0.0 ms | 36.4 ms | 42.3 ms | 766, all fresh |
+| 2 | 0.0 ms | 36.1 ms | 41.1 ms | 765, all fresh |
+| 3 | 2.3 ms | 36.8 ms | 42.8 ms | 760, all fresh |
+
+Limit 500 ms. No arrival after the restart pairs with an impulse emitted
+before it or deviates from the restarted route's delay by more than 15 ms.
+0 corrupted. The first review flagged one unpaired arrival per repeat:
+the probe's known extra final impulse (index 1,500, code 13 after 12,
+about 52 ms after the last emission; probe `out_of_window=1`, also seen
+since r13). The review now accepts exactly that impulse and still fails
+any other unpaired arrival (self-test case 5; acceptance 6 checks).
+Losses (about 362 per repeat) are the 3.6 s gap between kill and restart.
+Remaining slice 4 items: the 10-minute 997/47 Hz continuity test through
+the product route, and 8 channels / multi-cable layouts (engine width).
+
+**Tone continuity preparation (2026-10-11).** `m03_cable_session --tone HZ
+--render-endpoint ID --capture-endpoint ID` plays a quiet sine (0.05) into
+Cable A Input and records Cable B Output plus a loopback reference of Cable
+A Input. From 2 s after start to 1 s before stop it counts discontinuities
+with the sine recurrence of `live_audio_continuity.rs`, streaming (no
+recording buffer), plus silent runs and WASAPI discontinuity flags. Test:
+a clean 997/47 Hz tone gives 0, and the harness's drop-plus-zero case
+gives 3 glitches and one 480-sample silent run. `tools/vm/run-cable-tone.ps1`
+runs 997 Hz, then 47 Hz, 10 minutes each by default, with endpoint IDs
+from the probe inventory. Verdict per tone: Cable B 0 glitches and 0 silent
+runs with the tone present is a pass; a disturbed reference is
+inconclusive. `tests/acceptance/m03-cable-tone.ps1`: 7 checks. The bundle
+preparer ships the runner. r25 bundle
+`C:\VMsr-share\diagnostics-20261011-cable-tone-r25` (source `6c818005`,
+same driver source; 33 package checks pass), MANIFEST SHA-256
+`A4397C62C6DDDF0A368BA3731E5856ADACA4A3B733E8300E50DA73D2AB1FE00E`, 44/44
+verified. Guest command: `run-cable-tone.ps1` (about 21 minutes).
+
+**Tone result r25 (2026-10-11) — FAIL; cause found and repaired.** Archive
+`C:\VMsr-share\diagnostics-20261011-cable-tone-r25	one-7472df7638b7410ba8b75f2184db7230.zip`,
+SHA-256 `76EE507C491A53E3B751D116B10D71AC721BFCD8209BE50E958A8D351CF6F9A0`
+(matches the guest). 10 minutes per tone, route exit 0 both times.
+
+| Tone | Cable B glitches | Silent runs (samples) | Route silence / trims | Reference (Cable A loopback) |
+|---|---|---|---|---|
+| 997 Hz | 250 | 91 (42,000) | 86 / 83 | 0 glitches, 0 silent runs |
+| 47 Hz | 17 | 7 (3,792) | 4 / 1 | 0 glitches, 0 silent runs |
+
+The input was clean. 87 × 480 ≈ the silent samples, so almost every
+glitch is a relay silence insert (a 480-sample gap) plus the trim that
+later sheds the block that stood behind it. Cause: both sides of the route
+tick at 10 ms from one driver clock, with a fixed phase set at start.
+When the render block normally lands just before the reader acknowledges,
+each late VM hiccup turns into a silence, then about 1 s later a trim.
+997 Hz had an unlucky phase (one per about 7 s); 47 Hz a lucky one. The
+impulse runs showed the same mechanism only as a few lost impulses.
+
+Repair: `SilenceHoldoff` (`crates/windows-audio/src/cable_route.rs`). After
+the reader acknowledges, the capture side waits up to half a block period
+(5 ms at 480 frames) for a late block before publishing silence. Model
+test `silence_holdoff_ends_the_silence_and_drop_cycle_at_every_phase`
+(phase sweep in 0.25 ms steps, 0.5 ms jitter plus a 3 ms late block every
+700 blocks, 60 s): without the hold-off the worst phase gives at least 8
+silences and 6 trims, as in the VM; with it, every phase gives at most one
+of each. Plain jitter up to 2 ms is absorbed too. Wired into
+`CableRouteWorker` (`silence_holdoff_us`; the control plane sets half the
+block period). Latency cost: at most the wait itself, only at phases that
+need it. The VM tool relay (`m03_bridge_tone`) keeps the old rule as the
+diagnostic reference. windows-audio lib 137 passed, control 240 passed;
+worker tests 10/10 repeats; workspace Clippy clean. Next: rerun
+`run-cable-tone.ps1` on a new bundle. r26 bundle
+`C:\VMsr-share\diagnostics-20261011-cable-holdoff-r26` (source
+`10273764`, same driver source; 33 package checks pass), MANIFEST SHA-256
+`0666028FF652865230DF6DFCF72F6B29795157A3A5E3D71079C7BE09A675BDA3`, 44/44
+verified.
+
+**Tone result r26 (2026-10-11) — the route's own cycle is gone; the
+remaining glitches coincide with whole-process VM stalls.** Archive
+`C:\VMsr-share\diagnostics-20261011-cable-holdoff-r26	one-f34d5d15a9354fa6824539f24e337036.zip`,
+SHA-256 `D976EE63A83EB246AD2DBD56D68E3ED3ECE17330DC1F0C550773B9867C4083CC`
+(matches the guest). Reference clean in both runs; route exit 0.
+
+| Tone | Cable B glitches | Silent runs | Route silence / trims / drops | Glitch clusters (s after start) ↔ service-loop stall in the same second |
+|---|---|---|---|---|
+| 997 Hz | 5 (r25: 250) | 2 | 2 / 0 / 0 | ~300 ↔ 17.7 ms; ~438 ↔ 186 ms |
+| 47 Hz | 41 (r25: 17) | 15 | 5 / 0 / 0 | ~68 ↔ 19.4 ms; ~130 ↔ 21.4 ms; ~305 ↔ 17.5 ms; ~316 ↔ 369 ms |
+
+The hold-off removed the silence-and-trim cycle: zero trims, and route
+silences fell from 86 to 2 at 997 Hz. Every remaining glitch cluster
+falls in the same second as a stall of the tool's 1 ms service loop
+(17–369 ms). Those stalls are process-wide scheduling pauses, the VM
+behaviour that already blocks VCAB-24 qualification (r12–r20). Not every
+silent run is a route silence (47 Hz: 15 runs, 5 route silences), so
+some gaps arise downstream (driver capture or the Windows engine) during
+the same stalls. This is correlation, not an attributed cause per gap.
+The 47 Hz run had more stalls than the 997 Hz run, not a worse route.
+VCAB-24 stays not qualified (VM deviation, native-timer environment
+unavailable). WP-09 product-route work items done in the VM: works end to
+end (r23), latency recovery, A7 kill test (r24), continuity at the
+route level (r26). Remaining WP-09 work: 8 channels and multi-cable
+layouts (engine processing width), then WP-10 UI.
+
+### WP-09 slice 5 — multichannel cable routes (2026-10-11)
+
+**Decision (user, 2026-10-11): cable pass-through and mixing; tools stay
+stereo.** A cable route may carry 1–8 channels per cable when it connects
+the two cables directly, with the edge's channel matrix (rows: destination
+channels; columns: source channels): identity for bit-exact pass-through
+(VCAB-20 8-channel), or any up- or downmix (for example 7.1 game audio to
+stereo). A route with tools stays stereo. A multichannel route with tools is
+refused with a plain reason. Full engine widening (about 250 stereo-specific
+spots: matrix, mixer, meters, telemetry, recorder, plugin buses) is not in
+scope.
+
+Ordered tasks:
+1. Domain (`crates/domain`): ports of `VirtualRenderSource` /
+   `VirtualCaptureSink` allow 1–8 channels (`MAX_CABLE_CHANNELS`); every
+   other port stays 1–2. `MAX_CHANNEL_MATRIX_COEFFICIENTS` 4 → 64 (8×8);
+   the matrix length still equals destination × source channels. Schema,
+   catalog and contract follow the constants. The engine compilers keep
+   refusing more than 2 channels with an error, never a panic (test).
+2. `crates/windows-audio`: `CableMatrixRoute`, a preallocated f64 block
+   mapper. A row with a single 1.0 coefficient copies the sample (exact,
+   including −0.0); other rows sum their products. The worker takes either
+   stage (engine or matrix), with separate render and capture block sizes.
+   Tests: 8-channel identity is bit-exact with float32-grid noise and
+   signed zeros; 8→2 downmix values; 2→8 upmix; a channel swap.
+3. `crates/control`: `cable_route_shape` returns the channel counts and the
+   matrix. Any port other than 2 channels requires a direct cable→cable
+   edge and no tools. Leases open with each cable's channel count, and
+   diagnostics report `renderChannels` and `captureChannels`. The node's
+   channel count must match the cable's Windows format; otherwise the
+   driver counts `FormatMismatches` and outputs silence (by design;
+   WP-08/WP-10 will fill it from the endpoint).
+4. VM: the user sets Cable A Input and Cable B Output to an 8-channel
+   48 kHz default format in Sound settings. The product route runs 8→8
+   identity under an 8-channel bit-exact probe (`cable-bitexact`, if it
+   supports 8 channels; otherwise a tool extension), then restores the
+   formats.
+Rollback: per-task commits; stereo routes are unchanged (engine path).
+
+Tasks 1–3 done (2026-10-11).
+- Task 1 (`032aae0d`): domain cable ports 1–8 channels and matrices up
+  to 64 coefficients; session schema and catalog follow the constants.
+  Finding: after widening, the single-graph engine *accepted* an
+  8-channel cable graph it cannot process. Every engine compile entry now
+  goes through `validate_for_engine`, which refuses a node wider than 2
+  channels with `UnsupportedPath` (test
+  `engine_refuses_multichannel_cable_graphs_cleanly`).
+- Task 2: `CableMatrixRoute` (identity rows copy bit-exact, including
+  −0.0; zero rows give silence; others sum). `CableRouteStage::{Engine,
+  Matrix}`, with separate render and capture block sizes checked against
+  the stage at start. Tests: 8-channel identity bit-exact (noise, ±0,
+  ±1); 7.1 → stereo values; stereo → 8; channel swap; partial block;
+  refusals. Worker over mappings: 8 → 8 bit-exact, whole blocks in order
+  (no re-blocking delay); 8 → 2 downmix values.
+- Task 3: `cable_route_shape` reports each cable's channels. Stereo on
+  both sides keeps the engine path with tools. Otherwise it needs no
+  tools and one direct edge, whose matrix becomes the mapping, and
+  refuses with a plain reason. Leases, mappings and blocks use each
+  side's channel count. Diagnostics report `renderChannels` and
+  `captureChannels` (schema and contract updated).
+Checks: windows-audio lib 141 passed, control 241 passed, worker tests
+10/10 repeats, workspace and `src-tauri` Clippy, fmt and the contract
+typecheck clean. Next: task 4 (VM, 8-channel formats).
+
+Task 4 preparation: `m03_cable_session --channels N` (both cables N
+channels, identity map; `--check` passes at 8). `tools/vm/run-cable-bitexact.ps1
+-Channels 8` runs the probe's `cable-bitexact` (float32-grid noise at the
+shared mix format) through the product route, and refuses to judge unless
+the probe reports N channels. `tests/acceptance/m03-cable-bitexact.ps1`: 7
+checks. r27 bundle `C:\VMsr-share\diagnostics-20261011-multichannel-r27`
+(source `58646d6e`, same driver source; 33 package checks pass), MANIFEST
+SHA-256 `E07D356B2C8C15F40646288AE16994BC86D247B9DB1AC22AB363806F5BDC4654`,
+45/45 verified. Guest: the user sets Cable A Input (playback, Configure:
+7.1 Surround) and Cable B Output (recording, Advanced: 8 channel, 48000
+Hz) to 8 channels, runs the check, then restores both to stereo.
+
+**Task 4 blocked: Windows offers cables only 1 and 2 channels
+(2026-10-11).** In the VM, Sound settings → Advanced → Default Format lists
+only 1- and 2-channel formats (16/24/32-bit at 44.1/48/96 kHz), although
+the driver's data ranges and `CableSupportedFormats` include 4, 6 and 8
+channels (`cablewavtable.h`). Cause (code inspection): the cable topology
+(`cabletopotable.h`) has no nodes and no `KSPROPERTY_JACK_DESCRIPTION`. The
+SYSVAD speaker topology it derives from reports a `KSJACK_DESCRIPTION`
+whose `ChannelMapping` is the speaker mask. Without one, Windows treats the
+endpoint as stereo and filters the format list. This is a VCAB-11 defect:
+the spec says users can choose 1–8 channels in Sound settings. The product
+route's multichannel code (tasks 1–3) is done and host-tested, but no
+Windows client can open a cable at more than 2 channels in shared mode
+yet. Fix (driver, needs VM experiments): report a jack description that
+allows 7.1 while the default stays 48 kHz float stereo. Windows may take
+the jack's channel mapping as the default speaker setup, which would
+upmix every stereo app; the default must remain stereo. Then a WP-04
+review, install, restart, and this check.
+
+**Decision (user, 2026-10-11): fix the driver now.** Repair r28 (driver
+0.1.5): `Source/Filters/cabletopo.cpp/.h` add `KSPROPSETID_Jack`
+`KSPROPERTY_JACK_DESCRIPTION` and `_DESCRIPTION2` (GET, BASICSUPPORT) on
+every cable topology filter (automation tables in `cabletopotable.h`;
+`Filters.vcxproj` compiles the file). One `KSJACK_DESCRIPTION` with
+`ChannelMapping = KSAUDIO_SPEAKER_7POINT1_SURROUND` (0x63F) on the bridge
+pin: render topology pin 1, capture topology pin 0. They reuse
+`CMiniportTopology::PropertyHandlerJackDescription(2)`. The default format
+stays the wave pin's 48 kHz float stereo mode entry. Host: normal and
+diagnostic `build.ps1 -Version 0.1.5` pass with 0 warnings
+(`target/r28-build-*.log`, `cabletopo.cpp` compiled); driver unit tests
+88,167 checks pass. Independent review (fresh-context agent, read-only): no
+blocking defect. It confirmed the pin indices against `endpoints.h` and the
+SYSVAD speaker and mic tables, the `CMiniportTopology` cast,
+PAGE/PASSIVE_LEVEL, the struct layout and enums, and no new enumeration
+bugcheck path. Open question for the VM (review confidence medium-low):
+whether Windows makes 7.1 the cable's default speaker configuration or
+device format, which would upmix stereo apps. Required: the default stays
+stereo. Non-blocking notes kept: the capture jack mask is probably
+cosmetic; `cabletopo.h` relies on portcls types from its include site.
+VM steps: install 0.1.5 (upgrade, restart). Check that Windows offers
+4/6/8 channels (Configure, Advanced) while the default stays 2-channel
+48 kHz, and that the probe's mix format is stereo. Then set 8 channels,
+run `run-cable-bitexact.ps1 -Channels 8`, and restore stereo. Rollback:
+remove and reinstall 0.1.4 from the r27 bundle (`-Step remove`, then
+`-Step install`). r28 bundle `C:\VMsr-share\diagnostics-20261011-cable-jack-r28`
+(source `1fe3ba81`, clean; 0.1.5.0 test-signed with timing diagnostics,
+`cabletopo.cpp` compiled; 33 package checks pass), SYS SHA-256
+`D811EE6F9A788EBAE034D6B3CF5BFDF081E5B9535D5F5B011492CD4CAFEAF1F0`,
+MANIFEST SHA-256 `71BD7A55C950ED854E450ABDD21860724460184AFE30BE5ABF4E06DE21425945`,
+45/45 verified.
+
+**r28 result (2026-10-11): the jack alone does not unlock it.** After
+installing 0.1.5 and restarting (helper status `driver=0.1.5.0`; booted
+15:56:09 after the 15:44:43 install), MMDevices showed no
+`PKEY_AudioEndpoint_PhysicalSpeakers` on any cable endpoint. Sound
+settings still listed only 1- and 2-channel formats. The reviewer notes
+Windows probably writes that property only when the speaker wizard
+finishes, so its absence is not by itself proof.
+
+**Repair r29 (driver 0.1.6).** Following Microsoft's guidance that speaker
+setup uses `KSPROPERTY_AUDIO_CHANNEL_CONFIG` on a `KSNODETYPE_DAC` node,
+every cable render topology gains a DAC node (wave source → DAC → line-out
+bridge) with that property: GET reports the current mask, stereo by
+default (`CMiniportTopology::m_ChannelConfig`); SET accepts exactly the
+masks in `CableSupportedFormats` (mono, stereo, quad, 5.1 `0x3F`, 7.1
+surround `0x63F`), because the wave pin's `IsFormatSupported` matches
+masks exactly (review N1: 5.1 surround `0x60F` and 7.1 `0xFF` are not in
+the 60-format table, which the VM status check pins). Review (same
+reviewer, read-only): no blocking defect. Node and pin numbering,
+shared read-only tables, PortCls node routing and verb handling are
+correct, and the endpoint names are untouched. Applied: SET masks match
+the pin; a SET with no value returns `STATUS_INVALID_PARAMETER`. Known
+limit (N2): the setting is not persisted across driver restarts; Windows
+re-sends speaker configuration when DirectSound objects are created
+(Microsoft docs). Host: normal and diagnostic 0.1.6 builds have 0
+warnings; 88,167 driver checks pass. VM plan: install 0.1.6 and restart.
+On the Playback tab, check that the cable shows a Configure button and
+lists 7.1 Surround. If not, remove and reinstall the device so its
+endpoints are created fresh, then check again. r29 bundle `C:\VMsr-share\diagnostics-20261011-cable-dac-r29`
+(source `68613d29`, clean; 0.1.6.0 test-signed with timing diagnostics; 33
+package checks pass), SYS SHA-256
+`8C5B9B6DB0BACB6A928F84E87473D37EFBF1FD1115F9017BBCB98C116F766C1D`,
+MANIFEST SHA-256 `C5C5AE71005912717B92F95494F72056488BB5B054E876244E4908D811B34DEE`,
+45/45 verified.
+
+**r29 result (2026-10-11): Windows' speaker setup is unavailable for the
+cables.** After installing 0.1.6 and restarting, Sound settings → Playback →
+AudioRouter Cable A Input shows **Configure disabled**. Cause: the cable
+render endpoints are line-level analog connectors
+(`KSNODETYPE_ANALOG_CONNECTOR`). That was chosen on 2026-10-08 so each
+cable keeps its own name, because the speaker category forces the fixed
+"Speakers" label (validated lesson). Windows enables speaker
+configuration only for speaker-type endpoints, so no topology property
+(jack r28, DAC node r29) can make its dialog offer 7.1 while the cables
+keep their names. Capture endpoints list formats only up to their
+current channel count. VCAB-11's statement that users choose 1–8
+channels in Sound settings is therefore not achievable as written. The
+r28/r29 driver additions are harmless but unproven (no observable
+effect). Options for the user: (a) defer multichannel cables, keeping the
+host-tested route code; (b) an AudioRouter/helper path that sets a cable
+endpoint's device format directly (undocumented `IPolicyConfig` or the
+endpoint property store, elevated), to be researched; (c) speaker
+category for render endpoints, losing per-cable names (rejected
+2026-10-08). Also whether to keep or revert r28/r29 in the driver.
+
+**Decisions (user, 2026-10-11): defer 8-channel cables; revert r28/r29.**
+The driver source is restored to its pre-r28 state (the r20 notification
+lock, published as 0.1.4): the cable topology files are identical to
+`1fe3ba81~1`, and `cabletopo.cpp/.h` are removed. Host: build passes with 0
+warnings; 88,167 driver checks pass. The multichannel route code (slice 5
+tasks 1–3: domain 1–8 cable channels, `CableMatrixRoute`, the worker stage,
+control shape, diagnostics) stays. It is host-tested and is used as soon
+as a cable endpoint runs at more than 2 channels. **VCAB-11 (users choose
+1–8 channels in Sound settings) and VCAB-20 8-channel are blocked:**
+Windows disables speaker setup for the line-level cable endpoints, and
+capture lists only up to the current channel count. A future option is
+a direct format setter through the elevated helper (undocumented
+`IPolicyConfig`), to be researched before any implementation; it is not
+authorized now. Guest rollback to 0.1.4 (downgrades are refused):
+`vm-checks.ps1 -Step remove` from the r29 bundle, then `-Step install`
+from `diagnostics-20261011-multichannel-r27` (0.1.4, same driver source
+as r20), then restart. Next: WP-10 UI with stereo cable routes.
+
+Guest rollback done (2026-10-11): `-Step remove` (r29 bundle), then
+`-Step install` from the r27 bundle (exit 5, restart required, as
+expected), then a restart. `-Step status` reports `driver=0.1.4.0`, 4
+endpoints, 60 formats, min period ≤ 128 frames: PASS (evidence folder
+`20261011-161011-status`; its timestamp precedes the 16:10:24 install, so
+the next guest run must confirm bridge `driver_version: [0, 1, 4, 0]`).
+
+**WP-10 status and dependent work.** WP-08 status/API and both WP-10 UI
+implementation slices are complete; the implementation record is archived
+above. The attended app gate remains pending the signed package and disposable
+VM. The Game → Discord template is still not implemented: it requires
+WP-09 mixed-clock routes between cable and physical-device paths. That
+user-mode engine work remains an active implementation task and does not
+require changing the driver.
+
+## WP-09b — Sound-quality and performance harness (17 §11)
+
+- **Who:** agent on the host; user runs it in the VM now and on the main PC
+  in stage C.
+- **Files:** new `tools/m03-cable-quality/` (Rust, Windows-only, WASAPI
+  shared mode), new `tests/acceptance/m03-cable-quality.ps1`, docs in
+  `docs/operations/virtual-cable-testing.md` (A16 and stage C).
+- **Steps:**
+  1. Signals and analysis exactly as 17 §11.2 (seeded noise for bit-exact
+     compare with cross-correlation alignment; silence; 997 Hz THD+N; log
+     sweep; 47/997 Hz continuity; impulse train; per-cable tones for
+     crosstalk).
+  2. Cases: cable-only pass-through at 44.1/48/96 kHz × 1/2/8 channels ×
+     float/PCM16/PCM24/PCM32; cable → physical output → physical input
+     loopback (drift path, needs a loopback cable on the main PC); 8 cables
+     at once; low-latency and default periods; VB-Cable comparison on the
+     same machine.
+  3. Output `metrics.json` per case with the VCAB target, measured value
+     and pass/fail; a summary table; WAVs under `target/cable-quality/`
+     (git-ignored). Never record a microphone or private audio.
+  4. CPU/DPC/memory capture script using `wpr` and `Get-Process`/
+     Performance Monitor counters (17 §11.2), on request only.
+- **Tests:** the harness's analysis code is unit-tested with synthetic
+  signals of known THD+N, delay and crosstalk (portable, runs on any OS).
+- **Acceptance:** VM run of all cable-only cases recorded (indicative);
+  every metric has a value; failures are listed with numbers, not hidden.
+- **Status:** in progress (2026-10-11). Evidence: [portable analysis core
+  and real-sample bridge](../active/evidence/2026-10-11-wp09b-cable-quality-analysis.md).
+  Added deterministic signal generation, float32 WAV decoding, bounded frame
+  alignment, per-channel error metrics and sine-fit THD+N. The existing native
+  WASAPI bit-exact probe can now save reference and captured WAVs, and the
+  product-route VM runner sends them through the Rust analyzer; a guarded
+  `run-cable-quality.ps1 -Case float32-48k` entry point exposes that diagnostic
+  subset at 44.1/48/96 kHz when the guest's Cable formats are set first, plus
+  one unrouted Cable A-to-B diagnostic and a 56 ordered-pair isolation runner
+  at −140 dBFS. A separate 997 Hz tone mode now aligns the captured WAV to its
+  generated reference, fits THD+N per channel, and emits a separate VCAB-22/23
+  metric; `run-cable-quality.ps1 -Case thdn-997-48k` starts the product cable
+  route and packages the diagnostic report. Seven synthetic tests, standalone Clippy, native probe
+  build/self-check, and a cross-tool WAV writer/analyzer check pass on the
+  Windows host. The pairwise runner restores the original VM cable count in
+  its `finally` path. No live endpoint was opened. The full channel matrix,
+  integer formats, resampling, VM A16 runner and A16 evidence remain open.
+  Keep the 8-channel cases required by A16; the plan's recorded channel-count
+  deferral is an unresolved prerequisite, not a reason to reduce test coverage.
+  Native probe now identifies the Windows `GetMixFormat` encoding and supports
+  float32, PCM16, PCM24-in-32 and PCM32 capture/conversion; guarded integer cases
+  reject a mismatched negotiated format and apply the analyzer's ≤1-LSB metric.
+  This is host-checked wiring only; no VM route run has happened (current host
+  `PATRICK5080` is not the guarded VM and has no
+  `C:\ar` bundle). The native probe now produces a 20 Hz–20 kHz sweep;
+  48-point Hann-windowed relative magnitude analysis has a ±0.05 dB metric and
+  guarded cases at 44.1/48/96 kHz. The quality entry point also exposes the
+  existing 997/47 Hz and four-route eight-cable continuity runners with a
+  duration selector. Sweep analysis
+  measures passband magnitude only; phase, aliasing and imaging remain open.
+  PCM32 has analyzer and native-probe float64 WAV paths plus guarded cases at
+  44.1/48/96 kHz. PCM16/24/32 cases now share that rate matrix and accept the
+  required 1/2/8 channel counts. `-ChannelMatrix` runs float32, integer PCM,
+  sweep and 997 Hz THD+N cases at 1/2/8 channels sequentially and writes JSON/CSV
+  summaries linking each verdict to its metric archive. Next exercise PCM and sweep
+  cases in the disposable VM
+  and cover sweep/resampling and continuity metrics. Keep A16 blocked until
+  the channel-count decision and VM access gates are resolved; never count
+  synthetic checks as Stage A evidence.
+
+  Portable follow-up (2026-10-11): the silence/isolation analyzer now reports
+  peak, RMS, DC, and a threshold verdict for each interleaved channel in
+  addition to the aggregate result. This makes multichannel leakage visible
+  without changing the VCAB-26 aggregate threshold. A synthetic regression
+  verifies a silent channel and a distinct low-level channel are reported
+  separately. The portable harness can be maintained and tested on the host;
+  actual cable matrix execution, driver resampling response, aliasing, imaging,
+  phase/group delay, continuity, and A16 evidence still require the disposable
+  VM or physical loopback and remain unmeasured.
+  The guarded channel-matrix JSON/CSV summary now also reads each child
+  archive's metrics and includes the numeric worst response, THD+N, PCM-LSB,
+  or sample-error value with units. A synthetic ZIP fixture verifies the
+  archive reader without starting the device runner.
+
+#### Integer PCM analyzer codecs — progress
+
+Requirement IDs: VCAB-12, VCAB-20/21; specification 17 §3 and §11.2.
+Completed 2026-10-11: strict PCM16 and extensible PCM24-in-32 WAV read/write,
+validation, sign extension, channel preservation, and ≤1-LSB tests. The
+analyzer's PCM32 mode accepts float64 WAV pairs, retains sub-float32 precision,
+aligns frames and applies the PCM32 ≤1-LSB verdict. The native probe recognizes
+plain/extensible PCM32, generates full-resolution noise,
+preserves capture in double precision and writes float64 WAVs. The guarded
+PCM16/24/32 cases verify the negotiated format and reject dropped, flagged
+or overflowed captures. Failed analyzer verdicts now exit with failure so the
+sequential channel matrix stops at the first bad measurement. Host checks and
+a probe-to-analyzer WAV self-test pass;
+no PCM endpoint run has been measured. Next action: exercise the PCM and sweep
+cases in the disposable driver VM and cover resampling and continuity metrics.
+Validation: portable tests, format, Clippy, docs and acceptance passed; VM
+execution is still required before any endpoint claim. Rollback: revert the
+dedicated probe and runner change; no data migration.
+
+## WP-10 — UI (17 §7.4)
+
+- **Files:** `ui/src/FirstRunGuide.tsx`, new `ui/src/VirtualCablePanel.tsx`
+  (+ test), `ui/src/library.ts`, templates, `ui/src/backend.ts`,
+  `ui/src/host.ts` (shell commands), `ui/e2e/virtual-cable.pw.ts`.
+- **Also:** per-cable rename, endpoint format display with a hint when not
+  48 kHz float, live underrun/overrun counters (reserved slots, UI-17), and
+  the quality guidance from VCAB-29 (Windows communications ducking, app
+  noise suppression).
+- **Tests:** unit tests for every status state, button enablement, rename
+  validation and the Number of cables select (lowering lists affected
+  sessions first); Edge
+  test in three themes with layout-shift sampling (lesson 2026-10-03), host
+  bridge test for the shell command wiring (lesson 2026-10-04); screenshots
+  written to `testInfo.outputPath` (lesson 2026-10-03).
+- **Acceptance:** UI conventions in AGENTS.md; no layout shift while status
+  changes.
+- **Status:** host implementation for slices 1 and 2 is archived in
+  [the WP-10 execution record](2026-10-11-WP-10-virtual-cable-ui.md).
+  The attended app/VM acceptance remains open pending WP-11's signed package.
+
+### WP-10 implementation archived; attended gate remains active
+
+The host implementation for both UI slices is archived in the
+[WP-10 execution record](2026-10-11-WP-10-virtual-cable-ui.md).
+This closes implementation only, not WP-10 acceptance. The installed app has
+not been verified with the real adjacent helper and signed package. Remaining
+checks are real UAC operation results, status refresh, cable count/name and
+low-latency changes, and the integrated three-theme layout test. The
+development host must not be used to install or remove the driver.
+
+Next action: finish WP-11's signed-package prerequisite and then run the
+attended WP-10 management flow in the disposable VM. See the WP-11 execution
+record below; no attended or driver gate is waived by archiving the UI
+implementation.
+
+## WP-11 — Installer, update and uninstall (17 §7.5)
+
+- **Files:** `src-tauri/tauri.release.conf.json`, new
+  `src-tauri/installer-hooks.nsh`, `tools/release/prepare-artifacts.ps1`,
+  `tools/release/verify-artifacts.ps1`, `tests/acceptance/m08-installer-smoke.ps1`,
+  `docs/operations/distribution.md`.
+- **Tests:** installer smoke in the VM: install app (no UAC), install cable
+  from Setup (one UAC), upgrade app with newer driver → Update shown → one
+  UAC → endpoint IDs unchanged; uninstall app with "keep" and with
+  "remove"; verify-artifacts checks driver hashes.
+- **Status:** in progress; helper/resource and opt-in uninstall wiring implemented,
+  signed package and Windows VM lifecycle gate pending.
+
+### WP-11 execution — packaging preparation (2026-10-11)
+
+Objective: wire the elevated helper and signed cable package into the current-user
+NSIS release without installing a driver from the installer, then qualify explicit
+Setup install/update and opt-in uninstall. Requirement IDs: VCAB-02, VCAB-05,
+VCAB-10, SEC-08, DIST-01, DIST-02, ENG-05. Prerequisites: WP-10 slice 2 is
+committed and pushed as `314c75c1`; host tests cover the shell bridge. The
+repository has no production-signed driver payload in a release-input directory.
+The signed files therefore remain a hard packaging/installer smoke gate; the
+test-signed VM package must never enter a product installer.
+
+Ordered work: (1) bundle the release helper beside the shell and make release
+preparation fail closed if the signed package is absent or not the exact four-file
+payload; (2) add safe hash/manifest verification and NSIS uninstall consent with
+default Keep, invoking only the adjacent helper for Remove; (3) add acceptance
+tests for helper/package presence, checksum tamper/missing-file rejection and
+uninstall hook contract; (4) run script tests, format/lint/build checks and inspect
+the diff; (5) leave signed-driver install/update and NSIS install/upgrade/uninstall
+VM runs blocked until a Microsoft-signed payload and attended VM run are available.
+Rollback is limited to the new release wiring and hook; existing installer output
+and installed driver state are not modified.
+
+Validation (host, 2026-10-11): release helper builds with
+`cargo build --release --locked -p audiorouter-driver-helper`. PowerShell parser
+checks pass for edited release/acceptance scripts. `test-installer-hooks.ps1`,
+`test-verify-artifacts.ps1`, and `test-prepare-artifacts.ps1` pass. The M08
+installer wrapper passes its static resource/hook checks and correctly reports
+the signed-payload packaging stage skipped because
+`AUDIOROUTER_SIGNED_DRIVER_PACKAGE` was not supplied. `git diff --check` passes.
+This is host packaging evidence only: no NSIS bundle was generated, no driver was
+installed/removed, and no app install, upgrade, UAC, endpoint identity, or VM
+uninstall behavior was exercised. Next action: obtain the Microsoft-signed
+Partner Center payload, run the clean-tree packaging/verifier flow, then execute
+the install → update → uninstall keep/remove sequence in the disposable VM.
+
+## WP-12 — Stage A full qualification
+
+- Run A1–A16 of the [testing procedure](../../operations/virtual-cable-testing.md)
+  on one build, in the VM (A1–A14 with 2 cables, A15 with all 8, A16 the
+  WP-09b quality harness). VM latency/CPU numbers are indicative; bit-exact,
+  crosstalk, conversion and glitch results must already pass. Record evidence in
+  `docs/plans/active/evidence/<date>-virtual-cable-stage-a.md`.
+- **Gate:** all pass → ask the user for the go-ahead to buy the EV
+  certificate (WP-13).
+- **Status (2026-10-28):** superseded. Stage A ran on RC3 0.2.4 in sessions
+  r1–r10 (2026-10-12 to 14); results are in the RC freeze records above.
+  Open items and the final run are in
+  [Pre-purchase assurance](#pre-purchase-assurance-plan-2026-10-28-user-request).
+
+### WP-12 preflight — Stage A gates (2026-10-11)
+
+Objective: qualify A1–A16 on one VM build; requirement IDs VCAB-01–05,
+VCAB-10/11, VCAB-20–30, VDEV-01/03/04/07/11/12, SEC-08 and NFR-02.
+Prerequisites: WP-07 driver helper, WP-08 status, WP-09 product cable route,
+WP-09b quality harness, and a verified test-signed package with matching tools.
+Rollback: Stage A is VM-only; restore `02-test-signing-ready` after each run and
+remove only the exact package/root device owned by the run. Never use the host
+for test-signing or driver installation.
+
+WP-09b portable analysis, the rate/format/channel runners, and host-safe
+acceptance are now implemented. The endpoint measurement matrix has not been
+run. Stage A remains blocked by the user's 8-channel deferral (Windows exposes
+only 1- and 2-channel formats for the named cable endpoints) and unavailable
+VirtualBox control. These are acceptance gates; synthetic host checks do not
+substitute for the VM run.
+
+Ordered next steps: (1) implement the independent user-mode WP-09 mixed-clock
+cable/physical route path and its portable tests; (2) keep the 8-channel
+acceptance blocked unless a supported endpoint-format path is authorized and
+verified; (3) obtain the production-signed payload through WP-13; (4) prepare a
+fresh immutable Stage A bundle with driver, helper, app, and harness versions
+aligned; and (5) run A1–A16 in the disposable VM, retaining all failures.
+Current action: WP-09 mixed-clock route implementation. WP-12 remains in
+preflight; no Stage A qualification is claimed.
+
+## WP-13 — Microsoft signing and stage B (user, costs money)
+
+- Follow [virtual cable signing](../../operations/virtual-cable-signing.md).
+  Agent prepares the CAB (`tools/release/make-driver-cab.ps1`, new) and
+  verifies the returned package; user buys, registers and submits.
+- Stage B in a clean VM with Secure Boot and Memory Integrity on.
+- **Status:** not started; needs user go-ahead.
+
+## WP-14 — Stage C on the main PC
+
+- Testing procedure stage C, one week of daily use, Siege/BattlEye check.
+- **Binding performance and sound-quality measurements** (VCAB-20–30) with
+  the WP-09b harness on the main PC, including the physical loopback drift
+  case, 1-hour 8-cable glitch run under CPU load, WPR DPC capture and the
+  VB-Cable latency comparison. A missed target needs a fix or a recorded
+  user decision with the numbers (DEC-14 method) before WP-15.
+- **Status:** not started.
+
+## WP-15 — Beta, release, documentation
+
+- Stage D with 2–3 testers; then release with M08 gates.
+- Update: `README.md` (install section, "Why AudioRouter"),
+  `docs/operations/quickstart.md`, `privacy-permissions.md`,
+  `release-notes.md`, `distribution.md`, `examples/setups/`.
+- Archive this plan under `docs/plans/archived/` with the date.
+- **Status:** not started.
+
+## Validation matrix
+
+| Requirement | WP | Evidence |
+| --- | --- | --- |
+| VCAB-01/02, VDEV-01 (deviation) | WP-05, WP-07, WP-12 | VM endpoint list at 2 and 8 cables; A15 |
+| VCAB-03/04, VDEV-04/12 | WP-06, WP-09 | Tone, silence, crash tests |
+| VCAB-05, VDEV-03 | WP-07, WP-12 | Reboot keeps endpoint IDs; driver update migrates names and settings to new IDs (2026-10-12) |
+| VCAB-07 | WP-07, WP-14 | Default-device snapshot before/after |
+| VCAB-10/11 | WP-05 | Format inventory |
+| SEC-08, VDEV-07 | WP-04 | Unit tests, fuzzer, verifier, second user |
+| VDEV-08, NFR-16 | WP-07, WP-08 | Only the helper elevates; backend standard user |
+| VDEV-09 | WP-13 | Microsoft signer, stage B |
+| VDEV-09 development, SEC-08 packaging, ENG-05 | WP-02 | [Versioned test package](../active/evidence/2026-10-05-virtual-cable-wp02.md); production gate remains WP-13 |
+| VDEV-11 | WP-12, WP-14 | Discord, OBS |
+| NFR-02 | WP-12 | Impulse loopback p95 ≤ 160 ms, compared with VB-Cable |
+| VCAB-20/21/26 (bit-exact, conversions, isolation) | WP-05, WP-06, WP-09, WP-09b | Harness: noise compare, LSB error, crosstalk |
+| VCAB-22/23 (resampling, drift) | WP-09, WP-09b, WP-14 | Sweep, THD+N, aliasing; physical loopback 1 h |
+| VCAB-24/30 (no glitches, under load) | WP-09b, WP-12, WP-14 | 8 cables, 1 h, continuity harness, counters zero |
+| VCAB-25 (latency) | WP-05, WP-09b, WP-14 | Impulse p95/jitter, low-latency and default periods, vs VB-Cable |
+| VCAB-27/28 (CPU, memory) | WP-14 | WPR DPC, backend CPU, non-paged pool 24 h |
+| VCAB-29 (no hidden processing) | WP-05, WP-10 | No APO, volume 100 %, UI guidance |
+| DIST-01/02/06 | WP-11 | Installer smoke, artifact verification |
+
+## Risks
+
+See [17 §10](../../spec/17-virtual-cable.md#10-known-risks). Plan-specific:
+the WDK/SDK version mismatch on the host is the most common build blocker —
+install the WDK that matches the SDK version shown in Visual Studio
+Installer.
+
+## Rollback
+
+Every WP is a separate commit set. Until WP-15, nothing reaches users: the
+published app keeps the VB-Cable workflow. Reverting DEC-18 restores DEC-16.
+
+## Next action
+
+Superseded 2026-10-12 by the [driver completion goal](#goal-complete-the-driver-set-2026-10-12-user-request):
+the 8-channel decision, then freezing the RC and running Stage A. The
+mixed-clock task below continues in parallel as user-mode work.
+
+Host implementation task: plan and implement WP-09 mixed-clock route support
+between virtual cables and physical devices in the user-mode engine, with
+portable tests for route compilation, rate conversion, channel mapping,
+failure-to-silence behavior, and stop/restart ownership. Do not change the
+kernel driver. Keep the VM sound-quality, continuity, latency, signing and
+installer gates open; no synthetic result closes those gates.
+
+### WP-09 mixed-clock implementation record (2026-10-11)
+
+Objective: allow `VirtualRenderSource` and `VirtualCaptureSink` to participate
+in the existing multi-path user-mode route compiler alongside physical
+endpoints, preserving the engine's 48 kHz conversion and per-path drift
+handling. Requirement IDs: VCAB-22/23, VCAB-03/04, VDEV-04/12; design:
+`docs/spec/17-virtual-cable.md` §7.3. Prerequisites: WP-08 status/API and the
+WP-09 cable-only worker are implemented; native bridge bindings are staged by
+the shell as for current cable routes. No kernel or driver files may change.
+
+Ordered tasks: (1) map the current multi-path compiler, worker lifecycle and
+bridge-binding ownership; (2) design the smallest source/sink binding extension
+that admits virtual sources/sinks through the same compiled graph without
+special-case audio processing; (3) implement portable compilation, channel and
+rate conversion, silence-on-failure, and stop/restart tests; (4) add Windows
+binding/service coverage where it is host-testable; (5) run required formatting,
+lint, Clippy and relevant tests; (6) inspect the exact diff and record evidence.
+
+Validation matrix: portable engine/control tests for cable plus physical
+capture/render path shapes and conversion; controller tests for missing/stale
+leases and stop/restart ownership; Windows build checks for bridge worker
+integration. Real endpoint, driver, 10-minute tone, drift and VM continuity
+evidence are separate required gates and remain open when unavailable. Rollback:
+revert only the mixed-route implementation commit; the established cable-only
+`CableRouteWorker` path remains intact. Current action: step 1, map compiler,
+bindings and worker service before code changes.
+
+The 2026-10-07 failure and repaired-package replay are recorded in
+[the crash follow-up evidence](../active/evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md).
+The repaired package identity matched in the VM and Windows completed the
+device start without a bugcheck, but the helper still found zero of four
+endpoints. A direct diagnostic inventory showed the four healthy devices were
+named `Speakers (AudioRouter Virtual Audio Device)` (render) and `Line
+(AudioRouter Virtual Audio Device)` (capture), twice each. Those names do not
+match the required `AudioRouter Cable A/B Input/Output` names, so the helper
+correctly failed its strict name classification. The helper's remove command
+returned 0 and removed `oem5.inf`; the VM is clean. The INF's per-cable
+interface names are not reflected in the MMDevice friendly names. Microsoft
+documents endpoint naming through KS bridge-pin names/categories and the
+audio adapter's interface friendly name; speaker endpoints use the fixed
+`Speakers` label ([friendly names](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/friendly-names-for-audio-endpoint-devices),
+[endpoint builder](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/audio-endpoint-builder-algorithm)).
+Two interface-name retries failed. The diagnostic retry captured four healthy
+endpoint children, named `Speakers (AudioRouter Virtual Cable)` twice and
+`Line (AudioRouter Virtual Cable)` twice. This confirms the missing cable
+identity is in the bridge-pin naming path. Full evidence is in the
+[crash and endpoint-naming record](../active/evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md).
+Do not proceed to tone or Verifier until the required endpoint names appear.
+Two clean smoke runs are still required before tone or Verifier sessions.
+
+The first revised package (`repair-20261008-reviewed`) was copied and verified
+in the VM. Preflight passed 15/15 checks; smoke found two named endpoints,
+both captures, while render endpoints remained `Speakers (AudioRouter Virtual
+Cable)`. Cleanup and collection passed; see the 2026-10-08 evidence above.
+The code now uses `KSNODETYPE_ANALOG_CONNECTOR` plus per-cable bridge-pin
+`Name` GUIDs on render and keeps custom categories on capture. INF generation
+and the 274-check VM guard suite pass.
+
+On 2026-10-08, Visual Studio repair completed with exit code 0, but an
+ordinary build still failed with `LNK1101: incorrect MSPDB140.DLL version`.
+Repeating the documented process-local tool selection (`PreferredToolArchitecture=x64`
+and the matching 14.51.36256 Hostx64 linker directory first in `PATH`) made
+the x64 WDK build acceptance pass. The first share-preparation attempt then
+stopped at test-certificate creation with access denied. An elevated
+sign-only step reused certificate thumbprint
+`FF6876FBE50A74DC0B69077C11DC28A1A9FAAD40`; no host trust change was made.
+The resulting driver package passed 33 integrity checks. Static-CRT helper,
+tone/inventory tools and fuzzer were staged; the complete share passed all 29
+manifest hash checks and is at
+`C:\VMs\ar-share\repair-20261008-render-pin-name`. The SYS SHA-256 is
+`C6931B62DDFB6317A75D17D7DC7213838024EAC24A12CC801A8B8A7154DBE6BD`.
+
+The host bugcheck dump `C:\Windows\Minidump\100826-29328-01.dmp` was copied
+to the shared folder (SHA-256
+`ADE420AF6A2D0E275E5E4A98CDE28C11E8C4D89FC6302DBA18F28D10AE799A65`) and
+analyzed with matching Microsoft symbols. It records bugcheck `0x3B`
+(`0xC0000005`) at 2026-10-08 17:48:10, in `explorer.exe` waiting through
+`nt!KeWaitForSingleObject+0x369` on Windows 11 kernel 10.0.26100.9549. The
+dump contains no AudioRouter module, so this candidate driver was not loaded
+on the host. The fault occurred about ten seconds after the candidate SYS
+was built; the dump and call stack do not establish a cause. Blackbox PnP's
+last record is `STORAGE\VolumeSnapshot\HarddiskVolumeSnapshot2`, problem
+code 24, with no PnP event in progress; this is not evidence of causation.
+The host crash remains unexplained. No host driver was installed or loaded.
+Jev still awaits approval for its source export.
+
+The 2026-10-08 `repair-20261008-render-pin-name` retry passed all 15 preflight
+checks, installed and started the driver, then exposed two endpoints (Cable A/B
+Output) and no render endpoints. The captured endpoint inventory confirms that
+the unique pin `Name` registrations work for capture; the driver start record
+has no PnP problem. The missing render endpoints were caused by categorizing
+their bridge pins as `KSNODETYPE_ANALOG_CONNECTOR`: Windows classifies those
+endpoints as `UnknownFormFactor` and hides/disables them by default. The render
+bridge now uses `KSNODETYPE_SPEAKER` so endpoints are enabled by default while
+keeping the unique per-cable pin `Name` GUID, which Windows checks before the
+category's default friendly name. This is supported by Microsoft's endpoint
+naming and default-visibility documentation. The static regression now rejects
+the analog-connector category on render bridge pins. VM evidence is at
+`C:\VMs\ar-share\evidence-20261008-183636.zip`; extracted locally under ignored
+`target/vm-evidence-20261008-183636/`. The VM helper removed `oem5.inf`
+successfully, and the final collected device inventory is clean.
+
+Fix implemented: render bridge pins now retain the speaker pin category and
+use unique per-cable `Name` GUIDs. `m03-inf-gen.ps1` passed; VM guards passed
+274 checks; `m03-driver-build.ps1 -Platform x64` passed and explicitly did
+not install/load the driver or change host trust/boot/audio settings. Package
+integrity passed 33 checks. Commit `06e59457` contains the source fix,
+regression check, and diagnostic notes. A clean test-signed x64 package was
+staged at `C:\VMs\ar-share\repair-20261008-speaker-endpoints-clean`: version
+0.1.0, built 2026-10-09 01:41 UTC from commit
+`06e594575aee63a399d68b36212677450c710901`, `dirty: false`, 29 manifest file
+hashes verified. Driver SYS SHA-256:
+`05F74CC94ECCA7158BBD303BCA8C79B6EBA7860578E2E8D1EE9999B20A6900DD`.
+The earlier `repair-20261008-speaker-endpoints` folder was built while the
+worktree was dirty; use the `-clean` folder only.
+
+Next action: in the VM, restore `02-test-signing-ready` and run the one-shot
+command in the VM guide. The VM must pass A1-A3/A14 twice, with all four Cable
+A/B Input/Output endpoints, before tone or Verifier. Host driver installation
+remains paused while the unrelated host bugcheck is unexplained.
+
+### VM follow-up: speaker naming still fails (2026-10-08 18:44)
+
+The clean `06e59457` package passed preflight but failed A3 again. Evidence:
+`C:\VMs\ar-share\evidence-20261008-184523.zip`, inventory
+`20261008-184403-smoke/runner/endpoint-names-on-install-failure.json`.
+All four project endpoints are healthy: two renders named
+`Speakers (AudioRouter Virtual Cable)` and captures named Cable A/B Output.
+The helper counts only two because the render identities lack cable letters;
+A14 cleanup restores the complete baseline. This supersedes the claim that
+the speaker category plus a custom pin Name would fix the names. The earlier
+capture success uses custom category GUIDs, not render pin Name GUIDs.
+
+Microsoft's [endpoint builder algorithm](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/audio-endpoint-builder-algorithm)
+explicitly fixes speaker names to Speakers. Its
+[default visibility setting](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/pkey-audiodevice-enableendpointbydefault)
+provides the missing counterpart to a non-speaker category: enable render
+endpoints with `FLAG_ENABLE | FLOW_MASK_RENDER = 0x00000101` under the
+associated interface's `EP\\0` key.
+
+Plan for VCAB-02 and WP-03 A2/A3/A14: use the analog-connector render category
+and unique pin Names, associate generated render EP properties with that
+category, and set EnableEndpointByDefault to `0x00000101`. Keep capture
+unchanged. Add generator checks for each render Wave/Topology interface and
+capture isolation; run INF generation, VM guards, WDK build, package integrity,
+docs and diff checks; build a fresh clean signed share and update the guide.
+The combined naming/visibility change remains a candidate until Windows VM
+evidence passes twice. Rollback is reverting this change and restoring the
+clean VM snapshot. No host driver installation or loading is authorized.
+
+Implemented the category/visibility combination and generated the INF.
+Render Wave and Topology interfaces associate EP properties with the analog
+bridge category and enable only render flow; all capture policy stays as
+before. Generator regression checks each of the 32 Wave/Topology sections for
+the correct role policy and pins the SDK property/category GUIDs. Driver build
+acceptance passed; INF generation passed. The VM guard suite passed 275 checks
+including a new COM all-state enumeration, verified against the SDK's
+IMMDeviceCollection ABI. A helper-install failure now saves MMDevice IDs,
+flow and state before cleanup without activating streams, as well as PnP
+friendly names. This closes the evidence gap in the earlier analog-connector
+retry: its hidden/disabled state was inferred from documentation, not captured.
+Jev remains unrun because the previous automatic approval review rejected
+transmitting the source diff to its external service.
+
+Candidate staged and verified: `C:\VMs\ar-share\repair-20261008-render-enabled`,
+version 0.1.0, built `2026-10-09T01:51:01.3638446Z` from clean commit
+`5f61df3c367a6774fb829393b5458444889cad45`. Package integrity passed 33 checks;
+29 staged manifest hashes were independently reread and verified; the staged
+guard suite also passed 275 checks. Existing certificate thumbprint remains
+`FF6876FBE50A74DC0B69077C11DC28A1A9FAAD40`. SYS SHA-256:
+`54B7ABB3730550A8F2698C00F9850ACC5A3612F09D9B25318D82D3C6A1297362`.
+Documentation passed 133 files/721 local links; diff whitespace check passed.
+Runtime names, active state, stream safety and two-run gate remain unverified.
+Next: restore `02-test-signing-ready`, run the guide's one-shot retry command,
+and inspect its evidence before continuing Session 1 or later sessions.
+
+First clean runtime pass verified (2026-10-08 18:57): archive
+`C:\VMs\ar-share\evidence-20261008-185852.zip`, SHA-256
+`857FAC1C7EDA67744CC8D4F764D8043E00B396B553A7FFA0AC40CFF0D0AA29ED`.
+The clean `5f61df3c` package passed preflight, A1/A2/A3/A14 and collection.
+All four names are `AudioRouter Cable A/B Input/Output (AudioRouter Virtual
+Cable)`, status OK, with render flow on Input and capture flow on Output.
+Windows default roles did not change; uninstall restored the full baseline.
+The combined naming/default-enable fix is confirmed for this single install.
+Next: restore `02-test-signing-ready` and run the same candidate again. Two-run
+gate is 1/2; tone, formats, Verifier and later sessions remain pending.
+
+Second clean runtime pass verified (2026-10-08 19:20): archive
+`C:\VMs\ar-share\evidence-20261008-192120.zip`, SHA-256
+`B04D885E35FC2A4C4EE0AA0696DEBC1D2637DAA6321316B338B98F2941FF766E`.
+Same clean package; preflight and A1/A2/A3/A14 passed again. All four names
+and render/capture flows are correct, default roles remained unchanged, and
+uninstall restored the baseline. Session 1 naming/install/remove gate is
+**2/2 passed**. This qualifies the initial VCAB-02 names, not rename,
+ID persistence or audio quality. Next action: Session 2 install/status with
+the existing package, inspect 60-format and minimum-period inventory, then
+set up listening and run the tone tests only after that inventory passes.
+
+Unexpected VM restart reported after the Session 2 install/status instructions
+(2026-10-08). The exact command and restart cause are not yet established.
+Session 2 is paused pending the guest System events, minidump and collected
+evidence. Preserve these before restoring a snapshot or retrying installation.
+The two completed smoke passes remain valid; stream safety is still unqualified.
+Next action: collect read-only diagnostics in the restarted guest and copy the
+archive and latest minidump through `Z:\` to the host shared folder for analysis.
+
+Crash evidence received: `evidence-20261008-192858.zip` and
+`100826-7703-01.dmp`. Matching Microsoft symbols identify bugcheck 0x3B,
+access violation in `portcls!AcquireRemoveLock+4` during helper device open.
+Installation and its idempotent repeat had succeeded; Session 2 remains blocked.
+The bridge handlers were registered before `PcInitializeAdapterDriver`, which
+overwrites those dispatch entries. Repair plan (SEC-08, VCAB-11): initialize
+PortCls first, register bridge handlers afterward, publish the control device
+last, and forward audio-device requests to PortCls by device identity. Add
+regression guards for ordering and both dispatch paths; build/sign a fresh
+candidate and verify the package. Runtime verification requires the user VM:
+restore the clean snapshot, install and run status separately, then inspect
+evidence before tone. Rollback: restore the clean guest snapshot; never load
+this package on the host. A build alone cannot close this crash gate.
+
+Replacement is ready in `C:\VMs\ar-share\repair-20261008-bridge-dispatch`,
+clean source `151a3b69`, built `2026-10-09T02:32:39.0185028Z`. Windows x64
+WDK acceptance and dispatch regression guards passed; package integrity 33
+checks passed, 29 manifest hashes matched. The guide now separates install
+from status and pins the replacement SYS hash. Next: user restores the clean
+guest snapshot and runs the copy/preflight/install block, then sends output.
+Status/format inventory follows only after installation is reviewed.
+
+2026-10-08 19:36 guest evidence: clean preflight 15/15, install 3/3 and bridge
+QUERY/status succeeded with protocol 1.1; the bridge-open crash reproduction
+now passes on `151a3b69`. Archive `evidence-20261008-193649.zip` shows all four
+endpoints at 48/60 accepted formats and a minimum period of 128 frames. All
+12 rejected combinations per endpoint are 8-channel formats. The driver uses
+obsolete wide 7.1 mask 0xFF, while inventory correctly requests surround
+0x63F. VCAB-11 repair: use `KSAUDIO_SPEAKER_7POINT1_SURROUND`, assert its SDK
+value, pin inventory/table agreement in the build regression, then build/sign
+and stage a fresh clean package. No acceptance target is reduced. Guest
+verification: clean snapshot, copy/hash verification, install, status and
+collection; tone stays pending. Rollback: clean guest snapshot. Existing
+stereo package configurations are unchanged; this corrects the advertised
+eight-channel speaker positions for the test candidate.
+
+Candidate ready: `C:\VMs\ar-share\repair-20261008-surround-layout`, clean
+source `a8138984`, built `2026-10-09T02:40:41.6587231Z`. Host WDK acceptance,
+native stdout/stderr regression, package integrity (33), manifest hashes (29),
+and staged VM guards (275) passed. Guide pins the replacement SYS hash.
+Next: user restores `02-test-signing-ready`, copies this candidate, runs
+preflight/install and status/collection. Guest 60-format gate is still open.
+
+2026-10-08 19:43 guest evidence verified: archive
+`C:\VMs\ar-share\evidence-20261008-194356.zip`, SHA-256
+`89740A881754EDAE031CEEF369C252BF330CEFEEC30C5195581F40F239C645A3`.
+Preflight 15/15 and install 3/3 passed; bridge status returned installed,
+protocol 1.1 and all four names. All four endpoints now accept **60/60**
+formats, no rejected entries, mix 48 kHz float32 stereo. Minimum shared
+period 128 frames, default/max 480, fundamental 1. VCAB-11 advertised format
+gate and the original bridge-open crash reproduction passed. These checks
+do not prove actual streaming, latency, fidelity or Verifier safety. Next:
+continue in this installed VM, set Cable B Output Listen to the VM's physical
+speakers, run Session 2 tone for 600 seconds and collect/copy evidence. Review
+the WAV and counters before stall/8-channel tests; do not restore yet.
+
+2026-10-08 19:54 tone interrupted: archive `evidence-20261008-195458.zip`,
+SHA-256 `7CCFA6934BF5CA7D07D9CA123CE01E1EBCD36A3BC1C9AAE59FE66A97C33E1071`.
+Transcript started 19:46:23 and was stopped at 19:54:34 (491 seconds), before
+the configured 600-second duration. The wrapper buffers native output through
+Out-String until process exit, so silence in the console is expected. No
+counter report or completed summary exists; the 14,607,404-byte WAV retains
+placeholder RIFF/data sizes (36/0) after interruption and is not a qualified
+recording. This does not establish a hang or an audio-quality pass. Next:
+same installed guest and listening setup, run `tone -ToneSeconds 30`, collect
+and inspect completion/counters before repeating the full 600-second check.
+
+2026-10-08 19:56 short tone completed but failed VCAB-24: 3000 capture blocks
+written, capture-sink underrun_frames 1104 (23 ms), all other counters zero;
+render-source 1530 blocks/734400 frames, all error counters zero. Final totals
+do not locate the underruns in time. Do not waive them or assume VM scheduling.
+Diagnostic plan: add user-mode counter snapshots at lease open, first write
+and one-second intervals; print progress live through the VM wrapper while
+retaining the log. Keep kernel behavior and zero-counter gate unchanged.
+Run focused host tool tests/format checks, stage the diagnostic build, then
+run only a 30-second guest trace before selecting a repair. Rollback: previous
+test tool/package or clean guest snapshot. No host driver loading.
+
+Additional review requested by user: completed OPEN/setup, single-slot ack,
+WaveRT scratch/catch-up, close/counter timing and script gate review. Fixed
+missing/duplicate report handling and `tone-8ch` zero-counter enforcement;
+added live progress and raw counter snapshots. No kernel pacing change or
+counter waiver. Host tool tests 4/4, focused Clippy, Rust fmt checks and
+PowerShell output/counter regressions passed. Startup exposure and delayed
+callback starvation remain hypotheses requiring the diagnostic guest trace;
+see the [review record](../active/evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md#2026-10-08-1956-short-run-underrun-and-additional-review).
+
+Diagnostic bundle staged in `C:\VMs\ar-share\diagnostics-20261008-tone-timing`
+from clean `5cb14067`: only the static-CRT tone tool and vm-checks.ps1, with
+SHA-256 manifest `diagnostics.json`. Existing `a8138984` guest driver stays
+installed; no snapshot restore or driver update for this trace. Next: copy
+and verify those two files, run 30 seconds with existing Listen setup, then
+collect/copy and locate when underrun counts first rise. The producer bug
+is not marked repaired. Jev remains unrun (prior external-upload rejection).
+
+2026-10-08 20:16 diagnostic trace verified: archive
+`evidence-20261008-201644.zip`, SHA-256
+`CA1C2447E49362C1EFC5391C407D2B9FBF2B01C31C333F181B942A8F1200370A`.
+Counters are zero at lease-open/first-write, 96 underrun frames at 1 second,
+144 at 2 seconds, and 192 at 22 seconds through exit. The late 48-frame
+increment disproves a startup-only diagnosis. Other error counters remain
+zero. 3000 capture blocks written, 765 render blocks/367200 frames recorded.
+Do not retry the long test or change acceptance thresholds.
+
+### Capture buffering decision — approved 2026-10-08
+
+The review found a structural limitation: the capture callback requests a
+new bridge block only after its scratch is exhausted; a producer busy publishing
+or a callback catching up cannot wait for user mode and currently outputs
+counted silence. The trace proves runtime starvation, but not which timing
+race caused each increment. Proposal for VCAB-24/25/28 and SEC-08:
+
+1. Add one fixed preallocated capture prefetch block per stream. Opportunistically
+   copy/acknowledge the next valid block while the current block still has
+   samples; retain both blocks and consume strictly by sequence. No shared
+   protocol/layout, helper command, endpoint identity or format change.
+2. Preserve generation/format boundaries: reset both valid lengths on
+   generation change, unusable format, stop and teardown; never replay stale
+   audio. An empty queue still yields silence and increments the true underrun
+   counter. No allocation, wait, lock or logging in the audio callback.
+3. Add offline regressions for publication-in-progress, partial block reads,
+   callback batches across two blocks, missing-block silence, no duplicates,
+   generation/format changes and bounded memory. Test the owning buffering
+   logic rather than merely checking source strings.
+4. Record fixed memory increase and added buffered duration; measure the
+   existing latency gate rather than assuming prefetch is free. Build/sign
+   only after regressions, diff review and host checks pass; user VM checks
+   30 seconds, then 600 seconds, deliberate stall and 8-channel operation.
+5. Rollback: restore the clean guest snapshot and retain prior package/tool
+   plus archived evidence; no host driver loading.
+
+The user approved this proposal on 2026-10-08, satisfying rule 9. Implement
+the bounded queue, verify FIFO/partial reads/busy publication and reset paths,
+then build a fresh signed candidate. The zero-counter acceptance gate remains
+unchanged. Runtime repair and latency remain unverified until guest evidence.
+
+Implemented: the capture path uses a two-slot private FIFO and bounded
+prefetch; the existing render scratch stays independent. Generation races
+discard the queue and disable further reads for that callback. STOP and
+unusable format invalidate buffered audio; acknowledged sequence is retained
+across STOP. Memory increase is 256 KiB per stream plus 32-byte queue state,
+less the removed 8-byte sequence field. Added buffering is bounded to one
+quantum beyond the old scratch (10 ms at the diagnostic setup); VCAB-25 is
+still open. Shared bridge layout and zero-error counters are unchanged.
+
+Host regression: `drivers/audiorouter-virtual/tests/build-tests.ps1` passed
+252 checks, including actual queue sample ordering, busy-publication attempts,
+partial/batched consumption, duplicate/invalid-length refusal, and reset
+boundaries. Log: `target/driver-unit-release/tests.log`. x64 WDK acceptance
+passed (`target/capture-prefetch-build.txt`). Neither is kernel runtime
+evidence. AddressSanitizer was attempted but could not link because the installed
+MSVC toolchain lacks `clang_rt.asan_static_runtime_thunk-x86_64.lib`
+(`target/driver-unit-asan/compile.log`); no ASan pass is claimed.
+Jev remains unrun due the prior automatic-review rejection of
+external source upload. Next: finish host checks and stage a signed clean
+candidate, then restore the clean guest snapshot and run install/status and
+only a 30-second trace before the long continuity and latency gates.
+
+Candidate staged: `C:\VMs\ar-share\repair-20261008-capture-prefetch`, clean
+source `abb303ee8834c64af6ea273a7bdd960b128926e0`, built
+`2026-10-09T03:30:54.0452936Z`. SYS SHA-256:
+`B45C9EF5B4B466D729BBD6579962F1540BB853377A14C14A647AA641BD4605BA`.
+Package checks 33/33 and independently reread manifest hashes 29/29 passed;
+VM guard checks 275 passed. Final x64 WDK acceptance used
+`PreferredToolArchitecture=x64` and the installed MSVC Hostx64/x64 compiler
+directory on the process PATH. Logs: `target/capture-prefetch-build.txt`,
+`target/capture-prefetch-share.txt`, `target/capture-prefetch-vm-guards.txt`.
+Documentation validation passed 133 files/724 links; whitespace check passed.
+No driver was installed or loaded on the host. Next: restore
+`02-test-signing-ready`, use Session 2's copy/hash/preflight/install block,
+review installation, then status and a configured 30-second trace. Successful
+copy acknowledgement means private buffering, not completed playback; the
+short diagnostic and its counters do not substitute for external capture,
+fidelity or impulse latency qualification. VCAB-24/25/28 remain open.
+
+2026-10-08 20:36 candidate failed VCAB-24: archive
+`evidence-20261008-203731.zip`, SHA-256
+`8EDD4624AA55FE2619F7C866516BB2B5085118E7B05BE5B11C8460088FE54833`.
+Install and all four 60-format inventories passed. Capture underruns were
+already 480 at lease-open/first-write, 576 at 1 second, 624 at 4 seconds,
+and 672 at exit. Render was never stimulated: zero blocks and a header-only
+WAV; its zero counters are not render streaming evidence. Prefetch alone did
+not resolve the defect and is not qualified.
+
+Source review found the missing integration: TimerNotifyRT runs every 1 ms
+but skips UpdatePosition until a notification is due (10 ms here). Capture
+prefetch therefore cannot build headroom between notifications. The tone tool
+also opens the capture lease before opening render, creating its WAV and
+allocating/filling samples, exposing an active empty lease during setup.
+Within the approved bounded-prefetch repair, next tasks are: service capture
+DMA on each RUN timer tick while keeping notification/packet cadence unchanged;
+prime the first validated capture block before broker OPEN, with all other
+setup completed first; test timer integration plus actual primed mapped-session
+contents/sequence/error cleanup; rerun WDK, focused Rust tests/Clippy/format,
+VM guards/package checks and stage a clean candidate. No counter subtraction
+or startup exemption. Rollback remains the clean snapshot/prior package.
+
+Implemented the missing timer integration and primed capture startup.
+Offline queue/timing suite passed 254 checks, including a model that fails
+with notification-only service and passes with per-tick service under a
+one-tick producer delay and notification overshoot. This is simulation, not
+kernel timing evidence. The actual mapped-session priming test passed:
+sequence 1 and all samples are readable before broker OPEN, the next write
+is sequence 2, and wrong direction/invalid samples remove the owned file.
+Seven existing session tests and four tone-tool tests passed; crate/all-target
+Clippy and both Rust formatting checks passed (compiler reported a cache
+hard-link fallback, not a code lint). Logs: `target/primed-session-tests.txt`,
+`target/capture-tick-session-tests.txt`, `target/capture-tick-tone-tests.txt`,
+`target/capture-tick-clippy.txt`, `target/driver-unit-release/tests.log`.
+The failed prefetch-only candidate remains preserved; there is no accepted
+runtime continuity result yet. Next: complete WDK/package/VM guard checks,
+stage a clean candidate and request only install/status followed by a
+30-second trace with both capture listening and render Test stimulus.
+
+Review also caught a compatibility risk from faster DMA updates: the old
+byte-rate arithmetic can advance by partial frames at 44.1 kHz. UpdatePosition
+now rounds displacement down to complete frames and carries the fractional
+byte numerator modulo `1000 * nBlockAlign`. The shared helper is tested for
+all three supported rates and all seven possible frame byte sizes across
+1000 one-millisecond updates: exact one-second sample totals, zero remaining
+carry, and no partial frame. Invalid zero alignment fails closed. Final native
+suite: 276 checks. This preserves the existing rate/format contract (VCAB-11/12)
+while servicing capture between notifications. WDK acceptance, 275 VM guards,
+PowerShell output/counter regression, docs and diff checks passed; ASan/Jev
+limitations remain as recorded above. No host driver loading occurred.
+
+Corrected candidate staged: `C:\VMs\ar-share\repair-20261008-capture-tick-primed`,
+clean source `dbf19e178c737e9aa4cc93bc1048bd66ec591c3d`, built
+`2026-10-09T03:46:14.0611758Z`. SYS SHA-256:
+`692C013CF9727985FE804F4020388108D1A568ECF8FC0D99B9B525771E39D646`.
+Package checks 33 passed; all 29 manifest hashes independently reread and
+matched. Log: `target/capture-tick-share.txt`. Guide now runs install/status
+checks together before any listening/tone; an earlier failure stops the block.
+Next: restore `02-test-signing-ready`, copy/hash/preflight/install/status,
+review output, then configure Listen and run 30 seconds with Cable A Input
+Test stimulus. The previous trace's empty render WAV cannot qualify A4.
+No long test until this candidate's trace is reviewed. The zero-error gate
+and measured latency requirement remain unchanged.
+
+### 2026-10-08 20:54: per-tick candidate still fails; review before another retry
+
+Archive `C:\VMs\ar-share\evidence-20261008-205521.zip`, SHA-256
+`54FD1A4D3A2DDC4C4BEF1EB28A80D2EAC680ECCE4A7C6F953CAA99EA73A5EA6E`.
+Preflight/install/status passed. Capture counters are zero at primed OPEN and
+through 19.030 seconds, then 4272 underrun frames at 20.030 seconds, unchanged
+through exit. That is 89 ms of missing capture audio in one interval. Render
+has 480 overrun frames by 29.044 seconds (one 10 ms block). 2993 capture
+blocks written, 508 render blocks read, 243840 WAV frames. This is a failed
+VCAB-24 run; neither direction's continuity gate passes. Primed startup and
+per-tick prefetch behaved cleanly during the initial interval, which does not
+qualify sustained playback or establish the later failure's cause.
+
+Review of the actual test loop found an unisolated audio path: the same thread
+publishes capture, polls render, allocates/serializes/writes WAV data, performs
+two synchronous heartbeat IOCTLs, prints synchronous console progress, and
+sleeps. The log does not time those operations, so it cannot distinguish a
+blocking tool operation from scheduler delay or driver timing. The ~20 ms
+private capture reserve cannot cover an arbitrarily blocked producer. The
+earlier host timing model tested a one-tick producer delay; it did not cover
+this failure class. Do not increase buffers or relax counters on this evidence.
+
+Harness design approved by the user (2026-10-08) under plan rule 9:
+
+1. Keep driver/ABI and zero-error acceptance unchanged. Prepare resources and
+   prime capture before activation; move mapped capture production and render
+   consumption to dedicated audio workers with explicit readiness and shutdown.
+2. Keep heartbeat IOCTLs, progress output and WAV I/O outside those workers.
+   Transfer float64 render blocks through fixed, preallocated bounded storage;
+   report an exhausted recording queue as a harness failure, never block or
+   silently discard. Preserve exactly one producer/consumer per direction.
+3. Record each worker's maximum pump gap and control/recording operation
+   durations through bounded diagnostics. Treat thread scheduling support
+   failures explicitly. Do not claim MMCSS or scheduling guarantees unmeasured.
+4. Before any guest retry, exercise the actual worker/mapped-slot path on the
+   host with deliberately blocked heartbeat, console and recording operations,
+   plus recording backpressure, producer stalls, sample order, sequence counts,
+   startup failures and shutdown. Verify that peripheral stalls do not halt
+   audio service and that a real producer stall is still reported.
+5. Inspect the complete implementation and focused Windows checks, then stage
+   only the harness update for the existing guest driver. Review a 30-second
+   trace before any long run. New transport buffering, if still needed, is a
+   separate decision supported by that evidence. Latency/fidelity gates remain
+   open. Rollback is the previous tool bundle or clean guest snapshot.
+
+The isolated harness is implemented: prepared activation, two mapped audio
+workers, control-only main thread and bounded recording worker. Both leases
+deactivate before cleanup; final render data is drained. Host regressions:
+11 tone/worker tests and 30 bridge tests passed, including a 160 ms blocked
+recording/control interval, explicit backpressure and a visible 120 ms producer
+stall. Details and limits are in the
+[harness record](../active/evidence/2026-10-08-isolated-tone-harness.md).
+
+The first 30-second isolated VM run exercised capture and render, but exited
+with `SampleSizeMismatch` during teardown. Its final counters were zero because
+the driver resets the mapping on CLOSE. Fixed the order: snapshot raw counters
+before CLOSE; deactivate leases, stop/join workers and drain WAV buffers,
+then clean up their mappings. Details are in the evidence record. Twelve tone
+tests, 30 bridge tests, focused Clippy and formatting pass after this fix. No
+driver files or thresholds changed.
+
+The rebuilt, hash-verified tool-only bundle is ready at
+`C:\VMs\ar-share\diagnostics-20261008-isolated-tone` (source `966a83b6`).
+The driver file was not included. Corrected guest run passed all four tone
+checks; archive and metrics are in the harness evidence record. Next action:
+run the 10-minute tone check on the already installed VM using
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step tone`.
+Keep Cable B Output Listen enabled and stimulate Cable A Input during the run.
+Review the 10-minute trace before stall/8-channel checks. Archives are retained;
+no kernel patch or threshold change. VM sustained continuity, fidelity and
+latency gates remain open; the 30-second success does not qualify them.
+
+The next guest attempt stopped after about 29 seconds with one 480-frame
+render overrun and one harness sequence gap. Its maximum render poll gap was
+11.186 ms; heartbeat and WAV operations were each below 1 ms. It requested a
+600-second run but did not complete the 10-minute gate. Full archived evidence,
+limits, and the scheduling follow-up are in the
+[render-overrun record](../active/evidence/2026-10-08-m03-render-overrun.md). Before
+retrying, the isolated workers were updated to request MMCSS `Pro Audio`,
+report fallback capability, and include sequence and timing details in any
+gap error. Focused host checks and workspace Clippy pass; this is not VM timing
+evidence. The updated tool-only bundle is staged at
+`C:\VMs\ar-share\diagnostics-20261008-mmcss-render`; its executable and driver
+hashes and the exact VM command are in the
+[render-overrun record](../active/evidence/2026-10-08-m03-render-overrun.md). Run the
+30-second guest validation before another 10-minute attempt. Preserve the
+zero-counter acceptance criterion and installed VM driver.
+
+The MMCSS 30-second retry confirmed both workers acquired `Pro Audio`, with
+zero counters and no sequence gap, but exposed a second shutdown race:
+deactivation clears the mapping header just before the worker stop flag is
+set. The worker can report the expected clear as `SampleSizeMismatch`. Fixed
+with a separate retirement signal set before deactivation; only that exact
+error is tolerated after retirement begins. Keep runtime mapping errors and
+the zero-error gate unchanged. Host formatting, tests and Clippy pass. The new
+tool-only short retry is staged at
+`C:\VMs\ar-share\diagnostics-20261008-retirement-fix`; its exact command and
+hashes are in the [render-overrun record](../active/evidence/2026-10-08-m03-render-overrun.md).
+Do not run the 10-minute test until this retry passes.
+
+The next short retry had zero render blocks because Cable A Input was not
+stimulated; counters and sequence gaps stayed at zero, and MMCSS was active.
+The tool correctly reported missing playback. The retry script now waits for
+readiness and gives a five-second countdown before its 30-second tone run;
+click Cable A Input Test while the run is active. The exact guest archive and
+result are recorded in the
+[render-overrun evidence](../active/evidence/2026-10-08-m03-render-overrun.md).
+The updated tool-only bundle is staged at
+`C:\VMs\ar-share\diagnostics-20261008-tone-ready`; in the VM, run
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File Z:\diagnostics-20261008-tone-ready\retry-isolated-tone.ps1`.
+The 30-second retry passed with all error counters and harness sequence gaps
+at zero. It recorded 506 render blocks (about 5.06 seconds of audio), so for
+the 10-minute gate, route a known file into Cable A Input and keep playback
+continuous for the full run. Use
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ar\vm-checks.ps1 -Step tone -ToneSeconds 600`,
+then run the collect step. Archive and detailed metrics are in the
+[render-overrun evidence](../active/evidence/2026-10-08-m03-render-overrun.md).
+
+The first 600-second run completed but failed the clean-run gate: capture
+underrun was 2,208 frames (46 ms), first observed at 67.193 seconds; maximum
+capture/render worker poll gaps were 64.984/65.410 ms. Both workers had MMCSS
+Pro Audio and a 1 ms timer, and no fallback. The progress trace shows Cable A
+Input data for only 76.52 seconds total, not continuous for the whole test.
+The max-gap timestamps are unavailable, so a scheduling pause is plausible but
+unconfirmed. Do not run stall or 8-channel checks. Repeat the clean 600-second
+run only with a known file looped continuously into Cable A Input, the VM in
+the foreground and no heavy host work. If the underrun recurs, investigate VM
+scheduling and capture buffering before changing the driver or its thresholds.
+Archive and details are in the
+[render-overrun evidence](../active/evidence/2026-10-08-m03-render-overrun.md).
+
+The next 600-second attempt failed during startup: at 17 ms the render reader
+first observed sequence 2 instead of 1, recorded one 480-frame overrun, and
+exited before recording WAV frames. Its own poll gap was only 1.466 ms
+(maximum 2.165 ms). Code review found that the harness activated the render
+and capture leases before waking the render reader, so the first block could
+be overwritten before polling began. The harness now starts the render poller
+first, waits for its first empty poll, then activates both leases. A focused
+regression verifies that an immediately published first block is consumed
+without a gap. Host checks: 14/14 focused tests passed; workspace and
+`src-tauri` Clippy passed with `-D warnings`; formatting and `git diff --check`
+passed. A static-CRT tone executable was built and its non-device `--help`
+path exited as expected. The tool-only VM bundle is staged at
+`C:\VMs\ar-share\diagnostics-20261008-render-startup`; no driver package was
+rebuilt or included. The guest short test remains pending. Keep the zero-error
+criterion and do not retry the 600-second gate until the short guest test
+passes. Full archive and run details are in the
+[render-overrun evidence](../active/evidence/2026-10-08-m03-render-overrun.md).
+
+That short retry confirmed startup polling was fixed but still observed
+sequence 2 followed by sequence 4 at 996 ms, with one 480-frame render
+overrun. The run used only the brief Windows Test sound, and the current trace
+cannot distinguish a callback burst from delayed reader scheduling. The
+render worker now repolls immediately after a successful read rather than
+sleeping 1 ms before the next poll. The retry script now requires a sound file
+looped to Cable A Input for the full 30 seconds. The updated short run passed:
+3,000 render blocks / 1,440,000 frames, with all driver counters and harness
+sequence gaps at zero. This clears the short-run gate only; the 600-second
+run remains unqualified. Next, run the 600-second test with the known file
+looped continuously into Cable A Input.
+
+The first 600-second retry after the short pass failed at 18 ms, before its
+first progress report: render sequence 2 was observed before sequence 1 was
+acknowledged. The startup-poller message was present, and the poll gap was
+2,564 μs. This is not a 564-second failure; the guest archive's tone trace
+shows immediate startup failure. If Media Player was already playing before
+the render lease opened, that could explain the initial burst, but playback
+state is not recorded. For the next retry, prepare Media Player routed to
+Cable A Input but paused, start the 600-second command, then start playback
+when the first progress line appears. The clean 10-minute gate remains open.
+Archive and measurements are in the
+[render-overrun evidence](../active/evidence/2026-10-08-m03-render-overrun.md).
+
+**Agent (host, can start now):** WP-08 status detection and the
+`virtual-cable` CLI/API (17 §7.1–7.2), then WP-09 engine nodes. WP-09 must
+use the capture-sink acknowledgement (`consumer_sequence`) for producer
+pacing, as `m03_bridge_tone` does, and poll render-source leases faster than
+one period; a wall-clock producer against the single-block slot cannot be
+glitch-free (VCAB-24). Evidence from the VM sessions takes priority over new
+host work: fix what they find first.
+
+Do not load the intermediate package on the host or call a host build a
+runtime or quality pass.
+
+2026-10-09 VM status failure (candidate `repair-20261009-render-retention`):
+install and both smoke cycles passed. The status inventory JSON contains four
+valid endpoints (all 60 formats, minimum period 128 frames), but the inventory
+tool reports 12 name matches and eight `IAudioClient3` activation failures.
+Root cause: `enumerate_active_endpoint_display_info()` was documented to return
+active endpoints but called `EnumAudioEndpoints(..., DEVICE_STATE_ALL)`. The
+inventory therefore counted records from every Windows endpoint state and
+attempted to activate clients for them. The JSON lists only four because the
+tool skips a record before serializing it when client activation fails; the
+three-match/12-total diagnostics are computed before that filter. The guest
+output did not include each record's state, so the eight extra records are not
+individually classified.
+Requirements: VCAB-11, VCAB-25. Fix committed and pushed to `main` as
+`d9e72560`: enumerate active endpoints only and pin the state flag in the M03
+build acceptance guard. Driver behavior and acceptance thresholds are unchanged;
+no VM devices were removed. Focused evidence: inventory example tests 2/2,
+release executable build with static CRT, focused Clippy, Rust formatting,
+docs validation (136 Markdown files/738 links), and manifest verification for
+all 29 staged files. The driver's SYS hash is unchanged. Jev review could not
+reach its API and remains unrun. New bundle:
+`C:\VMs\ar-share\repair-20261009-active-inventory`; inventory tool SHA-256
+`D08495D741E99C1AC4FA4F0BE234C5C5CC2D920E30C1AACF28684DC6B94CDEB2`.
+The active-state inventory repair passed in the VM. The status step found
+exactly four active AudioRouter endpoints, each with 60 supported formats and
+a 128-frame minimum period. The 30-second tone run passed all four checks
+using bundle `repair-20261009-active-inventory`; archive
+`C:\ar\repair-20261009-active-inventory\evidence-20261009-171045.zip`,
+SHA-256 `F6D16DDFA8AC1B0A02AFBC349F074D249B74BEDD5324F6F59E8E24AF69F94BA3`.
+The trace records 3,003 capture blocks written, 3,000 render blocks read
+(1,440,000 stereo frames / 30 seconds), zero driver error counters, zero
+harness sequence gaps, and maximum capture/render worker poll gaps of 6.200 /
+6.192 ms. WAV format/header was verified as stereo 48 kHz float32 for exactly
+30 seconds. This qualifies the status repair and short-tone gate only; it does
+not qualify sustained continuity or latency.
+
+The 600-second attempt failed; it is not continuity evidence. Archive:
+`C:\ar\repair-20261009-active-inventory\evidence-20261009-173249.zip`,
+SHA-256 `A6BA1BE7E0AD2DABE1C4523D61386C3D6898E41E0437E51AE34160E38CA61E1B`.
+The trace began with zero counters, then at 178.536 seconds showed 1,776
+capture underrun frames (37 ms) and 2,256 render overrun frames (47 ms). At
+269.828 seconds those totals rose to 3,744 (78 ms) and 5,184 (108 ms), then
+remained there through 316.956 seconds. After that, both audio worker pollers
+had a 895,145 ms gap (about 14 minutes 55 seconds). Final counter totals were
+42,969,360 capture underrun frames and 42,970,944 render overrun frames, which
+correspond to roughly 895 seconds. The tool recorded 31,722 capture blocks
+and 31,716 render blocks (15,223,680 WAV frames, about 317 seconds), zero
+harness sequence gaps, and then failed with HRESULT `0x80070016` (“The device
+does not recognize the command”). This strongly indicates execution stopped
+for a long interval, but the trace alone cannot identify whether Windows, the
+VM, or its host paused it. The earlier 37/47 ms continuity errors occurred
+before that pause, so the result also fails even when the long gap is set
+aside.
+
+The host's available `VBox.log.1` is an older session (opened
+`2026-10-09T03:51:36Z`); the current `VBox.log` is empty. The guest query
+produced no matching System or Power-Troubleshooter events. Reading the live
+log for registered VM `AR-DriverTest` with VBoxManage supplied the relevant
+host-side record: VirtualBox is using NEM's “Snail execution mode” because the
+Windows Hyper-V hypervisor is active. The log records a separate 44-second
+guest heartbeat gap early in the VM session. At relative 00:55:15 it reports
+a 895,139,986,951 ns catch-up lag and a guest heartbeat absent for 896
+seconds, then reports the guest alive again. The VM session start and these
+relative timestamps align with the test's 14m55s worker gap. The host System
+log had no matching Kernel-Power, boot, shutdown or power-troubleshooter
+event. This confirms a VirtualBox guest execution stall, not a 14m55s
+driver-side audio loop. It does not establish what paused or starved the VM.
+The earlier 37 ms capture underrun and 47 ms render overrun at 178.536
+seconds, followed by additional errors at 269.828 seconds, remain separate
+continuity failures.
+
+Next: do not rerun tone yet. Review the host's Hyper-V/NEM configuration and
+VM scheduling/power conditions; do not disable Hyper-V, VBS, WSL or other host
+features without an explicit user decision. Then decide whether to qualify
+this VM under its current compatibility backend or use a host configuration
+where VirtualBox can use native hardware virtualization. Do not reinstall the
+unchanged driver. Acceptance remains zero driver error counters and zero
+harness sequence gaps; rollback is the existing clean VM snapshot and
+previously installed driver.
+
+User decision (2026-10-09): preserve WSL; do not disable the Windows
+hypervisor or its dependent features. Host inspection found the documented
+VM settings already in use (4 vCPUs, 8192 MB, 100% execution cap, nested
+paging on), with VirtualBox NEM active. The host Balanced power plan has
+sleep-after set to Never on AC; no matching host power/boot/shutdown events
+were present for the 14m55s stall. The earlier suggestion that the guest may
+have idled while the user was away is not supported: the user confirms the VM
+remained on and neither sleep nor a screen saver occurred.
+
+Supervised 300-second diagnostic (2026-10-09): completed the full duration,
+with no long pause or harness sequence gap. Four progress snapshots showed
+new counter bursts at 58.160 s (816 capture underrun / 1,824 render overrun
+frames), 83.234 s (7,008 / 8,496 cumulative), 210.589 s (13,728 / 15,696),
+and 273.788 s (16,704 / 19,152). Final totals correspond to 348 ms of
+capture underrun and 399 ms of render overrun at 48 kHz; maximum measured
+capture/render pump gaps were 163,040 / 163,082 us. Thus keeping the VM
+awake/foreground avoided the previous multi-minute execution pause but did not
+produce clean continuity. The user's confirmation rules out sleep and screen
+saver as causes. NEM scheduling remains a plausible contributor, not a proven
+root cause. Evidence archive: `C:\VMs\ar-share\evidence-20261009-175425.zip`,
+SHA256 `477BD491D3C8BD84B364A4337F581EEA5A5D23739B61E5557E09867317033CAB`;
+guest tone evidence is `20261009-174917-tone/tone.txt` in the archive.
+
+Next: do not repeat the unchanged long test. Review VM/host scheduling and
+diagnostic instrumentation, preserving WSL and leaving Hyper-V settings
+untouched. The initial review of this trace did not identify a driver defect
+(superseded by the packet-clock findings below):
+`WriteBytes`' capture-side queue holds at most two 480-frame blocks (20 ms at
+48 kHz), while `ReadBytes`' render-side queue is capped at four blocks (40 ms
+at 48 kHz); the shared bridge slot adds at most one block. A worker scheduling
+gap of 163 ms is therefore far outside available buffering. Absorbing it
+would require buffer headroom on the order of 160 ms or more and introduce
+comparable transient latency, conflicting with VCAB-25's 20 ms low-latency
+target, while masking a stalled VM rather than repairing a demonstrated
+product bug. The tone recorder's 64 preallocated
+10-ms packets provide 640 ms of disk backpressure, and its maximum WAV append
+time was 56.2 ms; the writer did not run out of packets. It read 29,960 blocks
+(14,380,800 frames) versus 30,000 expected for 300 seconds, a 40-block / 400-ms
+shortfall. That closely matches the 19,152-frame / 399-ms render overrun
+counter, confirming actual audio loss rather than a counter-only failure.
+The initial conclusion that no code change was justified is superseded by
+the deeper packet-clock review below. Scheduling remains unproven. Obtain ETW CPU,
+context-switch, DPC/ISR and VirtualBox scheduling traces during a bounded run,
+or qualify on a host where VirtualBox uses native hardware virtualization.
+Keep the continuity gate failed; do not claim sustained runtime qualification
+or install the test driver on the host. Preserve the clean VM snapshot and
+unchanged driver package.
+
+### Packet-clock repair (2026-10-09, requested code review)
+
+Objective: repair demonstrated WaveRT accounting defects before another VM
+run; preserve WSL and host settings. Requirements VCAB-24/25/27/28 and VDEV-12.
+Prerequisites: clean working tree; previous guest evidence preserved in the
+archives above; WDK/MSVC build tools available. Host builds do not load a driver.
+
+Confirmed findings: DMA advances by full elapsed time while the notification
+callback increments the completed-packet count only once; position queries
+can consequently return an inconsistent count. Capture catch-up traverses
+unbounded DMA laps under a spinlock. GetReadPacket extrapolates the end rather
+than the first sample of the latest completed packet. STOP retains fractional
+time/byte carry from the previous stream.
+
+Ordered tasks: (1) derive packet count from DMA position, separately retain
+the last notified count, correct capture timestamp and STOP reset; (2) bound
+capture catch-up to one surviving DMA lap and count skipped frames;
+(3) regress production arithmetic for delayed callbacks, wrap and restart;
+(4) add per-progress-interval worker gap diagnostics; (5) run host-safe C++
+units, WDK x64/ARM64 acceptance, Rust example tests/Clippy/format and docs;
+(6) prepare a checksummed VM bundle and one bounded test procedure.
+
+Validation: arithmetic and source wiring are checked on the host; only the
+guest can establish install, endpoints and continuity. Do not increase queues,
+ignore losses, relax zero-counter acceptance, or claim a delayed callback can
+recover overwritten audio. Rollback: restore the known clean test-signing VM
+snapshot and retain the previous bundle. Next action: implement these repairs,
+then document measured host results and the precise next guest command.
+
+Implementation/checks completed: packet clock and separate notification state,
+first-sample timestamp, STOP fractional reset, bounded capture traversal and
+interval worker diagnostics. C++ host units: 569 checks (578 after the QPC
+conversion follow-up below); Rust tone example:
+15 tests; WDK x64 and ARM64 acceptance: pass; workspace/shell Clippy and fmt:
+pass. Documentation validation: 138 Markdown files / 746 local links; retest
+script parses in Windows PowerShell and refuses host execution. Details and limitations:
+[review evidence](../active/evidence/2026-10-09-m03-packet-clock-review.md).
+Next: build the identified candidate, then follow the
+[bounded VM procedure](../../operations/virtual-cable-packet-clock-retest.md).
+Original runtime failure remains unverified until the guest run; do not mark
+continuity or measured kernel latency as passed from host-safe checks.
+
+Final arithmetic review found another independent defect: converting an
+absolute capture timestamp back to QPC multiplied before dividing, overflowing
+after about 51 hours of uptime at 10 MHz. Split seconds/remainder before
+scaling; regress 100-day timestamps and representable/overflow boundaries.
+Use the `repair-20261009-packet-clock-r2` bundle including this follow-up,
+not the earlier packet-clock candidate. Both WDK targets and all 578 C++
+checks pass again after this follow-up. Next: verify the rebuilt test-signed
+bundle and hand off the bounded procedure. Completed: r2 built from clean
+source `97b393d5`, package integrity 33/33 and all 30 manifest hashes pass.
+Driver SHA256 is recorded in the review evidence. Next action is the guest
+procedure; no VM run was performed during this review.
+
+Guest follow-up: the user ran r2 Prepare successfully. Archive
+`evidence-20261009-182328.zip` is independently hash-verified on the host;
+preflight, smoke A1/A2/A3/A14, install/idempotency, four-endpoint format status
+and collection all pass. Details are in the packet-clock review evidence.
+Next: 30-second tone in the same installed guest session, with Cable A Input
+loop playback and Cable B Output listening already active; 300 seconds only
+after the short run passes. No new continuity result yet.
+
+The r2 30-second tone now passes, independently reviewed in archive
+`evidence-20261009-183059.zip`: all driver error counters and harness sequence
+gaps zero; exactly 30 seconds recorded with a valid WAV header/length.
+Maximum worker gaps were 7.523 ms capture / 7.467 ms render. Next action:
+300-second Tone phase in the same guest session with loop playback/listening
+kept active. This short result does not close the sustained, eight-cable,
+waveform, DPC-duration or hardware latency gates.
+
+### 2026-10-09: five-minute harness exceeded its deadline
+
+Archive `evidence-20261009-191454.zip`, independently verified SHA256
+`B576C55519311EF2E7DC00D89AF5B2304C0F6077B0E90801D500C4D2AC1C30C5`,
+shows synchronous progress output blocked 2,310,481,790 us. The control
+thread could not service heartbeats or stop leases, while audio workers
+continued beyond the requested 300 seconds (2,530.98 seconds recorded).
+Output blocking is measured; its console/environment trigger is unknown.
+There was also earlier real loss: around 56 seconds, both worker gaps reached
+53 ms and counters rose to 1,584 capture underrun / 2,016 render overrun frames.
+Thus repairing the report hang alone cannot establish sustained continuity.
+
+Objective (VCAB-24, VDEV-12; VCAB-27/28 remain open): make duration independent
+of output and preserve failures. Ordered implementation: (1) buffer bounded
+progress snapshots in memory while leases are active; (2) enforce the control
+deadline independently of worker completion; (3) stop/join/close before
+writing reports; (4) redirect native tone output to evidence files and add a
+process timeout; (5) host-only regressions, formatting/Clippy and docs review.
+No driver or host hypervisor change is planned from this evidence. Preserve
+zero-counter acceptance and all prior archives. Rollback: retain the previous
+bundle and revert the harness changes. Next action: implement and verify these
+repairs before requesting another guest run; sustained audio loss stays open.
+
+Reporting repair implemented: deferred bounded snapshots, independent control
+deadline, lease shutdown/WAV worker join before reporting, control-loop timing,
+native file redirection and owned-child watchdog. Host verification: 17 Rust
+tone tests, 11 fake-process regressions, workspace/shell Clippy/format,
+PowerShell syntax, and docs (138 Markdown / 747 local links) pass. The process
+regression caught and corrected Windows PowerShell 5.1 losing the native exit
+code unless its handle is retained. No VM/driver/hypervisor operation was run.
+Next: build and independently hash-verify the separate bounded-tone update,
+then hand off its 30-second command. Earlier real audio loss is not repaired
+or waived by these host results; preserve the failed sustained gate.
+
+Candidate prepared from clean source `658be117`: 30 manifest hashes pass,
+all 16 driver files byte-identical to r2, copied runner refuses host execution.
+Only the Release static-runtime tone executable and two supporting scripts
+changed. Artifact hashes and exact next guest task are in the packet-clock
+review/retest procedure. Next: updated 30-second tone in the existing guest
+session; no reinstall/restore required. Review before any sustained run.
+
+Guest bounded-tone follow-up: archive `evidence-20261009-192823.zip` hash
+independently verified. Status/tone/collect pass; zero error counters and
+harness sequence gaps. Leases stop at 30,001 ms; process completes in 30.604 s
+without timeout. All 29 deferred snapshots and the valid 29.99-second WAV
+are present. Full measurements and limitations are in the review record.
+Next: bounded 300-second Tone with the same installed driver and audio setup;
+inspect control/worker timing alongside any loss. Sustained acceptance stays
+open until that and the remaining required gates have evidence.
+
+### 2026-10-09 19:35: bounded five-minute run still loses audio
+
+Archive `evidence-20261009-193519.zip`, SHA256
+`F77E1359EC22E368420A58BDC04ABD8A26ABEB2A1E35E141A49554DCBB4E6D2B`,
+independently verified. Tool exits 0/no timeout; leases stop at 300,003 ms,
+process 300.145662 s. Capture underrun 16,704 / render overrun 17,520 frames;
+all other error counters/harness sequence gaps zero. First loss snapshot at
+122.349 s correlates capture/render/control gaps 310.442/310.289/317.342 ms;
+second at 184.541 s correlates 23.117/23.222/28.291 ms. The output hang is
+repaired, but the sustained gate remains failed.
+
+All three independent loops were delayed in the same observation intervals.
+Mapped audio loops have no file/console/IOCTL call or shared control lock;
+maximum heartbeat operation was only 372 us. These facts support a broader
+execution delay, without identifying a guest DPC, guest scheduler, host or
+hypervisor cause. Host System log has no events in 19:31:50–19:33:25 local;
+VBox.log supplies no scheduler trace that distinguishes these possibilities.
+Do not blame sleep, relax counters, or change WSL/Hyper-V.
+
+Next objective (VCAB-24/27 diagnostics, VDEV-12 lifecycle): prepare an opt-in,
+guest-only scheduler trace around one bounded run, using built-in WPR
+GeneralProfile.Light (context switches/ready threads/DPC/ISR). Verify no
+existing recorder session, start only after status passes, stop/save the owned
+trace before collection even after tone failure, retain partial output and
+report startup/stop failure. Host-only fake-recorder tests must cover ownership,
+startup refusal and failed-tone cleanup; no host trace or VM run is authorized
+by those tests. Trace overhead makes this diagnostic, not release evidence.
+Rollback: omit the tracing option/use the retained bounded-tone bundle. Next:
+implement and verify the collector before handing off a trace command.
+
+Collector implemented inside the tone step: its traced callback runs only the
+redirected child under the existing watchdog; no console output occurs while
+trace/audio is active. Save/stop before counter reporting and archive creation.
+Use a unique named WPR instance and require guest free space. Host checks:
+77 fake-recorder/lifecycle/tone-integration assertions and 11 existing process
+regressions pass; scripts parse and host identity guard refuses tracing.
+The exported GeneralProfile.Light definition contains the intended scheduling
+keywords. No real host recording, VM operation or driver change was performed.
+Next: verify the separate diagnostics bundle (same driver/audio executable),
+then collect one five-minute guest trace. Root cause/sustained gate stay open.
+
+Scheduling diagnostic artifact prepared from clean `bf03cf26`: 31 manifest
+hashes pass; driver files and audio executable are unchanged; copied wrapper
+refuses host tracing. Exact identity/hashes are in the review record. Next
+action: one 300-second guest trace using the updated retest procedure, with
+existing audio settings. No guest trace/continuity result is claimed yet.
+
+### 2026-10-09 19:53: recorder startup unsupported
+
+The copied archive `evidence-20261009-195302.zip` independently matches SHA256
+`7B481B854285D656364C44D7E8F03CD669042B4A52936E9FD3DBB1A5B3A0EABE`.
+Status passes, but WPR rejects GeneralProfile.Light.File with 0x80070032 in
+0.169 seconds. No tone started. Cancellation reports no trace profiles running.
+The error does not identify which profile feature or recorder option is
+unsupported; listing/exporting a profile and fake lifecycle checks did not
+prove runtime compatibility. Sustained audio loss remains unresolved.
+
+Objective: repair diagnostic compatibility without changing driver/audio bytes
+or host settings (VCAB-24/27 diagnostics, VDEV-12 ownership). Ordered work:
+1. Use a versioned minimal kernel scheduling WPRP (process/thread, loader,
+   context switch, ready thread, priority, DPC/ISR), preserving named ownership.
+2. Validate its syntax with read-only WPR queries and regress actual profile
+   forwarding/startup errors; keep real recorder startup explicitly unverified.
+3. Add a guest-only two-second TraceProbe phase that saves the trace and copies
+   evidence, without launching audio. Require its reviewed result before a
+   new five-minute diagnostic. No global cancel or automatic broad fallback.
+4. Prepare a separate checksummed script update; preserve old bundles.
+Rollback: use the retained bounded-tone bundle or omit tracing. Risk: narrowed
+profile/named instance may still be unsupported; probe fails visibly and
+collects exact command output. Next action: implement and check the collector.
+
+Collector/probe implemented. Read-only WPR profile/profiledetails queries parse
+and enumerate the minimal events; 128 fake-recorder/probe/integration checks,
+11 process checks, script parsing, docs and host guard pass. Actual guest
+start/save/event content is still unverified. Failed startup cancellation now
+reports any error other than the observed no-profiles code. Probe collection
+archives only its own folder, avoiding earlier large audio files. Full checks
+and evidence paths are in the packet-clock review. Next: prepare and verify
+the separate r2 script update, then review the two-second guest probe.
+
+Separate r2 diagnostic bundle prepared from clean `ee2048a6`: 32 hashes pass,
+all 16 driver files and tone executable unchanged; copied host guard and
+read-only profile query pass. Artifact identity is in the review record.
+Next action: guest TraceProbe only, then inspect its trace and exact errors.
+
+### 2026-10-09 20:03: guest minimal recorder probe passes
+
+Copied archive SHA256
+`A3E50C9558066CE4F928341768E8338DA0C0A8A248328F8430949AA588E7019B`
+independently verified. Start/save exit 0, no timeout/cleanup failure. Saved
+13.6 MB trace decodes: 96,771 events, zero reported lost; ready-thread,
+context-switch event type, DPC/ISR, priority and process/image records present.
+Newer context-switch payload version is not fully interpreted by host tracerpt;
+timing attribution remains pending. This was two seconds without audio leases.
+Minimal profile compatibility is now guest evidence; original unsupported
+GeneralProfile feature and audio-loss cause remain unidentified. Full command,
+counts and limitations are in the review record. Next: one 300-second traced
+Tone in the same session/bundle with loop/listener active. Preserve WSL/Hyper-V,
+the zero-error gate and all failed-run evidence; no longer or stall test yet.
+
+### 2026-10-09 20:11: five-minute scheduling trace collected
+
+Archive `evidence-20261009-201122.zip` independently matches SHA256
+`16A48B2590608BEBC512213FCE092784BF9DCB231E280F28A487C162E01763C2`.
+Native process finishes in 300.1581863 s; capture underrun 7,056 frames,
+render overrun 14,832. Trace save succeeds and decodes 3,420,594 events with
+zero lost. The gate still fails. Review of version-5 context-switch common
+fields using Microsoft's parser layout shows long before-ready waits, not
+long runnable-queue delays at the maximum worker gap. Largest capture/render
+off-CPU intervals 35.6225/35.7156 ms; ready-to-run 30.2/161 us, priority 24.
+Two event-silent intervals across recorded live scheduler/DPC/ISR events
+(28.443 and 35.2318 ms) coincide with the first and largest loss windows.
+Full guest-versus-host attribution is not proven. Do not modify buffers,
+counters, driver timer behavior or WSL based on this alone.
+
+Next ordered tasks (VCAB-24/27 diagnostics): retain an offline-only version-5
+context-switch reader in source so analysis is reproducible, check its length
+guards and compare both raw/converted event counts to tracerpt; record exact
+thread/timer and WAV findings; decide what paired host/guest timing evidence
+is needed without repeating the unchanged guest-only test. No audio/driver
+implementation change is justified yet. Rollback: remove the diagnostic reader;
+it never creates/controls tracing sessions or accesses a driver.
+
+Offline reader and review complete: MSVC x64 `/W4 /WX` build, eight prefix/
+length checks, actual ETL decoding in converted and raw modes, and existing
+output refusal pass. Both decodes match tracerpt's 1,717,691 context switches
+and 1,232,133 ready events, with zero rejected/lost. WAV parses as 48-kHz stereo
+float, 14,384,640 frames (299.68 s). Largest individual decoded DPC is 2.754 ms;
+ISR 2.317 ms. These do not establish the cause of the much longer waits.
+Pinned Rust sleep uses a high-resolution waitable timer when available;
+fallback use and timer occlusion are not proven. No driver/audio bytes changed.
+
+Next task: design paired host/guest timing collection to distinguish delayed
+guest timer delivery from host/VirtualBox execution delay. Prerequisites:
+read-only recorder availability/ownership checks, explicit clock alignment,
+bounded duration and cleanup, host trace privacy/size limits, short start/save
+probe before attended audio. Preserve WSL/Hyper-V and existing evidence.
+Do not start another unchanged guest-only run, install host drivers/tools,
+change host features, waive counters, or claim VCAB-24/27 closed. User can stop
+loop/listener between measurements. Full timings and verification commands are
+in the packet-clock review; diagnostic reader rollback removes only its source.
+
+### Paired timing preparation (2026-10-10, user asks for next step)
+
+Objective: correlate host VirtualBox thread execution with the guest's late
+worker readiness (VCAB-24/27 diagnostic; VDEV-12 recorder ownership). Ordered
+work: (1) prepare an owned, bounded host recorder using the already narrowed
+profile and local evidence; (2) verify idle recorder/free space and a two-second
+start/save probe before any paired audio; (3) add shared-folder request/reply
+clock brackets before and after measurements, preserving clock uncertainty;
+(4) coordinate paired recorder lifetimes with explicit timeout/failure markers;
+(5) hand off one small paired probe before a reviewed 300-second audio run.
+No changes to driver/audio binaries, host security, power, WSL or VM settings.
+No new dependency installation. Host trace contains system process/image and
+scheduling metadata, stays in the private evidence share and is not committed.
+Bound recording duration/disk use; preserve temporary logs on failed save and
+stop only the uniquely owned instance. Fake checks validate protocol logic;
+real start/save and clock brackets require both machines, not mocks. Rollback:
+omit paired collection and retain all prior bundles; do not repeat unpaired
+audio. Next action: implement and verify the host recorder probe.
+
+Prepared copy-only probes: HostProbe (two seconds) and PairProbe (no audio),
+with sixteen before/after clock brackets, atomic unique messages, peer timeout/
+failure propagation, storage stop thresholds and the existing named-recorder
+cleanup. Local Windows PowerShell 5.1 checks: 52 protocol/production-callback
+checks and 128 fake-recorder lifecycle checks pass. Initial background-job
+check needed unsandboxed process IPC; approved fake checks run successfully.
+Review corrected a dynamic-scope collision before handoff. HostProbe candidate
+invocation refused because the Windows token is not Administrator, before any
+real recorder call. No real host or paired trace success is claimed.
+Next: commit/push, prepare the source-identified copy-only share update and
+independently verify it, then user runs HostProbe in Administrator PowerShell.
+Inspect its saved event coverage/loss before any paired probe. No audio test
+is requested yet. Exact procedure: virtual-cable-paired-trace runbook.
+
+Copy-only share bundle published from clean `88f6e808`, prepared 03:44:25Z:
+`C:\VMs\ar-share\diagnostics-20261010-paired-probe`. Independent verification
+passes all 35 hashes; all 32 base files unchanged. Manifest identity is in the
+review record. Next user action: HostProbe only in Administrator PowerShell
+on the main PC; review the local archive's coverage/loss before PairProbe.
+
+User HostProbe reviewed: archive `paired-6ac9b6ced68f41dc89c99d1861642218-host.zip`
+SHA256 `89ACCA58C665D234621A8A20955F2FDC0FB0BE471E993767B38D29B4AEC9316A`
+matches. Real host start/save exit 0, profile matches, decoder processes 717,343
+events with zero lost. Offline reader matches 232,406 switches / 141,391 ready
+events, zero rejected. WPR read-only status is idle. Next: paired two-second
+probe with Media Player/listener off; copy guest bundle before starting host
+PairProbe, then join from guest within two minutes. Review both traces and
+clock uncertainty before any audio phase. Driver/continuity gates stay open.
+
+Paired probe `02d977908cf14e5cbfd31f33eb5103ae` reviewed: both archive hashes
+match, host/guest traces decode with zero lost/rejected. Sixteen QPC clock
+brackets have a compatible 22.45631-ms offset interval. Guest UTC progresses
+3.8900716 s while guest QPC progresses 5.3119743 s between the two tightest
+round trips; UTC-only alignment is invalid. This is an observed clock anomaly,
+not proof of the audio-loss cause. Do not synchronize/change guest or host
+clocks/settings from it. ETW raw QPC is required for paired timing attribution.
+
+Next ordered work (VCAB-24/27 diagnostic): export normalized QPC bounds in
+future clock CSVs; extend the paired coordinator with explicit Tone phase,
+matching 30/300-second offers and read-only guest status before joining;
+retain VM identity guards and the existing native watchdog/zero-counter gate;
+save current guest run only, keep large host ETL separate from metadata ZIP;
+scale host free-space/stop thresholds for 300 seconds; check actual production
+callbacks and argument paths, prepare a separate copy-only update. Hand off
+30 seconds first with both recorders, then review clock quality/loss before
+300 seconds. No driver/audio binary or timer behavior changes. Rollback: use
+retained probe-only bundle; paired traces add overhead and are not qualification.
+
+Paired Tone implemented and reviewed: phase/duration matching, read-only
+status before join, unchanged zero-counter/native watchdog gate, normalized
+QPC bounds, failure-preserving after clocks/trace saves, current guest evidence
+only and separate host ETL. Host budgets: 16 GB initial/8 GB reserve/6 GB
+sampled stop. Windows PowerShell 5.1: 88 paired production-boundary checks
+and 128 fake recorder checks pass; evidence in packet-clock review. No real
+paired audio, build or setting change occurred. Next: commit/push, verify
+separate copy-only paired-tone bundle and hand off 30 seconds. Review before
+any longer run; remaining gates stay open.
+
+Copy-only paired-tone bundle published from clean `565c9e6d`, prepared
+`2026-10-10 04:34:19Z`, under `C:\VMs\ar-share\diagnostics-20261010-paired-tone`.
+All 35 hashes independently verify; all 32 base files unchanged. Source pushed
+to main. Artifact identity in packet-clock review. Next user action: copy
+inside VM, start loop/listener, host Tone 30 then guest Tone 30 when ready.
+No paired audio has run yet; review before any longer test.
+
+Paired 30-second run `2efe2c4cb0ae466a8536fbe49ed2ac74` reviewed: both ZIP
+hashes match, native exit 0/no timeout, leases stop at 30,004 ms, all counters
+and harness sequence gaps zero. WAV parses as 30 s/1,440,000 frames. Host
+and guest traces independently decode with zero loss/rejections; QPC bounds
+intersect across all sixteen samples within 23.0877 ms. Host recorder idle
+afterward. This short diagnostic does not close sustained/audio-quality gates.
+
+New user observation: continuous hiss plus audible beep through Cable B
+listener, stopping with the script. Guest has no Audacity. Hold longer/stall
+tests. Existing WAV captures Cable A only; there is no direct Cable B sample
+to attribute hiss to driver, shared audio engine, listener or VirtualBox/host
+playback. Source review of generator, capture queue and sample conversion
+does not demonstrate an owning defect from this evidence. Next task: design
+and prepare a bounded exact-endpoint Cable B recorder using existing Windows
+capture code; refuse default/microphone substitution, preserve packet/format
+metadata and compare captured signal to generated 997/47-Hz reference. No
+new test or implementation is claimed. Preserve current artifacts and WSL.
+## Convergence task — automatic direct audio diagnosis (2026-10-09)
+
+User requests faster convergence after repeated attended failures. The paired
+30-second run passes counters, but the user hears continuous hiss through
+Cable B. Media Player routed directly to VM speakers plays without hiss or
+crackles (user observation, not a digital-path measurement).
+
+- Requirements: VCAB-12/20/24/29, VDEV-12; sustained, latency and signing
+  gates remain open. Preserve WSL, host settings and the installed driver.
+- Prerequisites: installed `97b393d5` driver, passing active inventory,
+  AR-DriverTest guest, local checked bundle and shared Z: evidence destination.
+- Decision: measure before another driver change. Add a VM-only user-mode
+  source on the exact Cable A Input and recorder on exact Cable B Output.
+  Generate 440/660 Hz and retain 997/47 Hz bridge tones. No default endpoint,
+  microphone, external player or Audacity dependency. Record packet flags,
+  positions and pump gaps. Analyze both WAVs after streaming ends.
+- Ordered tasks: implement bounded preallocated probe and offline signal
+  analysis; regress clean/noise/drop/repeat/channel failures and VM guards;
+  compile and lint on Windows without opening host streams; publish a
+  checksummed copy-only update; run one automatic 30-second guest diagnostic.
+- Validation: synthetic checks prove diagnostic behavior only. Guest WAVs,
+  native counters and timing establish the actual short-run outcome. Hold
+  long/stall tests until those samples explain the audible defect. Then use
+  the same build for 30 s, 5 min, 10 min and remaining specified gates, with
+  a fixed duration/watchdog and current-run-only evidence each time.
+- Rollback: stop only owned user-mode processes and use the previous bundle;
+  no driver install, settings migration or change to acceptance thresholds.
+- Risk: additional WASAPI clients add scheduling work. A diagnostic failure
+  is evidence, not automatically a driver defect. First run remains pending.
+- Preparation: implemented the safe WASAPI helper, phase/noise analyzer,
+  owned-process wrapper and copy-only preparer. Windows host-safe checks pass:
+  9 Rust regressions, 75 PowerShell checks, release build, workspace/shell
+  Clippy and both format checks. No host audio stream or driver was opened.
+  See [preparation evidence](../active/evidence/2026-10-09-m03-direct-audio-preparation.md).
+- Published: clean source `c0bc9595`, 37 verified bundle files, all 35 base
+  files unchanged, including every driver file. Share folder:
+  `C:\VMs\ar-share\diagnostics-20261010-direct-audio`.
+- Next action: run the
+  [automatic 30-second guest diagnostic](../../operations/virtual-cable-direct-audio.md).
+  First real direct recording and waveform review remain pending.
+
+### Direct recorder startup repair — 2026-10-09
+
+Guest archive `direct-4a281d278cde43ada173fb07d2506aea.zip` matches SHA-256
+`CA129D76FCA71BD8A42125FA3B73DA5E7ED9A27E162641990CFF61673052E0AD`.
+Status passes; recorder exits before readiness with empty stdout/stderr and
+no recording. No tone process starts. The new helper imports VCRUNTIME140.dll
+and dynamic CRT API sets, unlike the working statically linked VM tools.
+This is a confirmed packaging defect; the archive omitted the native exit
+code, so the precise guest loader failure cannot yet be confirmed.
+
+Repair before retry: build the helper with `+crt-static` in a separate target
+folder; gate packaging on actual PE imports; add an offline startup command
+and preserve numeric/hex startup and recorder exits even before readiness.
+Regress a missing-runtime exit with empty stderr and verify the shipped
+helper's dependency table, host refusal and offline command. Do not install a
+redistributable or rebuild/install the driver. Publish a new immutable bundle;
+keep this failure and prior artifacts. Requirements/sustained gates unchanged.
+
+Repair complete and pushed as `0e854d7e`. Static build and independent PE
+inspection confirm no Visual C++ runtime DLL import. Nine Rust regressions,
+103 PowerShell checks (including loader/early-exit failures), formatting,
+workspace/shell Clippy and documentation checks pass. R2 is published under
+`C:\VMs\ar-share\diagnostics-20261010-direct-audio-r2`; all 37 file hashes
+verify, all 35 paired-tone base files unchanged. Next: the automatic guest
+procedure with r2; actual direct recording and hiss cause remain pending.
+
+### Direct r2 waveform review — 2026-10-09
+
+Received `direct-4586cab5c56d429c8835b3c0eaa3008c.zip`; its SHA-256 matches
+`7F47E3C08F46DF6A3945C60F5731E79CC9FDEE94E530A3F2240BF30A2B554AA4`.
+Recorder startup/exit and installed status pass. The native zero-error gate
+fails: 12,912 capture underrun and 12,912 render overrun frames, with a
+288-ms gap shared by both native workers and the independent direct recorder.
+Both active recordings span 29.73 seconds. Offline inspection of 100-ms
+windows finds Cable B clean between the pause (residual near float32 rounding,
+amplitude 0.25), with one in-signal discontinuity flag and a phase break at
+the pause. Continuous hiss is not present in those direct Cable B samples.
+Cable A also has separate phase breaks at recorded seconds 12.037–12.050. Cause of
+the shared scheduling gap and the downstream audible hiss remains open.
+
+Requirements: VCAB-12/20/24/29, VDEV-12. Before another guest run:
+1. Fix the offline analyzer to retain signal metrics when duration fails;
+   keep the 29.8–30.2-second gate and all noise/phase thresholds unchanged.
+2. Regress shortened/noisy recordings and rerun analysis on both saved WAVs
+   on the host without opening audio endpoints. Retain the raw originals.
+3. Record duration, packet/phase failures and the distinction between captured
+   Cable B samples and Windows Listen/speaker playback. Do not attribute the
+   hiss to sample-rate conversion or a specific driver function without data.
+4. Review the listening path separately before requesting another audio run;
+   do not repeat the unchanged test, rebuild the driver or start a long run.
+
+Validation: focused synthetic regressions, offline reproduction using this
+archive, formatting/Clippy/docs/diff checks. No host audio or system settings
+changes. Rollback: revert only diagnostic reporting; the current installed
+driver and all retained bundles remain unchanged. Next action: reporting
+repair and saved-waveform review, not an attended retry.
+
+Reporting repair complete: unchanged duration/noise/phase bounds now retain
+per-channel window metrics on short or long active intervals. Ten Rust tests
+and 117 orchestration checks pass, including short duration plus packet loss.
+The repaired analyzer reproduces failures on both original WAVs offline and
+retains their 29.71-second fitted intervals, phase breaks and packet bounds.
+See [direct r2 waveform evidence](../active/evidence/2026-10-09-m03-direct-audio-preparation.md#direct-r2-recordings-and-reporting-repair-2026-10-09).
+Next: locate the downstream Listen/speaker hiss separately from the measured
+shared pause. No new VM audio run is requested by this reporting repair.
+
+### Speaker-format investigation — 2026-10-09
+
+User confirms continuous hiss when replaying the saved Cable B WAV through
+Media Player → Speakers, independently of the live bridge tone. Speakers
+offers only 16-bit 16/22.05/44.1 kHz; its current setting is 44.1 kHz. Cable B
+is stereo 32-bit/48 kHz. Preserve those supported settings; do not force
+48 kHz or alter the virtual cable. A five-second clean recorded section
+(file seconds 2–7) differs from a generated 997/47-Hz float32 reference by at
+most one float32 step (1.49e-8); all 480,000 samples quantize identically to
+PCM16. This excludes added continuous digital noise in that section, but
+does not identify the playback defect or excuse the separate lost frames.
+
+Next ordered task (VCAB-12/20/24/29): generate offline PCM16 reference files
+at 44.1 and 48 kHz, each with both tones, high-only, then low-only sections.
+Use a fixed -12-dBFS peak with brief boundary fades; no AudioRouter device,
+recording, live host playback or Windows setting change. Regress WAV header,
+duration, amplitude, phase/frequency and fade boundaries; publish checksummed
+files in a new share folder. User first plays the 44.1-kHz file through the
+same VM Speakers. Review which section has hiss before requesting the
+48-kHz comparison. Rollback: stop file playback; all driver artifacts and
+settings remain unchanged. This is playback triage, not driver qualification.
+
+Reference preparation complete: standard-library generator and three offline
+regressions pass for both supported reference rates; initial sandbox temporary
+path failure corrected to workspace-owned test storage. New share folder
+`C:\VMs\ar-share\playback-reference-20261009` contains both files and verified
+checksums. Next: play only reference-44100.wav in the VM and identify which
+of the three sections has hiss; no driver test or new setting is requested.
+Exact copy/paste procedure is in the direct audio runbook above.
+
+### Independent reference also has audible static — 2026-10-09
+
+User reports continuous static in all three 44.1-kHz PCM16 reference sections.
+The file was synthesized independently of AudioRouter. Reinspection of the
+published bytes confirms the original SHA-256, correct stereo PCM16/44.1-kHz
+header, 749,700 frames, peak 8,192, and zero nonzero separator samples.
+793,800 interior samples match the sine equations within 0.5 PCM16 step.
+The tone content and supported reference format do not explain continuous
+digital noise in the file. Playback-chain cause remains open; do not clear
+the separate 288-ms stall/lost-frame/phase-break defects.
+
+Read-only review: current AR-DriverTest configuration is HDA/Windows Audio,
+four CPUs, 8 GB. VBox.log opened 2026-10-10T01:21:10Z identifies VirtualBox
+7.2.20 r175154, HostAudioWas and default output Speakers (Focusrite USB Audio).
+It contains scheduling-hint warnings with implausible printed durations;
+those numbers are not measured pauses and do not establish the hiss cause.
+No machine, audio endpoint or host setting was changed.
+
+Next ordered comparison (VCAB-12/20/24/29, VDEV-12): stop scripts/playback,
+clear Cable B Output's guest Listen setting, confirm Media Player routes to
+Speakers and replay the same 17-second reference. Ask for static during tone
+sections and silent gaps. This removes the concurrent listener from the
+comparison; it does not prove the driver or VirtualBox at fault. Preserve
+44.1-kHz speakers and 48-kHz cable settings. Rollback is rechecking Listen
+if previously enabled. No live bridge, long/stall run or 48-kHz comparison.
+
+Listener-off result: user reports "a lot less" static, still audible especially
+in the first and final parts. The setting affects the audible reproduction,
+but does not establish that all remaining noise originates in the same layer.
+First/final sections contain 47 Hz, middle only 997 Hz. Next is clarification
+of continuous sections versus brief start/stop sounds, plus silent-gap and
+middle-section quality. Leave Listen off; do not change formats or request
+another driver run based on this subjective reduction.
+
+### Next diagnostic: guest speaker loopback (2026-10-09)
+
+User clarifies several distinct crackles in the early/final portions; the
+middle is not perfectly clean either. Timing is approximate, not a measured
+number of clicks. Silence quality remains unconfirmed. Do not infer a 47-Hz
+or sample-rate defect from this subjective description.
+
+Objective (VCAB-12/20/24/29, VDEV-12): obtain a digital recording of this
+independent reference at the guest speaker boundary before changing drivers.
+Prerequisites: current reference checksum, Media Player already routed to
+Speakers, Cable B Listen off, all bridge tools/playback stopped. Only the
+user runs native audio inside AR-DriverTest; host validation is offline.
+
+Ordered tasks:
+1. Add a separate 30-second, VM-only speaker loopback mode to the static
+   user-mode diagnostic. Select exactly one active Speakers (High Definition
+   Audio Device), stereo native 44.1-kHz PCM16 or float32; no default/mic/cable
+   fallback, no resampling or endpoint/volume setting change.
+2. Preallocate samples/packet metadata before Start; keep file/log work off
+   the service thread. Preserve raw native WAV format, packet flags/positions,
+   monotonic gaps and endpoint identity. Independent process watchdog applies.
+3. Add a wrapper that waits for verified recorder readiness before opening
+   the checksummed reference in the existing Media Player, retains startup/
+   exit/error evidence, archives only this run and stops only its own child.
+4. Verify endpoint/format rejection, WAV serialization, startup/timeout/failure
+   paths, static imports, formatting, Clippy and documentation offline. Package
+   from a clean identified commit into a new immutable share folder.
+5. Give one exact guest command; review the recorded samples before a new
+   bridge/long test. Capture completion is not a signal or driver pass.
+
+Boundary: WASAPI loopback observes the guest rendering endpoint mix; it is
+not a recording of host/hardware/acoustic output. Clean loopback would narrow
+further playback investigation but cannot prove which downstream component
+is defective. Source: [Microsoft loopback recording](https://learn.microsoft.com/en-us/windows/win32/coreaudio/loopback-recording).
+Risks: another guest app's audio mixes into the recording; stop unrelated
+playback. Rollback: stop this owned helper/file playback and return to the
+previous bundle. No driver install/rebuild, host audio, VM configuration,
+WSL/Hyper-V, security or qualification threshold change.
+
+Preparation complete: 12 Rust tests, 82 speaker-wrapper checks, existing
+117 direct-audio checks, static import gate, formatting, workspace/shell Clippy
+and documentation checks pass. Latest speaker fixture evidence:
+`target\speaker-tests-70cabb42e15349639510dafc7815eb09`.
+Published and independently reverified five-entry manifest in
+`C:\VMs\ar-share\diagnostics-20261009-speaker-loopback`, from clean source
+`72766a66dab28830644aca6f330270b6b802a375`.
+Manifest SHA-256:
+`7F899E6AC49C211E32F7EB61E0F2E01738A692ED3D1BFAEA1481860D18B769FC`.
+Next: the exact speaker-loopback guest command in the runbook. Real guest
+capture and signal attribution remain pending; no driver qualification pass.
+
+### Speaker recording reviewed: noisy sections match exactly (2026-10-09)
+
+The user heard crackles at reference seconds 0–5 and 12–16. Returned archive
+`speaker-loopback-0e7000c055ba41d392abb3a902097fca.zip` matches the reported
+SHA-256. Native stereo float32/44.1-kHz recording: 1,320,256 frames,
+29.937778 seconds, elapsed 30.005337 s, maximum pump gap 15.324 ms.
+After aligning by 64 frames, 749,260 consecutive reference frames match
+both channels exactly (16.990023 s), including both reported noisy sections
+and both silent separators. Last 440 frames of the first reference differ;
+subsequent tone sections continue. No full-recording pass is claimed.
+
+Retain 35 discontinuity flags (including startup) and 34 device-position
+gaps totaling 15,232 frames. These metadata anomalies occur despite exact
+sample agreement in the compared prefix; do not convert them into asserted
+sample loss or treat the virtual device position as an independently verified
+physical clock. Full checksums, reproduction and limits are in the
+[speaker evidence](../active/evidence/2026-10-09-m03-direct-audio-preparation.md#guest-speaker-recording-review-2026-10-09).
+
+Decision (VCAB-12/20/24/29, VDEV-12): investigate the audible reproduction
+after this capture boundary separately from the measured bridge loss. Do
+not make speculative driver/buffer/rate changes based on the hiss alone.
+No acceptance criterion is waived. Installed driver remains `97b393d5`.
+
+Next ordered work: review the installed VirtualBox version's playback/backend
+configuration and logs read-only; prepare at most one reversible comparison
+with original settings and rollback recorded before a user run. The initial
+`VBoxManage showvminfo` query failed with COM E_ACCESSDENIED; only existing XML
+and logs have been read successfully. No configuration change was attempted.
+Leave Listen off; do not request another driver/long/stall run now. Preserve
+WSL/Hyper-V and host settings. Rollback for this review is documentation only.
+
+### Prepared playback backend comparison (2026-10-09)
+
+Read-only review is complete. Official VirtualBox 7.2.20 source archive
+matches Oracle's SHA-256 `5c2138213b72f36c129b92c2c267f2a40e9c98513f4c86a584327f09f9be706d`.
+`ConsoleImplConfigCommon.cpp:3755–3787` selects HostAudioWas even for
+DirectSound on modern Windows unless the `VBoxInternal2/Audio/WindowsDrv`
+override prevents that substitution. `VBoxManageModifyVM.cpp:2783–2806`
+confirms `--audio-driver dsound` and `default` syntax. Installed binary reports
+7.2.20r175154. Current machine XML uses HDA, default driver/WAS, input/output
+enabled; machine/global XML have no audio override. Current log confirms
+HostAudioWas. COM-dependent agent queries still fail; version query succeeds.
+Source files were read only, not built or executed.
+
+Objective (VCAB-12/20/24/29, VDEV-12): compare the same independent reference
+through VirtualBox's DirectSound implementation, keeping the guest HDA,
+formats, driver and host output unchanged. This tests a playback hypothesis,
+not driver qualification. DirectSound still uses Windows audio services;
+success would implicate differences between VirtualBox backend paths, not
+prove a Windows/Focusrite/driver cause or cure the independent bridge loss.
+
+Ordered tasks: user shuts down guest Windows normally (no saved state or
+snapshot restore); guarded host block checks powered-off state and expected
+current XML, saves its configuration and sets only this VM's backend plus
+override. On failure after the override, remove it; retain saved settings.
+User boots normally; agent verifies current log selects DSoundAudio before
+requesting a bounded replay/capture. Keep Listen off and no cable tests.
+Record subjective crackles and raw waveform metadata; preserve failed gates.
+Rollback, with VM off: restore driver `default` and remove the machine
+override. Original default/WAS state is checked before and after. No global
+override, host endpoint, WSL/Hyper-V, security, power or controller change.
+Exact commands and source links are in the
+[backend comparison runbook](../../operations/virtual-cable-direct-audio.md#completed-virtualbox-playback-backend-comparison).
+
+User applied the guarded host block successfully. Original configuration:
+`C:\VMs\ar-share\vbox-audio-before-336a68538bfa437aa8167432a0de8729.xml`.
+Read-only verification confirms current HDA/DirectSound and machine override
+`VBoxInternal2/Audio/WindowsDrv=dsound`. No VirtualBoxVM process is running;
+the existing log ends with powered-off shutdown and belongs to the earlier
+HostAudioWas session. Next: user starts VM normally, then verify the fresh
+startup log selects DSoundAudio before requesting reference playback.
+
+Fresh startup verified after normal boot (no snapshot restore): VBox.log
+opened `2026-10-10T06:04:57.145334800Z`; Driver and DriverName are DSoundAudio.
+Next authorized comparison: the same existing 30-second guest speaker
+recorder/reference with Listen/Repeat off and Media Player routed to Speakers.
+Exact preparation/run/report steps are now Step 4 in the runbook. Preserve
+formats/volume, collect only this current run automatically, then review the
+recording and audible report before any further cable test. No new binary,
+driver rebuild, host audio operation or qualification claim.
+
+### DirectSound capture failed at its storage bound (2026-10-09)
+
+Returned speaker archive `98d3cd98` is checksum-verified. Recorder exits 1
+after 25.1114944 s, saving 1,543,360 frames / 34.996825 nominal sample seconds
+at 44.1 kHz. All 3,445 saved packets have 448 frames; metadata storage is far
+below its cap and device positions advance contiguously. The next full packet
+cannot fit the 35-second sample storage bound. Preserve this as a failed
+capture/timing observation; enlarging storage would conceal the disagreement.
+No new driver, recorder binary or machine setting is changed.
+
+Samples match the first 749,260 reference frames exactly at offset 64, as in
+the previous WAS recording. User reports perfectly quiet separators and
+scratching only during capture, with clean playback afterward (approximately
+30 s by ear; metadata gives the actual stop above). This suggests interaction
+with capture; it does not identify the polling loop, MMCSS/timer request,
+guest audio engine, HDA or VirtualBox backend as the cause.
+
+Next ordered comparison (same requirement IDs and failed gates): stop all
+recorders/bridge scripts, keep DirectSound/Listen-off/formats/volume unchanged,
+turn Repeat off and play only the same verified 17-second reference. This
+covers the full capture-off condition once; send audible section results.
+No recording/collect, longer run or driver test. Review timing/source paths
+before any further recorder variant. Exact block is Step 5 in the runbook.
+Rollback remains the powered-off default-backend restoration above.
+
+### Capture-off playback still scratches; review clock recovery (2026-10-10)
+
+User reports scratching with the recorder stopped, variably about six to eight
+events on some plays, with more scratching as playback continues. This
+supersedes the provisional capture-only interpretation and the pending
+comparison above. DirectSound has not produced reliably clean playback.
+The subjective count is not a drift measurement; no new capture exists.
+
+Current boot log reports a 248.755-second virtual-clock catch-up failure and
+249-second guest heartbeat gap. Verified installed-version source shows HDA
+timers use the synchronous virtual clock and that recovery can accelerate
+guest DMA. Both audio backends share that path. This provides a supported
+timing hypothesis; event overlap and the actual catch-up percentage are not
+established. Host power-event queries were denied; do not infer sleep or blame
+Hyper-V/WSL. Details and source/log hashes are in the
+[clock review](../active/evidence/2026-10-09-m03-direct-audio-preparation.md#directsound-playback-with-capture-off-and-clock-review-2026-10-10).
+
+Next ordered work: stop playback, restore the default backend with the
+powered-off rollback, then review clock recovery against retained paired
+timing evidence before proposing a candidate. Rollback is not yet performed.
+No additional playback/recorder/bridge/long test is requested. No owning
+AudioRouter defect was proved by this inspection, so no speculative driver
+patch, buffer increase, timer/security/WSL change or waived gate. Requirements
+VCAB-12/20/24/29 and VDEV-12 retain their failed/unverified evidence.
+
+### Rollback complete; closed-session HDA evidence (2026-10-10)
+
+User reports successful powered-off rollback. Read-only XML confirms retained
+HDA, `useDefault=true`, WAS and no `VBoxInternal2/Audio/WindowsDrv` override;
+no VM process runs. The earlier pending rollback action is complete.
+
+Shutdown counters show 11 Stream4 output transfers skipped due to a pending
+BCIS completion interrupt. Source `hdaR3StreamDoDmaPrologue` returns before
+DMA when this bit remains set, while the host backend keeps consuming. This
+is observed virtual HDA scheduling trouble, but there is no per-event timing
+to map it to the subjective scratches. Stream0's 3,101 underruns belong to
+the input stream and must not be reported as 3,101 speaker glitches. Later
+HostSuspend/HostResume and host endpoint changes extend the session; totals
+are not isolated to the short comparison. Evidence and limits are in the
+[shutdown review](../active/evidence/2026-10-09-m03-direct-audio-preparation.md#rollback-verified-and-shutdown-statistics-reviewed-2026-10-10).
+
+Next: keep the VM off and review virtual HDA interrupt/clock recovery against
+retained timing data before preparing a candidate. No new test or driver patch
+is requested by this rollback result; all prior qualification gates remain.
+
+**2026-11-24 (second host pass): host-load rule fixed and a 24 h pool path added.**
+The first gate judged the worst single sample of total host CPU, so the guest's
+own vCPUs could be read as host starvation. CPU is now recorded as total, non-VM
+and VM, and judged on sustained non-VM load (mean > 20 % with at least half the
+samples above it, two or more samples); one spike is not starvation, the owner's
+20 %/6000 MB limits stand, and a live check with the release guest running gave
+22 % total but 3.4 % non-VM. `-PoolMinutes` accepts 5-1440 (2 h default), the
+pool samples are copied to the share while the block runs, and the sampler runs
+26 h; bundle `rc-0.2.5-r7` is current. Details:
+[current status](../active/evidence/2026-11-24-virtual-cable-current-status.md) and
+[review fixes](2026-11-24-virtual-cable-review-fixes.md). Still no VM start, driver install
+or driver source change.

@@ -480,6 +480,7 @@ pub fn rpc_failure_log_summary(error: &serde_json::Value) -> serde_json::Value {
         Some("revisionConflict") => {
             Some("Refresh the session and review the retained draft before retrying.")
         }
+        Some("sessionNotStopped") => Some("Stop the named session, then commit the graph again."),
         Some("restartRequired") => Some("Stop, prepare the route, and Play again."),
         _ => None,
     };
@@ -694,6 +695,13 @@ fn failure_logs_preserve_audio_context_and_reject_unbounded_private_fields() {
     assert_eq!(summary["hresultHex"], "0xE000020B");
     assert_eq!(summary["kind"], "deviceInvalidated");
     assert!(!summary.to_string().contains("private"));
+    assert_eq!(
+        rpc_failure_log_summary(&serde_json::json!({
+            "code": -32602,
+            "data": {"code": "sessionNotStopped"}
+        }))["guidance"],
+        "Stop the named session, then commit the graph again."
+    );
     let hostile = rpc_failure_log_summary(
         &serde_json::json!({"code":{},"data":{"code":"private".repeat(50000),"operation":"private path","hresult":{"audio":"secret"},"retryable":"token"}}),
     );

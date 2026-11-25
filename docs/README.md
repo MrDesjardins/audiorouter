@@ -48,6 +48,9 @@ The [editor invariant catalog](operations/editor-invariants.md) records state
 ownership, layout/history rules and the executable regression coverage.
 The [production UI checks](operations/production-ui-tests.md) cover optimized
 adapters, usable-canvas readiness, uncaught errors and retained evidence.
+The [interface language workflow](operations/ui-localization.md) explains the
+per-language catalogs, adding a language, the validation and audit commands,
+the plain-word glossary and the fluent-review queue.
 
 The [verification runbook](operations/verification.md) documents shared local/CI
 profiles, check selection, evidence, guarded audio and merge-gate rollout.
@@ -90,7 +93,7 @@ session. The [virtual cable test procedure](operations/virtual-cable-testing.md)
 the AudioRouter-owned cable (DEC-18) from a test-signed VM to a
 Microsoft-signed package on the main PC and beta testers; the
 [signing runbook](operations/virtual-cable-signing.md) covers the paid
-Microsoft steps, and the [virtual cable plan](plans/active/virtual-cable.md)
+Microsoft steps, and the [virtual cable plan](plans/archived/2026-11-24-virtual-cable.md)
 lists the work packages. The current driver investigation uses the
 [automatic direct audio diagnostic](operations/virtual-cable-direct-audio.md)
 for bounded direct cable runs; sustained runs need the user-run
@@ -98,8 +101,8 @@ for bounded direct cable runs; sustained runs need the user-run
 (hypervisor off for one boot, with the exact restore steps for WSL and
 Memory Integrity) or a bare-metal test PC. The [cable latency diagnostic](operations/virtual-cable-latency.md)
 prepares VCAB-25 measurement through a bridge pass-through.
-For agent continuation, start with the [detailed driver handoff](plans/active/virtual-cable-agent-handoff.md)
-and then the [virtual cable plan](plans/active/virtual-cable.md), whose
+For agent continuation, start with the [detailed driver handoff](plans/archived/2026-11-24-virtual-cable-agent-handoff.md)
+and then the [virtual cable plan](plans/archived/2026-11-24-virtual-cable.md), whose
 Objective section has the latest candidate, evidence and open gates.
 
 The [release qualification checklist](operations/release-qualification.md)

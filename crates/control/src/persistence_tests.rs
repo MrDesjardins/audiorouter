@@ -876,6 +876,21 @@ fn memory_operation_retention_evicts_in_insertion_order() {
 }
 
 #[test]
+fn lifetime_operation_keys_stay_bounded_by_the_journal_capacity() {
+    let mut plane = ControlPlane::default();
+    let limit = audiorouter_storage::MAX_OPERATION_JOURNAL_ENTRIES;
+    for index in 0..limit + 10 {
+        plane.remember_operation_outcome(&format!("key-{index}"), json!({}), "test", None);
+    }
+    // A repeated key must not take a second slot.
+    plane.remember_operation_outcome(&format!("key-{limit}"), json!({}), "test", None);
+    assert_eq!(plane.lifetime_operations.len(), limit);
+    assert_eq!(plane.lifetime_operation_order.len(), limit);
+    assert!(!plane.lifetime_operations.contains("key-9"));
+    assert!(plane.lifetime_operations.contains("key-10"));
+}
+
+#[test]
 fn operations_cancel_reports_completed_operations_without_undoing_them() {
     let mut plane = ControlPlane::default();
     let original = session();

@@ -508,7 +508,7 @@ Source/implementation:
   `tools/vm/prepare-cable-latency-update.ps1`, rejects a base bundle that
   already has it, documents the one-block guest procedure in
   `docs/operations/virtual-cable-latency.md`, and updates
-  `docs/plans/active/virtual-cable.md`.
+  `docs/plans/archived/2026-11-24-virtual-cable.md`.
 - Host command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
   tests/acceptance/m03-cable-continuity.ps1`. Result: **153 checks passed**;
   no audio stream, helper or driver tool opened. This exercises fake process
@@ -603,7 +603,7 @@ Exit 0. Reproduced 400 emitted / 398 matched / 2 lost, no corrupted or
 duplicate impulses, zero render-clock discontinuities, initial level
 34.379 ms for 145 impulses and level 64.446 ms from impulse 148 for 252
 impulses. This reproduces the symptom; it does not locate the queued audio.
-The [execution queue](../virtual-cable.md#execution-queue-after-r12-2026-10-10)
+The [execution queue](../../archived/2026-11-24-virtual-cable.md#execution-queue-after-r12-2026-10-10)
 records inputs, task order, validation, rollback and the short guest-run gate.
 No additional guest run is needed while these offline tasks are pending.
 

@@ -1150,7 +1150,9 @@ impl ControlPlane {
                 &json!({ "sessionId": id, "action": "start", "candidate": candidate }),
             ),
         );
-        if let Some(previous) = self.lookup_idempotent_result(&operation.0, &operation.1)? {
+        if let Some(previous) =
+            self.replay_runtime_outcome(&operation.0, &operation.1, "sessions.start", &params)?
+        {
             return Ok(previous);
         }
         if candidate.is_none() {
@@ -1788,7 +1790,9 @@ impl ControlPlane {
                 )
             });
         if let Some((key, hash)) = &operation {
-            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
+            if let Some(previous) =
+                self.replay_runtime_outcome(key, hash, "sessions.stop", &params)?
+            {
                 return Ok(previous);
             }
         }

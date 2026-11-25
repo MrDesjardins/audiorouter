@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runChecks, execute, hardwareCheck } from './verify.mjs';
+import { runChecks, execute, hardwareCheck, childEnvironment, resolveCommand } from './verify.mjs';
 import { fullChecks, checks } from './checks.mjs';
 import { classifyChanges } from './policy.mjs';
 const command = code => ({ executable: 'node', args: ['-e', `process.exit(${code})`] });
@@ -29,4 +29,12 @@ test('hardware profile refuses implicit devices and preserves endpoint arguments
   assert.throws(()=>hardwareCheck({allowLiveAudio:true,capture:'a',render:'b',duration:99}));
   const result=hardwareCheck({allowLiveAudio:true,capture:'capture id',render:'render id',duration:500});
   assert.ok(result.windows); assert.deepEqual(result.args.slice(-4),['-CaptureEndpointId','capture id','-RenderEndpointId','render id']);
+});
+
+test('lifecycle harness tests run under Windows PowerShell 5.1 with its own module path', () => {
+  const lifecycle = checks['release-tests'].filter(command => command.args.some(arg => arg.includes('m08-lifecycle-')));
+  assert.equal(lifecycle.length, 4);
+  for (const command of lifecycle) assert.equal(resolveCommand(command)[0], 'powershell.exe');
+  assert.deepEqual(childEnvironment('powershell.exe', { PSModulePath: 'C:\pwsh', TEMP: 't' }), { TEMP: 't' });
+  assert.deepEqual(childEnvironment('pwsh.exe', { PSModulePath: 'C:\pwsh' }), { PSModulePath: 'C:\pwsh' });
 });

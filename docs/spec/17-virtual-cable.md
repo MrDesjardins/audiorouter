@@ -1,7 +1,7 @@
 # 17 — AudioRouter virtual cable (technical design)
 
 Milestone ownership: M03 driver track (DEC-18). Execution order, work
-packages and evidence: [virtual cable plan](../plans/active/virtual-cable.md).
+packages and evidence: [virtual cable plan](../plans/archived/2026-11-24-virtual-cable.md).
 Testing: [virtual cable testing](../operations/virtual-cable-testing.md).
 Signing: [virtual cable signing](../operations/virtual-cable-signing.md).
 
@@ -348,7 +348,7 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
      to the driver (`NativeBridgeSession::defer_lease_to_driver`): it keeps
      no wall-clock deadline of its own, and only a refused HEARTBEAT ends the
      route, so a route rides such a stall without reconnecting (review R1,
-     [plan](../plans/active/virtual-cable-review-fixes.md)). Against an
+     [plan](../plans/archived/2026-11-24-virtual-cable-review-fixes.md)). Against an
      older driver the refused HEARTBEAT still triggers the reconnect below;
    - an OPEN for a lease held by another live file object → `STATUS_SHARING_VIOLATION`
      (maps to API `resourceConflict`, VDEV-07);

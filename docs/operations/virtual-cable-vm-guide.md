@@ -5,7 +5,7 @@ driver in a virtual machine (VM) when you have never done it before. It
 covers stage A of the [test procedure](virtual-cable-testing.md): a
 test-signed driver in a disposable Windows 11 VM. The design is in
 [17 Virtual cable](../spec/17-virtual-cable.md); the work packages are in the
-[virtual cable plan](../plans/active/virtual-cable.md).
+[virtual cable plan](../plans/archived/2026-11-24-virtual-cable.md).
 
 **What you get out of it:** proof that the driver installs, shows its
 endpoints, carries audio both ways, survives hostile input, and uninstalls
@@ -435,39 +435,78 @@ What it runs (`-Blocks`, default `ab,pool,verifier,live`):
 | `pool` | Does the driver's own non-paged pool grow (A8)? It samples the four driver tags (`MNWR`, `MNTR`, `SyAu`, `AUDR`) every 30 s for `-PoolMinutes`. | Growth of the tag sum at most 0.25 MiB/h PASS, up to 2 REVIEW, above FAIL. The whole-pool figure is shown for comparison only. |
 | `verifier` | Does a Driver Verifier session end cleanly twice (the 2026-11-11 guest freeze)? Fuzz, 10 min stall watch, a planned restart under Verifier, fuzz again, watch again, Verifier off. | Both fuzz rounds PASS and the guest never goes 30 s without answering its 5 s sample. |
 | `control` | Is the Verifier freeze the VM or the driver? Same IOCTL fuzz (`-FuzzSeconds`) twice, only Driver Verifier changes: A with Verifier off, B with Verifier on Microsoft's `ks.sys` and `portcls.sys` only (AudioRouter's driver loaded, not verified), a 10 min stall watch after each. Not in the default `-Blocks`; run it alone: `-Blocks control`. | Each fuzz PASS and no 30 s gap in the 5 s samples. A freeze in A or B (state file stops updating, screen frozen) means the VM stalls without Verifier on our driver. Both passing is **not** proof the driver is fine: it only says the stall did not reproduce. |
-| `repro` | Does the Verifier freeze reproduce? Verifier stays on for `audioroutervirtual.sys`; `-ReproBoots` boots (default 5), each a restart, a short fuzz (`-FuzzSeconds`, use 300) and a 2 min stall watch. Run alone: `-Blocks repro -FuzzSeconds 300`. | Every fuzz PASS. A frozen guest (state file stops, screen frozen) is a reproduction: save the evidence, reset the VM and let the run resume. Count freezes per boot in the notes. |
+| `repro` | Does the Verifier freeze reproduce? Verifier stays on for `audioroutervirtual.sys`; `-ReproBoots` boots (default 5), each a restart, a short fuzz (`-FuzzSeconds`, use 300) and a 2 min stall watch. Run alone: `-Blocks repro -FuzzSeconds 300`. | Every fuzz PASS. A frozen guest (state file stops, screen frozen) is a reproduction: save the evidence, reset the VM and let the run resume. Count freezes per boot in the notes. A freeze counts as a driver/Verifier candidate only if the matching `host load (...)` line shows the host idle; a `REVIEW` host-load line makes the freeze host starvation. |
 | `pause` | Only with `-WithHostPause`: does a route ride a 90 s host-side VM pause (nearest analog of sleep, **not** a real S3 sleep)? | Route state `running` and exit 0 afterwards. |
+
+Bundles built before 2026-11-24 do not contain the host-load gate (the `r3`,
+`r4` and `r5` folders on the share are stale for this purpose); build a new
+bundle from the committed source before the run.
 
 Every step also copies its state to `Z:\<bundle>\round2-state.json` (and the A/B
 rows to `round2-ab-rows.jsonl`) so a guest that hangs for hours does not take
 the results with it.
 
-On the PC (normal PowerShell, no build, no driver):
+On the PC, from a checkout of the repository whose commit contains the
+host-load gate (normal PowerShell, no build, no driver):
 
 ```powershell
-Set-Location C:\code\audiorouter\.worktrees\vc-stage-a-025   # worktree of branch docs/virtual-cable-stage-a-0.2.5
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\round2-support.tests.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\prepare-round2-bundle.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\prepare-round2-bundle.ps1 -Destination C:\VMs\ar-share\rc-0.2.5-r7
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\round2-host-preflight.ps1
 ```
 
 The first command must end with `All round-2 host checks passed.` The second
-builds `C:\VMs\ar-share\rc-0.2.5-r3` (the same 0.2.5 files, the new scripts and
-`driver-rc3`) and verifies every hash. Do not run either while on a call; they
-are light, but copying the bundle reads a few hundred MB.
+builds `C:\VMs\ar-share\rc-0.2.5-r7` (the same 0.2.5 files, the new scripts and
+`driver-rc3`); it refuses a dirty tree and a non-empty destination, so use a new
+folder for every rebuild. It is light, but copying the bundle reads a few
+hundred MB. Do not run these while on a call.
+
+The third is the idle-host gate (owner rule, 2026-11-22: a game on the host
+starved the VM, which then froze or stalled for minutes with no driver
+installed). It measures CPU and available memory for 10 s, prints the heaviest
+processes, and refuses with exit 2 while the PC is busy or WSL is running. When
+the PC is idle it starts the host-load sampler, which writes one row every 20 s
+to `C:\VMs\ar-share\host-load.csv` (the guest sees the same rows as
+`Z:\host-load.csv`) for 26 h, enough for a 24 h pool run. Leave that window
+open.
+
+A freeze is a driver candidate only if the host stayed under 20 % CPU with
+6 GB or more available during it. CPU is judged on **non-VM** load, sustained:
+the sampler records total CPU, the VirtualBox processes' share and the
+remainder, and a block is Starved only when the mean non-VM CPU is above 20 %
+with at least half its samples above it over two or more samples. The guest's
+own 4 vCPUs (up to about 17 % of a 24-thread PC) therefore do not count, and
+one spike never does. Memory is host-wide (the VM's 8 GB is part of it) and the
+6 GB floor is judged on the window median, so one transient dip is not
+starvation. The round-2 run enforces the sampler: before any block it checks
+that the CSV is on the share and still growing and stops with a FAIL and a SKIP
+line when it is not. Every block also records a `host load (<block>)` line with
+those numbers.
 
 Optional host pause test (needs the VM to be running; leave this window open):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\round2-pause-watcher.ps1 -Share C:\VMs\ar-share\rc-0.2.5-r3
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\round2-pause-watcher.ps1 -Share C:\VMs\ar-share\rc-0.2.5-r7
 ```
 
 In the VM: restore `02-test-signing-ready`, start it, sign in, copy
-`Z:\rc-0.2.5-r3` to `C:\ar\rc-0.2.5-r3`, open PowerShell as administrator:
+`Z:\rc-0.2.5-r7` to `C:\ar\rc-0.2.5-r7`, open PowerShell as administrator:
 
 ```powershell
-cd C:\ar\rc-0.2.5-r3
+cd C:\ar\rc-0.2.5-r7
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run-stage-a.ps1 -Session round2 -AutoLogon
 ```
+
+The run's first check is `host-load sampler`; if it fails, start the sampler on
+the PC and run the command again. Expected output for a healthy block sequence:
+each block's steps print PASS/REVIEW rows, then a `host load (<block>) INFO`
+row such as `224 samples, mean non-VM CPU 3.4 % (peak 10 %, 0 % of samples above
+20 %); median available 9,412 MB (least 9,200 MB); total CPU peak 22 % (host
+idle for its own work)`. A `host load ... REVIEW` row means the PC was busy and
+that block's results are host-confounded, not a driver result. If the guest
+freezes, the resumed run prints `host load (<step>, until the restart)` for the
+window that contains the freeze, so the decision needs no clock comparison
+between the two machines.
 
 `-AutoLogon` asks once for the guest account's password, checks it, and stores
 it in the guest's Winlogon key so the VM signs in by itself after each planned
@@ -476,17 +515,24 @@ run, and restoring the checkpoint removes it too. Without it you must log back
 in after every restart and the night stalls. Add `-WithHostPause` only if the
 watcher is running.
 
-**Run VM sessions only on an idle host** (owner rule, 2026-11-22: a game on the host starved the VM, which then froze or stalled for minutes with no driver installed). Close games, run `wsl --shutdown`, check at least 10 GB of available memory, and start `toolsmhost-load.ps1` (detached, writes `C:VMshost-load.csv`) so a freeze can be matched to host load. A freeze is a driver candidate only if the host stayed under 20 % CPU with 6 GB or more available.
+**A 24 h pool run (VCAB-28):** `-PoolMinutes` accepts up to 1440 and defaults
+to 120. Start the sampler with at least 25 h (`round2-host-preflight.ps1`
+defaults to 1560 min). The pool block copies `pool-tags.csv` to the share after
+every 30 s sample, so a restart does not lose the samples, and the run's state
+keeps `hostRows` across a restart. Shorter variants: `-Blocks repro
+-FuzzSeconds 300 -ReproBoots 5`, `-Blocks ab -AbPhases 4`, `-PoolMinutes 30`,
+`-FuzzSeconds 900`.
 
 **Keep the PC awake overnight** (Settings, System, Power: screen and sleep set
 to Never, or PowerToys Awake). If the host sleeps, the VM stops with it and the
 run resumes in the morning with meaningless timings; a stalled night is not
 evidence about the driver. The summary and
-`stage-a-round2-*.zip` land on `Z:\rc-0.2.5-r3`. If the guest is frozen in the
+`stage-a-round2-*.zip` land on `Z:\rc-0.2.5-r7`. If the guest is frozen in the
 morning, do not restore the snapshot first: copy `round2-state.json` from the
-share, save the host's `C:\VMs\AR-DriverTest\Logs\VBox.log`, then power off.
-Shorter runs: `-Blocks ab` (about 75 min), `-AbPhases 4`, `-PoolMinutes 30`,
-`-FuzzSeconds 900`.
+share, save `host-load.csv` and the host's
+`C:\VMs\AR-DriverTest\Logs\VBox.log`, then power off. The state file records
+`hostRows`, the sampler row count when the frozen step began; the rows after
+that position are the freeze window.
 
 Rollback: shut the VM down and restore `02-test-signing-ready` (untick the
 snapshot-of-current-state box). Nothing here touches the host's drivers or

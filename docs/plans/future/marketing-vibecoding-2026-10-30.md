@@ -273,7 +273,7 @@ Edit into your own words; copied replies read as canned.
   what you switched away from.
 - **"Is the code secure?"** It has CodeQL scanning; 38 alerts were found and
   each was fixed or given a recorded disposition (see
-  `docs/plans/active/code-scanning-remediation.md`). Check the current open
+  `docs/plans/archived/2026-11-24-code-scanning-remediation.md`). Check the current open
   count with `gh api repos/MrDesjardins/audiorouter/code-scanning/alerts?state=open`
   before quoting a number (it showed 1 on 2026-10-30). Do not claim a security
   audit.

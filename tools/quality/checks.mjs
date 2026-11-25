@@ -2,10 +2,14 @@
 const npm = (directory, ...args) => ({ executable: 'npm', args: ['--prefix', directory, ...args] });
 const cargo = (...args) => ({ executable: 'cargo', args, windows: true });
 const ps = script => ({ executable: 'powershell', args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script], windows: true });
+// The VM lifecycle harness has no VM-free other coverage; run its host guards
+// with the release tooling whenever release-area files change. The harness runs
+// under Windows PowerShell 5.1, so name powershell.exe: 'powershell' may become pwsh.
+const lifecycle = ['process', 'guards', 'recording', 'unattended-guards'].map(name => ({ ...ps(`tests/acceptance/m08-lifecycle-${name}.ps1`), executable: 'powershell.exe' }));
 export const checks = {
   docs: [{ executable: 'node', args: ['tools/docs/validate.mjs'] }],
   site: [{ executable: 'node', args: ['site/generate-social.mjs', '--check', '--check-changed'] }, { executable: 'node', args: ['site/check-guides.mjs'] }, { executable: 'node', args: ['site/generate-csp.mjs', '--check'] }, { executable: 'node', args: ['--test', 'site/generate-csp.test.mjs', 'site/guide-recordings.test.mjs', 'tools/site/tool-guide-guards.test.mjs'] }],
-  policy: [{ executable: 'node', args: ['--test', 'tools/quality/policy.test.mjs', 'tools/quality/verify.test.mjs', 'tools/quality/quality-history-chart.test.mjs', 'tools/quality/packaged-shell-windows.test.mjs', 'tools/metrics/code-size.test.mjs'] }],
+  policy: [{ executable: 'node', args: ['--test', 'tools/quality/policy.test.mjs', 'tools/quality/verify.test.mjs', 'tools/quality/summary.test.mjs', 'tools/quality/quality-history-chart.test.mjs', 'tools/quality/test-trend.test.mjs', 'tools/quality/app-soak-analysis.test.mjs', 'tools/quality/packaged-shell-windows.test.mjs', 'tools/metrics/code-size.test.mjs'] }],
   'rust-format': [{ executable: 'cargo', args: ['fmt', '--all', '--', '--check'] }, { executable: 'cargo', args: ['fmt', '--manifest-path', 'src-tauri/Cargo.toml', '--', '--check'] }],
   // custom-protocol embeds frontendDist, so build current assets before shell lint.
   'rust-clippy': [{ ...npm('ui', 'run', 'build'), windows: true }, cargo('clippy', '--workspace', '--all-targets', '--all-features', '--locked', '--', '-D', 'warnings'), cargo('clippy', '--manifest-path', 'src-tauri/Cargo.toml', '--all-targets', '--all-features', '--locked', '--', '-D', 'warnings')],
@@ -27,7 +31,7 @@ export const checks = {
   'probe-build': [cargo('check', '--manifest-path', 'tools/m00-wasapi-probe/Cargo.toml', '--locked'), ps('tests/acceptance/m00-native-build.ps1')],
   'cli-parity': [{ ...ps('tests/acceptance/m01-cli.ps1'), args: [...ps('tests/acceptance/m01-cli.ps1').args, '-AllowNoAudioEndpoints'] }],
   'sdk-provenance': [ps('tests/acceptance/m06-sdk-installer.ps1')],
-  'release-tests': ['prepare-artifacts', 'verify-artifacts', 'runbook-command', 'app-only-release'].map(name => ps(`tools/release/test-${name}.ps1`)),
+  'release-tests': ['prepare-artifacts', 'verify-artifacts', 'runbook-command', 'app-only-release'].map(name => ps(`tools/release/test-${name}.ps1`)).concat(lifecycle),
   'release-build': [{ ...ps('tests/acceptance/m08-release.ps1'), args: [...ps('tests/acceptance/m08-release.ps1').args, '-AppOnly'] }],
   'cargo-deny': [{ ...cargo('deny', '--manifest-path', 'Cargo.toml', 'check', 'advisories', 'licenses', 'sources', 'bans'), windows: false }, { ...cargo('deny', '--manifest-path', 'src-tauri/Cargo.toml', 'check', 'advisories', 'licenses', 'sources', 'bans'), windows: false }],
   'npm-audit': ['ui', 'contracts', 'tools/streamdeck'].map(dir => npm(dir, 'audit', '--omit=dev', '--audit-level=high')),

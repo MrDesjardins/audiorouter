@@ -308,8 +308,6 @@ export function NodeTelemetryPanel({
     node.kind === "applicationCapture"
       ? (snapshot?.applicationCaptureStates.find((item) => item.nodeId === node.id) ?? null)
       : null;
-  const reason = (snapshot?.audio.reason ?? "").toLocaleLowerCase();
-  const endpointOwned = reason.includes("in use") || reason.includes("owned");
   const tiles: Array<{ label: string; value: string; detail?: string; tone?: "good" | "warn" | "bad" }> = [];
   if (running && node.enabled && !node.bypass && observation) {
     const meter = observation.meter;
@@ -389,18 +387,14 @@ export function NodeTelemetryPanel({
         ? applicationCaptureState.state
         : !running
           ? "Waiting for Play"
-          : endpointOwned
-            ? "Device busy"
-            : tiles.length > 0
-              ? "Live"
-              : "No readings";
+          : tiles.length > 0
+            ? "Live"
+            : "No readings";
   const note = !node.enabled
     ? tr("workflowUi.offNote")
     : node.bypass
       ? tr("workflowUi.bypassNote")
-      : (applicationCaptureState?.detail ??
-        // Only notes that tell the user something; the status pill covers the rest.
-        (running && endpointOwned ? tr("workflowUi.exclusiveNote") : null));
+      : applicationCaptureState?.detail;
   return (
     <section className={`node-telemetry${running ? " is-live" : ""}`} aria-labelledby="node-telemetry-heading">
       <div className="node-telemetry-heading">
@@ -413,15 +407,13 @@ export function NodeTelemetryPanel({
               ? tr("toolProperties.bypass")
               : status === "Waiting for Play"
                 ? tr("workflowUi.waitingPlay")
-                : status === "Device busy"
-                  ? tr("workflowUi.deviceBusy")
-                  : status === "Live"
-                    ? tr("workflowUi.liveStatus")
-                    : status === "No readings"
-                      ? tr("workflowUi.noReadings")
-                      : APP_CAPTURE_STATE_TEXT[status]
-                        ? tr(APP_CAPTURE_STATE_TEXT[status])
-                        : status}
+                : status === "Live"
+                  ? tr("workflowUi.liveStatus")
+                  : status === "No readings"
+                    ? tr("workflowUi.noReadings")
+                    : APP_CAPTURE_STATE_TEXT[status]
+                      ? tr(APP_CAPTURE_STATE_TEXT[status])
+                      : status}
         </span>
       </div>
       {note && <p className="node-telemetry-note">{note}</p>}

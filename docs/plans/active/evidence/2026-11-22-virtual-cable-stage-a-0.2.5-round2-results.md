@@ -46,7 +46,7 @@ ab4), so the load on the VM, not the driver, may drive most of the spread; the s
 6 0.2.5 runs with a different phase mix; and the medians differ by about 1,700 frames (35 ms) against run-to-run
 spreads of tens of thousands. The rule was not changed after seeing the data. The decision (revert the frame-clock
 hunk as a new RC, or repeat the comparison under a quieter design) is the owner's: task 4 of
-[virtual-cable-review-fixes.md](../virtual-cable-review-fixes.md).
+[virtual-cable-review-fixes.md](../../archived/2026-11-24-virtual-cable-review-fixes.md).
 
 ### verifier: guest freeze
 

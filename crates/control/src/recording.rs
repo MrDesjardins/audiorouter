@@ -919,7 +919,9 @@ impl ControlPlane {
             .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
         let request_hash = Self::request_hash(&params);
         let scoped_key = self.scoped_idempotency_key("recorders.create", idempotency_key);
-        if let Some(result) = self.lookup_idempotent_result(&scoped_key, &request_hash)? {
+        if let Some(result) =
+            self.replay_runtime_outcome(&scoped_key, &request_hash, "recorders.create", &params)?
+        {
             return Ok(result);
         }
         let sequence = params
@@ -1044,7 +1046,9 @@ impl ControlPlane {
             &json!({ "method": method, "sessionId": session_id, "nodeId": node_id }),
         );
         let scoped_key = self.scoped_idempotency_key(method, &idempotency);
-        if let Some(result) = self.lookup_idempotent_result(&scoped_key, &request_hash)? {
+        if let Some(result) =
+            self.replay_runtime_outcome(&scoped_key, &request_hash, method, &params)?
+        {
             return Ok(result);
         }
         self.get_session(&session_id)?;
@@ -1104,7 +1108,9 @@ impl ControlPlane {
             "frame": frame,
         }));
         let scoped_key = self.scoped_idempotency_key(method, &idempotency);
-        if let Some(result) = self.lookup_idempotent_result(&scoped_key, &request_hash)? {
+        if let Some(result) =
+            self.replay_runtime_outcome(&scoped_key, &request_hash, method, &params)?
+        {
             return Ok(result);
         }
         if let Some(node_id) = node_id {

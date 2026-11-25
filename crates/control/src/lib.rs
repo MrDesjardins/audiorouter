@@ -69,6 +69,8 @@ mod contract_cases;
 #[cfg(test)]
 mod contract_tests;
 mod dispatch_methods;
+#[cfg(test)]
+mod edit_soak_tests;
 mod graph;
 mod midi;
 mod native_application;
@@ -80,6 +82,8 @@ mod network;
 mod network_paths;
 mod persistence;
 mod plugins;
+#[cfg(test)]
+mod recorder_play_tests;
 mod recorder_workers;
 mod recording;
 mod recording_library;
@@ -237,7 +241,16 @@ pub enum ControlError {
     /// Stop and Play. The old route is still playing and intact; distinct
     /// from a failed preparation, which must never stop it.
     RestartRequired(String),
+    /// A commit that requires its session stopped met a running one. The
+    /// stable code lets an adapter retry after the user stops it, without
+    /// reading the sentence.
+    SessionNotStopped,
     IdempotencyConflict,
+    /// The same-key request was recorded by an earlier backend lifetime, and
+    /// its outcome claims a runtime state this process cannot honour (a route
+    /// that played, a recording that ran). The side effect is not repeated and
+    /// the recorded result is not returned; the caller sends a new request.
+    IdempotencyExpired(&'static str),
     Store(audiorouter_domain::StoreError),
     Json(String),
     Storage(String),
@@ -257,6 +270,9 @@ impl std::fmt::Display for ControlError {
             | Self::RestartRequired(message)
             | Self::Audio { message, .. }
             | Self::NodeNotReady { message, .. } => write!(f, "{message}"),
+            Self::SessionNotStopped => {
+                write!(f, "This graph commit requires its session to be stopped.")
+            }
             Self::PluginScan(error) => match error {
                 audiorouter_plugin_host::ScanError::InvalidRoot => {
                     write!(f, "The plugin folder does not exist or is not a folder.")
@@ -278,6 +294,10 @@ impl std::fmt::Display for ControlError {
             Self::IdempotencyConflict => write!(
                 f,
                 "This idempotency key was already used for a different request; use a new key for a new request."
+            ),
+            Self::IdempotencyExpired(reason) => write!(
+                f,
+                "AudioRouter restarted since this request, so {reason}"
             ),
             Self::Store(error) => write!(f, "{error}"),
             Self::Json(message) => write!(f, "AudioRouter could not read or write JSON: {message}"),
@@ -446,6 +466,12 @@ pub struct ControlPlane {
     events: EventLog,
     mutation_limiter: MutationRateLimiter,
     operation_outcomes: HashMap<String, Value>,
+    /// Every idempotency key journaled by this backend lifetime, even after
+    /// its result leaves the bounded in-memory replay cache. A storage row
+    /// whose key is absent here came from an earlier lifetime. Bounded like the
+    /// durable journal; an evicted key is treated as earlier, so it is refused.
+    lifetime_operations: std::collections::HashSet<String>,
+    lifetime_operation_order: VecDeque<String>,
     operation_names: HashMap<String, String>,
     operation_order: VecDeque<String>,
     idempotency_hashes: HashMap<String, String>,
@@ -672,6 +698,8 @@ impl ControlPlane {
             events: EventLog::new(1),
             mutation_limiter: MutationRateLimiter::default(),
             operation_outcomes: HashMap::new(),
+            lifetime_operations: std::collections::HashSet::new(),
+            lifetime_operation_order: VecDeque::new(),
             operation_names: HashMap::new(),
             operation_order: VecDeque::new(),
             idempotency_hashes: HashMap::new(),
@@ -884,7 +912,7 @@ impl ControlPlane {
                 format!("permission denied: {:?}", spec.permission),
             );
             if let Some(error) = response.error.as_mut() {
-                error.data = Some(application_error_data("permissionDenied"));
+                error.data = Some(permission_denied_data(spec.permission));
             }
             return response;
         }
@@ -905,7 +933,7 @@ impl ControlPlane {
                     ),
                 );
                 if let Some(error) = response.error.as_mut() {
-                    let mut data = application_error_data("permissionDenied");
+                    let mut data = permission_denied_data(PermissionScope::DeviceAdministration);
                     data["fieldPath"] = json!(pointer);
                     error.data = Some(data);
                 }
@@ -930,7 +958,7 @@ impl ControlPlane {
                 "A client cannot revoke its own access. Remove it from another client or the AudioRouter window.",
             );
             if let Some(error) = response.error.as_mut() {
-                let mut data = application_error_data("permissionDenied");
+                let mut data = permission_denied_data(PermissionScope::DeviceAdministration);
                 data["fieldPath"] = json!("/clientId");
                 error.data = Some(data);
             }
@@ -949,7 +977,7 @@ impl ControlPlane {
                 "permission denied: GraphWrite is required to preview an edited route",
             );
             if let Some(error) = response.error.as_mut() {
-                error.data = Some(application_error_data("permissionDenied"));
+                error.data = Some(permission_denied_data(PermissionScope::GraphWrite));
             }
             return response;
         }
@@ -1171,8 +1199,10 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
         ControlError::CorruptDatabase(_) => "corruptDatabase",
         ControlError::Json(_) => "internalError",
         ControlError::IdempotencyConflict => "idempotencyConflict",
+        ControlError::IdempotencyExpired(_) => "idempotencyConflict",
         ControlError::InvalidRequest(_) => "invalidRequest",
         ControlError::RestartRequired(_) => "invalidRequest",
+        ControlError::SessionNotStopped => "sessionNotStopped",
         ControlError::Audio { code, .. } => code,
         ControlError::PluginScan(error) => error.code(),
         ControlError::NodeNotReady { .. } => "nodeNotReady",
@@ -1202,6 +1232,12 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
         _ => None,
     };
     let mut response = JsonRpcResponse::failure(id, -32000, message);
+    if matches!(error, ControlError::SessionNotStopped) {
+        // Invalid input, as this refusal was before it gained a stable code.
+        if let Some(error) = response.error.as_mut() {
+            error.code = -32602;
+        }
+    }
     if let Some(error) = response.error.as_mut() {
         let mut data = application_error_data(code);
         if let Some((hresult, retryable, remediation, operation, resource_ids)) = audio_details {
@@ -1247,6 +1283,7 @@ fn application_error_data(code: &str) -> Value {
             false,
             "request the required permission scope for the target operation",
         ),
+        "sessionNotStopped" => (false, "stop the named session, then commit the graph again"),
         "invalidRoot" | "tooManyCandidates" | "tooManyDirectories" | "cancelled" => (
             false,
             "choose a valid configured directory or explicitly retry the scan",
@@ -1274,6 +1311,14 @@ fn application_error_data(code: &str) -> Value {
         "retryable": retryable,
         "remediation": remediation
     })
+}
+
+/// A `permissionDenied` refusal with the exact scope it required, so an
+/// adapter can decide what to offer without reading the English message.
+fn permission_denied_data(scope: PermissionScope) -> Value {
+    let mut data = application_error_data("permissionDenied");
+    data["permissionScope"] = json!(scope);
+    data
 }
 
 #[cfg(test)]
@@ -1578,6 +1623,7 @@ mod tests {
                 "idempotencyConflict",
             ),
             (ControlError::IdempotencyConflict, "idempotencyConflict"),
+            (ControlError::SessionNotStopped, "sessionNotStopped"),
             (ControlError::Storage("disk full".into()), "storageFailure"),
             (
                 ControlError::CorruptDatabase("page checksum".into()),
@@ -1601,6 +1647,7 @@ mod tests {
                 "\")",
                 "InvalidRequest",
                 "IdempotencyConflict",
+                "SessionNotStopped",
                 "SessionNotFound",
                 "PluginScan",
                 "InvalidRoot",

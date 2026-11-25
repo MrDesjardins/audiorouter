@@ -127,6 +127,159 @@ function Compare-RenderAb {
     return [pscustomobject]@{ Verdict = $verdict; Detail = $detail; Shapes = [pscustomobject]$shapes }
 }
 
+# --- host load (the PC sampler, read through the share) -----------------------
+# tools\vm\host-load.ps1 runs on the PC and writes one row per interval to the
+# share root (C:\VMs\ar-share\host-load.csv), so the guest reads the same file as
+# Z:\host-load.csv. Rows carry a full UTC timestamp, which survives midnight and
+# a guest clock that is wrong (the 2026-11-22 core showed the guest clock hours
+# behind the host). A block is judged by ROW POSITION, never by comparing the
+# guest clock with host rows.
+#
+# CPU is recorded twice. The owner's 2026-11-22 rule ("under 20 % CPU with 6 GB
+# or more available") is about HOST load, but total CPU includes the guest's own
+# 4 vCPUs, up to about 17 % of a 24-thread PC, so a busy but healthy guest plus
+# one spike would read as starvation and could excuse a real driver freeze.
+# Every row therefore carries the total, the VirtualBox processes' share and the
+# remainder (OtherCpuPercent), and the verdict judges SUSTAINED non-VM load: a
+# mean above 20 % with at least half the samples above it, over two or more
+# samples. One spike is never starvation. The 20 % and 6000 MB limits stand.
+function Get-VmCpuSeconds {
+    $seconds = 0.0
+    foreach ($process in @(Get-Process -Name 'VirtualBoxVM', 'VBoxHeadless', 'VBoxSVC', 'VBoxSDS' -ErrorAction SilentlyContinue)) {
+        try { $seconds += $process.TotalProcessorTime.TotalSeconds } catch { }
+    }
+    return $seconds
+}
+function Get-HostCpuBaseline {
+    return [pscustomobject]@{ Time = [DateTime]::UtcNow; VmSeconds = Get-VmCpuSeconds }
+}
+# One sample. Pass the previous sample's Baseline to get this interval's VM
+# share; without it the VM share is reported as 0 and the remainder equals the
+# total (conservative for a single first row).
+function Get-HostLoadSnapshot {
+    param($Baseline = $null)
+    $total = -1.0
+    $processors = @(Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue)
+    if ($processors.Count -gt 0) {
+        $total = [double][Math]::Round((($processors | Measure-Object -Property LoadPercentage -Average).Average), 0)
+    }
+    $now = [DateTime]::UtcNow
+    $vmSeconds = Get-VmCpuSeconds
+    $vmPercent = 0.0
+    if ($Baseline -and ($now - $Baseline.Time).TotalSeconds -gt 0.2) {
+        $elapsed = ($now - $Baseline.Time).TotalSeconds
+        $cpus = [Math]::Max(1, [Environment]::ProcessorCount)
+        $vmPercent = [Math]::Min(100.0, [Math]::Max(0.0, $vmSeconds - $Baseline.VmSeconds) / $elapsed / $cpus * 100.0)
+    }
+    $other = if ($total -ge 0) { [Math]::Max(0.0, [Math]::Min(100.0, $total - $vmPercent)) } else { -1.0 }
+    $availableMb = -1.0
+    $pages = -1.0
+    $memory = Get-CimInstance Win32_PerfRawData_PerfOS_Memory -ErrorAction SilentlyContinue
+    if ($memory) { $availableMb = [double]$memory.AvailableMBytes }
+    if ($availableMb -lt 0) {
+        $os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
+        if ($os) { $availableMb = [double]($os.FreePhysicalMemory / 1024) }
+    }
+    $formatted = Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory -ErrorAction SilentlyContinue
+    if ($formatted -and $null -ne $formatted.PagesPerSec) { $pages = [double]$formatted.PagesPerSec }
+    return [pscustomobject]@{
+        Utc = $now; CpuPercent = $total; OtherCpuPercent = $other; VmCpuPercent = $vmPercent
+        AvailableMb = $availableMb; PagesPerSec = $pages; HasBreakdown = $true
+        Baseline = [pscustomobject]@{ Time = $now; VmSeconds = $vmSeconds }
+    }
+}
+function Get-HostLoadRows {
+    param([string[]] $Lines)
+    $rows = New-Object System.Collections.Generic.List[object]
+    foreach ($line in @($Lines)) {
+        if (-not $line -or $line.Trim() -eq '' -or $line -match '^utc,') { continue }
+        $parts = $line -split ','
+        # 4 columns are the first sampler (cpu = total); 6 add non-VM and VM CPU.
+        if ($parts.Count -ne 4 -and $parts.Count -ne 6) { continue }
+        $utc = [DateTime]::MinValue
+        if (-not [DateTime]::TryParseExact($parts[0].Trim(), 'yyyy-MM-ddTHH:mm:ssZ',
+                [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AdjustToUniversal, [ref]$utc)) { continue }
+        $numbers = New-Object System.Collections.Generic.List[double]
+        $broken = $false
+        foreach ($index in 1..($parts.Count - 1)) {
+            $value = 0.0
+            if (-not [double]::TryParse($parts[$index].Trim(), [Globalization.NumberStyles]::Float,
+                    [Globalization.CultureInfo]::InvariantCulture, [ref]$value) -or $value -lt 0) { $broken = $true; break }
+            $numbers.Add($value)
+        }
+        if ($broken -or $numbers.Count -ne ($parts.Count - 1)) { continue }
+        if ($parts.Count -eq 4) {
+            $row = [ordered]@{ Utc = $utc; CpuPercent = $numbers[0]; OtherCpuPercent = $numbers[0]; VmCpuPercent = 0.0
+                AvailableMb = $numbers[1]; PagesPerSec = $numbers[2]; HasBreakdown = $false }
+        } else {
+            $row = [ordered]@{ Utc = $utc; CpuPercent = $numbers[0]; OtherCpuPercent = $numbers[1]; VmCpuPercent = $numbers[2]
+                AvailableMb = $numbers[3]; PagesPerSec = $numbers[4]; HasBreakdown = $true }
+        }
+        $rows.Add([pscustomobject]$row)
+    }
+    # ToArray, not @($rows): Windows PowerShell 5.1 throws "Argument types do
+    # not match" from @() over an empty generic List[object].
+    return $rows.ToArray()
+}
+# Summary of rows [From, To); To = 0 means "to the end". Row positions, not time.
+function Get-HostLoadWindow {
+    param([object[]] $Rows, [int] $From = 0, [int] $To = 0)
+    $all = @($Rows)
+    $end = if ($To -gt 0) { [Math]::Min($To, $all.Count) } else { $all.Count }
+    $first = [Math]::Max(0, $From)
+    # Assign then wrap: a single-element `if` output is unrolled to a scalar,
+    # which would lose `.Count` and every field below (found 2026-11-24).
+    $slice = @()
+    if ($first -lt $end) { $slice = @($all[$first..($end - 1)]) }
+    $summary = [ordered]@{ Count = $slice.Count; From = $first; To = $end
+        WorstCpuPercent = $null; MeanCpuPercent = $null; MeanOtherCpuPercent = $null; MaxOtherCpuPercent = $null
+        OtherCpu = @(); MinAvailableMb = $null; MedianAvailableMb = $null
+        FirstUtc = $null; LastUtc = $null; HasBreakdown = $true }
+    if ($slice.Count -gt 0) {
+        $summary.WorstCpuPercent = [double](($slice | Measure-Object -Property CpuPercent -Maximum).Maximum)
+        $summary.MeanCpuPercent = [double](($slice | Measure-Object -Property CpuPercent -Average).Average)
+        $summary.OtherCpu = [double[]]@($slice | ForEach-Object { $_.OtherCpuPercent })
+        $summary.MeanOtherCpuPercent = [double](($summary.OtherCpu | Measure-Object -Average).Average)
+        $summary.MaxOtherCpuPercent = [double](($summary.OtherCpu | Measure-Object -Maximum).Maximum)
+        $summary.MinAvailableMb = [double](($slice | Measure-Object -Property AvailableMb -Minimum).Minimum)
+        $summary.MedianAvailableMb = [double](Get-Median @($slice | ForEach-Object { $_.AvailableMb }))
+        $summary.FirstUtc = $slice[0].Utc
+        $summary.LastUtc = $slice[$slice.Count - 1].Utc
+        $summary.HasBreakdown = (@($slice | Where-Object { -not $_.HasBreakdown }).Count -eq 0)
+    }
+    return [pscustomobject]$summary
+}
+# Owner rule 2026-11-22: a freeze is a driver candidate only when the host
+# stayed under 20 percent CPU and kept 6 GB or more available. Total CPU alone
+# would count the guest's own vCPUs, so CPU is judged on non-VM load, sustained;
+# memory is host-wide (the VM's 8 GB is part of it) and judged on the window
+# median so one transient dip is not a starvation verdict.
+function Get-HostLoadVerdict {
+    param($Summary, [double] $MaxCpuPercent = 20, [int] $MinAvailableMb = 6000, [int] $MinSamples = 2)
+    if (-not $Summary -or $Summary.Count -eq 0) {
+        return [pscustomobject]@{ Verdict = 'NoData'
+            Detail = 'no host-load samples for this window; start tools\vm\round2-host-preflight.ps1 on the PC before the VM' }
+    }
+    if ($Summary.Count -lt $MinSamples) {
+        return [pscustomobject]@{ Verdict = 'NoData'
+            Detail = "only $($Summary.Count) host-load sample(s) in this window; sustained load cannot be judged, so the window proves nothing" }
+    }
+    $other = @($Summary.OtherCpu)
+    $elevated = @($other | Where-Object { $_ -gt $MaxCpuPercent }).Count
+    $fraction = if ($other.Count) { $elevated / $other.Count } else { 0.0 }
+    $suffix = if ($Summary.HasBreakdown) { '' } else { '; legacy rows: non-VM CPU equals total CPU' }
+    $detail = "{0:N0} samples, mean non-VM CPU {1:N1} % (peak {2:N0} %, {3:N0} % of samples above {4:N0} %); median available {5:N0} MB (least {6:N0} MB); total CPU peak {7:N0} %{8}" -f `
+        $Summary.Count, $Summary.MeanOtherCpuPercent, $Summary.MaxOtherCpuPercent, ($fraction * 100), $MaxCpuPercent,
+        $Summary.MedianAvailableMb, $Summary.MinAvailableMb, $Summary.WorstCpuPercent, $suffix
+    if ($Summary.MeanOtherCpuPercent -gt $MaxCpuPercent -and $fraction -ge 0.5) {
+        return [pscustomobject]@{ Verdict = 'Starved'; Detail = "$detail (sustained non-VM CPU above $MaxCpuPercent %)" }
+    }
+    if ($Summary.MedianAvailableMb -lt $MinAvailableMb) {
+        return [pscustomobject]@{ Verdict = 'Starved'; Detail = "$detail (host memory below $MinAvailableMb MB for most of the window)" }
+    }
+    return [pscustomobject]@{ Verdict = 'Idle'; Detail = "$detail (host idle for its own work)" }
+}
+
 # --- guest auto-logon (reversible; the guest is a throwaway VM) -----------------
 # A planned restart resumes through a logon task, so an unattended night needs the
 # guest to sign in by itself. The password is stored in the Winlogon key only for

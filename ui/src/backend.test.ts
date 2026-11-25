@@ -5,6 +5,7 @@ import {
   createLiveBackendFromTransport,
   formatUiError,
   isRevisionConflict,
+  isSessionNotStopped,
   rememberDeviceNames,
   SnapshotCache,
   type UiBackend,
@@ -12,6 +13,7 @@ import {
 } from "./backend";
 import { AudioRouterRpcError } from "@audiorouter/contracts";
 import { demoSession } from "./fixtures";
+import { isDeviceAccessDenied } from "./DeviceAccess";
 import { applyGraphDraft, describeDraftChanges, setNodeDraftFlag, setNodeDraftParameter } from "./draft";
 
 describe("disconnected backend", () => {
@@ -81,7 +83,7 @@ describe("UI error formatting", () => {
       },
     });
     expect(formatUiError(error, "fallback")).toBe(
-      "The selected audio device is in use by another application. Choose a different device in the Output Device node's Properties, or release this exact device in the application using it, then prepare it again.",
+      "The selected audio device is in use by another application. Choose a different device in the Properties of the output tool, or release this exact device in the application using it, then prepare it again.",
     );
   });
 
@@ -213,6 +215,73 @@ describe("UI error formatting", () => {
       "Another save changed this route, so your save was not applied. Your edits are kept. Compare them with the latest saved route, then save again.",
     );
     expect(isRevisionConflict(new Error("revisionConflict"))).toBe(false);
+  });
+
+  it("recognizes the stopped-session refusal from structured data", () => {
+    const error = new AudioRouterRpcError({
+      code: -32602,
+      message: "this graph commit requires its session to be stopped",
+      data: {
+        code: "sessionNotStopped",
+        fieldPath: null,
+        resourceIds: [],
+        retryable: false,
+        remediation: "stop the named session",
+      },
+    });
+    expect(isSessionNotStopped(error)).toBe(true);
+    expect(isSessionNotStopped(new Error("this graph commit requires its session to be stopped"))).toBe(false);
+    expect(isSessionNotStopped(new Error("session to be stopped"))).toBe(false);
+  });
+
+  it("names the required permission once when the message has no scope", () => {
+    const error = new AudioRouterRpcError({
+      code: -32001,
+      message: "refused",
+      data: {
+        code: "permissionDenied",
+        fieldPath: null,
+        resourceIds: [],
+        retryable: false,
+        remediation: "request the required permission scope",
+      },
+    });
+    expect(formatUiError(error, "fallback")).toBe(
+      "Permission denied: this app is not granted the required permission needed for this action, so the backend refused it. Nothing was changed.",
+    );
+  });
+});
+
+describe("structured errors through the transport", () => {
+  it("keeps the permission scope from the transport response to the consent check", async () => {
+    const transport = {
+      send: async (request: { id?: unknown }) => ({
+        jsonrpc: "2.0",
+        id: request.id ?? null,
+        error: {
+          code: -32001,
+          message: "permission denied: DeviceAdministration",
+          data: {
+            code: "permissionDenied",
+            fieldPath: null,
+            resourceIds: [],
+            retryable: false,
+            remediation: "request the required permission scope for the target operation",
+            permissionScope: "deviceAdministration",
+          },
+        },
+      }),
+    };
+    const backend = createLiveBackendFromTransport(transport as never, "session");
+    let caught: unknown;
+    try {
+      await backend.prepareNativeEndpoint!("session", "capture", "render");
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(AudioRouterRpcError);
+    expect((caught as AudioRouterRpcError).data?.permissionScope).toBe("deviceAdministration");
+    expect(isDeviceAccessDenied(caught)).toBe(true);
   });
 });
 

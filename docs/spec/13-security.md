@@ -94,7 +94,7 @@ fresh install):
   window's decision. The backend also refuses a client revoking its own
   identity, so the window cannot be locked out of its own backend.
 - **Decision (2026-11-22, owner: "Option b"): stored reads are Read.**
-  Evidence: [second API/MCP review](../plans/active/api-mcp-quality.md#r2-1-high-13-default-mcp-tools-can-never-succeed).
+  Evidence: [second API/MCP review](../plans/archived/2026-11-24-api-mcp-quality.md#r2-1-high-13-default-mcp-tools-can-never-succeed).
   `recordings.list`, `recordings.get`, `recorders.list`, `plugins.list` and
   `plugins.inventory` only return data AudioRouter already stored (recording
   metadata, live recorder status, the remembered plugin scan). They need `read`

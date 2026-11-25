@@ -27,7 +27,7 @@ database were not touched.
 top of `test/q4-contract-tests` 2951e9b71) while step 9 was already merged, so it was
 merged afterwards as step 12. It is a descendant of 2951e9b71, so nothing was
 merged twice. The Rust checks below ran before this merge; the merge touches only
-`docs/plans/active/application-quality.md` and
+`docs/plans/archived/2026-11-24-application-quality.md` and
 `ui/src/App.accessibility.test.tsx`, and every UI check, `docs/validate` and
 `cargo fmt` were rerun after it (the Playwright suite ran after it too).
 

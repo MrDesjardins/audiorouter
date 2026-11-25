@@ -2606,7 +2606,7 @@ fn is_known_mcp_tool(name: &str) -> bool {
 const MCP_LEGACY_VERSIONS: [&str; 3] = ["2025-11-25", "2025-06-18", "2025-03-26"];
 
 /// Sent at initialize: how an assistant should approach AudioRouter.
-const MCP_SERVER_INSTRUCTIONS: &str = "AudioRouter routes and processes the user's audio on this PC. Start with get_session_summary to see the open setup, and with get_recipes when the user asks for a result rather than a step. Name nodes as get_session_summary shows them. Tools that act on one session use the open session when sessionId is omitted; on list tools sessionId is an optional filter. Never choose a microphone or output device for the user: ask. Tools use the permissions of this enrolled client (Observer reads, including saved recordings and the plugin list; Editor builds routes; Operator also stops, starts prepared routes and controls running audio). Starting audio with Play, starting or stopping a recording, and inspecting plugins are done by the user in the AudioRouter window; if a call is refused, say so and suggest the user do it in the AudioRouter window. No audio content is ever exposed.";
+const MCP_SERVER_INSTRUCTIONS: &str = "AudioRouter routes and processes the user's audio on this PC. Start with get_session_summary to see the open setup, and with get_recipes when the user asks for a result rather than a step. Name nodes as get_session_summary shows them. Tools that act on one session use the open session when sessionId is omitted; on list tools sessionId is an optional filter. Never choose a microphone or output device for the user: ask. Tools use the permissions of this enrolled client (Observer reads, including saved recordings and the plugin list; Editor builds routes; Operator also stops, starts prepared routes and controls running audio). Starting audio with Play, starting or stopping a recording, and inspecting plugins are done by the user in the AudioRouter window; if a call is refused, say so and suggest the user do it in the AudioRouter window. No audio content is ever exposed. A retry reuses the same idempotency key and returns the recorded outcome; after AudioRouter restarted, a recorded play or recording is refused with idempotencyConflict instead of starting again, so send a new request. Use a new key for a new action, or omit it to get a fresh one.";
 
 fn mcp_listed_tools(advanced: bool) -> Value {
     let tools = mcp_tools();
@@ -2747,6 +2747,7 @@ fn mcp_tool_activity_record(
                 *kind,
                 "permissionDenied"
                     | "revisionConflict"
+                    | "sessionNotStopped"
                     | "rateLimited"
                     | "invalidParams"
                     | "notFound"
@@ -3478,7 +3479,7 @@ fn mcp_tool_call(
             );
         }
         "get_recipes" => {
-            return json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": format!("{MCP_RECIPES}\n{NETWORK_PAIRING_RECIPE}\n{OUTPUT_SWITCH_RECIPE}\n16. Plugin update recovery: ask the user to scan the updated plugin's folder first (explicit plugin-scan scope). Use prepare_plugin_update with the existing node name or ID. While stopped, apply its returned parameters with change_settings on that node, retaining wiring. resetState=true is deliberate recovery from rejected saved state; keep the old assets. Do not start audio or silently bypass a failed microphone processor.") }], "isError": false } });
+            return json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": format!("{MCP_RECIPES}\n{NETWORK_PAIRING_RECIPE}\n{OUTPUT_SWITCH_RECIPE}\n16. Plugin update recovery: ask the user to scan the updated plugin's folder first (explicit plugin-scan scope). Use prepare_plugin_update with the existing node name or ID. While stopped, apply its returned parameters with change_settings on that node, retaining wiring. resetState=true is deliberate recovery from rejected saved state; keep the old assets. Do not start audio or silently bypass a failed microphone processor.\nEvery new start, play, toggle, record or mute is a new action: use a new idempotency key (the tools generate one when omitted). Reuse a key only to retry that same request; after AudioRouter restarted a recorded play or recording is refused with idempotencyConflict, so send a new request.") }], "isError": false } });
         }
         "call_api" => {
             let method = arguments["method"].as_str().unwrap_or_default();
@@ -4707,6 +4708,13 @@ mod tests {
         let record =
             mcp_tool_activity_record("assistant-client", &request, &response, 1234, "bad id");
         assert_eq!(record["errorKind"], "permissionDenied");
+        // A refused commit that needs its session stopped keeps its own kind.
+        let stopped = serde_json::json!({"error":{"code":-32602,"message":"private detail","data":{"code":"sessionNotStopped"}}});
+        assert_eq!(
+            mcp_tool_activity_record("assistant-client", &request, &stopped, 1234, "bad id")
+                ["errorKind"],
+            "sessionNotStopped"
+        );
         // An invalid correlation ID is never logged.
         assert_eq!(record["requestId"], Value::Null);
         assert_eq!(record["outcome"], "error");

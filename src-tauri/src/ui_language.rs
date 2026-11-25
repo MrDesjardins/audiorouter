@@ -83,9 +83,21 @@ fn text_en(key: &str) -> &'static str {
     match key {
         "native.alreadyPlaying" => "Already playing",
         "native.autoplayFailed" => "Autoplay failed: the audio engine did not start",
-        "native.autoplayPaused" => {
-            "Autoplay paused: unavailable saved sessions need recovery in AudioRouter."
-        }
+        "native.autoplayPaused" => "Autoplay paused: unavailable saved sessions need recovery in AudioRouter.",
+        "native.instanceCheckApps" => "Could not check running apps. Please close AudioRouter and try again.",
+        "native.instanceCheckOwnership" => "Could not check AudioRouter instance ownership.",
+        "native.instanceCheckSession" => "Could not check this Windows session.",
+        "native.instanceCloseAndReopen" => "There is already an instance running. Please close it and open AudioRouter again.",
+        "native.instanceCloseBlocked" => "There is already an instance running. Please close it. Windows would not allow this app to close it automatically.",
+        "native.instanceContent" => "You can close the existing AudioRouter window normally, then open this version again. If the old app is stuck, force close it below to continue with this version.",
+        "native.instanceCouldNotClose" => "Could not close the old app. Close it in Task Manager, then try again.",
+        "native.instanceExtraInstances" => "Please close the extra AudioRouter instances and try again.",
+        "native.instanceForceClose" => "Force close old instance and continue\nStops its audio. Unsaved changes and unfinished recordings may be lost.",
+        "native.instanceInstruction" => "There is already an instance running. Please close it.",
+        "native.instanceOtherSession" => "AudioRouter is running in another Windows session. Please close it there and try again.",
+        "native.instanceStarting" => "There is already an instance starting. Please close it or wait, then try again.",
+        "native.instanceStillClosing" => "The old app is still closing. Please wait and open AudioRouter again.",
+        "native.instanceVerifyUser" => "Could not verify this Windows user.",
         "native.liveRecordersUnavailable" => "Live recorders: unavailable",
         "native.micMuted" => "Mic muted",
         "native.micOn" => "Mic on",
@@ -94,12 +106,8 @@ fn text_en(key: &str) -> &'static str {
         "native.open" => "Open AudioRouter",
         "native.play" => "Play",
         "native.playFailed" => "Play failed: {{reason}}",
-        "native.playFailedConsent" => {
-            "Play failed: allow device access in the window first (press Play there once)."
-        }
-        "native.playFailedNoRoute" => {
-            "Play failed: no device route. Open AudioRouter and choose the devices."
-        }
+        "native.playFailedConsent" => "Play failed: allow device access in the window first (press Play there once).",
+        "native.playFailedNoRoute" => "Play failed: no device route. Open AudioRouter and choose the devices.",
         "native.playing" => "Playing",
         "native.playingSessionsStatus" => "Playing {{count}} sessions · {{mic}}",
         "native.playingStatus" => "Playing · {{mic}}",
@@ -129,6 +137,20 @@ fn text_fr(key: &str) -> &'static str {
         "native.alreadyPlaying" => "Déjà en cours",
         "native.autoplayFailed" => "Échec du démarrage automatique : le moteur audio n’a pas démarré",
         "native.autoplayPaused" => "Le démarrage automatique est suspendu. Récupérez les sessions indisponibles dans AudioRouter.",
+        "native.instanceCheckApps" => "Impossible de vérifier les applications en cours. Fermez AudioRouter, puis réessayez.",
+        "native.instanceCheckOwnership" => "Impossible de vérifier la propriété de l’instance AudioRouter.",
+        "native.instanceCheckSession" => "Impossible de vérifier cette session Windows.",
+        "native.instanceCloseAndReopen" => "Une instance d’AudioRouter est déjà en cours d’exécution. Fermez-la, puis rouvrez AudioRouter.",
+        "native.instanceCloseBlocked" => "Une instance d’AudioRouter est déjà en cours d’exécution. Fermez-la. Windows n’a pas autorisé cette application à la fermer automatiquement.",
+        "native.instanceContent" => "Vous pouvez fermer normalement la fenêtre AudioRouter existante, puis rouvrir cette version. Si l’ancienne application ne répond plus, forcez sa fermeture ci-dessous pour continuer avec cette version.",
+        "native.instanceCouldNotClose" => "Impossible de fermer l’ancienne application. Fermez-la dans le Gestionnaire des tâches, puis réessayez.",
+        "native.instanceExtraInstances" => "Fermez les instances AudioRouter supplémentaires, puis réessayez.",
+        "native.instanceForceClose" => "Forcer la fermeture de l’ancienne instance et continuer\nCela arrête son audio. Les modifications non enregistrées et les enregistrements inachevés peuvent être perdus.",
+        "native.instanceInstruction" => "Une instance d’AudioRouter est déjà en cours d’exécution. Veuillez la fermer.",
+        "native.instanceOtherSession" => "AudioRouter est en cours d’exécution dans une autre session Windows. Fermez-le là-bas, puis réessayez.",
+        "native.instanceStarting" => "Une instance d’AudioRouter est déjà en cours de démarrage. Fermez-la ou attendez, puis réessayez.",
+        "native.instanceStillClosing" => "L’ancienne application est encore en cours de fermeture. Attendez, puis rouvrez AudioRouter.",
+        "native.instanceVerifyUser" => "Impossible de vérifier cet utilisateur Windows.",
         "native.liveRecordersUnavailable" => "Enregistreurs actifs : état indisponible",
         "native.micMuted" => "Micro coupé",
         "native.micOn" => "Micro activé",
@@ -168,6 +190,20 @@ fn text_zh_hans(key: &str) -> &'static str {
         "native.alreadyPlaying" => "已在播放",
         "native.autoplayFailed" => "自动播放失败：音频引擎未启动",
         "native.autoplayPaused" => "已暂停自动播放。请在 AudioRouter 中恢复不可用的已保存会话。",
+        "native.instanceCheckApps" => "无法检查正在运行的应用。请关闭 AudioRouter，然后重试。",
+        "native.instanceCheckOwnership" => "无法检查 AudioRouter 实例所有权。",
+        "native.instanceCheckSession" => "无法检查此 Windows 会话。",
+        "native.instanceCloseAndReopen" => "已有 AudioRouter 实例正在运行。请关闭它，然后重新打开 AudioRouter。",
+        "native.instanceCloseBlocked" => "已有 AudioRouter 实例正在运行。请将其关闭。Windows 不允许此应用自动关闭它。",
+        "native.instanceContent" => "你可以正常关闭现有的 AudioRouter 窗口，然后重新打开此版本。如果旧应用卡住，请在下方强制关闭它以继续使用此版本。",
+        "native.instanceCouldNotClose" => "无法关闭旧应用。请在任务管理器中关闭它，然后重试。",
+        "native.instanceExtraInstances" => "请关闭多余的 AudioRouter 实例，然后重试。",
+        "native.instanceForceClose" => "强制关闭旧实例并继续\n这会停止其音频。未保存的修改和未完成的录音可能会丢失。",
+        "native.instanceInstruction" => "已有 AudioRouter 实例正在运行。请将其关闭。",
+        "native.instanceOtherSession" => "AudioRouter 正在另一个 Windows 会话中运行。请在那里关闭它，然后重试。",
+        "native.instanceStarting" => "已有 AudioRouter 实例正在启动。请关闭它或稍等，然后重试。",
+        "native.instanceStillClosing" => "旧应用仍在关闭中。请稍等，然后重新打开 AudioRouter。",
+        "native.instanceVerifyUser" => "无法验证此 Windows 用户。",
         "native.liveRecordersUnavailable" => "实时录音器状态不可用",
         "native.micMuted" => "麦克风已静音",
         "native.micOn" => "麦克风已开启",
@@ -176,9 +212,7 @@ fn text_zh_hans(key: &str) -> &'static str {
         "native.open" => "打开 AudioRouter",
         "native.play" => "播放",
         "native.playFailed" => "播放失败：{{reason}}",
-        "native.playFailedConsent" => {
-            "播放失败：请先在 AudioRouter 窗口中点击“播放”，授予设备访问权限。"
-        }
+        "native.playFailedConsent" => "播放失败：请先在 AudioRouter 窗口中点击“播放”，授予设备访问权限。",
         "native.playFailedNoRoute" => "播放失败：没有设备路由。请打开 AudioRouter 并选择设备。",
         "native.playing" => "正在播放",
         "native.playingSessionsStatus" => "正在播放 {{count}} 个会话 · {{mic}}",

@@ -95,7 +95,7 @@ fixtures remain explicitly opt-in; a skip is not a product pass.
 
 ## Separate packaged gate
 
-The [quality roadmap](../plans/active/application-quality.md) requires an exact
+The [quality roadmap](../plans/archived/2026-11-24-application-quality.md) requires an exact
 release-shell smoke with an isolated database and WebView2 profile, native
 bridge, usable canvas, stopped first launch and save/reload evidence. Build the
 embedded UI and release shell, then run from the repository root:

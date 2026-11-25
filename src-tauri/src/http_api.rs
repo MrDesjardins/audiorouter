@@ -775,6 +775,7 @@ fn http_status_for_error_code(code: &str) -> u16 {
         // or exclusive device, a node not set up yet, nothing to undo.
         "revisionConflict"
         | "idempotencyConflict"
+        | "sessionNotStopped"
         | "planExpired"
         | "planLimitReached"
         | "deviceInUse"
@@ -1510,6 +1511,7 @@ mod tests {
             ("notFound", 404),
             ("revisionConflict", 409),
             ("idempotencyConflict", 409),
+            ("sessionNotStopped", 409),
             ("planExpired", 409),
             ("rateLimited", 429),
             ("internalError", 500),

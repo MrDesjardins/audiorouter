@@ -28,7 +28,7 @@ function Invoke-VBox([string]$Name, [string[]]$Arguments, [switch]$AllowNonzero)
 $output = [IO.Path]::GetFullPath($OutputDirectory)
 if ((Test-Path -LiteralPath $output) -or -not (Test-Path -LiteralPath (Split-Path -Parent $output) -PathType Container)) { throw 'Evidence directory must be new and have an existing parent' }
 New-Item -ItemType Directory -Path $output | Out-Null
-$result = [ordered]@{ status = 'failed'; vmId = $VmId; snapshotId = $SnapshotId; username = $Username; steps = [Collections.Generic.List[object]]::new(); error = $null }
+$result = [ordered]@{ status = 'failed'; vmId = $VmId; snapshotId = $SnapshotId; username = $Username; timeoutMarkerReached = $null; steps = [Collections.Generic.List[object]]::new(); error = $null }
 $started = $false
 try {
     if (-not $RestoreDisposableSnapshot) { throw 'Explicit disposable snapshot restore acknowledgement is required' }
@@ -71,11 +71,38 @@ try {
                 # Let the sign-in screen finish drawing after guest services start.
                 Start-Sleep -Seconds 20
                 $lastSignIn = [DateTime]::UtcNow
-                # Wake the lock screen, then sign in. Do not press Tab, Enter or Escape first:
-                # on the account picker they move focus to the account list, so the password
-                # went to whichever account headed it instead of the default user.
+                if ($signInAttempts -gt 0) {
+                    # A failed attempt can leave another account's expired-password
+                    # form or its error dialog on screen (Winlogon's default user
+                    # is not always the test account). Enter dismisses the error,
+                    # then Escape returns to the account picker with the last
+                    # signed-in user selected. Never sent on the first attempt:
+                    # focus-moving keys before the password sent it to whichever
+                    # account headed the picker (2026-11 lesson). No account is
+                    # changed and no protection is disabled.
+                    $null = Invoke-VBox 'sign-in-reset' @('controlvm',$VmId,'keyboardputscancode','1c','9c')
+                    Start-Sleep -Milliseconds 800
+                    1..3 | ForEach-Object {
+                        $null = Invoke-VBox 'sign-in-dismiss' @('controlvm',$VmId,'keyboardputscancode','01','81')
+                        Start-Sleep -Milliseconds 600
+                    }
+                    $result.steps.Add(@{ name = 'sign-in-reset'; attempt = $signInAttempts })
+                }
+                # Wake the lock screen and type the password. The first attempt sends no
+                # Tab/Enter/Escape: on the account picker they move focus, so the password
+                # went to whichever account headed it instead of the last signed-in user.
+                # Retries use the reset above first.
                 $null = Invoke-VBox 'sign-in-wake' @('controlvm',$VmId,'keyboardputscancode','39','b9')
                 Start-Sleep -Seconds 3
+                if ($signInAttempts -gt 0) {
+                    # A previous attempt (or the wake key) can leave characters in
+                    # the password field, which would be prefixed to the new
+                    # password. Ctrl+A then Delete clears it without moving focus.
+                    $null = Invoke-VBox 'sign-in-clear' @('controlvm',$VmId,'keyboardputscancode','1d','1e','9e','9d')
+                    Start-Sleep -Milliseconds 250
+                    $null = Invoke-VBox 'sign-in-clear-delete' @('controlvm',$VmId,'keyboardputscancode','e0','53','e0','d3')
+                    Start-Sleep -Milliseconds 250
+                }
                 $secret = ([IO.File]::ReadAllText((Resolve-Path -LiteralPath $PasswordFile).Path)).Trim()
                 $null = Invoke-VBox 'sign-in-password' @('controlvm',$VmId,'keyboardputstring',$secret)
                 $secret = $null
@@ -112,8 +139,10 @@ try {
             try {
                 $verify = $probeBase + ('type {0}' -f $marker)
                 $markerOutput = @(Invoke-LifecycleProcess $vbox 'verify-timeout-marker' $verify $output 10 -OutputFilter '^AR_QUAL_TIMEOUT_REACHED\s*$')
-                $result.steps.Add(@{ name = 'timeout-marker'; reached = (($markerOutput | Out-String) -match '(?m)^AR_QUAL_TIMEOUT_REACHED\s*$') })
+                $result.timeoutMarkerReached = (($markerOutput | Out-String) -match '(?m)^AR_QUAL_TIMEOUT_REACHED\s*$')
+                $result.steps.Add(@{ name = 'timeout-marker'; reached = $result.timeoutMarkerReached })
             } catch {
+                $result.timeoutMarkerReached = $false
                 $result.steps.Add(@{ name = 'timeout-marker'; reached = $false; error = $_.Exception.Message })
             }
         }
@@ -130,7 +159,14 @@ try {
     $null = Invoke-LifecycleProcess (Join-Path $PSHOME 'powershell.exe') 'lifecycle' $arguments $output $runnerTimeout -SuppressOutput -KillTree
     $result.steps.Add(@{ name = 'lifecycle'; status = 'passed' })
     $result.status = 'passed'
-} catch { $result.error = $_.Exception.Message }
+} catch {
+    $result.error = $_.Exception.Message
+    # RQ-02 requires a reached marker, not only a bounded timeout. The injected
+    # run fails by design; say which half failed instead of leaving it in steps.
+    if ($InjectGuestControlTimeout -and $result.timeoutMarkerReached -eq $false) {
+        $result.error = "Guest timeout marker was not verified: $($result.error)"
+    }
+}
 finally {
     try {
       if ($started) {

@@ -1,9 +1,30 @@
 /** @vitest-environment jsdom */
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { DeviceAccessDialog } from "./DeviceAccess";
+import { AudioRouterRpcError, type PermissionScope } from "@audiorouter/contracts";
+import { DeviceAccessDialog, isDeviceAccessDenied } from "./DeviceAccess";
 
 afterEach(cleanup);
+
+it("recognizes the device-consent refusal from its structured scope, not its wording", () => {
+  const refusal = (message: string, permissionScope?: PermissionScope) =>
+    new AudioRouterRpcError({
+      code: -32001,
+      message,
+      data: {
+        code: "permissionDenied",
+        fieldPath: null,
+        resourceIds: [],
+        retryable: false,
+        remediation: "request the required permission scope",
+        ...(permissionScope ? { permissionScope } : {}),
+      },
+    });
+  expect(isDeviceAccessDenied(refusal("refused", "deviceAdministration"))).toBe(true);
+  expect(isDeviceAccessDenied(refusal("permission denied: DeviceAdministration"))).toBe(false);
+  expect(isDeviceAccessDenied(refusal("refused", "graphWrite"))).toBe(false);
+  expect(isDeviceAccessDenied(new Error("permission denied: DeviceAdministration"))).toBe(false);
+});
 
 it("lists the decline first, the confirming button last, and starts on the confirming one", () => {
   render(<DeviceAccessDialog busy={false} error={null} onAllow={vi.fn()} onCancel={vi.fn()} />);

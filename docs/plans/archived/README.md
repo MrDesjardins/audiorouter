@@ -27,6 +27,42 @@ Keep an index below with date, milestone/task, outcome, and path. Do not move st
   dropdown/density/loading evidence recorded. Attended M05 gates and scores
   remain open. [Execution record](2026-11-07-ui-round-27.md).
 
+### 2026-11-24 owner-requested consolidation
+
+The owner asked for every active plan to be finished or archived. Agent work is done;
+open gates, including failed checks, are in
+[human-gated tasks](../active/human-gated-tasks.md). An entry here passes no gate.
+The former active page is kept as [history](2026-11-24-active-plan-history.md).
+
+| Plan | Outcome and what stays open | Path |
+| --- | --- | --- |
+| REST API and MCP quality review (2026-11-21) | All findings fixed; assistant-recording and rename decisions and live checks | [Record](2026-11-24-api-mcp-quality.md) |
+| MCP setup and connection UX — active execution plan | Shipped in PR #114; packaged look, owner profile and ChatGPT checks | [Record](2026-11-24-mcp-setup-ux.md) |
+| Code-scanning alert remediation — 2026-10-26 | Zero open alerts; no gate remains | [Record](2026-11-24-code-scanning-remediation.md) |
+| Delegation brief: app-only release qualification | Superseded delegation brief; release checks | [Record](2026-11-24-delegate-release-qualification.md) |
+| Delegation brief: finish VST2/VST3 compatibility | Superseded delegation brief; VST owner checks | [Record](2026-11-24-delegate-vst-compatibility.md) |
+| Issue #136 - VST experience investigation and execution plan | Software scenarios covered; reporter evidence is BLOCKED and eye/ear checks | [Record](2026-11-24-issue-136-vst-experience.md) |
+| Issue #136 - VST2 chain matrix with Blue Cat PatchWork | Non-Blue-Cat matrix done; the attended Blue Cat rerun | [Record](2026-11-24-issue-136-vst2-chain-matrix.md) |
+| Issue 149 supplied-session verification | Portable coverage complete; the reporter-PC run | [Record](2026-11-24-issue-149-session-verification.md) |
+| Active plan: OBS and Discord as a premium experience (2026-10-23) | Implementation merged; real OBS and Discord acceptance | [Record](2026-11-24-obs-discord.md) |
+| AudioRouter execution plan after the game | Packages reconciled to their owning plans; remaining owner gates | [Record](2026-11-24-post-game-execution.md) |
+| Open PR integration (2026-11-22) | PRs #176 to #180 merged; no gate remains | [Record](2026-11-24-pr-merge.md) |
+| Release 0.0.32 candidate preparation | Preparation done, not published; tag and publication | [Record](2026-11-24-release-0.0.32.md) |
+| Plan: app-only release qualification | Agent qualification done, RQ-05 partial; attended, hardware and Defender gates | [Record](2026-11-24-release-qualification.md) |
+| Plan: sign the Windows release and publish it on GitHub | Parked, not executed; the purchase and Microsoft verdict | [Record](2026-11-24-release-signing-and-publication.md) |
+| UI code review, 2026-11-22 | Findings merged in PR #176; attended instrument and audio checks | [Record](2026-11-24-ui-code-review.md) |
+| UI language support plan | Implementation complete; fluent review, Narrator, scaling and live checks | [Record](2026-11-24-ui-localization.md) |
+| UI quality review — 2026-11-03 | Agent rounds done; participant study, Narrator and attended checks | [Record](2026-11-24-ui-quality-review.md) |
+| Active plan — AudioRouter virtual cable (DEC-18) | NOT passed: Stage A failures stand; VM, signing and bare-metal work | [Record](2026-11-24-virtual-cable.md) |
+| Active plan — virtual cable driver review fixes (2026-11-10, owner request) | NOT passed: Stage A freeze, A/B and live-update failures stand; VM runs | [Record](2026-11-24-virtual-cable-review-fixes.md) |
+| Virtual-cable driver handoff | Pointer only; virtual-cable gates | [Record](2026-11-24-virtual-cable-agent-handoff.md) |
+| VST compatibility completion — work plan (2026-11-14) | Agent work done; owner, hardware and vendor checks | [Record](2026-11-24-vst-completion-work.md) |
+| Full VST2 and VST3 compatibility | Agent work done; owner, hardware and vendor checks | [Record](2026-11-24-vst-full-compatibility.md) |
+| VST work: handoff for the next agent (2026-11-14) | Historical handoff; VST owner checks | [Record](2026-11-24-vst-handoff.md) |
+| MIDI input and instrument plugins: design (phase P8b) | Design implemented; hardware MIDI and listening checks | [Record](2026-11-24-vst-midi-instruments-design.md) |
+| VST owner checks (open, 2026-11-18) | Moved in full; its checks are unrun | [Record](2026-11-24-vst-owner-checks.md) |
+| Application quality and regression prevention | Agent slices done; decisions, endurance and live evidence | [Record](2026-11-24-application-quality.md) |
+
 ### 2026-11-16 consolidation
 
 Completed November execution plans moved out of `docs/plans/active/` on

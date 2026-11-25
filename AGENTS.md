@@ -170,7 +170,7 @@ Report the result, affected requirement IDs/files, checks performed and limitati
   late passes) for any change to the pump, the feeder or their constants.
 
 - **2026-11-07 — Match complete control captions in guide automation.**
-  Evidence: [Round 25 guide review](docs/plans/active/ui-quality-review.md),
+  Evidence: [Round 25 guide review](docs/plans/archived/2026-11-24-ui-quality-review.md),
   `Hold targets its own control and cannot match Threshold` in `tools/site/tool-guide-guards.test.mjs`.
   Scope: Properties recordings and caption-based control selectors. Consequence:
   a case-insensitive search for Hold selected Threshold, while the production
@@ -178,7 +178,7 @@ Report the result, affected requirement IDs/files, checks performed and limitati
   precise-value suffix) and inspect the changed field before accepting a clip.
 
 - **2026-11-06 — A browser test must bring a card into view before clicking it.**
-  Evidence: [Round 23 verified](docs/plans/active/ui-quality-review.md), `fitCanvas` in `ui/e2e/workbench.ts`.
+  Evidence: [Round 23 verified](docs/plans/archived/2026-11-24-ui-quality-review.md), `fitCanvas` in `ui/e2e/workbench.ts`.
   Scope: `ui/e2e` tests on routes wider than the canvas at readable zoom. Consequence: Playwright can reach a card past
   the canvas edge by scrolling a clipped container, so such tests pass by luck until card height changes, then fail in
   dozens with misleading hit targets. Call `fitCanvas` first, and read the failing line before blaming the product: a
@@ -190,13 +190,13 @@ Report the result, affected requirement IDs/files, checks performed and limitati
   running the exe on a new database showed it. Grep Rust too, and look at the first launch.
 
 - **2026-11-06 — Exercise the release exe with its WebView profile isolated too.**
-  Evidence: [Round 21 progress](docs/plans/active/ui-quality-review.md). Scope: driving the built shell through
+  Evidence: [Round 21 progress](docs/plans/archived/2026-11-24-ui-quality-review.md). Scope: driving the built shell through
   CDP. Consequence: `LOCALAPPDATA` moves the logs but not the WebView profile, so a disposable database met the owner's
   remembered route, which exposed a real startup dead end. Set `WEBVIEW2_USER_DATA_FOLDER` as well, or the run reads and
   can overwrite the owner's UI state. The harness never found this or the false "no readings" during a hold.
 
 - **2026-11-06 — Rebuild the `e2e_backend` example before trusting real-backend browser tests.**
-  Evidence: [Round 21 progress](docs/plans/active/ui-quality-review.md), `ui/e2e/session-file.pw.ts`.
+  Evidence: [Round 21 progress](docs/plans/archived/2026-11-24-ui-quality-review.md), `ui/e2e/session-file.pw.ts`.
   Scope: `ui/e2e` tests importing `./real-backend`. Consequence: Playwright spawns
   `target/debug/examples/e2e_backend.exe` and never builds it. A stale binary answered new methods with
   "method not found", and also hid that an older test no longer matched a security repair. Run
@@ -288,7 +288,7 @@ Report the result, affected requirement IDs/files, checks performed and limitati
   launch environments before attributing such a failure to embedded assets.
 
 - **2026-10-24 — A known warning count hides new warnings; keep it at zero and read PR annotations.**
-  Evidence: [OBS and Discord plan, lint warnings repair](docs/plans/active/obs-discord.md#pr-warnings-and-app-strip-loading-2026-10-24-owner-request),
+  Evidence: [OBS and Discord plan, lint warnings repair](docs/plans/archived/2026-11-24-obs-discord.md#pr-warnings-and-app-strip-loading-2026-10-24-owner-request),
   PR #67 CI annotations. Scope: UI lint, CI annotations, any check that
   reports warnings without failing. Consequence: 25 `exhaustive-deps`
   warnings were reported as "pre-existing" on every branch, so nobody
@@ -402,7 +402,7 @@ Report the result, affected requirement IDs/files, checks performed and limitati
   conditions over several rounds.
 
 - **2026-10-12 — Endpoint INF and naming facts the audio stack enforces silently.**
-  Evidence: [virtual cable plan, RC 0.2.0–0.2.4 Stage A](docs/plans/active/virtual-cable.md).
+  Evidence: [virtual cable plan, RC 0.2.0–0.2.4 Stage A](docs/plans/archived/2026-11-24-virtual-cable.md).
   Scope: INF endpoint properties, endpoint names and cable identity.
   Consequence: (1) `PKEY_AudioEngine_OEMFormat` must be the 48-byte
   `StgSerializePropVariant` blob (`41,00,00,00,28,00,00,00` + format); the
@@ -415,7 +415,7 @@ Report the result, affected requirement IDs/files, checks performed and limitati
   connected filter reference (DeviceTopology), never by names.
 
 - **2026-10-12 — Windows assigns new audio endpoint IDs on every driver update.**
-  Evidence: [virtual cable plan, r32/r33 endpoint ID results](docs/plans/active/virtual-cable.md),
+  Evidence: [virtual cable plan, r32/r33 endpoint ID results](docs/plans/archived/2026-11-24-virtual-cable.md),
   Microsoft's endpoint ID strings documentation. Scope: driver updates,
   upgrade tests (A13) and anything that stores an endpoint ID. Consequence:
   an in-place update of identical source on the same devnode changed all

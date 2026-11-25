@@ -162,6 +162,12 @@ pub(crate) fn storage_error(error: StorageError) -> ControlError {
     }
 }
 
+/// A journaled outcome and whether this backend lifetime produced it.
+pub(crate) struct IdempotentReplay {
+    pub result: Value,
+    pub this_lifetime: bool,
+}
+
 impl ControlPlane {
     pub fn try_with_storage(
         build: impl Into<String>,
@@ -285,6 +291,8 @@ impl ControlPlane {
             events: EventLog::new(backend_epoch),
             mutation_limiter: MutationRateLimiter::default(),
             operation_outcomes: HashMap::new(),
+            lifetime_operations: std::collections::HashSet::new(),
+            lifetime_operation_order: VecDeque::new(),
             operation_names: HashMap::new(),
             operation_order: VecDeque::new(),
             idempotency_hashes: HashMap::new(),
@@ -590,6 +598,17 @@ impl ControlPlane {
         }
         self.operation_outcomes
             .insert(idempotency_key.to_owned(), result);
+        if self.lifetime_operations.insert(idempotency_key.to_owned()) {
+            if self.lifetime_operation_order.len()
+                >= audiorouter_storage::MAX_OPERATION_JOURNAL_ENTRIES
+            {
+                if let Some(oldest) = self.lifetime_operation_order.pop_front() {
+                    self.lifetime_operations.remove(&oldest);
+                }
+            }
+            self.lifetime_operation_order
+                .push_back(idempotency_key.to_owned());
+        }
         self.operation_names
             .insert(idempotency_key.to_owned(), operation.to_owned());
         if let Some(hash) = request_hash {
@@ -606,18 +625,26 @@ impl ControlPlane {
         audiorouter_storage::lower_hex(&digest.finalize())
     }
 
-    pub(crate) fn lookup_idempotent_result(
+    /// Read a recorded outcome without changing anything. A row found only in
+    /// storage belongs to an earlier backend lifetime: startup never reloads
+    /// journal rows into the in-memory cache, and `lifetime_operations` keeps
+    /// every key this process journaled even after the bounded cache evicts
+    /// its result.
+    pub(crate) fn idempotent_replay(
         &self,
         key: &str,
         request_hash: &str,
-    ) -> Result<Option<Value>, ControlError> {
+    ) -> Result<Option<IdempotentReplay>, ControlError> {
         if let Some(result) = self.operation_outcomes.get(key) {
             if self.idempotency_hashes.get(key).map(String::as_str) != Some(request_hash) {
                 // Its own code, so a caller can tell a reused key from a
                 // malformed request (REST answers 409).
                 return Err(ControlError::IdempotencyConflict);
             }
-            return Ok(Some(result.clone()));
+            return Ok(Some(IdempotentReplay {
+                result: result.clone(),
+                this_lifetime: true,
+            }));
         }
         let Some(storage) = &self.storage else {
             return Ok(None);
@@ -626,9 +653,46 @@ impl ControlPlane {
             .journal_result_checked(key, request_hash)
             .map_err(storage_error)?
             .map(|result| {
-                serde_json::from_str(&result).map_err(|error| ControlError::Json(error.to_string()))
+                serde_json::from_str(&result)
+                    .map(|result| IdempotentReplay {
+                        result,
+                        this_lifetime: self.lifetime_operations.contains(key),
+                    })
+                    .map_err(|error| ControlError::Json(error.to_string()))
             })
             .transpose()
+    }
+
+    pub(crate) fn lookup_idempotent_result(
+        &self,
+        key: &str,
+        request_hash: &str,
+    ) -> Result<Option<Value>, ControlError> {
+        Ok(self
+            .idempotent_replay(key, request_hash)?
+            .map(|replay| replay.result))
+    }
+
+    /// A same-key retry reveals the recorded outcome and never repeats the
+    /// side effect. If that outcome came from an earlier backend lifetime and
+    /// claims a live runtime state this process cannot honour, refuse instead
+    /// of replaying a false "running" or executing the old request again.
+    pub(crate) fn replay_runtime_outcome(
+        &self,
+        key: &str,
+        request_hash: &str,
+        method: &str,
+        params: &Value,
+    ) -> Result<Option<Value>, ControlError> {
+        let Some(replay) = self.idempotent_replay(key, request_hash)? else {
+            return Ok(None);
+        };
+        if !replay.this_lifetime {
+            if let Some(reason) = self.stale_runtime_outcome(method, params, &replay.result) {
+                return Err(ControlError::IdempotencyExpired(reason));
+            }
+        }
+        Ok(Some(replay.result))
     }
 
     pub(crate) fn journal_idempotent_result(

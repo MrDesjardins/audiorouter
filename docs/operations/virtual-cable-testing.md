@@ -3,7 +3,7 @@
 How the AudioRouter-owned virtual cable is tested from the first build to a
 public release, without risking the maintainer's daily PC. What is built:
 [17 Virtual cable](../spec/17-virtual-cable.md). Work packages (WP-xx):
-[virtual cable plan](../plans/active/virtual-cable.md). Signing:
+[virtual cable plan](../plans/archived/2026-11-24-virtual-cable.md). Signing:
 [virtual cable signing](virtual-cable-signing.md). Costs and background:
 [driver track](../plans/future/M03-driver-signing.md). Requirements:
 VCAB-01–12, VDEV-01–12, SEC-08, NFR-02, NFR-16.

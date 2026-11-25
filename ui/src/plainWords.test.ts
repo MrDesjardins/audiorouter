@@ -1,11 +1,12 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 /**
  * The words the app shows people. See "Glossary" in
- * docs/plans/active/ui-quality-review.md: a route is the graph on the canvas, a
+ * docs/plans/archived/2026-11-24-ui-quality-review.md: a route is the graph on the canvas, a
  * tool is a card on it, unsaved edits are the changes not saved yet, and an
  * input or output device is a real device. Backend and code keep their own terms.
  */
@@ -63,6 +64,30 @@ function visibleStrings(source: string): string[] {
   }
   for (const match of withoutComments.matchAll(/\bformatUiError\(\s*\w+,\s*["`]([^"`]+)["`]/g)) add(match[1]);
   return found;
+}
+
+/** Preview fixtures show invented text; they never ship in the app. */
+const PREVIEW_FILES = new Set(["devHarness.tsx"]);
+
+/** Units and symbols a label may display beside a value without a catalog key. */
+const UNITS = new Set(["db", "dbfs", "hz", "khz", "ms", "s", "%", "kbps", "ch", "px", "x"]);
+
+/**
+ * Whether a literal reads as English prose rather than a technical value.
+ * Single words, units, product names and paths are deliberately allowed: the
+ * audit lists them for review, but a guard that failed on them would need a
+ * brittle allowlist of every technical literal.
+ */
+function readsAsProse(text: string): boolean {
+  if (/\$\{/.test(text)) return false;
+  // Paths and route examples are technical values.
+  if (/^[A-Za-z]:[\\/]/.test(text) || /[\\/]/.test(text)) return false;
+  const words = text
+    .split(/\s+/)
+    .map((word) => word.replace(/^[.,;:!?«»"“”()…-]+|[.,;:!?«»"“”()…-]+$/g, ""))
+    .filter(Boolean);
+  if (words.length < 2) return false;
+  return words.some((word) => /^[a-z][a-z’'-]+$/.test(word) && !UNITS.has(word));
 }
 
 describe("plain words in visible text", () => {
@@ -128,5 +153,34 @@ describe("plain words in visible text", () => {
       }
     }
     expect(hits).toEqual([]);
+  });
+
+  it("new visible prose is written through the catalog", () => {
+    // A developer adding `>Save changes<` instead of `{tr("…")}` is caught here;
+    // units, product names, paths and preview fixtures stay allowed above.
+    const hits: string[] = [];
+    const files = readdirSync(here).filter(
+      (name) => /\.tsx$/.test(name) && !/\.(test|spec)\./.test(name) && !PREVIEW_FILES.has(name),
+    );
+    for (const name of files) {
+      const path = join(here, name);
+      const source = ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
+      const visit = (node: ts.Node) => {
+        if (ts.isJsxText(node)) {
+          const text = node.text.replace(/\s+/g, " ").trim();
+          if (readsAsProse(text)) hits.push(`${name}: "${text}"`);
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(source);
+    }
+    expect(hits).toEqual([]);
+  });
+
+  it("the prose guard does not pass by reading nothing", () => {
+    expect(readsAsProse("Save changes")).toBe(true);
+    expect(readsAsProse("48 kHz")).toBe(false);
+    expect(readsAsProse("AudioRouter")).toBe(false);
+    expect(readsAsProse("C:\\Games\\game.exe")).toBe(false);
   });
 });

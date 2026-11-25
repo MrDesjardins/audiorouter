@@ -45,6 +45,11 @@
     round2     NOT part of 'all'. The second Stage A round on driver 0.2.5
                (2026-11-21 gap analysis; needs a bundle from
                prepare-round2-bundle.ps1, which carries RC3 as driver-rc3).
+               Before any block it requires a live PC sampler at
+               Z:\host-load.csv (start tools\vm\round2-host-preflight.ps1 on
+               the PC) and stops with a SKIP when there is none: a night on a
+               busy host cannot be told apart from a driver defect. Each block
+               records the host CPU/memory it ran under.
                -Blocks picks and orders nothing, it only selects among:
                  ab        paired RC3 / 0.2.5 render comparison, alternating
                            installs, steady and restarting render streams
@@ -64,7 +69,7 @@ param(
     [switch] $Resume,
     [ValidateRange(0, 1800)][int] $SettleSeconds = 300,
     [ValidateRange(60, 3600)][int] $FuzzSeconds = 1800,
-    [ValidateRange(5, 120)][int] $PoolMinutes = 60,
+    [ValidateRange(5, 1440)][int] $PoolMinutes = 120,
     [ValidateRange(1, 60)][int] $EightMinutes = 30,
     # round2 only
     [ValidatePattern('^(ab|pause|live|pool|verifier|control|repro)(,(ab|pause|live|pool|verifier|control|repro))*$')][string] $Blocks = 'ab,pool,verifier,live',
@@ -82,6 +87,8 @@ $principal = [Security.Principal.WindowsPrincipal]::new([Security.Principal.Wind
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Open PowerShell with "Run as administrator".' }
 $peer = Join-Path 'Z:\' (Split-Path -Leaf $bundle)
 if (-not (Test-Path -LiteralPath $peer -PathType Container)) { throw "Shared folder $peer is missing; copy the bundle from Z: first." }
+# Round 2 only: the PC sampler (tools\vm\host-load.ps1) writes the share root.
+$hostLoadPeer = Join-Path (Split-Path -Parent $peer) 'host-load.csv'
 
 $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $probe = Join-Path $bundle 'tools\m00-probe.exe'
@@ -105,7 +112,7 @@ Start-Transcript -LiteralPath (Join-Path $work ('transcript-' + (Get-Date -Forma
 # --- state: steps, results and the running step survive restarts ------------
 $done = [Collections.Generic.List[string]]::new()
 $results = [Collections.Generic.List[object]]::new()
-$state = [pscustomobject]@{ current = $null; crashed = $false; startedUtc = [DateTime]::UtcNow.ToString('o') }
+$state = [pscustomobject]@{ current = $null; crashed = $false; startedUtc = [DateTime]::UtcNow.ToString('o'); hostRows = 0 }
 if ($Resume -and (Test-Path -LiteralPath $statePath)) {
     $saved = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
     foreach ($name in @($saved.done | ForEach-Object { $_ })) { $done.Add([string]$name) }
@@ -113,13 +120,14 @@ if ($Resume -and (Test-Path -LiteralPath $statePath)) {
     $state.current = $saved.current
     $state.crashed = [bool]$saved.crashed
     $state.startedUtc = $saved.startedUtc
+    $state.hostRows = if ($null -ne $saved.hostRows) { [int]$saved.hostRows } else { 0 }
     Write-Host "Resuming '$Session' after a restart; $($done.Count) steps already done." -ForegroundColor Cyan
 } elseif (Test-Path -LiteralPath $statePath) {
     Remove-Item -LiteralPath $statePath
 }
 function Save-State {
     [ordered]@{ session = $Session; done = @($done); results = @($results); current = $state.current
-        crashed = $state.crashed; startedUtc = $state.startedUtc } |
+        crashed = $state.crashed; startedUtc = $state.startedUtc; hostRows = $state.hostRows } |
         ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $statePath -Encoding UTF8
     # Keep a copy on the shared folder after every step: a guest that hangs for
     # hours (the 2026-11-11 Verifier freeze) must not take the results with it.
@@ -183,6 +191,9 @@ if ($state.current -and -not $done.Contains($state.current)) {
     # The VM restarted while a step was running and nobody asked for it.
     $dumps = Copy-CrashDumps $state.current
     Add-Result $state.current 'FAIL' "the VM restarted during this step (bugcheck?); $($dumps.Count) crash dump(s) since the run started"
+    # The PC sampler kept writing through the freeze/restart. Rows from the
+    # step's start (row positions, never clocks) say whether the host was busy.
+    if ($Session -eq 'round2') { Add-HostLoadResult "$($state.current), until the restart" $state.hostRows 'this window decides whether the restart is host starvation or a driver/Verifier candidate' }
     $done.Add($state.current)
     $state.current = $null
     $state.crashed = $true
@@ -497,6 +508,26 @@ function Grade-Pool([string] $Label, $Samples) {
     else { Add-Result $Label 'FAIL' $detail }
 }
 
+# --- host load (round2) --------------------------------------------------------
+# The PC sampler writes C:\VMs\ar-share\host-load.csv, which the guest sees as
+# Z:\host-load.csv. Blocks are judged by row position; the guest clock is not
+# compared with the host clock (the 2026-11-22 core showed they differ by hours).
+function Read-HostLoadRows {
+    param([string] $Path = $hostLoadPeer)
+    if (-not (Test-Path -LiteralPath $Path)) { return @() }
+    try { return @(Get-HostLoadRows @(Get-Content -LiteralPath $Path -ErrorAction Stop)) } catch { return @() }
+}
+function Add-HostLoadResult {
+    param([string] $Name, [int] $From = 0, [string] $Note = '')
+    $window = Get-HostLoadWindow -Rows (Read-HostLoadRows) -From $From
+    $verdict = Get-HostLoadVerdict $window
+    $detail = $verdict.Detail
+    if ($Note) { $detail = "$detail; $Note" }
+    if ($verdict.Verdict -eq 'Idle') { Add-Result "host load ($Name)" 'INFO' $detail }
+    elseif ($verdict.Verdict -eq 'Starved') { Add-Result "host load ($Name)" 'REVIEW' "$detail; host starvation, so this window is not a driver result" }
+    else { Add-Result "host load ($Name)" 'REVIEW' $detail }
+}
+
 # --- steps ---------------------------------------------------------------------
 # A step runs once. After an unplanned restart only -AlwaysRun steps (turning
 # Driver Verifier off, the crash check, removal) still run.
@@ -508,6 +539,9 @@ function Step([string] $Name, [scriptblock] $Body, [switch] $AlwaysRun) {
     }
     Write-Host "`n== $Name" -ForegroundColor Cyan
     $state.current = $Name
+    # Remember where the PC sampler was when this step began. If the guest
+    # freezes, the resumed run classifies the rows written since then.
+    if ($Session -eq 'round2') { $state.hostRows = @(Read-HostLoadRows).Count }
     Save-State
     try { & $Body } catch { Add-Result $Name 'FAIL' $_.Exception.Message }
     $state.current = $null
@@ -1213,6 +1247,9 @@ function Block-Pool {
                 $s = Get-DriverPoolTagSample
                 if (-not (Test-Path -LiteralPath $csv)) { ($s.PSObject.Properties.Name + 'minutes') -join ',' | Set-Content -LiteralPath $csv }
                 (@($s.PSObject.Properties | ForEach-Object { $_.Value }) + $minutes) -join ',' | Add-Content -LiteralPath $csv
+                # Keep the samples on the share while the block runs: a 24 h run
+                # that loses the guest must not lose its evidence with it.
+                try { Copy-Item -LiteralPath $csv -Destination (Join-Path $peer 'pool-tags.csv') -Force -ErrorAction Stop } catch { }
                 $sum = 0.0; $allocs = 0.0
                 foreach ($tag in $script:DriverPoolTags) { $sum += $s.$tag; $allocs += $s."$tag-allocs" }
                 $tagged.Add([pscustomobject]@{ Minutes = $minutes; Bytes = $sum })
@@ -1225,7 +1262,7 @@ function Block-Pool {
         $allocGrowth = Get-SeriesGrowthMiBPerHour $tagAllocs
         $wholeGrowth = Get-SeriesGrowthMiBPerHour $whole
         $first = $tagged[0].Bytes; $last = $tagged[$tagged.Count - 1].Bytes
-        $detail = "driver tags (MNWR, MNTR, SyAu, AUDR): $([Math]::Round($first / 1KB)) KiB to $([Math]::Round($last / 1KB)) KiB, growth $tagGrowth MiB/h; live allocations $($tagAllocs[0].Bytes) to $($tagAllocs[$tagAllocs.Count - 1].Bytes); whole non-paged pool growth $wholeGrowth MiB/h; $($tagged.Count) samples; tone restarted $restarts time(s); pool-tags.csv"
+        $detail = "driver tags (MNWR, MNTR, SyAu, AUDR): $([Math]::Round($first / 1KB)) KiB to $([Math]::Round($last / 1KB)) KiB, growth $tagGrowth MiB/h; live allocations $($tagAllocs[0].Bytes) to $($tagAllocs[$tagAllocs.Count - 1].Bytes); whole non-paged pool growth $wholeGrowth MiB/h; $($tagged.Count) samples; tone restarted $restarts time(s); pool-tags.csv (copied to the share each sample)"
         if ($null -eq $tagGrowth) { Add-Result $label 'FAIL' "too few samples; $detail" }
         elseif ($first -eq 0 -and $last -eq 0) { Add-Result $label 'FAIL' "the driver tags were never seen (wrong tag names?); $detail" }
         elseif ($tagGrowth -le 0.25) { Add-Result $label 'PASS' $detail }
@@ -1365,7 +1402,37 @@ function Block-Control {
     Step-NoBugcheck $P
     Step-Remove $P
 }
+function Step-HostLoadSampler([string] $P) {
+    # A night without the PC sampler cannot tell host starvation from a driver
+    # defect (2026-11-22). Growing rows prove the sampler is alive without any
+    # agreement between the guest clock and the host clock.
+    Step "${P}host-load sampler" {
+        if (-not (Test-Path -LiteralPath $hostLoadPeer)) {
+            Add-Result "${P}host-load sampler" 'FAIL' "no $hostLoadPeer on the share. Start tools\vm\round2-host-preflight.ps1 on the PC first: it checks that the PC is idle and starts the sampler, which writes C:\VMs\ar-share\host-load.csv (Z:\host-load.csv here). Nothing was measured."
+            return
+        }
+        $rows = @(Read-HostLoadRows)
+        if ($rows.Count -lt 3) {
+            Add-Result "${P}host-load sampler" 'FAIL' "only $($rows.Count) row(s) in $hostLoadPeer. Start tools\vm\round2-host-preflight.ps1 on the PC, wait a minute, then rerun. Nothing was measured."
+            return
+        }
+        Start-Sleep -Seconds 25
+        $after = @(Read-HostLoadRows)
+        if ($after.Count -le $rows.Count) {
+            Add-Result "${P}host-load sampler" 'FAIL' "no new row in 25 s ($($rows.Count) rows): the sampler stopped. Start tools\vm\round2-host-preflight.ps1 again. Nothing was measured."
+            return
+        }
+        Add-Result "${P}host-load sampler" 'PASS' "$($after.Count) rows and growing; a freeze can be classified against the host"
+    }
+}
 function Session-Round2([string] $P) {
+    Step-HostLoadSampler $P
+    $gate = @($results | Where-Object { $_.step -eq "${P}host-load sampler" } | Select-Object -Last 1)
+    if (-not $gate -or $gate.verdict -ne 'PASS') {
+        Add-Result "${P}round2 blocks" 'SKIP' 'the host-load sampler check did not pass, so no block was run and no driver result is claimed'
+        return
+    }
+    $processRows = @(Read-HostLoadRows).Count
     $selected = @($Blocks -split ',')
     if ($selected -contains 'pause' -and -not $WithHostPause) {
         Step 'pause: skipped' { Add-Result 'pause: skipped' 'SKIP' 'the pause block needs -WithHostPause and the host watcher' }
@@ -1374,6 +1441,7 @@ function Session-Round2([string] $P) {
     if ($WithHostPause -and $selected -notcontains 'pause') { $selected = @('pause') + $selected }
     foreach ($block in @('ab', 'pause', 'pool', 'verifier', 'control', 'repro', 'live')) {
         if ($selected -notcontains $block) { continue }
+        $from = @(Read-HostLoadRows).Count
         switch ($block) {
             'ab' { Block-Ab }
             'pause' { Block-Pause }
@@ -1383,7 +1451,9 @@ function Session-Round2([string] $P) {
             'control' { Block-Control }
             'repro' { Block-Repro }
         }
+        Add-HostLoadResult "$block block" $from
     }
+    Add-HostLoadResult 'this runner process' $processRows
 }
 
 # --- run -----------------------------------------------------------------------

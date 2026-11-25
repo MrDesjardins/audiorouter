@@ -51,6 +51,33 @@ fn audio_status_names_the_attached_worker_kind() {
 }
 
 #[test]
+fn no_audio_status_reason_means_another_application_owns_the_device() {
+    // The Properties live pill no longer inspects this text; this test keeps
+    // the assumption honest: an endpoint owned by another app is a prepare
+    // error, never an audio status reason.
+    for state in ["running", "configured-stopped", "unknown"] {
+        for kind in [
+            None,
+            Some("endpoint"),
+            Some("process-loopback"),
+            Some("duplex"),
+            Some("render-source"),
+            Some("multi-input"),
+            Some("cable-route"),
+        ] {
+            let (_, reason) = ControlPlane::audio_status_for(state, kind);
+            let lower = reason.to_ascii_lowercase();
+            assert!(
+                !lower.contains("in use")
+                    && !lower.contains("owned")
+                    && !lower.contains("exclusive"),
+                "{state}/{kind:?}: {reason}"
+            );
+        }
+    }
+}
+
+#[test]
 fn status_snapshot_tracks_sessions_and_event_cursor() {
     let mut plane = ControlPlane::default();
     let initial = plane.dispatch(JsonRpcRequest {

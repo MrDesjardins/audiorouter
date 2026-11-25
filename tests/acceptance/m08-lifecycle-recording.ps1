@@ -52,6 +52,18 @@ $bytes = [IO.File]::ReadAllBytes($tone)
 [IO.File]::WriteAllBytes($broken, $bytes[0..($bytes.Length - 2)])
 Expect-Rejected $broken '*Invalid RIFF*'
 $recorderText = [IO.File]::ReadAllText((Join-Path $PSScriptRoot '../../tools/vm/installer-lifecycle-recording.ps1'))
+# A reinstall keeps the user's device consent, so an installed-shell offline check
+# must be able to run without the fresh-install consent assertion.
+if ($recorderText -notmatch '\$ExpectDeviceAccess' -or $recorderText -notmatch 'device access was') {
+    throw 'Recorder must allow an already-consented installed shell'
+}
+# Idempotency records persist across app restarts. A fixed Play/Record key would
+# replay an earlier result instead of starting a new recording (and a replayed
+# Play reports a stopped route as running), so every key needs a per-attempt nonce.
+if ($recorderText -notmatch '\$run = \[guid\]::NewGuid' -or
+    $recorderText -match "idempotencyKey = 'qualification-") {
+    throw 'Recorder idempotency keys must be unique per attempt'
+}
 # WebView2 writes its debugging port below the EBWebView folder of the user data
 # directory. Looking beside it left the installed-shell run waiting until timeout.
 if ($recorderText -notmatch [regex]::Escape("'EBWebView\DevToolsActivePort'")) { throw 'Recorder must read DevToolsActivePort from EBWebView' }

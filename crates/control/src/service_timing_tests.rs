@@ -1006,6 +1006,127 @@ fn service_cadence_while_bundle_work_runs() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// The three large-library workloads the plan asks about, running at the same
+/// time: Play's media decode, a bundle export (prepare + ZIP) and a bundle
+/// import (stage + restore). The production backend serves control requests
+/// one at a time, so this is not a dispatch-order test; it asks whether the
+/// service closure still ticks when those three workloads compete for disk and
+/// CPU, as separate clients or helper threads would.
+///
+/// The Play decode uses `session_audio_media` on a second connection to the
+/// same library; export and import use their own connections and paths. A
+/// ready bundle is exported before the clock so the import can overlap.
+#[test]
+#[ignore = "opt-in timing harness; builds a ~400 MiB synthetic library"]
+fn concurrent_play_export_import_service_cadence() {
+    let scale = env_usize("AUDIOROUTER_TIMING_SCALE", 1);
+    let runs = env_usize("AUDIOROUTER_TIMING_RUNS", 3);
+    let root = unique_root("concurrent");
+    isolate_temp(&root.join("temp"));
+    let mut rows = Rows::new(
+        "run,play_ms,export_ms,import_ms,wall_ms,passes,median_gap_ms,p99_gap_ms,max_gap_ms,gaps_over_8ms",
+    );
+    for run in 0..runs {
+        let run_root = root.join(format!("run-{run}"));
+        let library = build_library(&run_root, scale);
+        let source = EntityId::new("export-compressible");
+        let ready_bundle = run_root.join("ready.audiorouter");
+        {
+            let storage = Storage::open(library.database()).unwrap();
+            storage
+                .prepare_bundle_export(&source)
+                .unwrap()
+                .write(&ready_bundle)
+                .unwrap();
+        }
+        // Play's decode fixture: eight 100 s stereo 16-bit files, the same
+        // shape `play_path_media_load_and_compile` uses (a Mixer takes eight).
+        let play_root = run_root.join("play");
+        std::fs::create_dir_all(&play_root).unwrap();
+        let play_database = play_root.join("play.sqlite");
+        let mut play_media = Vec::new();
+        {
+            let storage = Storage::open(&play_database).unwrap();
+            for index in 0..8 {
+                let id = format!("play-{index:02}");
+                storage
+                    .store_audio_media(
+                        &id,
+                        "fixture.wav",
+                        "wav",
+                        &wav_with_format(44 + 100 * 48_000 * 4, false, index as u64 + 3, 48_000, 2),
+                        None,
+                    )
+                    .unwrap();
+                play_media.push(id);
+            }
+            storage
+                .save_session(&media_session("play", &play_media))
+                .unwrap();
+        }
+        let play = std::thread::spawn(move || {
+            let mut plane = plane_for(&play_database, "timing-concurrent-play");
+            let session = plane.get_session(&EntityId::new("play")).unwrap().clone();
+            let start = Instant::now();
+            plane.session_audio_media(&session, 48_000).unwrap();
+            millis(start.elapsed())
+        });
+        let export_database = library.database();
+        let export_bundle = run_root.join("concurrent.audiorouter");
+        let export = std::thread::spawn(move || {
+            let storage = Storage::open(&export_database).unwrap();
+            let start = Instant::now();
+            storage
+                .prepare_bundle_export(&EntityId::new("export-compressible"))
+                .unwrap()
+                .write(&export_bundle)
+                .unwrap();
+            millis(start.elapsed())
+        });
+        let import_staging = run_root.join("staging");
+        let import_database = run_root.join("imported.sqlite");
+        let import = std::thread::spawn(move || {
+            let start = Instant::now();
+            let staged = Storage::stage_session_bundle(&ready_bundle, &import_staging).unwrap();
+            let storage = Storage::open(&import_database).unwrap();
+            storage.restore_session_bundle(staged).unwrap();
+            millis(start.elapsed())
+        });
+        let mut plane = plane_for(&library.database(), "timing-concurrent-service");
+        let mut cadence = Cadence::default();
+        let mut last = None;
+        let start = Instant::now();
+        loop {
+            let now = Instant::now();
+            if let Some(previous) = last {
+                cadence.gaps.push(now.saturating_duration_since(previous));
+            }
+            plane.service_running_native_audio(now);
+            last = Some(now);
+            if (play.is_finished() && export.is_finished() && import.is_finished())
+                || start.elapsed() > Duration::from_secs(120)
+            {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let wall = millis(start.elapsed());
+        let play_ms = play.join().unwrap();
+        let export_ms = export.join().unwrap();
+        let import_ms = import.join().unwrap();
+        let (passes, median, p99, max, late) = cadence.summary();
+        eprintln!(
+            "concurrent: play {play_ms:.0} ms, export {export_ms:.0} ms, import {import_ms:.0} ms; service passes {passes}, max gap {max:.2} ms"
+        );
+        rows.push(format!(
+            "{run},{play_ms:.1},{export_ms:.1},{import_ms:.1},{wall:.1},{passes},{median:.3},{p99:.3},{max:.3},{late}"
+        ));
+        let _ = std::fs::remove_dir_all(&run_root);
+    }
+    rows.save();
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// Do an export and an import of a 20 MiB audio asset both succeed? The
 /// importer limits non-media entries to 16 MiB but media entries to 64 MiB, so
 /// they should. Prints both outcomes; asserts nothing, so the result is

@@ -360,11 +360,9 @@ fn graph_commit_can_require_its_session_to_be_stopped_for_recovery_edits() {
             "requireStoppedSessionId":"feedback"
         }),
     ));
-    assert!(response
-        .error
-        .unwrap()
-        .message
-        .contains("session to be stopped"));
+    let error = response.error.unwrap();
+    assert!(error.message.contains("session to be stopped"));
+    assert_eq!(error.data.unwrap()["code"], "sessionNotStopped");
     assert_eq!(plane.get_session(&original.id).unwrap().revision, 0);
 }
 
@@ -834,6 +832,220 @@ fn live_edit_classification_distinguishes_parameters_flags_and_topology() {
         .parameters
         .insert("gainDb".into(), json!(-6.0));
     assert_eq!(classify_live_edit(&saved, &both), LiveEdit::ParametersOnly);
+}
+
+/// Issue #149: the reporter toggled Mute and changed the Fun Voice Changer
+/// while an automatic save was in flight. The backend serves one request at a
+/// time, so this proves the serial case the window falls back to: the save
+/// that follows is built from the revision the first save wrote, so it commits
+/// instead of returning a revision conflict, while a plan still built from the
+/// old revision is refused. The in-flight overlap itself is the App regression
+/// `coalesces edits during automatic save`; "no new worker for an unchanged
+/// plugin" is covered by
+/// `merged_preparation_reuses_worker_and_defers_slider_changes_until_publication`
+/// and `only_requested_plugin_groups_start_and_fully_reused_groups_are_skipped`.
+#[test]
+fn a_second_save_based_on_the_first_saves_revision_commits_without_a_conflict() {
+    use audiorouter_domain::voice_changer::{voice_preset_parameters, VOICE_PRESETS};
+    let stereo = |name: &str, direction| Port {
+        name: name.into(),
+        direction,
+        channels: 2,
+    };
+    let tool = |id: &str, kind: NodeKind| Node {
+        id: EntityId::new(id),
+        kind,
+        type_version: 1,
+        name: id.into(),
+        enabled: true,
+        bypass: false,
+        parameters: Default::default(),
+        ports: vec![
+            stereo("in", PortDirection::Input),
+            stereo("out", PortDirection::Output),
+        ],
+    };
+    let edge = |source: &str, destination: &str, matrix: Vec<f32>| Edge {
+        id: EntityId::new(format!("{source}->{destination}")),
+        source_node: EntityId::new(source),
+        source_port: "out".into(),
+        destination_node: EntityId::new(destination),
+        destination_port: "in".into(),
+        matrix,
+        enabled: true,
+    };
+    // Tone -> Mute -> Fun Voice Changer -> Meter opens no audio device, so the
+    // route starts through the ordinary API on this machine.
+    let route = Session {
+        id: EntityId::new("issue-149"),
+        name: "issue-149".into(),
+        schema_version: 1,
+        revision: 0,
+        nodes: vec![
+            test_signal("tone"),
+            tool("mute", NodeKind::Mute),
+            tool("voice", NodeKind::FunVoiceChanger),
+            meter("meter"),
+        ],
+        edges: vec![
+            edge("tone", "mute", vec![1.0, 0.0, 0.0, 1.0]),
+            edge("mute", "voice", vec![1.0, 0.0, 0.0, 1.0]),
+            edge("voice", "meter", vec![1.0, 0.0, 0.0, 1.0]),
+        ],
+    };
+    let mut plane = ControlPlane::default();
+    plane.insert_session(route.clone()).unwrap();
+    plane.session_start(&route.id).unwrap();
+    let session_id = route.id.clone();
+    let request_id = std::cell::Cell::new(0_u64);
+    let next_request_id = || {
+        request_id.set(request_id.get() + 1);
+        request_id.get()
+    };
+    let plan = |plane: &mut ControlPlane, base: u64, candidate: &Session| {
+        plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(next_request_id())),
+            method: "graph.plan".into(),
+            params: Some(json!({
+                "sessionId": session_id,
+                "baseRevision": base,
+                "candidate": candidate
+            })),
+        })
+    };
+    let commit = |plane: &mut ControlPlane, plan_id: &str, base: u64, key: &str| {
+        plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(next_request_id())),
+            method: "graph.commit".into(),
+            params: Some(json!({
+                "planId": plan_id,
+                "baseRevision": base,
+                "idempotencyKey": key
+            })),
+        })
+    };
+    let plan_id = |response: &JsonRpcResponse| {
+        assert!(response.error.is_none(), "{response:?}");
+        response.result.as_ref().unwrap()["planId"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+
+    // The user's first autosave: Mute on and a voice preset chosen.
+    let mut first = route.clone();
+    first
+        .nodes
+        .iter_mut()
+        .find(|node| node.id.as_str() == "mute")
+        .unwrap()
+        .parameters
+        .insert("muted".into(), json!(true));
+    first
+        .nodes
+        .iter_mut()
+        .find(|node| node.id.as_str() == "voice")
+        .unwrap()
+        .parameters = voice_preset_parameters(&VOICE_PRESETS[2])
+        .into_iter()
+        .collect();
+    let planned = plan(&mut plane, 0, &first);
+    let id = plan_id(&planned);
+    let committed = commit(&mut plane, &id, 0, "issue149-save-1");
+    assert!(committed.error.is_none(), "{committed:?}");
+    assert_eq!(
+        committed.result.as_ref().unwrap()["revision"],
+        1,
+        "{committed:?}"
+    );
+    assert_eq!(classify_live_edit(&route, &first), LiveEdit::ParametersOnly);
+    assert!(classify_live_edit(&route, &first).retains_sources());
+
+    // A second edit arrived while that save was running. The window saves it
+    // from the revision the first save just wrote; that must commit.
+    let mut second = first.clone();
+    second
+        .nodes
+        .iter_mut()
+        .find(|node| node.id.as_str() == "voice")
+        .unwrap()
+        .parameters
+        .insert("pitchSemitones".into(), json!(4.0));
+    let planned = plan(&mut plane, 1, &second);
+    let id = plan_id(&planned);
+    let committed = commit(&mut plane, &id, 1, "issue149-save-2");
+    assert!(committed.error.is_none(), "{committed:?}");
+    assert_eq!(
+        committed.result.as_ref().unwrap()["revision"],
+        2,
+        "{committed:?}"
+    );
+    assert_eq!(
+        classify_live_edit(&first, &second),
+        LiveEdit::ParametersOnly
+    );
+
+    // A request still built from the old revision is refused, so this case can
+    // fail: the second save is not accepted just because it comes after the
+    // first.
+    let stale = plan(&mut plane, 0, &second);
+    let error = stale.error.expect("a stale plan must be refused");
+    assert_eq!(
+        error.data.as_ref().unwrap()["code"],
+        "revisionConflict",
+        "{error:?}"
+    );
+
+    let saved = plane.get_session(&route.id).unwrap().clone();
+    let mute = saved
+        .nodes
+        .iter()
+        .find(|node| node.id.as_str() == "mute")
+        .unwrap();
+    assert_eq!(mute.parameters["muted"], json!(true));
+    let voice = saved
+        .nodes
+        .iter()
+        .find(|node| node.id.as_str() == "voice")
+        .unwrap();
+    assert_eq!(voice.parameters["pitchSemitones"], json!(4.0));
+    assert_eq!(saved.revision, 2);
+}
+
+fn test_signal(id: &str) -> Node {
+    Node {
+        id: EntityId::new(id),
+        kind: NodeKind::TestSignal,
+        type_version: 1,
+        name: id.into(),
+        enabled: true,
+        bypass: false,
+        parameters: Default::default(),
+        ports: vec![Port {
+            name: "out".into(),
+            direction: PortDirection::Output,
+            channels: 2,
+        }],
+    }
+}
+
+fn meter(id: &str) -> Node {
+    Node {
+        id: EntityId::new(id),
+        kind: NodeKind::Meter,
+        type_version: 1,
+        name: id.into(),
+        enabled: true,
+        bypass: false,
+        parameters: Default::default(),
+        ports: vec![Port {
+            name: "in".into(),
+            direction: PortDirection::Input,
+            channels: 2,
+        }],
+    }
 }
 
 #[test]

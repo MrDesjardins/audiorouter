@@ -32,8 +32,30 @@ pub const MAX_PENDING_PLAN_RECORDS: usize = 100;
 /// Maximum number of enrolled local client identities retained by the control
 /// plane. The extra row used by list reads is a fail-closed overflow sentinel.
 pub const MAX_CLIENT_ENROLLMENTS: usize = 256;
-/// Maximum number of recent idempotency outcomes retained by SQLite.
-pub const MAX_OPERATION_JOURNAL_ENTRIES: usize = 4_096;
+/// Maximum number of recent idempotency outcomes retained by SQLite. A graph
+/// edit writes two rows (the edit outcome and its commit), so this holds 16,384
+/// edits in the 24-hour API-07 window. Every commit counts the rows, so the
+/// bound also limits handler time (about 0.5 ms at this size, 2 ms at 131,072).
+/// Sustained automation near the API-11 ceiling can still reach it and is refused.
+pub const MAX_OPERATION_JOURNAL_ENTRIES: usize = 32_768;
+
+#[cfg(test)]
+thread_local! {
+    /// A small capacity for the refusal test, so the production bound does not
+    /// require tens of thousands of inserts. Thread-local keeps parallel tests independent.
+    static TEST_JOURNAL_CAPACITY: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+fn journal_capacity() -> usize {
+    #[cfg(test)]
+    {
+        let value = TEST_JOURNAL_CAPACITY.with(std::cell::Cell::get);
+        if value > 0 {
+            return value;
+        }
+    }
+    MAX_OPERATION_JOURNAL_ENTRIES
+}
 pub const MAX_AUDIO_MEDIA_BYTES: usize = 64 * 1024 * 1024;
 pub const MAX_AUDIO_MEDIA_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
 
@@ -4052,7 +4074,7 @@ impl Storage {
                 transaction.query_row("SELECT COUNT(*) FROM operation_journal", [], |row| {
                     row.get(0)
                 })?;
-            if count >= MAX_OPERATION_JOURNAL_ENTRIES {
+            if count >= journal_capacity() {
                 return Err(StorageError::JournalLimitReached);
             }
         }
@@ -4129,7 +4151,7 @@ impl Storage {
                 .query_row("SELECT COUNT(*) FROM operation_journal", [], |row| {
                     row.get(0)
                 })?;
-        if count >= MAX_OPERATION_JOURNAL_ENTRIES {
+        if count >= journal_capacity() {
             return Err(StorageError::JournalLimitReached);
         }
         Ok(())
@@ -4516,7 +4538,7 @@ impl Storage {
                 transaction.query_row("SELECT COUNT(*) FROM operation_journal", [], |row| {
                     row.get(0)
                 })?;
-            if count >= MAX_OPERATION_JOURNAL_ENTRIES {
+            if count >= journal_capacity() {
                 return Err(StorageError::JournalLimitReached);
             }
         }
@@ -6186,8 +6208,11 @@ mod tests {
 
     #[test]
     fn operation_journal_rejects_new_keys_at_capacity_but_replays_existing() {
+        // A small thread-local cap exercises the refusal without inserting the
+        // production bound's rows.
+        TEST_JOURNAL_CAPACITY.with(|capacity| capacity.set(8));
         let storage = Storage::open_memory().unwrap();
-        for index in 0..MAX_OPERATION_JOURNAL_ENTRIES {
+        for index in 0..8 {
             assert!(storage
                 .journal_commit(&format!("journal-{index}"), "graph.commit", "{}", 1)
                 .unwrap());
@@ -6198,6 +6223,27 @@ mod tests {
         ));
         assert!(!storage
             .journal_commit("journal-0", "graph.commit", "different", 2)
+            .unwrap());
+        TEST_JOURNAL_CAPACITY.with(|capacity| capacity.set(0));
+    }
+
+    const _: () = assert!(MAX_OPERATION_JOURNAL_ENTRIES >= 32_768);
+
+    #[test]
+    fn operation_journal_accepts_more_than_the_old_small_bound() {
+        // A graph edit writes two journal rows. The old 4,096-row bound refused
+        // the 2,049th edit; a normal editing day needs far more.
+        let storage = Storage::open_memory().unwrap();
+        for index in 0..4_097 {
+            assert!(
+                storage
+                    .journal_commit(&format!("day-{index}"), "nodes.set", "{}", 1)
+                    .unwrap(),
+                "day edit {index} was refused"
+            );
+        }
+        assert!(storage
+            .journal_commit("day-last", "nodes.set", "{}", 1)
             .unwrap());
     }
 

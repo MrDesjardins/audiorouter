@@ -9,7 +9,7 @@ docs. Unsigned prereleases 0.0.2–0.0.7 were published from it, each with an
 exact-package fresh-install check and downloaded-asset verification. Step 6
 (clean-machine install/upgrade/uninstall, missing WebView2, signatures) is
 not done and is tracked in the active plan and the
-[signing plan](../active/release-signing-and-publication.md).
+[signing plan](2026-11-24-release-signing-and-publication.md).
 
 Status: planning requested 2026-09-28; implementation is not authorized by
 this plan. The user asked for an easy integrated install and a manual official

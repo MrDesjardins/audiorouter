@@ -40,13 +40,19 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(picker).toHaveValue("surround-preview");
     await picker.press("Tab");
     await expect(picker).not.toBeFocused();
+    // Escape cancels the list, Tab leaves the field, and neither applies the
+    // provisional choice to the backend: the change stays in the unsaved route
+    // until Save, and the next control keeps its own focus.
+    await expect(picker).toHaveValue("surround-preview");
+    await expect(page.getByRole("button", { name: "Refresh available outputs", exact: true })).toBeFocused();
     expect(
-      await page.evaluate(() =>
-        (window as unknown as { __routeFixtureCalls: () => string[] })
+      await page.evaluate(() => ({
+        calls: (window as unknown as { __routeFixtureCalls: () => string[] })
           .__routeFixtureCalls()
-          .filter((call) => call === "commit"),
-      ),
-    ).toEqual([]);
+          .filter((call) => call === "commit" || call === "start"),
+        plans: (window as unknown as { __routeFixturePlanCalls: () => number }).__routeFixturePlanCalls(),
+      })),
+    ).toEqual({ calls: [], plans: 0 });
     await page.setViewportSize({ width: 640, height: 690 });
     await picker.scrollIntoViewIfNeeded();
     const bounds = (await picker.boundingBox())!;

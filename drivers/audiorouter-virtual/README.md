@@ -105,7 +105,7 @@ This prototype becomes the shipped AudioRouter Cable A–H driver (up to 8
 cables, 2 enabled by default). What must change (16 endpoints, enabled
 count, protocol 1.1, security fixes, helper, signing) is in
 [17 Virtual cable](../../docs/spec/17-virtual-cable.md) and the
-[virtual cable plan](../../docs/plans/active/virtual-cable.md). Test only in
+[virtual cable plan](../../docs/plans/archived/2026-11-24-virtual-cable.md). Test only in
 the VM described in
 [virtual cable testing](../../docs/operations/virtual-cable-testing.md).
 

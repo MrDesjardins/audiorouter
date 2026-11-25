@@ -506,7 +506,7 @@ impl ControlPlane {
             let key = text_param(&params, "idempotencyKey")?.to_owned();
             let scoped = self.scoped_idempotency_key(method, &key);
             let hash = Self::request_hash(&json!({ "method": method, "params": params }));
-            if let Some(previous) = self.lookup_idempotent_result(&scoped, &hash)? {
+            if let Some(previous) = self.replay_runtime_outcome(&scoped, &hash, method, &params)? {
                 return Ok(previous);
             }
             Some((scoped, hash, key))
@@ -604,6 +604,62 @@ impl ControlPlane {
         self.runtimes
             .get(session_id)
             .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+    }
+
+    /// An outcome recorded by an earlier backend lifetime that claims a live
+    /// runtime state this process cannot honour. Same-lifetime replays are always
+    /// verbatim; only a storage-only record is checked, and the side effect is
+    /// never repeated.
+    pub(crate) fn stale_runtime_outcome(
+        &self,
+        method: &str,
+        params: &Value,
+        result: &Value,
+    ) -> Option<&'static str> {
+        let state = result.get("state").and_then(Value::as_str);
+        let running = |plane: &Self| {
+            plane
+                .simple_session_id(params)
+                .ok()
+                .is_some_and(|id| plane.simple_running(&id))
+        };
+        match method {
+            "sessions.play" | "sessions.start" | "session.start" => (state == Some("running"))
+                .then_some("the route is no longer playing. Send a new request to play it."),
+            "sessions.togglePlay" => match state {
+                Some("running") => {
+                    Some("the route is no longer playing. Send a new request to play it.")
+                }
+                Some("stopped") if running(self) => {
+                    Some("the route is playing again. Send a new request to stop it.")
+                }
+                _ => None,
+            },
+            "sessions.stop" | "session.stop" => (state == Some("stopped") && running(self))
+                .then_some("the route is playing again. Send a new request to stop it."),
+            "recorders.startRecording"
+            | "recorders.start"
+            | "recorders.resume"
+            | "recorders.arm" => matches!(state, Some("recording" | "paused" | "armed"))
+                .then_some("the recording is no longer running. Send a new request to record it."),
+            "recorders.pause" => (state == Some("paused"))
+                .then_some("the recording is no longer paused. Send a new request to pause it."),
+            "recorders.stopRecording" | "recorders.stop" => self
+                .simple_session_id(params)
+                .ok()
+                .is_some_and(|id| self.session_is_recording(&id))
+                .then_some("a recording is running again. Send a new request to stop it."),
+            "recorders.create" => result.get("recorderId").is_some().then_some(
+                "the recorder it created no longer exists. Send a new request to create it.",
+            ),
+            "safety.togglePrivacyMute" | "safety.setPrivacyMute" => {
+                (result.get("muted").and_then(Value::as_bool) != Some(self.privacy_muted))
+                    .then_some(
+                    "the privacy mute is no longer in that state. Send a new request to change it.",
+                )
+            }
+            _ => None,
+        }
     }
 
     /// Prepare the saved route's devices (every path) and start, as Play does.

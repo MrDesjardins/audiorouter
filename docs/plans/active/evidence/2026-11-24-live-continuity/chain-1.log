@@ -1,0 +1,68 @@
+﻿cargo.exe :     Finished `release` profile [optimized] target(s) in 0.15s
+At line:11 char:91
++ ... in-$n.log"; & cargo test -p audiorouter-transport --test live_audio_c ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Finished `r...get(s) in 0.15s:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+     Running tests\live_audio_continuity.rs (target\release\deps\live_audio_continuity-8b777f43e301c398.exe)
+
+running 1 test
+tone render buffer: 2400 frames
+prepared: {"branchNodeIds":["destination"],"generation":1,"pathCount":1,"renderEndpointIds":["{0.0.0.00000000}.{03498a2
+a-ef6a-4dd4-b9ba-72e22f567d7a}"],"sessionId":"continuity","sourceNodeIds":["source"],"state":"configured-stopped"}
+started:
+{"generation":1,"preview":false,"runtime":"native","savedRevision":0,"sessionId":"continuity","state":"running"}
+service phase maxima (wait, dispatch, pump): [3.0695ms, 1.7205ms, 905.2┬╡s]
+chain: [Gain, ParametricEq, GraphicEq, BassTreble, Dehum, Compressor, Gate, Limiter, Delay, Meter]; audio service:
+{"active":true,"lateGaps":0,"maxGapMicros":3095,"passes":19167}; output underruns: 1
+  "source" timing={"delayMs":16.07987286782721} plugin=null network=null processor=null
+  "tool-0" timing={"delayMs":0.0,"processingUsAvg":0.5002916560994167,"processingUsMax":7.5} plugin=null network=null
+processor=null
+  "tool-1" timing={"delayMs":0.0,"processingUsAvg":3.84141516611717,"processingUsMax":683.0} plugin=null network=null
+processor=null
+  "tool-2" timing={"delayMs":0.0,"processingUsAvg":10.173750951052495,"processingUsMax":587.6} plugin=null
+network=null processor=null
+  "tool-3" timing={"delayMs":0.0,"processingUsAvg":2.5946614253106772,"processingUsMax":176.0} plugin=null
+network=null processor=null
+  "tool-4" timing={"delayMs":0.0,"processingUsAvg":4.38034491503931,"processingUsMax":35.5} plugin=null network=null
+processor=null
+  "tool-5" timing={"delayMs":0.0,"processingUsAvg":2.302675627694649,"processingUsMax":133.2} plugin=null network=null
+processor={"gainReductionDb":[0.0,0.0],"gateOpen":[false,false],"inputLevelDb":[-26.020774841308594,-26.020774841308594
+],"outputLevelDb":[-26.020774841308594,-26.020774841308594]}
+  "tool-6" timing={"delayMs":0.0,"processingUsAvg":11.31473497337053,"processingUsMax":166.4} plugin=null network=null
+processor={"gainReductionDb":[1.6815581571897805e-43,0.0],"gateOpen":[true,false],"inputLevelDb":[-26.020774841308594,-
+26.020774841308594],"outputLevelDb":[-26.020774841308594,-26.020774841308594]}
+  "tool-7" timing={"delayMs":5.0,"processingUsAvg":1.7271240172457518,"processingUsMax":29.3} plugin=null network=null
+processor={"gainReductionDb":[0.0,0.0],"gateOpen":[false,false],"inputLevelDb":[-26.020774841308594,-26.020774841308594
+],"outputLevelDb":[-26.02135467529297,-26.02135467529297]}
+  "tool-8" timing={"delayMs":0.0,"processingUsAvg":2.3201749936596503,"processingUsMax":166.9} plugin=null
+network=null processor=null
+  "tool-9" timing={"delayMs":0.0,"processingUsAvg":0.8658889170682222,"processingUsMax":9.1} plugin=null network=null
+processor=null
+  "destination" timing={"delayMs":23.965489690923647} plugin=null network=null processor=null
+reference (CABLE Output): 20.0 s analysed, peak 0.0500, 0 glitches, 0 silent runs (0 samples), 0 WASAPI discontinuity
+flags
+  glitches per 5 s: [0, 0, 0, 0, 0]
+routed result (CABLE-B Output): 20.0 s analysed, peak 0.0500, 2 glitches, 1 silent runs (544 samples), 0 WASAPI
+discontinuity flags
+  glitches per 5 s: [2, 0, 0, 0, 0]
+  at    1.189 s residual 1.00x amplitude
+  at    1.200 s residual 1.00x amplitude
+
+thread 'live::live_backend_service_keeps_a_routed_tone_continuous' (49108) panicked at
+crates\transport\tests\live_audio_continuity.rs:1223:9:
+assertion `left == right` failed: the routed tone has audible discontinuities
+  left: 2
+ right: 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test live::live_backend_service_keeps_a_routed_tone_continuous ... FAILED
+
+failures:
+
+failures:
+    live::live_backend_service_keeps_a_routed_tone_continuous
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out; finished in 22.10s
+
+error: test failed, to rerun pass `-p audiorouter-transport --test live_audio_continuity`
