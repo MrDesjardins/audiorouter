@@ -16,6 +16,23 @@ for (const theme of THEMES) {
   });
 }
 
+test("Mic to Discord builds the cable route without asking for a game", async ({ page }) => {
+  await page.goto("/backend-harness.html");
+  await page.keyboard.press("Control+k");
+  await page.getByRole("combobox").fill("start from");
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "What do you want to do?" });
+  await dialog.getByRole("button", { name: "Use this: Mic to Discord" }).click();
+  await expect(page.getByRole("dialog", { name: "What do you want to do?" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Choose later", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Make this route", exact: true })).toHaveCount(0);
+  for (const name of ["Microphone", "Speech Denoise", "Gate", "Compressor", "Voice to Discord"]) {
+    await expect(page.locator(".react-flow__node").filter({ hasText: name }).first()).toBeAttached();
+  }
+  await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(4);
+  await expect(page.locator(".global-action-message")).toContainText("the virtual cable Discord listens to");
+});
+
 test("a goal makes a real stopped route with no device chosen, and the tour replays from Help", async ({
   page,
 }, info) => {

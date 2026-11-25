@@ -9,6 +9,7 @@ import { uiIdempotencyKey } from "./idempotency";
 
 const GOAL_ICONS: Record<string, IconName> = {
   "clean-mic": "mic",
+  "mic-discord": "mic",
   "game-discord": "gamepad-2",
   podcast: "podcast",
   empty: "square-dashed",
@@ -20,12 +21,14 @@ const GOAL_ICONS: Record<string, IconName> = {
  * anything else (a newer backend) is shown as received. */
 const GOAL_TEXT_KEYS: Record<string, MessageKey> = {
   "Clean up my mic": "h2.goalTitleCleanMic",
+  "Mic to Discord": "h2.goalTitleMicDiscord",
   "Game and voice for Discord": "h2.goalTitleGameDiscord",
   "Record a podcast": "h2.goalTitlePodcast",
   "Start empty": "h2.goalTitleEmpty",
   "Record one app": "h2.goalTitleRecordApp",
   "Talk to a guest without echo": "h2.goalTitleMixMinus",
   "A clearer voice for calls and games.": "h2.goalSumCleanMic",
+  "Your cleaned voice goes to the cable Discord listens to.": "h2.goalSumMicDiscord",
   "Your voice goes to Discord, and the game stays out of it.": "h2.goalSumGameDiscord",
   "Your mic and a guest's app, saved to a file.": "h2.goalSumPodcast",
   "An empty canvas. Add tools yourself.": "h2.goalSumEmpty",
