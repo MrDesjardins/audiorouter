@@ -65,6 +65,7 @@ import type {
 import type { MethodParams, MethodResult } from "@audiorouter/contracts";
 import { demoSession, demoSessions } from "./fixtures";
 import { errorMessage, type UiMessage } from "./actionMessage";
+import { tm } from "./actionText";
 
 export type ApplicationRow = ApplicationInfo;
 export type ProcessorResponseParams = NonNullable<MethodParams["processors.response"]>;
@@ -136,17 +137,17 @@ export function formatUiError(error: unknown, fallback: string): string {
   if (
     /native (?:worker|render-source worker|output fan-out) (?:is )?already (?:attached|connected)/i.test(error.message)
   ) {
-    return "Audio is already prepared in this app. Stop playback, then try Play again. If it still cannot start, close AudioRouter and reopen it.";
+    return tm("backendErrors.alreadyPrepared");
   }
   const invalidSetting = /^nodes\[\d+\]\.parameters\.(\w+): parameter is invalid$/.exec(error.message.trim());
   if (invalidSetting) {
     // Seen when Save is pressed while an audio file is still uploading (mediaId not set yet).
     return invalidSetting[1] === "mediaId"
-      ? "An audio file is not ready yet, so the route was not saved. Wait until the file finishes importing, or choose it again, then press Save."
-      : `A tool setting (${invalidSetting[1]}) has a value AudioRouter cannot use, so the route was not saved. Check the tool's Properties, then press Save.`;
+      ? tm("backendErrors.mediaNotReady")
+      : tm("backendErrors.settingInvalid", { name: invalidSetting[1] });
   }
   if (isRevisionConflict(error)) {
-    return "Another save changed this route, so your save was not applied. Your edits are kept. Compare them with the latest saved route, then save again.";
+    return tm("backendErrors.revisionConflict");
   }
   if (
     /0x88890004/i.test(error.message) ||
@@ -154,7 +155,7 @@ export function formatUiError(error: unknown, fallback: string): string {
       (error.data?.code === "deviceInvalidated" ||
         (typeof error.data?.hresult === "number" && error.data.hresult >>> 0 === 0x88890004)))
   ) {
-    return "The selected audio device changed or disconnected. Stop audio, refresh the device list, then select the exact input and output again. Play will reopen those devices. If one is missing, reconnect it before retrying.";
+    return tm("backendErrors.deviceInvalidated");
   }
   if (
     /0x8889000a/i.test(error.message) ||
@@ -164,22 +165,23 @@ export function formatUiError(error: unknown, fallback: string): string {
   ) {
     const device = failedDevice(error);
     if (device) {
-      const tab = device.direction === "capture" ? "Recording" : "Playback";
+      const tab = tm(
+        device.direction === "capture" ? "backendErrors.windowsRecordingTab" : "backendErrors.windowsPlaybackTab",
+      );
       const twin = sameCableTwin(device);
-      const twinText = twin
-        ? ` This is a VB-Cable: an application playing to its twin "${twin}" (the same cable) also blocks it, so set that application to "${device.name}" instead.`
-        : "";
-      return `"${device.name}" is in use by another application, which has taken it exclusively.${twinText} Close or reconfigure that application, or stop apps from locking it: Windows Sound settings → ${tab} → ${device.name} → Properties → Advanced → untick "Allow applications to take exclusive control". Then press Play again.`;
+      return twin
+        ? tm("backendErrors.deviceInUseNamedWithTwin", { device: device.name, twin, tab })
+        : tm("backendErrors.deviceInUseNamed", { device: device.name, tab });
     }
-    return "The selected audio device is in use by another application. Choose a different device in the Output Device node's Properties, or release this exact device in the application using it, then prepare it again.";
+    return tm("backendErrors.deviceInUse");
   }
   if (/native graph rejected: UnsupportedTopology/.test(error.message)) {
-    return "This route includes an audio combination the current engine cannot play. Try a separate Test Signal → Physical Output route, or remove one source and connect the remaining source directly to the output. Your saved route was not changed.";
+    return tm("backendErrors.unsupportedTopology");
   }
   const permission = /permission denied:\s*([A-Za-z]+)/i.exec(error.message);
   if (permission || (error instanceof AudioRouterRpcError && error.data?.code === "permissionDenied")) {
-    const scope = permission?.[1] ?? "the required";
-    return `Permission denied: this app is not granted the ${scope} permission needed for this action, so the backend refused it. Nothing was changed.`;
+    const scope = permission?.[1] ?? tm("backendErrors.scopeRequired");
+    return tm("backendErrors.permissionDenied", { scope });
   }
   if (!(error instanceof AudioRouterRpcError) || !error.data) return error.message;
   // Already names the node and what to do there.
@@ -187,7 +189,7 @@ export function formatUiError(error: unknown, fallback: string): string {
   const { code, hresult, remediation, retryable } = error.data;
   const hresultText =
     typeof hresult === "number" ? `, HRESULT 0x${(hresult >>> 0).toString(16).padStart(8, "0").toUpperCase()}` : "";
-  const retryText = retryable ? " Retry may succeed." : "";
+  const retryText = retryable ? tm("backendErrors.retry") : "";
   return `${error.message} [${code}${hresultText}] ${remediation}${retryText}`;
 }
 

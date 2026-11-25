@@ -3990,6 +3990,22 @@
     },
     "svgHandle": {
       "hint": "{{label}} : {{value}} {{unit}}. Faites glisser, ou utilisez les flèches (Maj pour des pas plus grands)."
+    },
+    "backendErrors": {
+      "alreadyPrepared": "L’audio est déjà préparé dans cette application. Arrêtez la lecture, puis cliquez à nouveau sur Démarrer. S’il ne démarre toujours pas, fermez AudioRouter puis rouvrez-le.",
+      "mediaNotReady": "Un fichier audio n’est pas encore prêt, la route n’a donc pas été enregistrée. Attendez la fin de l’importation, ou choisissez à nouveau le fichier, puis cliquez sur Enregistrer.",
+      "settingInvalid": "Un réglage de l’outil ({{name}}) a une valeur qu’AudioRouter ne peut pas utiliser ; la route n’a donc pas été enregistrée. Vérifiez les Propriétés de l’outil, puis cliquez sur Enregistrer.",
+      "revisionConflict": "Un autre enregistrement a modifié cette route ; votre enregistrement n’a donc pas été appliqué. Vos modifications sont conservées. Comparez-les avec la dernière route enregistrée, puis enregistrez à nouveau.",
+      "deviceInvalidated": "Le périphérique audio sélectionné a changé ou a été déconnecté. Arrêtez l’audio, actualisez la liste des périphériques, puis sélectionnez à nouveau l’entrée et la sortie exactes. La lecture rouvrira ces périphériques. S’il en manque un, reconnectez-le avant de réessayer.",
+      "deviceInUseNamed": "« {{device}} » est utilisé par une autre application, qui l’a pris en mode exclusif. Fermez ou reconfigurez cette application, ou empêchez les applications de le verrouiller : Paramètres son de Windows → {{tab}} → {{device}} → Propriétés → Avancé → décochez « Autoriser les applications à prendre le contrôle exclusif ». Cliquez ensuite à nouveau sur Démarrer.",
+      "deviceInUseNamedWithTwin": "« {{device}} » est utilisé par une autre application, qui l’a pris en mode exclusif. Il s’agit d’un VB-Cable : une application qui lit dans son jumeau « {{twin}} » (le même câble) le bloque aussi ; configurez plutôt cette application pour « {{device}} ». Fermez ou reconfigurez cette application, ou empêchez les applications de le verrouiller : Paramètres son de Windows → {{tab}} → {{device}} → Propriétés → Avancé → décochez « Autoriser les applications à prendre le contrôle exclusif ». Cliquez ensuite à nouveau sur Démarrer.",
+      "deviceInUse": "Le périphérique audio sélectionné est utilisé par une autre application. Choisissez un autre périphérique dans les Propriétés de l’outil Sortie, ou libérez ce périphérique exact dans l’application qui l’utilise, puis préparez-le à nouveau.",
+      "unsupportedTopology": "Cette route comprend une combinaison audio que le moteur actuel ne peut pas lire. Essayez une route depuis une Séquence de test séparée vers le périphérique de sortie, ou retirez une source et reliez la source restante directement à la sortie. Votre route enregistrée n’a pas changé.",
+      "permissionDenied": "Permission refusée : cette application n’a pas l’autorisation {{scope}} pour cette action ; le backend l’a donc refusée. Rien n’a changé.",
+      "scopeRequired": "requise",
+      "retry": " Une nouvelle tentative peut aboutir.",
+      "windowsPlaybackTab": "Lecture",
+      "windowsRecordingTab": "Enregistrement"
     }
   }
 }

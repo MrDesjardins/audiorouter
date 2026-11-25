@@ -3972,5 +3972,21 @@ export const ENGLISH_MESSAGES = {
   },
   "svgHandle": {
     "hint": "{{label}}: {{value}} {{unit}}. Drag, or use the arrow keys (Shift for bigger steps)."
+  },
+  "backendErrors": {
+    "alreadyPrepared": "Audio is already prepared in this app. Stop playback, then try Play again. If it still cannot start, close AudioRouter and reopen it.",
+    "mediaNotReady": "An audio file is not ready yet, so the route was not saved. Wait until the file finishes importing, or choose it again, then press Save.",
+    "settingInvalid": "A tool setting ({{name}}) has a value AudioRouter cannot use, so the route was not saved. Check the tool's Properties, then press Save.",
+    "revisionConflict": "Another save changed this route, so your save was not applied. Your edits are kept. Compare them with the latest saved route, then save again.",
+    "deviceInvalidated": "The selected audio device changed or disconnected. Stop audio, refresh the device list, then select the exact input and output again. Play will reopen those devices. If one is missing, reconnect it before retrying.",
+    "deviceInUseNamed": "\"{{device}}\" is in use by another application, which has taken it exclusively. Close or reconfigure that application, or stop apps from locking it: Windows Sound settings → {{tab}} → {{device}} → Properties → Advanced → untick \"Allow applications to take exclusive control\". Then press Play again.",
+    "deviceInUseNamedWithTwin": "\"{{device}}\" is in use by another application, which has taken it exclusively. This is a VB-Cable: an application playing to its twin \"{{twin}}\" (the same cable) also blocks it, so set that application to \"{{device}}\" instead. Close or reconfigure that application, or stop apps from locking it: Windows Sound settings → {{tab}} → {{device}} → Properties → Advanced → untick \"Allow applications to take exclusive control\". Then press Play again.",
+    "deviceInUse": "The selected audio device is in use by another application. Choose a different device in the Properties of the output tool, or release this exact device in the application using it, then prepare it again.",
+    "unsupportedTopology": "This route includes an audio combination the current engine cannot play. Try a route from a separate Test Signal to the output device, or remove one source and connect the remaining source directly to the output. Your saved route was not changed.",
+    "permissionDenied": "Permission denied: this app is not granted the {{scope}} permission needed for this action, so the backend refused it. Nothing was changed.",
+    "scopeRequired": "required",
+    "retry": " Retry may succeed.",
+    "windowsPlaybackTab": "Playback",
+    "windowsRecordingTab": "Recording"
   }
 } as const;

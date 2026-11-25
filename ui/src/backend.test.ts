@@ -81,7 +81,7 @@ describe("UI error formatting", () => {
       },
     });
     expect(formatUiError(error, "fallback")).toBe(
-      "The selected audio device is in use by another application. Choose a different device in the Output Device node's Properties, or release this exact device in the application using it, then prepare it again.",
+      "The selected audio device is in use by another application. Choose a different device in the Properties of the output tool, or release this exact device in the application using it, then prepare it again.",
     );
   });
 
@@ -213,6 +213,23 @@ describe("UI error formatting", () => {
       "Another save changed this route, so your save was not applied. Your edits are kept. Compare them with the latest saved route, then save again.",
     );
     expect(isRevisionConflict(new Error("revisionConflict"))).toBe(false);
+  });
+
+  it("names the required permission once when the message has no scope", () => {
+    const error = new AudioRouterRpcError({
+      code: -32001,
+      message: "refused",
+      data: {
+        code: "permissionDenied",
+        fieldPath: null,
+        resourceIds: [],
+        retryable: false,
+        remediation: "request the required permission scope",
+      },
+    });
+    expect(formatUiError(error, "fallback")).toBe(
+      "Permission denied: this app is not granted the required permission needed for this action, so the backend refused it. Nothing was changed.",
+    );
   });
 });
 
