@@ -878,8 +878,9 @@ Checks (Windows 11, 2026-11-24, own worktree, from `ui/` unless noted):
 - `npm test`: 137 files, 1,198 tests pass.
 - Playwright (Edge, `--workers=1`, temporary config on port 4291 with its own
   output, deleted afterwards): `ui-language-zoom` 6/6 pass;
-  `chinese-ui-audit` (opt-in) 1/1 pass. Earlier in the same session the
-  existing `ui-language` scenarios passed before the final edits.
+  `chinese-ui-audit` (opt-in) 1/1 pass. After the final structured-code edits,
+  `ui-language` and `ui-language-zoom` reran together on the final code: 17/17
+  pass.
 - `node tools/docs/validate.mjs`: 306 Markdown files, 1,695 links, pass.
   `git diff --check`: pass.
 - No Rust source changed (`src-tauri/src/ui_language.rs` is regenerated and
