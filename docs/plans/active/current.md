@@ -106,9 +106,12 @@ reconciling the later handoff against older open-work summaries first.
    [review fixes](virtual-cable-review-fixes.md) and the
    [agent handoff](virtual-cable-agent-handoff.md). Do not install the
    test-signed driver on the development PC.
-4. **UI quality review (UI-*).** Continue the rounds and close the open attended
-   evidence: Narrator, real Windows scaling, live-route device-loss messaging,
-   a first-time-user walk-through and refreshed guide clips. See
+4. **UI quality review (UI-*).** Narrator and real Windows 150 %/200 % scaling
+   are re-confirmed on the packaged 0.0.32 shell (Round 30, 2026-11-24, owner
+   attended); a first-time-user rehearsal led to a new “Mic to Discord” goal
+   (no game step), but the real participant study is open. Still open: live-route device-loss messaging on
+   the rebuilt exe, physical-key dropdown cancellation, a narrow 200 % window,
+   the M08 participant study and refreshed guide clips. See
    [UI quality review](ui-quality-review.md).
 5. **Application quality roadmap.** Q3.2 is complete (2026-11-23). Next: the
    two CI-flake repair branches, then Q4–Q6; see
@@ -116,20 +119,27 @@ reconciling the later handoff against older open-work summaries first.
 6. **Audio-latency residual owner gates (ARCH-08, CAP-04, NFR-03).** The
    real-session `audioHealth` log is analysed (55.8 h after the repair,
    [evidence](evidence/2026-11-23-audio-health-after-latency-repair.md)).
-   Open: the owner's listening test, live cable continuity, and the owner's
-   choice of cushion floor for `voice-to-cable-a`.
+   The owner's listening test was done across recent evening sessions and
+   chose to keep the 10 ms `voice-to-cable-a` cushion floor (2026-11-24), so
+   the pump constants are unchanged. The automated multi-input continuity runs
+   passed on CABLE/CABLE-A; a long session through the owner's own app is not
+   separately claimed.
 7. **Code-review-fixes residual qualification.** Isolated VB-Cable
    continuity/service-gap runs, large-library service timing and
    latency-changing commercial-plugin continuity; see
    [code-review fixes](code-review-fixes.md).
 8. **MCP setup UX (AUTO-06) and attended OBS/Discord acceptance.** See
    [MCP setup UX](mcp-setup-ux.md) and [OBS/Discord](obs-discord.md).
-9. **Maintenance backlog.** Refresh the
-   [code-scanning remediation](code-scanning-remediation.md) alert counts from
-   the current CodeQL run. The low-severity findings of the
-   [2026-11-11 bug audit](../archived/2026-11-11-bug-audit.md) and resilience
-   RES-10/11 remain unfixed, and RES-6 still needs representative
-   large-import/export timings
+9. **Maintenance backlog.** #187 fixed the
+   [2026-11-11 bug audit](../archived/2026-11-11-bug-audit.md) low-severity
+   items (DSP-4, SES-4, UI-1; REC-2 not reproduced; HTTP-1/UI-2 already fixed)
+   and resilience RES-11a/RES-11b, and added synthetic large-bundle service
+   timings for RES-6. Checked 2026-11-24 at `53e1de80e`: hosted CI and CodeQL
+   are green with no check annotations and **zero open CodeQL alerts**, so the
+   [code-scanning remediation](code-scanning-remediation.md) refresh is current.
+   Still open: RES-10 plugin-worker restart stays an owner decision, and RES-6
+   needs representative real library/plugin workload timings beyond the
+   synthetic fixtures
    ([resilience implementation](../archived/2026-11-13-resilience-implementation.md)).
 
 ## Open owner gates
@@ -149,6 +159,10 @@ them.
 - Endurance and load-controlled UDP continuity; i686 hosted CI.
 
 ## Active plan index
+
+[Post-game execution](post-game-execution.md) covers priorities 2–10 from the
+November 24 ranked roadmap. Start after the owner says the game is finished
+and asks to execute it. The installer qualification workstream has its own plan.
 
 Owner-tested local build and next prerelease (2026-11-22):
 [0.0.32 candidate preparation](release-0.0.32.md). Build in an isolated
@@ -261,9 +275,9 @@ Next:
 2. Owner, tonight: stop the route and free the cables, then the agent runs
    `live_backend_service_keeps_a_routed_tone_continuous` for the multi-input
    worker on the owner's cables.
-3. Owner: listening test on the real route, and a decision on the
-   `voice-to-cable-a` cushion floor (10 ms now; 15 ms would make its
-   remaining gaps about six times rarer for 5 ms more delay).
+3. Done: the owner's listening test across recent evening sessions; the
+   `voice-to-cable-a` cushion floor is decided (keep 10 ms, 2026-11-24), so no
+   pump constant changed and the remaining gaps stay as measured.
 4. Then Q4.2 restart interleaving and Q5.1–Q5.2 metrics, as listed in
    [application quality](application-quality.md).
 

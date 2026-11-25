@@ -83,10 +83,11 @@ frames each, so the pacing input and the others agree closely.
    minutes, shrinks back to 10 ms (decision D4). On CABLE-A that 10 ms is
    slightly too thin, so the output saw a gap about every two hours. A
    15 ms floor for that output would make them about six times rarer at the
-   cost of 5 ms more delay on that path. That trade (latency against the
-   occasional gap) is the owner's to make after listening; it is recorded as
-   an open decision, not changed here. Any change to the pump constants also
-   needs the drift simulation suite and a live continuity run.
+   cost of 5 ms more delay on that path. **Decision (owner, 2026-11-24): keep
+   the 10 ms floor** for `voice-to-cable-a`; 5 ms more delay is not worth the
+   rarer gaps. No pump constant changed, so no drift-simulation or live
+   continuity rerun is required by this decision; the measured ~0.48 gaps/hour
+   on CABLE-A at 10 ms is the expected behavior.
 
 ## What this does not show
 
@@ -100,5 +101,8 @@ frames each, so the pacing input and the others agree closely.
 ## Outcome
 
 Task 9's health-log half is answered: the repair works on the owner's real
-route over 55.8 hours. Still open: the owner's listening test, the live
-continuity run, and the owner's decision on the CABLE-A cushion floor.
+route over 55.8 hours. The CABLE-A cushion floor is decided (keep 10 ms,
+2026-11-24). The owner reports the listening test was done across recent
+evening play sessions and chose to keep 10 ms; the automated multi-input
+continuity runs passed on CABLE/CABLE-A. A long live session through the
+owner's own running app is not separately claimed.

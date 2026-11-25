@@ -1,5 +1,97 @@
 # UI quality review — 2026-11-03
 
+## Round 30 — packaged 0.0.32 attended session (2026-11-24)
+
+Built from `origin/main` `53e1de80e` with `tools/build-desktop.ps1`; shell
+SHA-256 `2C75BB456C846CA0DF7E68D7E231ADA4B2EAB096F7D7D2C7FCF3F972E1210597`,
+newer than `ui/dist`. Packaged smoke passed on an isolated database, `LOCALAPPDATA`
+and WebView2 profile (WebView2 158.0.4370.33): startup, native bridge, save/restart
+and graceful quit; `target/post-game-2026-11-24/ui-package/smoke/result.json`.
+The owner closed their own app first; no owner data was used. This re-confirms
+the Round 28 Typography (9) and Navigation (9) evidence on the shipped shell;
+scores stay with the owner and are unchanged here.
+
+### Narrator (owner listening, fresh disposable profile)
+
+- Goal dialog “What do you want to do?”: Narrator read the dialog text and each
+  button name (owner).
+- After **Start empty**, the first Tab only hands focus from the window to the
+  page (Narrator announces the window title); the next stops are “Skip to
+  canvas”, “Skip to tools and settings”, then the top bar. Undo/Redo/Save are
+  **skipped because disabled**; Play and Quit are read. Verified order:
+  skip links → AudioRouter desktop → Play → Quit → panel separator → Arrange →
+  Route list → Connect.
+- Workbench tabs are the standard ARIA tabs pattern: only the selected tab is a
+  Tab stop; Left/Right/Home/End move and select (verified: Tools → Properties →
+  Status). Tab leaves the tab strip to Settings gear, help, then panel. The
+  owner first expected Tab to open Properties and, after the explanation,
+  confirmed the behaviour is fine.
+- Canvas cards, Properties fields/values, Settings → API invalid Port (range
+  read and visible reason), and a dialog’s focus containment/Cancel-first order:
+  owner reported “all good”.
+
+### Real Windows display scaling (owner switched; agent captured)
+
+| Scale | devicePixelRatio | CSS viewport | Horizontal overflow | Notes |
+| --- | --- | --- | --- | --- |
+| 100 % (original) | 1 | 1280×800 | none | baseline |
+| 150 % | 1.5 | 1282×802 | none | physical window grows; layout stable |
+| 200 % | 2 | 1283×804 | none | physical window grows; layout stable |
+| restored 100 % | 1 | — | none | owner restored |
+
+The only clipped elements at every scale were the two canvas edge labels
+(`Connection …: stopped`), clipped by design inside the SVG. The owner visually
+confirmed no clipped/overlapping text. Screenshots:
+`target/post-game-2026-11-24/ui-package/attended/shots/{at150,at200,restored}.png`.
+The app keeps its logical size, so scaling enlarges rendering rather than
+cramping the layout; a narrow-window 200 % case remains separate.
+
+### First-time-user walkthrough — agent rehearsal only (fresh profile)
+
+Prompt: “make my mic sound cleaner and send it to Discord”. Steps and friction
+(screenshots in `.../attended/first-time/`):
+
+1. The prompt matches no single goal. “Clean up my mic” is the literal fit but
+   its described route ends in a generic **Output device**, not Discord;
+   “Game and voice for Discord” is the only goal naming Discord.
+2. Choosing “Game and voice for Discord” asks **“Which game should play in your
+   headphones?”** with a long running-process list (system services included),
+   an extra decision the stated goal did not ask for. “Choose later” is
+   available.
+3. “Choose later” builds the route and starts a 3-step tour. The result is
+   Microphone → Speech Denoise → Gate → Compressor → **Voice to Discord**, plus
+   Game mix → Headphones. The output is clearly named **Voice to Discord**, which
+   supports identifying the Discord source set (M08 criterion).
+4. Three bindings are empty after the tour — Microphone, Voice to Discord and
+   Headphones all show **“No device”**. The user must open each and choose; the
+   list names the virtual cables, so choosing which CABLE Discord listens to is
+   still the ambiguous step. The Output help says “for example CABLE Input”.
+
+These were clarity findings, not defects proven against the M08 definition. The
+real study (at least four of five first-time users finish within ten minutes and
+all identify the Discord source set) still needs real participants.
+
+**Implemented clarity change (2026-11-24):** a new **“Mic to Discord”** goal
+(`mic-discord`, `crates/control/src/goals.rs`) builds Microphone → Speech
+Denoise → Gate → Compressor → **Voice to Discord** with no game/app step, and
+its post-create message says “Still to choose: your microphone, the virtual
+cable Discord listens to”. It is a main goal, shown after “Clean up my mic”.
+The device is not preselected because a goal must never choose a device
+(`no_goal_binds_a_device_or_arms_a_recorder`, extended with the new goal).
+Exercised through the rebuilt packaged shell (SHA-256 `69EF34D9…`): the card
+appears in the first-run dialog and creating it builds the expected route with
+no app prompt. The app picker already has a **Find an app** search box
+(`roundTwentyOne.test.tsx`), so its long list is searchable; the earlier “add
+search” suggestion was wrong. New French/Chinese goal strings are agent-written
+and join the fluent-review queue. Checks: `goals::tests` 11 pass (including
+“every goal compiles” and “no goal binds a device”), strict control Clippy, UI
+`npm test` 1,191 pass, `i18n:check` 3,740 messages, and `goals-and-tour.pw.ts`
+8 pass in real Edge (three themes plus the new goal). UI-28 in
+`docs/spec/09-interface.md` now lists “Mic to Discord”.
+
+Not run: live device-loss on the rebuilt exe, physical-key dropdown
+cancellation, a narrow 200 % window, and the participant study.
+
 ## Round 29 — agent audits for the Round 28 portable gaps (2026-11-24)
 
 Agent audits, not a participant study: no score is changed here (scoring stays with the owner).
