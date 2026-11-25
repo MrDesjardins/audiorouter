@@ -94,7 +94,13 @@ measurements and records them per block.
 
 A new bundle is required for the guest (`rc-0.2.5-r3/r4/r5` have the old runner).
 `prepare-round2-bundle.ps1 -Destination C:\VMs\ar-share\rc-0.2.5-r6` builds it from
-a clean committed tree and verifies every hash.
+a clean committed tree and verifies every hash. Done on 2026-11-24 at source
+`5fad66d15`: `C:\VMs\ar-share\rc-0.2.5-r6`, 89 files, `MANIFEST.txt` SHA-256
+`870B35EA63C56D2D833C5896115E14B1C57129B387F81692C7AB73AF93825753`; the bundle's
+`run-stage-a.ps1` contains the gate and its `round2-support.ps1` the host-load
+helpers. Read-only VM state: `AR-DriverTest` is `poweroff` with current snapshot
+`02-test-signing-ready`, 8192 MB RAM, 4 vCPUs, nested VT-x off (NEM); no VirtualBox
+VM was running. No snapshot was taken, restored or deleted.
 
 ## 5. The one remaining ordered VM block (fail-fast)
 
