@@ -1,12 +1,19 @@
 # Active plan — code-review fixes (2026-11-01, owner request)
 
-> **Status (2026-11-24).** Every triage item below is implemented. Only
-> qualification remains, and each piece needs the owner's environment or a
-> decision: three isolated continuity runs per cable with the owner's route
-> stopped, a latency-changing commercial plugin run, and whether CABLE-B's
-> 8-channel format should be supported. The large-library concurrent
-> Play/export/import timing can run on synthetic data and is the one portable
-> item left. Archive this plan when that timing is recorded.
+> **Status (2026-11-24, later).** Every triage item below is implemented, and
+> the portable large-library timing item is answered by the #187 synthetic
+> service-timing record (item-by-item comparison in
+> [the residual record](evidence/2026-11-24-code-review-fixes-residual.md)).
+> Owner-authorized live re-runs were made on CABLE-A: 2 of 3 `gain` runs and 1
+> of 3 ten-tool runs passed; three runs lost one ~11–12 ms block in the routed
+> result while the reference and the service thread were clean. Those runs
+> were not provably isolated (CABLE-A Output is the default capture and
+> Discord/Zoom were open), so the automated continuity gate is **failed under
+> non-isolated conditions**, not passed and not attributed to the engine.
+> Remaining: isolated CABLE-A repeats with the owner confirming a free cable,
+> the CABLE-B 8-channel owner decision (no valid CABLE-B result endpoint
+> exists), and the licensed latency-changing commercial-plugin run. Archive
+> when the isolated repeat and the two owner decisions are settled.
 
 Owner request, 2026-11-01: "do the two code review markdown in the future
 folder. Set them in current and tackle all of them." Sources:
@@ -580,3 +587,58 @@ incremented) or the owner's library. Evidence and the `#[ignore]` harnesses:
 [synthetic service timing](evidence/2026-11-24-synthetic-service-timing.md).
 Still open here: the isolated VB-Cable repeat runs with a route playing and
 the latency-changing commercial-plugin run.
+
+### Residual check and live re-runs (2026-11-24)
+
+Evidence: [residual record](evidence/2026-11-24-code-review-fixes-residual.md)
+and the raw [run logs](evidence/2026-11-24-live-continuity/).
+
+**Portable timing item — covered, no new harness.** The #187 synthetic record
+matches the item point for point: a ~400 MiB media library with ~100 sessions
+and 2,000 recordings; export and import through `ControlPlane::dispatch` and
+through the production pipe serve loop; the two device-free Play steps
+(decode 0.6–0.7 s under `while_servicing_audio`, compile < 0.3 ms inline); a
+queued export + re-import and six concurrent pollers; three runs with medians
+and maxima. The one scenario it cannot run is a real Play start, because
+`sessions.start` for an Audio File route opens endpoints through
+`nativePaths.prepare`; that is live-gate work, not synthetic. No measured
+method approached its deadline. The pipe-busy candidate defect it found is
+already fixed on main (`connect_client_waiting`, `probe_pipe`,
+`crates/transport/tests/busy_pipe_wait.rs`).
+
+**Silent catches — confirmed.** `useWorkbenchStatus.ts:21-88` records one
+category per failure run and re-arms on the next success while keeping the last
+answer, with regressions in `useWorkbenchStatus.test.ts`; the virtual-cable
+poll in `App.tsx:909-926` latches once and keeps the last status; the session
+inventory refresh after a deletion records its category at `App.tsx:2070`; OBS
+status keeps the last good facts and marks them stale
+(`useObsStatus.test.tsx:74`). The pre-App probe, pointer-capture and
+diagnostic-sink catches stay intentional and documented.
+
+**Mechanical splits — confirmed.** `useRecordingActions.ts`,
+`CanvasConnectorMeasurements.tsx`, `latency_compensation.rs` and
+`packet_codec.rs` exist and are wired at `App.tsx:46,420`,
+`SessionFlowCanvas.tsx:3899`, `engine/src/lib.rs:46-47` and
+`windows-audio/src/lib.rs:27-29`. This remains the bounded-concern pass; the
+large compiler and endpoint files are still large.
+
+**Live re-runs (owner authorized).** Six 20 s CABLE-A runs of
+`live::live_backend_service_keeps_a_routed_tone_continuous`, release harness,
+private pipe, in-memory plane, no plugins: three `gain` and three ten-tool
+chains. Reference path 0 glitches in all six. Routed result: 0 glitches in
+gain-1/gain-2/chain-2, and **2 glitches with one ~11–12 ms silent run** in
+gain-3, chain-1 and chain-3. The failing runs had 0 late gaps and a ≤ 3.2 ms
+max service gap; two passing runs had an ~82 ms slow service pass. So the
+silence is not service-thread lateness. CABLE-A Output is the default
+communications capture and Discord/Zoom were open; the runs were not provably
+isolated, so this is a **failed** assertion under non-isolated conditions, not
+a product defect and not a passed gate. CABLE-B was not run: its Input is
+8-channel, which the stereo worker refuses (owner decision). Latency samples:
+source 12.1–19.9 ms, destination 22.5–28.1 ms.
+
+**Still open.** (1) Three clean isolated runs per chain after the owner
+confirms no call/stream holds CABLE-A Output — a reproducible failure then
+becomes a defect to trace at the glitch offset. (2) The CABLE-B 8-channel
+decision. (3) A licensed latency-changing non-Blue-Cat plugin run; installed
+UADx/TDR candidates were not used because licensing and the exact choice are
+the owner's, and UADx previously returned input unchanged.

@@ -1,0 +1,37 @@
+﻿cargo.exe :     Finished `release` profile [optimized] target(s) in 0.37s
+At line:10 char:88
++ ... in-$n.log"; & cargo test -p audiorouter-transport --test live_audio_c ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Finished `r...get(s) in 0.37s:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+     Running tests\live_audio_continuity.rs (target\release\deps\live_audio_continuity-8b777f43e301c398.exe)
+
+running 1 test
+tone render buffer: 2400 frames
+prepared: {"branchNodeIds":["destination"],"generation":1,"pathCount":1,"renderEndpointIds":["{0.0.0.00000000}.{03498a2
+a-ef6a-4dd4-b9ba-72e22f567d7a}"],"sessionId":"continuity","sourceNodeIds":["source"],"state":"configured-stopped"}
+started: 
+{"generation":1,"preview":false,"runtime":"native","savedRevision":0,"sessionId":"continuity","state":"running"}
+service phase maxima (wait, dispatch, pump): [3.8395ms, 26.9637ms, 82.4969ms]
+slow service pass: AudioServicePassTiming { elapsed: 5.7703599s, wait: 86.6┬╡s, dispatch: 14.869ms, service: 10┬╡s, 
+recorder_drain_micros: 0, running: true }
+slow service pass: AudioServicePassTiming { elapsed: 6.1025044s, wait: 82.3┬╡s, dispatch: 26.9637ms, service: 9.9┬╡s, 
+recorder_drain_micros: 0, running: true }
+slow service pass: AudioServicePassTiming { elapsed: 17.4670492s, wait: 1.0685ms, dispatch: 0ns, service: 82.4969ms, 
+recorder_drain_micros: 0, running: true }
+chain: [Gain]; audio service: {"active":true,"lateGaps":3,"maxGapMicros":82689,"passes":18952}; output underruns: 1
+  "source" timing={"delayMs":13.56232180724666} plugin=null network=null processor=null
+  "tool-0" timing={"delayMs":0.0,"processingUsAvg":0.5418209485163582,"processingUsMax":9.9} plugin=null network=null 
+processor=null
+  "destination" timing={"delayMs":21.82949678612505} plugin=null network=null processor=null
+reference (CABLE Output): 20.0 s analysed, peak 0.0500, 0 glitches, 0 silent runs (0 samples), 0 WASAPI discontinuity 
+flags
+  glitches per 5 s: [0, 0, 0, 0, 0]
+routed result (CABLE-B Output): 20.0 s analysed, peak 0.0500, 0 glitches, 0 silent runs (0 samples), 0 WASAPI 
+discontinuity flags
+  glitches per 5 s: [0, 0, 0, 0, 0]
+test live::live_backend_service_keeps_a_routed_tone_continuous ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 22.09s
+

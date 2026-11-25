@@ -219,12 +219,43 @@ Detail is in [UI quality review, Round 30](ui-quality-review.md).
 
 ### Not run (prerequisites)
 
-- **Package 4:** Narrator, real 150 %/200 % scaling, first-time-user study and a
-  packaged shell launch with a disposable profile (the owner’s app profile is
-  separate).
+- **Package 3:** a fresh hosted nightly to confirm the headless editor skip, the
+  SDK/fixture builds, attended editor/DPI/MIDI checks, licensed plugins, and an
+  i686 run beyond the hosted nightly.
+- **Package 4:** the real first-time-user study (4 of 5 within ten minutes; all
+  identify the Discord source set), live device-loss on the rebuilt exe,
+  physical-key dropdown cancellation, and a narrow 200 % window. Narrator,
+  real 150 %/200 % scaling and the agent rehearsal were run (above); an earlier
+  draft of this list wrongly repeated them as not run.
 - **Package 5:** virtual-cable Stage A requires the disposable driver VM; the
   test-signed driver must not go on this PC.
 - **Package 7:** MCP enrollment/revocation through a packaged profile and the
   attended OBS/Discord acceptance with the agreed endpoints.
 - **Packages 9–10:** future scope needing explicit owner promotion (updater key
   custody/feed; UAD inventory approval).
+
+## Package reconciliation and ownership (2026-11-24)
+
+Every package in this plan is executed inside another plan that owns its
+requirements, gates and evidence. This section maps them so the program page
+can be archived without losing an open item: the owning plan keeps the check,
+and this page does not duplicate it.
+
+| Package | Owning plan(s) | What the owning plan must carry |
+| --- | --- | --- |
+| 2. Live audio continuity and latency | [code-review-fixes.md](code-review-fixes.md) (automated continuity, service timing, commercial plugin) and [current.md](current.md) priority 6 (owner listening and cushion) | The isolated per-cable continuity runs (CABLE-B 8-channel is an owner decision; CABLE-A runs are recorded on `plans/code-review-fixes`), the large-library live load, and the latency-changing commercial-plugin run. Owner listening and the 10 ms cushion are already recorded. |
+| 3. VST2/VST3 compatibility | [vst-completion-work.md](vst-completion-work.md), [vst-owner-checks.md](vst-owner-checks.md), [vst-handoff.md](vst-handoff.md), [vst-full-compatibility.md](vst-full-compatibility.md) | P2/P3/P5/P6/P9 dispositions; the headless editor skip needs a fresh hosted run; SDK/fixture/DPF builds, attended editor/DPI/MIDI checks and an i686 run; PLUG-01–07 evidence. |
+| 4. Attended Windows UI qualification | [ui-quality-review.md](ui-quality-review.md) and `current.md` priority 4 | The first-time-user study with participant records; live-route device-loss on the packaged exe; physical-key dropdown cancellation; narrow 200 % layout. Narrator, 150 %/200 % scaling and guide recapture are recorded. |
+| 5. Virtual cable Stage A | [virtual-cable.md](virtual-cable.md), [virtual-cable-agent-handoff.md](virtual-cable-agent-handoff.md), the 2026-11-21 gap analysis | The disposable-VM Stage A blocks (frame-clock revert, render underruns, live update/unload, tagged pool, A15), then Stage C, then the owner signing decision. Do not install the test-signed driver on this PC. |
+| 6. Application quality and maintenance | [application-quality.md](application-quality.md), [code-scanning-remediation.md](code-scanning-remediation.md), the resilience record | Q5.1 first-pass/retry trend and Q5.2 coverage baselines (the next code task); RES-10 plugin-worker restart stays an owner decision; the CodeQL refresh is current at `53e1de80e`. |
+| 7. MCP setup and OBS/Discord acceptance | [mcp-setup-ux.md](mcp-setup-ux.md), [obs-discord.md](obs-discord.md) | Packaged-profile enrollment, role display, a default-tool call over the real adapter and live revocation; the copied OBS profile check and Fix in OBS preview/restore; the attended Discord/OBS source-scope run. |
+| 8. Localization qualification | [ui-localization.md](ui-localization.md) | Fluent French and Simplified-Chinese review of the new goal strings and absorbed keys; packaged three-theme/200 %/Narrator evidence; any residual per-surface extraction. `i18n:check` is current. |
+| 9. Signed in-app updater | [auto-update-tauri.md](../future/auto-update-tauri.md) | Future scope only: owner promotion, signing provider and key custody, feed host, channels, consent/restart, and signed upgrade/rollback evidence. |
+| 10. Broader UAD compatibility | [uad-plugin-support.md](../future/uad-plugin-support.md) | Future scope only: a bounded U1 inventory proposal and the owner's choice of UADx vs UAD-2/Apollo path, then licensed-title qualification. |
+
+Items in packages 9 and 10 are not authorized work; they are listed so the
+program page closes with its deferred scope intact. The agent-doable package
+work (automated continuity, hosted inspection, code-quality reconciliation,
+localization check, and the packaged rehearsal) is recorded above; nothing in
+this reconciliation adds authority to push, release, install a driver or touch
+the owner's data.

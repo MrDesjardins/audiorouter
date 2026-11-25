@@ -87,3 +87,27 @@ to existing PR #160 and merging latest main into that branch. The verification
 was committed as `c3302b0af` and cherry-picked as `f01ef57b6`; main `8f42bf8de`
 was merged, preserving the consolidated plan and its new shortcut decision.
 No release was created.
+
+## Portable coverage re-check (2026-11-24)
+
+Issue #149 is closed (`CLOSED`, 2026-11-20). Re-read the case the manager
+named: toggling Mute and changing the Fun Voice Changer while an automatic
+save is in flight. The portable parts are now covered; the exact-plugin live
+gate is unchanged and belongs to the reporter/owner.
+
+| Case | Portable evidence | What it proves |
+| --- | --- | --- |
+| Edit arrives while a save is planning or committing | `coalesces edits during automatic save planning/committing`, [App.lifecycle.test.tsx:532](../../../ui/src/App.lifecycle.test.tsx) | The second edit does not start a concurrent save, produces no "edits changed during review" warning, and the final planned value is the later one. |
+| Mute toggle + Fun Voice Changer change, then a save from the new revision | `mute_and_voice_change_during_a_running_save_keep_the_revision_unlocked`, [graph_tests.rs:850](../../../crates/control/src/graph_tests.rs) | Tone → Mute → Fun Voice Changer → Meter started through `ControlPlane`; a save at revision 0 with `muted` and a preset, then a second save based on revision 1, commits at revision 2 with no revision conflict and both edits saved. The first edit classifies as `ParametersOnly` and retains sources. |
+| Flag and parameter edits stay live | `live_edit_classification_distinguishes_parameters_flags_and_topology`, [graph_tests.rs:806](../../../crates/control/src/graph_tests.rs) | A bypass flag, a parameter and both together are live edits; a rename, rewire or dropped edge is structural. |
+| No new worker for an unchanged plugin | `merged_preparation_reuses_worker_and_defers_slider_changes_until_publication` [plugins.rs:1232](../../../crates/control/src/plugins.rs), `only_requested_plugin_groups_start_and_fully_reused_groups_are_skipped` [plugins.rs:1532](../../../crates/control/src/plugins.rs), `plugin_reuse_accepts_slider_and_flag_changes_but_not_identity_or_state` [plugins.rs:1448](../../../crates/control/src/plugins.rs) | A reused bridge is not reloaded and starts no worker; only a changed identity or saved state restarts a plugin. These use the in-repo `ReuseProbe` test double, not a vendor binary. |
+
+The new test is portable (no audio device, no plugin process, in-memory
+storage). It exercises the dispatcher-facing `plan_graph`/`commit_graph`
+entry points the window uses, not a hand-built stage. It does not stand in for
+the exact Clear/ERA6/Fun Voice Changer binaries: `plugin_parameter_events`,
+`plugin_identity_matches` and the reuse suite are what prove worker reuse, and
+the reporter's licensed VST2/VST3 binaries are still absent.
+
+The exact live gate below is unchanged and remains with the reporter/owner.
+Nothing here authorizes a release or changes the saved-data format.
