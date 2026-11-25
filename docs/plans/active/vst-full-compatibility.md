@@ -653,3 +653,30 @@ instead of its chunk) was not built: it would need a per-plugin allow-list,
 and the plugin only forwards MIDI, so its saved settings matter little.
 
 - 2026-11-14: DPF VST3 instruments (Kars, Nekobi) declare a bare `Instrument` category. The scan now accepts that whole string when the module has no `Fx` category; none of the corpus effects match.
+
+## Audit (2026-11-24)
+
+This file's progress table and older "not done" notes are historical; the
+reconciled state is the VS-01 table in
+[the completion work plan](vst-completion-work.md#reconciled-gap-list-vs-01-2026-11-18).
+
+- P1, P2, P3, P4, P5, P6, P8a and P8b software work is implemented and tested on
+  `main` (PR #164 plus #187). P7 remains deliberately deferred with its
+  recorded decision; P9 is a release/owner gate.
+- Stale lines superseded here: "programs, shell plugins and `.fxp/.fxb` remain
+  open", "units/programs, multi-class and validator remain open", "resizable
+  editors, keyboard focus and monitor/DPI remain open", and "sidechain and the
+  automatic Mixer remain as the issue describes". Programs, presets, shell
+  sub-IDs, VST3 units/programs, multi-class, sample-format refusal, resizable
+  editors and the sidechain path are implemented and have real-worker or
+  dispatcher tests.
+- Residual verification gaps are external only: a multichannel-only plugin (to
+  see the refusal from a real plugin), a plugin that sends `kIoChanged`, a
+  vendor-made `.fxp`, and a third-party VST2 shell that enumerates. These are
+  human/external gates, not agent code.
+- Rerun locally: formats, Clippy, workspace tests, both engine combination
+  suites, fixture VST2 shell/bus/plan tests, docs validation and diff check all
+  pass. Native VST3 tests were not rerun (no SDK checkout in this worktree).
+  See [audit evidence](evidence/2026-11-24-vst-plans-audit.md).
+- Disposition: **archive**; the owner/P9 and external gates move to the
+  manager's `human-gated-tasks.md`.

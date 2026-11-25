@@ -359,3 +359,21 @@ remains at `%TEMP%\audiorouter-nsis-smoke-issue136`. This does not satisfy
 signing, driver package, hosted CI, real-endpoint audio or attended editor
 gates. Current commands and outcomes are recorded at the end of
 `vst-completion-work.md`.
+
+## Audit (2026-11-24)
+
+Issue #136 is closed and the investigation's software work is merged (PR #164,
+plus #187). Every I136 scenario has implementation coverage except the
+reporter-specific reproduction: I136-SETUP, I136-SERIAL, I136-SUM, I136-AUX,
+I136-UNSUPPORTED, I136-EDITOR and I136-HEADLESS are covered by the stopped
+editor, insertion/replacement, named sidechain port and headless dispatcher
+tests recorded in the completion plan. The reporter-specific gate (I136-R1/R2
+with their own plugin, Windows build, scaling and support bundle) stays blocked;
+no support bundle or reporter database exists in the repository.
+
+This audit changed no code. Local re-verification (formats, Clippy, workspace
+tests, both engine combination suites, fixture VST2 shell/bus/plan tests, docs
+validation, diff check) passed; see
+[audit evidence](evidence/2026-11-24-vst-plans-audit.md). Disposition:
+**archive**; the reporter-specific evidence remains an external gate, and the
+remaining by-eye/by-ear checks are in the manager's `human-gated-tasks.md`.

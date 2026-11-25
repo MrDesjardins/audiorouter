@@ -111,3 +111,26 @@ Delete the test file and this page; nothing else changed.
 1. Run the full matrix; fix every problem it finds, each with a regression.
 2. Run the shell build by eye with the same plugins and `AUDIOROUTER_CHAIN_SHOW_EDITORS=1` evidence.
 3. Then the stopped-session editor and the sidechain design from the parent plan.
+
+## Audit (2026-11-24)
+
+Items 1 and 3 are done: the stopped-session editor and sidechain design shipped
+and are tested; the non-Blue-Cat matrix run recorded above passed every step
+(48 runs, no problems), and the VST2 instrument classification defect found
+here is fixed at load with `effFlagsIsSynth` (a VST2 instrument is still learned
+at its first refusal because the flag is only readable after the plugin entry
+point runs; scan-time classification remains a documented limit, not a
+regression).
+
+What remains is human only and must not run unattended:
+
+- **Blue Cat PatchWork attended rerun.** The demo's "limiting demo" dialog owns
+  its own window, and the single-plugin editor result was ambiguous; this needs
+  the owner present, `AUDIOROUTER_CHAIN_SHOW_EDITORS=1`, and only the BC chains.
+  Never run while the owner is gaming or on a call, and never automated.
+- **Shell build by eye** with Pitchproof/ReaPlugs/Blue Cat and visible editors.
+
+No code changed in this audit; rerun evidence is in
+[the audit record](evidence/2026-11-24-vst-plans-audit.md). Disposition:
+**archive**; both remaining items move to the manager's
+`human-gated-tasks.md`.

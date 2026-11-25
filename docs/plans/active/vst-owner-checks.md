@@ -90,3 +90,16 @@ Run workflow), wait for it, download the `vst-qualification` artifact, and read 
 run (`gh api repos/<owner>/<repo>/check-runs/<id>/annotations`). The first
 hosted run is the evidence that the runner works on a clean machine; it has
 only run on the owner's PC so far (48 of 48 on 2026-11-18).
+
+## Audit note (2026-11-24)
+
+No check on this page was run by the audit agent: all six need a person's
+screen, ears, hardware or sign-in. The completion-plan audit
+([evidence](evidence/2026-11-24-vst-plans-audit.md)) found no agent-doable VST
+software gap left, so these checks are the only remaining VST gates.
+
+The full de-duplicated list handed to the manager also carries gates that were
+not on this page: the signed installer, the attended Blue Cat PatchWork chain
+rerun (never unattended; demo popup), the audible Instrument guide recording
+and the attended shell run with an instrument. A failure is recorded as a
+failure with the observed build, not as "pending".

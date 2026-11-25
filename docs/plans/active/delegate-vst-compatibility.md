@@ -178,3 +178,21 @@ reported separately, not silently waived or made a blocker for unsigned tests.
 
 Next action: VS-01 reconciliation, then VS-02 production sidechain proof and
 VS-05 pumped-parent preparation, following actual dependencies found in code.
+
+## Audit (2026-11-24)
+
+The assignment is complete for every agent-doable item in VS-01 through VS-06.
+VS-01's reconciled table is in
+[the completion work plan](vst-completion-work.md#reconciled-gap-list-vs-01-2026-11-18);
+VS-02 sidechain production routing, VS-03 VST2 programs/presets/shell, VS-04
+VST3 conformance, VS-05 editor host support and VS-06 artifact/census records
+are merged (PR #164 plus #187). No further code is needed from a delegate.
+
+The gates that remain are the ones this brief says stay external: owner by-eye
+and by-ear checks, hardware MIDI, PolyMAX sign-in, a signed installer, hosted
+CI with annotations, a real enumerating third-party shell, a vendor-made
+`.fxp`, reporter-specific issue #136 evidence, and Blue Cat attended reruns.
+They are listed for the manager's `human-gated-tasks.md` in the audit report.
+Local re-verification on this tree passed; see
+[audit evidence](evidence/2026-11-24-vst-plans-audit.md). Disposition:
+**archive**; do not re-delegate this brief.

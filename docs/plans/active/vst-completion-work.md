@@ -1220,3 +1220,35 @@ Checks run in this worktree (Windows, `CARGO_BUILD_JOBS=6`):
 - `cargo test -p audiorouter-cli`: all pass (58 lib, 5, 2 in `security_boundaries`, 1 ignored). `cargo test -p audiorouter-control --lib`: 453 passed, 25 ignored. `cargo test --manifest-path src-tauri/Cargo.toml`: 133 passed, 4 ignored (7 in `plugin_editor_windows`, run 3 more times without a failure). `ui/dist` was built here with `npm ci` and `npm run build` so the shell compiles.
 - Opt-in: `shell_scan_and_saved_route_bind_the_exact_sub_id` and the new two-sub-ID test pass (above).
 Not run: `tools/vst-qualification/run.ps1` (needs the full SDK, fixture and DPF builds; the new test was only added to its list and run directly), the SDK build and validator through `m06-vst3-sdk.ps1`, any attended editor, focus or DPI check, the UI suites (no UI source changed), a hosted CI run.
+
+## Audit (2026-11-24)
+
+Re-audited against `plans/vst` HEAD `02ca8dc9d` (base `origin/main`
+`53e1de80e`, which already contains PR #164 and the #187 portable hardening).
+The VS-01 table above is accurate; every row's "Missing locally" is still none.
+
+- No agent-doable VST software gap remains. The only open items are owner,
+  hardware, hosted-CI, signing or external-plugin gates (editors by eye, live
+  listening, sidechain ducking by ear, hardware MIDI, PolyMAX sign-in, hosted
+  `vst-nightly.yml` and annotations, signed installer, Blue Cat attended rerun,
+  a real enumerating third-party shell, a vendor-made `.fxp`, multichannel-only
+  and `kIoChanged` plugins, reporter-specific issue #136 evidence).
+- "Two sub-IDs in one shared worker" is not a gap: a shell sub-ID sets
+  `metadata.class_ids`, and `start_plugin_bridges` refuses chain eligibility for
+  any non-empty class list (`crates/control/src/plugins.rs:796-812`), so shell
+  sub-ID nodes always get their own worker.
+- `a0f388981` (skip both editor-lifecycle entries on headless runners) is
+  committed on this branch and still needs a hosted run to confirm.
+- Rerun on this tree: `cargo fmt` both, workspace/shell Clippy, `cargo test
+  --workspace` (control 509/29 ignored, plugin-host 130, engine 189/1), both
+  engine combination suites 6/6, the fixture-only VST2 shell/bus/plan tests,
+  docs validation and `git diff --check` all passed. Native VST3 tests were not
+  rerun (no SDK checkout here).
+- One agent-doable live check was run with the audio slot: a release VST2
+  fixture effect in the production prepared route (Test Signal source, stereo,
+  main VB-Cable and Cable B only, Cable A untouched, no microphone/speaker)
+  passed twice with 0 glitches; the debug worker's slower cold start produced
+  two startup glitches after the test's 1 s settle, recorded as a debug-build
+  limitation. Details: [audit evidence](evidence/2026-11-24-vst-plans-audit.md).
+- Disposition: **archive** once the remaining human gates are moved to the
+  manager's `human-gated-tasks.md`; no further local code task is listed here.

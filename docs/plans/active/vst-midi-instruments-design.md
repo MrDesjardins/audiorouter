@@ -171,3 +171,21 @@ site page, and the property coverage manifest entry.
 - Not done: the shell window was not launched with an instrument (the
   owner is using the PC; audio would play through speakers) and the shell-side
   editor window for an instrument is untested.
+
+## Audit (2026-11-24)
+
+The software path (steps 1-8) is merged and tested: both workers, the MIDI
+queue/recovery fixes, `midi.devices`/`midi.sendEvents`/MCP tools, the winmm
+source, the Instrument node across both combination suites, the on-screen
+keyboard, guides and the property manifest. The x86 instrument path was
+exercised with the mda JX10 control. "Classify a VST3 without metadata before
+its first failed Play" is done by the binary category-string scan; the earlier
+"still open" note is stale. No agent-doable software item remains.
+
+Open items are human only: a real hardware MIDI keyboard (including unplug and
+replug), the attended shell run with an instrument, and an audible Instrument
+guide recording. Local re-verification this date: formats, Clippy, workspace
+tests and both combination suites passed; see
+[audit evidence](evidence/2026-11-24-vst-plans-audit.md). Disposition:
+**archive**; the three human checks move to the manager's
+`human-gated-tasks.md`.

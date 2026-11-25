@@ -440,3 +440,15 @@ live-ear behavior on owner endpoints; hosted i686 CI with every annotation
 reviewed; and a signed installer. No hardware MIDI, PolyMAX sign-in,
 reporter-specific plugin, or real-audio sidechain ducking qualification is
 claimed here.
+
+## Audit (2026-11-24)
+
+This page is historical and is superseded by the reconciled VS-01 table in
+[the completion work plan](vst-completion-work.md#reconciled-gap-list-vs-01-2026-11-18).
+All P2/P3/P5/P6 software work listed as "open" above is implemented and tested;
+the portable hardening recorded here is in `main` via #187. The only remaining
+items are human, hardware, hosted-CI, signing or external-plugin gates. Local
+re-verification (formats, Clippy, workspace tests, both combination suites, the
+fixture VST2 shell/bus tests, docs validation, diff check) passed on this tree;
+see [audit evidence](evidence/2026-11-24-vst-plans-audit.md). Disposition:
+**archive**; do not use its worktree paths, branch heads or open lists.
