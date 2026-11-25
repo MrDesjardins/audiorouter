@@ -175,21 +175,52 @@ worked only because that key had not been used yet.
 
 Reproduced on the host through `ControlPlane::dispatch` with a file database and
 the real `tests/fixtures/installer-recorder-session.json`: play, restart the
-control plane, replay the same request → cached `running` with
-`playing:false`. Failing-first regression:
-`a_replayed_play_after_a_restart_does_not_report_a_stopped_route_as_running`
-in `crates/control/src/recorder_play_tests.rs`.
+control plane, replay the same request returned the cached `running` while the
+summary said `playing:false`. The ten-case suite in
+`crates/control/src/recorder_play_tests.rs` encodes the accepted rules; nine of
+its cases failed on the re-executing revision (`42538818e`) as recorded in the
+product bullet below.
 
 Two defects, both fixed:
 
-- **Product (owning layer):** a journaled runtime outcome was replayed without
-  checking live state. `runtime_replay_is_current` now accepts a replay of
-  `sessions.play`/`togglePlay`/`start` only while the live runtime state matches
-  the recorded result; otherwise `forget_operation_outcome` deletes the stale
-  journal row and the request re-executes and journals the true result.
-  `Storage::delete_journal_result` is new
-  (`journal_delete_allows_a_corrected_result_under_the_same_key`). A cached
-  "running" for a stopped route can no longer be returned after a restart.
+- **Product (owning layer, revised 2026-11-24 after review):** a journaled
+  runtime outcome must not be re-executed. Within one backend lifetime a
+  same-key retry now replays the recorded result verbatim, even after the route
+  was stopped or started under another key. A result found only in storage came
+  from an earlier lifetime (`lifetime_operations` records every key this process
+  journaled; startup never reloads rows into the in-memory cache), so a
+  play/start/toggle claiming `running`, a recorder claiming `recording`, or a
+  mute claiming a different latch is refused with `idempotencyConflict` and
+  "AudioRouter restarted since this request …"; the journal row stays and a new
+  request is required. Stop outcomes replay only while nothing plays, and a
+  recorder stop only while no recording runs. `runtime_replay_is_current`,
+  `forget_operation_outcome` and `Storage::delete_journal_result` were removed:
+  re-execution was the wrong fix (it could start a stopped microphone again).
+  Ten dispatcher tests cover Stop-then-retry, both toggle directions, the
+  recorded generation, restart refusal with a fresh-key success, recorder start,
+  and stop replay/refusal. Before the revision, nine of the ten failed on
+  `42538818e` for the expected wrong reasons: the retry re-executed (a hit
+  "native worker is already attached"; b1 returned a fresh stop result; b2 tried
+  to start the route and errored; c returned generation 2; restart, recorder
+  start and stop-while-playing returned success instead of a refusal). Only the
+  stop-replay-while-idle case already passed, because it performed no side
+  effect.
+
+  Startup constructs `operation_outcomes` empty and never reloads the journal,
+  so a memory hit is exactly this lifetime; `lifetime_operations` keeps the
+  origin fact for keys the bounded cache evicted. The rule covers
+  `sessions.start`/`session.start`, `sessions.play`, `sessions.togglePlay`,
+  `sessions.stop`, `recorders.create`, `recorders.arm`/`start`/`pause`/`resume`,
+  `recorders.startRecording`/`stopRecording`, `recorders.stop` and
+  `safety.setPrivacyMute`/`togglePrivacyMute`. Audit findings not changed:
+  `audioSources.transport`, `timeShift.transport`, `soundboard.*` and
+  `midi.sendEvents` take no idempotency key, so no replay exists;
+  `sessions.active.set`, `system.quit`, `system.osTransition`, `plugins.retry`,
+  `obs.connect`/`disconnect`/`apply`/`restore`, `recorders.split` and
+  `startup.apply` are journaled but replaying performs no audio side effect and
+  their results do not claim a route is playing or a recording is running. Those
+  outcomes can still be stale (an OBS connection or an active selection); they
+  are recorded for a later audit rather than changed here.
 - **Harness:** the recorder helper used fixed idempotency keys for play, record,
   finalize and stop. It now uses one GUID per recording attempt so a later
   launch is a new intent, and `m08-lifecycle-recording.ps1` guards that no fixed
@@ -197,7 +228,7 @@ Two defects, both fixed:
   the shipped 0.0.32 bytes do not contain the product fix, so the guest proof
   below exercises the harness fix, not the new binary.
 
-Checks: `cargo test -p audiorouter-control` (511 passed, 29 ignored),
+Checks: `cargo test -p audiorouter-control` (519 passed, 29 ignored),
 `cargo test -p audiorouter-storage`, workspace and shell strict Clippy, both
 format checks, `node tools/quality/verify.mjs --checks release-tests` (8 scripts,
 27.9 s), `node tools/docs/validate.mjs` (304 files/1,705 links), `git diff

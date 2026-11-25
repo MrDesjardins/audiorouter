@@ -506,13 +506,8 @@ impl ControlPlane {
             let key = text_param(&params, "idempotencyKey")?.to_owned();
             let scoped = self.scoped_idempotency_key(method, &key);
             let hash = Self::request_hash(&json!({ "method": method, "params": params }));
-            if let Some(previous) = self.lookup_idempotent_result(&scoped, &hash)? {
-                if self.runtime_replay_is_current(method, &params, &previous)? {
-                    return Ok(previous);
-                }
-                // The recorded outcome no longer holds after a restart. Re-run
-                // the request and journal the true result instead.
-                self.forget_operation_outcome(&scoped)?;
+            if let Some(previous) = self.replay_runtime_outcome(&scoped, &hash, method, &params)? {
+                return Ok(previous);
             }
             Some((scoped, hash, key))
         } else {
@@ -611,44 +606,59 @@ impl ControlPlane {
             .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
     }
 
-    /// A journaled start/play outcome is only a valid replay while the live
-    /// runtime agrees with it. A control-plane restart keeps the idempotency
-    /// journal but loses every runtime, so a cached "running" would otherwise
-    /// answer a replay with running for a route the summary calls stopped.
-    pub(crate) fn runtime_replay_is_current(
+    /// An outcome recorded by an earlier backend lifetime that claims a live
+    /// runtime state this process cannot honour. Same-lifetime replays are always
+    /// verbatim; only a storage-only record is checked, and the side effect is
+    /// never repeated.
+    pub(crate) fn stale_runtime_outcome(
         &self,
         method: &str,
         params: &Value,
-        previous: &Value,
-    ) -> Result<bool, ControlError> {
-        if !matches!(
-            method,
-            "sessions.play" | "sessions.togglePlay" | "sessions.start" | "session.start"
-        ) {
-            return Ok(true);
-        }
-        let Ok(session_id) = self.simple_session_id(params) else {
-            // The session is gone since the result was journaled; let the
-            // method run and answer with its own notFound error.
-            return Ok(false);
+        result: &Value,
+    ) -> Option<&'static str> {
+        let state = result.get("state").and_then(Value::as_str);
+        let running = |plane: &Self| {
+            plane
+                .simple_session_id(params)
+                .ok()
+                .is_some_and(|id| plane.simple_running(&id))
         };
-        let cached_running = previous.get("state").and_then(Value::as_str) == Some("running");
-        if cached_running != self.simple_running(&session_id) {
-            return Ok(false);
-        }
-        if !cached_running {
-            return Ok(true);
-        }
-        // A later start can reuse the id while the runtime generation moves on;
-        // the cached generation, when present, must still be the live one.
-        let live_generation = self
-            .runtimes
-            .get(&session_id)
-            .filter(|runtime| runtime.state() == RuntimeState::Running)
-            .map(|runtime| runtime.generation());
-        match previous.get("generation").and_then(Value::as_u64) {
-            Some(cached_generation) => Ok(live_generation == Some(cached_generation)),
-            None => Ok(true),
+        match method {
+            "sessions.play" | "sessions.start" | "session.start" => (state == Some("running"))
+                .then_some("the route is no longer playing. Send a new request to play it."),
+            "sessions.togglePlay" => match state {
+                Some("running") => {
+                    Some("the route is no longer playing. Send a new request to play it.")
+                }
+                Some("stopped") if running(self) => {
+                    Some("the route is playing again. Send a new request to stop it.")
+                }
+                _ => None,
+            },
+            "sessions.stop" | "session.stop" => (state == Some("stopped") && running(self))
+                .then_some("the route is playing again. Send a new request to stop it."),
+            "recorders.startRecording"
+            | "recorders.start"
+            | "recorders.resume"
+            | "recorders.arm" => matches!(state, Some("recording" | "paused" | "armed"))
+                .then_some("the recording is no longer running. Send a new request to record it."),
+            "recorders.pause" => (state == Some("paused"))
+                .then_some("the recording is no longer paused. Send a new request to pause it."),
+            "recorders.stopRecording" | "recorders.stop" => self
+                .simple_session_id(params)
+                .ok()
+                .is_some_and(|id| self.session_is_recording(&id))
+                .then_some("a recording is running again. Send a new request to stop it."),
+            "recorders.create" => result.get("recorderId").is_some().then_some(
+                "the recorder it created no longer exists. Send a new request to create it.",
+            ),
+            "safety.togglePrivacyMute" | "safety.setPrivacyMute" => {
+                (result.get("muted").and_then(Value::as_bool) != Some(self.privacy_muted))
+                    .then_some(
+                    "the privacy mute is no longer in that state. Send a new request to change it.",
+                )
+            }
+            _ => None,
         }
     }
 

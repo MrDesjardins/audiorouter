@@ -373,10 +373,14 @@ PR, tag, draft or publication was performed.
   the summary said stopped. Reproduced on the host through
   `ControlPlane::dispatch` with a file database (failing-first
   `a_replayed_play_after_a_restart_does_not_report_a_stopped_route_as_running`).
-  Fixed in the owning layer (`runtime_replay_is_current`,
-  `forget_operation_outcome`, `Storage::delete_journal_result`) and in the
-  recorder harness (per-attempt GUID keys). The shipped 0.0.32 bytes do not
-  contain the product fix; the next build carries it.
+  Fixed on both sides: the recorder harness uses a per-attempt GUID key, and
+  the control plane now replays a recorded outcome verbatim for the whole
+  backend lifetime and **refuses** a play/start/toggle (and record/mute)
+  outcome recorded by an earlier lifetime with `idempotencyConflict` and
+  "AudioRouter restarted since this request" instead of re-executing it. The
+  shipped 0.0.32 bytes do not contain the product fix; the next build carries
+  it. Tests cover Stop-then-retry, both toggle directions, generation, restart
+  refusal, recorder start and stop replays through the dispatcher.
 - **Wrapper cold-boot sign-in (fixed, proved).** The unattended wrapper now, on
   retry only, dismisses a blocking expired-password form and clears the password
   field before typing, without changing any account or security setting. A run
@@ -403,16 +407,20 @@ PR, tag, draft or publication was performed.
 - Recorder idempotency keys are unique per attempt. Journal rows persist across
   app restarts, so fixed keys replayed an earlier Play/Record result; the guard
   in `m08-lifecycle-recording.ps1` rejects a fixed key.
-- The product side of that replay defect is fixed in `crates/control`:
-  `runtime_replay_is_current`, `forget_operation_outcome` and
-  `Storage::delete_journal_result`, with failing-first dispatcher and storage
-  regressions (`recorder_play_tests.rs`). The 0.0.32 installer does not contain
-  this fix; the next build does.
+- The product side of that replay defect is fixed in `crates/control`: a
+  same-lifetime retry replays the recorded result verbatim, and a storage-only
+  result from an earlier lifetime that claims a live runtime state is refused
+  with `idempotencyConflict` ("AudioRouter restarted since this request") rather
+  than re-executing the old request. `lifetime_operations` supplies the explicit
+  lifetime fact; the ten-case dispatcher suite is
+  `recorder_play_tests.rs`. The 0.0.32 installer does not contain this fix; the
+  next build does.
 - `installer-lifecycle-unattended.ps1` retries now dismiss a blocking
   expired-password form and clear the password field before typing, which makes
   its cold-boot sign-in work on the older baseline. No account or security
   setting is changed; the guard test requires both steps to be retry-only.
-- Checks: `cargo test -p audiorouter-control` (511 passed, 29 ignored),
+- Checks: `cargo test -p audiorouter-control` (519 passed, 29 ignored, including
+  10 idempotency replay tests),
   `cargo test -p audiorouter-storage`, workspace and shell strict Clippy, both
   format checks, `node tools/quality/verify.mjs --checks release-tests` (8
   scripts, 27.9 s), `node tools/docs/validate.mjs` (304 files, 1,705 links),
@@ -425,7 +433,7 @@ Statuses are for the named bytes; "partial" names the missing scenario.
 | Requirement | Status | Evidence and exact gap |
 | --- | --- | --- |
 | DIST-01 per-user install | **Pass** | 2026-11-24 0.0.32 fresh install as `arqual4` (standard user, no elevation) and 2026-11-21 v0.0.31 runs; registration and six installed executables checked. |
-| DIST-02 state preservation | **Pass** | Session and recording hash retained through repair, rollback, upgrade, uninstall and reinstall on 0.0.32; a production recording was produced offline after the reinstall. The post-reinstall direct-RPC restart finding is fixed in source with a dispatcher regression; 0.0.32 bytes need the next build for non-UI clients, while the UI Play path prepares first. |
+| DIST-02 state preservation | **Pass** | Session and recording hash retained through repair, rollback, upgrade, uninstall and reinstall on 0.0.32; a production recording was produced offline after the reinstall. The post-reinstall stale-replay finding is fixed in source: a same-lifetime retry replays the recorded outcome, and an earlier-lifetime runtime result is refused with `idempotencyConflict`, with dispatcher regressions. 0.0.32 bytes need the next build for non-UI clients; the UI Play path prepares first and was unaffected. |
 | DIST-03 first-run guidance | **Partial** | v0.0.31 chooser, `NO DEVICE` cards, no substitution and consent prompt observed 2026-11-21 (guest + isolated host run). Missing: endpoint vendor guidance with a real endpoint on these bytes, and a 0.0.32 interactive pass. |
 | DIST-04 offline operation | **Pass for the tested surface** | 2026-11-24 offline on 0.0.32: CLI, schema, retained session read, discovery, MCP stdio and a production recording through the installed bridge. Missing: offline editing through the window itself (not exercised) and the absent-runtime diagnostic attribution. |
 | DIST-05 manual publication | **Pass as tooling review** | `tools/release/test-runbook-command.ps1` and the release scripts pass; no draft/tag/release was created. Publication remains a human action. |

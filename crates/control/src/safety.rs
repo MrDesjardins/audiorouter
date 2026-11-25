@@ -672,7 +672,12 @@ impl ControlPlane {
             self.scoped_idempotency_key("safety.setPrivacyMute", idempotency_key),
             Self::request_hash(&json!({ "muted": muted })),
         );
-        if let Some(previous) = self.lookup_idempotent_result(&operation.0, &operation.1)? {
+        if let Some(previous) = self.replay_runtime_outcome(
+            &operation.0,
+            &operation.1,
+            "safety.setPrivacyMute",
+            &params,
+        )? {
             return Ok(previous);
         }
         if let Some(storage) = &self.storage {

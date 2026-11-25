@@ -172,8 +172,10 @@ form and clear the password field (Ctrl+A, Delete) before typing; the first
 attempt sends no focus-moving key. No guest account, password or protection is
 changed. The recorder helper uses one idempotency key per attempt: journal rows
 survive an app restart while runtimes do not, so a fixed key would replay an
-earlier Play/Record result instead of starting a new recording (the product now
-also refuses to replay a runtime action whose live state disagrees).
+earlier Play/Record result instead of starting a new recording. The control
+plane replays a same-lifetime result verbatim and refuses an earlier-lifetime
+result that claims a live runtime state (`idempotencyConflict`, "AudioRouter
+restarted since this request") instead of performing the old action again.
 
 ## Current qualification snapshot
 

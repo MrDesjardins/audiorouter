@@ -1150,13 +1150,10 @@ impl ControlPlane {
                 &json!({ "sessionId": id, "action": "start", "candidate": candidate }),
             ),
         );
-        if let Some(previous) = self.lookup_idempotent_result(&operation.0, &operation.1)? {
-            if self.runtime_replay_is_current("sessions.start", &params, &previous)? {
-                return Ok(previous);
-            }
-            // The journal survived a control-plane restart; the runtime did
-            // not. Start again rather than claim a stopped route is running.
-            self.forget_operation_outcome(&operation.0)?;
+        if let Some(previous) =
+            self.replay_runtime_outcome(&operation.0, &operation.1, "sessions.start", &params)?
+        {
+            return Ok(previous);
         }
         if candidate.is_none() {
             self.refuse_unprepared_device_route(&id)?;
@@ -1793,7 +1790,9 @@ impl ControlPlane {
                 )
             });
         if let Some((key, hash)) = &operation {
-            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
+            if let Some(previous) =
+                self.replay_runtime_outcome(key, hash, "sessions.stop", &params)?
+            {
                 return Ok(previous);
             }
         }

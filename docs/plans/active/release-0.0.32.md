@@ -235,10 +235,12 @@ after the reinstall; the absent-WebView2 baseline bootstrapped WebView2
 failure; the unattended wrapper's cold-boot sign-in was fixed and proved. The
 earlier recorder failure was a stale replayed `sessions.play` idempotency result:
 the journal survives an app restart while the runtime does not. That product
-defect is fixed in `crates/control`/`crates/storage` with a failing-first
-dispatcher regression, but **these installer bytes predate the fix**; the next
-build must carry it. The UI Play path was never affected because it prepares
-before start. See
+defect is fixed in `crates/control`: a same-lifetime retry replays the recorded
+outcome, and a runtime outcome recorded before a restart is refused with
+`idempotencyConflict` instead of re-executing or claiming it is still playing.
+Ten dispatcher regressions cover it, but **these installer bytes predate the
+fix**; the next build must carry it. The UI Play path was never affected because
+it prepares before start. See
 [the 0.0.32 qualification record](evidence/2026-11-24-release-qualification-0.0.32.md#follow-up-post-reinstall-recorder-failure-absent-runtime-wrapper-sign-in-2026-11-24-second-vm-session).
 
 Still open for 0.0.32, all human-gated or unreleased-bytes work: interactive

@@ -54,7 +54,12 @@ edit in the window.
 | Show levels on a display | `POST /api/v1/meters/levels` `{}` |
 | Describe the setup | `POST /api/v1/sessions/summary` `{}` |
 
-Each mutating call needs a fresh `idempotencyKey` (any unique text). A
+Each mutating call needs a fresh `idempotencyKey` (any unique text). Reuse a
+key only to retry the same request: within one app run a retry returns the
+recorded outcome and does not repeat the action. After AudioRouter restarts, a
+retry of a play, record or mute recorded earlier is refused with HTTP 409
+`idempotencyConflict` and "AudioRouter restarted since this request" instead of
+starting audio again; send a new request with a new key. A
 StreamDeck "web request" or "API" action can send these with the bearer token
 header. Mistakes return HTTP 400 with a sentence naming the problem, for
 example the node names that exist. Play needs the device-administration

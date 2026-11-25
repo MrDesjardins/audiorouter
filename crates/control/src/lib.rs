@@ -240,6 +240,11 @@ pub enum ControlError {
     /// from a failed preparation, which must never stop it.
     RestartRequired(String),
     IdempotencyConflict,
+    /// The same-key request was recorded by an earlier backend lifetime, and
+    /// its outcome claims a runtime state this process cannot honour (a route
+    /// that played, a recording that ran). The side effect is not repeated and
+    /// the recorded result is not returned; the caller sends a new request.
+    IdempotencyExpired(&'static str),
     Store(audiorouter_domain::StoreError),
     Json(String),
     Storage(String),
@@ -280,6 +285,10 @@ impl std::fmt::Display for ControlError {
             Self::IdempotencyConflict => write!(
                 f,
                 "This idempotency key was already used for a different request; use a new key for a new request."
+            ),
+            Self::IdempotencyExpired(reason) => write!(
+                f,
+                "AudioRouter restarted since this request, so {reason}"
             ),
             Self::Store(error) => write!(f, "{error}"),
             Self::Json(message) => write!(f, "AudioRouter could not read or write JSON: {message}"),
@@ -448,6 +457,10 @@ pub struct ControlPlane {
     events: EventLog,
     mutation_limiter: MutationRateLimiter,
     operation_outcomes: HashMap<String, Value>,
+    /// Every idempotency key journaled by this backend lifetime, even after
+    /// its result leaves the bounded in-memory replay cache. A storage row
+    /// whose key is absent here came from an earlier lifetime.
+    lifetime_operations: std::collections::HashSet<String>,
     operation_names: HashMap<String, String>,
     operation_order: VecDeque<String>,
     idempotency_hashes: HashMap<String, String>,
@@ -674,6 +687,7 @@ impl ControlPlane {
             events: EventLog::new(1),
             mutation_limiter: MutationRateLimiter::default(),
             operation_outcomes: HashMap::new(),
+            lifetime_operations: std::collections::HashSet::new(),
             operation_names: HashMap::new(),
             operation_order: VecDeque::new(),
             idempotency_hashes: HashMap::new(),
@@ -1173,6 +1187,7 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
         ControlError::CorruptDatabase(_) => "corruptDatabase",
         ControlError::Json(_) => "internalError",
         ControlError::IdempotencyConflict => "idempotencyConflict",
+        ControlError::IdempotencyExpired(_) => "idempotencyConflict",
         ControlError::InvalidRequest(_) => "invalidRequest",
         ControlError::RestartRequired(_) => "invalidRequest",
         ControlError::Audio { code, .. } => code,
