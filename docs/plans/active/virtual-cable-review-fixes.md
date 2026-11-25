@@ -685,3 +685,52 @@ through the parser (none on disk with a driver line), a real route output throug
 The older bundle `rc-0.2.5-r2` is stale: do not use it.
 
 Round 2 ran on 2026-11-21 (see [results](evidence/2026-11-22-virtual-cable-stage-a-0.2.5-round2-results.md)): A/B FAIL by the pre-registered rule (confounded), pool PASS, Verifier fuzz froze the guest (core saved), live run alone 2026-11-22: REVIEW (update and remove under a playing route both return helper exit 5, restart required, route survives, no bugcheck; item 3 not verified). Freeze core analysed (see [freeze-core-analysis](evidence/2026-11-22-virtual-cable-stage-a-0.2.5-freeze-core-analysis.md)): nothing is stuck in the driver, the whole guest stopped (inference: NEM stall); A11 stays open. Control run done (fuzz with Verifier off, and with Verifier on Microsoft drivers only: both PASS, no freeze), so the VM is not shown to be the cause and the heartbeat-stall evidence is withdrawn. Repro attempt aborted: the host was starved (game running, 332 MB free, CPU 91 %) and the guest froze or stalled for minutes even with no driver, so VM results on a busy host prove nothing either way. Next action: run `-Blocks repro -FuzzSeconds 300 -ReproBoots 5` only on an idle host (no game, WSL stopped, >10 GB free) with `tools/vm/host-load.ps1` sampling, then the owner decides task 4 and whether exit 5 under a live route is acceptable.
+
+## Host-side round-2 readiness and re-verification (2026-11-24, agent, host only)
+
+Objective: make the next VM night decidable and re-verify every review fix that
+the frozen 0.2.5 source claims, without touching the driver, the VM or the host's
+drivers. Requirement IDs: VCAB-24/25/27/28/30, SEC-08, VDEV-09, NFR-02. Evidence
+and the requirement map: [current status](evidence/2026-11-24-virtual-cable-current-status.md).
+
+Done:
+
+- Every review-fix item (1-6, S1-S4, R1, R2, R6) confirmed in the frozen source,
+  with file:line and the host test that covers it. Host driver suite
+  `drivers/audiorouter-virtual/tests/build-tests.ps1`: 10,915,246 checks pass
+  (2026-11-24). Rust R1 regression
+  `driver_owned_session_survives_a_stall_longer_than_its_lease` passes.
+- The idle-host rule is now enforced by tools, not memory. `host-load.ps1` is a
+  parameterised sampler writing `C:\VMs\ar-share\host-load.csv` (guest:
+  `Z:\host-load.csv`). New `round2-host-preflight.ps1` measures the PC, refuses a
+  busy one or a running WSL (exit 2), and starts the sampler. `run-stage-a.ps1`
+  `-Session round2` now stops with FAIL/SKIP when the sampler is absent or not
+  growing, records `host load (<block>)` per block, stores `hostRows` in the state
+  file, and classifies an unexpected restart against the rows written since the
+  step began (row positions; the guest and host clocks differ by hours).
+- Host tests: `tools/vm/round2-support.tests.ps1` extended by 35 checks (CSV
+  parsing, row windows, Idle/Starved/NoData, runner wiring, preflight gate and
+  sampler liveness) and passing. The preflight's refusal was exercised on this
+  PC (54-79 % CPU, 3.9-4.7 GB free, `vmmemWSL`) and is expected.
+- VM guide: the round-2 section gives the preflight/sampler commands, expected
+  `host load` lines, the stop rule and a new bundle name
+  (`rc-0.2.5-r6`); the older bundles are stale for the guest scripts. A corrupted
+  sentence that had lost its backslashes (`toolsmhost-load.ps1`,
+  `C:VMshost-load.csv`) is fixed.
+
+Not run: any VM start, driver install/load, Driver Verifier, WPR/DPC measurement,
+VB-Cable install, 24 h pool run, signed package, Stage B/C. Stage A on 0.2.5
+stays **not passed**.
+
+Ordered next VM block (one night, idle host, from `02-test-signing-ready`, after
+`round2-host-preflight.ps1` exits 0; full steps are in
+`human-gated-tasks.md`):
+
+1. `-Blocks repro -FuzzSeconds 300 -ReproBoots 5`. A freeze with an idle host-load
+   line is a driver/Verifier defect and blocks signing; five clean boots keep the
+   VM explanation alive but unproven.
+2. If clean: `-Blocks ab,pool,verifier,live` (or the single blocks in that order)
+   on a quieter design. Record each host-load line with its verdict.
+3. Owner decisions: revert the frame-clock hunk as a new RC above 0.2.6 with its
+   PDB, or accept 0.2.5 with the confounded A/B recorded; and whether helper exit
+   5 under a live route is acceptable for review item 3.

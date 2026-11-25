@@ -13,7 +13,7 @@ function Assert-That([string] $Name, [bool] $Condition, [string] $Detail = '') {
 
 # 1. Every script parses and is ASCII-only (PowerShell 5.1 reads BOM-less files as Windows-1252).
 foreach ($name in 'round2-support.ps1', 'round2-support.tests.ps1', 'round2-restart-render.ps1', 'round2-pause-watcher.ps1',
-    'prepare-round2-bundle.ps1', 'run-stage-a.ps1', 'vm-checks.ps1') {
+    'prepare-round2-bundle.ps1', 'run-stage-a.ps1', 'vm-checks.ps1', 'host-load.ps1', 'round2-host-preflight.ps1') {
     $path = Join-Path $PSScriptRoot $name
     $errors = $null
     [void][Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$errors)
@@ -30,7 +30,7 @@ function Get-ScriptAst([string] $FileName) {
 $functionFilter = { param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] }
 $commandFilter = { param($n) $n -is [Management.Automation.Language.CommandAst] }
 $supportFunctions = @('round2-support.ps1', 'paired-trace-support.ps1' | ForEach-Object { (Get-ScriptAst $_).FindAll($functionFilter, $true) } | ForEach-Object { $_.Name })
-foreach ($name in 'run-stage-a.ps1', 'round2-support.ps1', 'round2-restart-render.ps1', 'round2-pause-watcher.ps1', 'prepare-round2-bundle.ps1') {
+foreach ($name in 'run-stage-a.ps1', 'round2-support.ps1', 'round2-restart-render.ps1', 'round2-pause-watcher.ps1', 'prepare-round2-bundle.ps1', 'host-load.ps1', 'round2-host-preflight.ps1') {
     $ast = Get-ScriptAst $name
     $defined = @($ast.FindAll($functionFilter, $true) | ForEach-Object { $_.Name }) + $supportFunctions
     $unknown = @()
@@ -166,6 +166,56 @@ Assert-That 'pool tags: driver tag columns are present and numeric' ($sample.MNW
 Initialize-PoolTagReader
 $known = @([AudioRouterPoolTags]::Read() | Where-Object { $_.Tag -in 'Ntfn', 'File', 'Thre', 'Proc', 'MmCa', 'Even' })
 Assert-That 'pool tags: well-known kernel tags decode as text' ($known.Count -ge 2) "found $($known.Count)"
+
+# 6. Host-load rows: the PC sampler's CSV, judged by row position, not clock.
+$csv = @(
+    'utc,cpu_pct,avail_mb,pages_sec',
+    '2026-11-24T22:00:00Z,7,12000,100',
+    '2026-11-24T22:00:20Z,91,332,90000',
+    '2026-11-24T22:00:40Z,12,11000,50',
+    '2026-11-24T22:01:00Z,5,11500,40',
+    '2026-11-24T22:01:20Z,6',
+    '2026-11-24T22:01:40Z,7,-1,3',
+    'garbage line',
+    ''
+)
+$rows = @(Get-HostLoadRows $csv)
+Assert-That 'host load: header, short, negative and garbage rows are ignored' ($rows.Count -eq 4) "$($rows.Count)"
+Assert-That 'host load: UTC timestamp parsed' ($rows[0].Utc.Kind -eq 'Utc' -and $rows[0].Utc.Hour -eq 22 -and $rows[0].CpuPercent -eq 7 -and $rows[3].PagesPerSec -eq 40)
+$stall = Get-HostLoadWindow -Rows $rows -From 0 -To 2
+Assert-That 'host load: a window by row position takes the right rows' ($stall.Count -eq 2 -and $stall.WorstCpuPercent -eq 91 -and $stall.MinAvailableMb -eq 332 -and $stall.LastUtc.Minute -eq 0)
+$after = Get-HostLoadWindow -Rows $rows -From 2
+Assert-That 'host load: From without To reads to the end' ($after.Count -eq 2 -and $after.WorstCpuPercent -eq 12 -and $after.MinAvailableMb -eq 11000)
+Assert-That 'host load: CPU above 20 percent is starvation' ((Get-HostLoadVerdict $stall).Verdict -eq 'Starved') (Get-HostLoadVerdict $stall).Detail
+Assert-That 'host load: memory below 6000 MB is starvation' ((Get-HostLoadVerdict $after -MinAvailableMb 12000).Verdict -eq 'Starved')
+Assert-That 'host load: an idle window passes' ((Get-HostLoadVerdict $after).Verdict -eq 'Idle')
+Assert-That 'host load: the limits themselves are still idle' ((Get-HostLoadVerdict ([pscustomobject]@{ Count = 1; WorstCpuPercent = 20; MinAvailableMb = 6000 })).Verdict -eq 'Idle')
+Assert-That 'host load: an empty window is NoData, never PASS' ((Get-HostLoadVerdict (Get-HostLoadWindow -Rows $rows -From 9)).Verdict -eq 'NoData')
+# The guest must require the sampler and record host load per block, not rely
+# on a night's operator memory.
+$runnerText = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'run-stage-a.ps1') -Raw
+Assert-That 'runner: round2 stops without a host-load sampler' ($runnerText -match 'host-load sampler' -and $runnerText -match "'SKIP' 'the host-load sampler check did not pass")
+Assert-That 'runner: each round2 block records host load' ($runnerText -match 'Add-HostLoadResult "\$block block" \$from')
+Assert-That 'runner: an unexpected restart is classified against host load' ($runnerText -match 'until the restart')
+
+# 7. Host preflight: the idle gate and the sampler check (library mode only).
+. (Join-Path $PSScriptRoot 'round2-host-preflight.ps1') -LibraryOnly
+$idle = [pscustomobject]@{ Verdict = 'Idle'; Detail = 'ok' }
+$busy = [pscustomobject]@{ Verdict = 'Starved'; Detail = 'cpu 91' }
+Assert-That 'preflight: an idle PC has no reasons' (@(Get-PreflightReasons -Verdict $idle -Wsl @()).Count -eq 0)
+Assert-That 'preflight: a busy PC is refused with its reason' (((@(Get-PreflightReasons -Verdict $busy -Wsl @())) -join '; ') -match 'cpu 91')
+Assert-That 'preflight: a running WSL distro is refused' (((@(Get-PreflightReasons -Verdict $idle -Wsl @('Ubuntu Running'))) -join '; ') -match 'wsl --shutdown')
+$live = Measure-HostIdle -Seconds 1 -IntervalSeconds 1
+Assert-That 'preflight: a live measurement returns a usable summary' ($live.Count -ge 1 -and $live.WorstCpuPercent -ge 0 -and $live.MinAvailableMb -ge 0) "count $($live.Count)"
+Assert-That 'preflight: a missing sampler file is not running' (-not (Test-SamplerRunning -Path (Join-Path ([IO.Path]::GetTempPath()) 'no-such-host-load.csv')))
+$tempCsv = Join-Path ([IO.Path]::GetTempPath()) 'round2-host-load-test.csv'
+'utc,cpu_pct,avail_mb,pages_sec' | Set-Content -LiteralPath $tempCsv -Encoding ASCII
+(Get-Item -LiteralPath $tempCsv).LastWriteTime = (Get-Date).AddMinutes(-10)
+Assert-That 'preflight: a stale sampler file is not running' (-not (Test-SamplerRunning -Path $tempCsv))
+(Get-Item -LiteralPath $tempCsv).LastWriteTime = (Get-Date)
+Assert-That 'preflight: a fresh sampler file is running' (Test-SamplerRunning -Path $tempCsv)
+Remove-Item -LiteralPath $tempCsv -Force -ErrorAction SilentlyContinue
+Assert-That 'preflight: heavy-process and WSL probes return arrays' ($null -ne @(Get-HeavyProcesses) -and $null -ne @(Get-RunningWsl))
 
 if ($script:failures -gt 0) { Write-Host "`n$($script:failures) check(s) failed." -ForegroundColor Red; exit 1 }
 Write-Host "`nAll round-2 host checks passed."

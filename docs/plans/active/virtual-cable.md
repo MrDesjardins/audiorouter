@@ -19,6 +19,19 @@ the second VM round are in the
 and [review-fixes plan](virtual-cable-review-fixes.md#stage-a-on-025-gap-analysis-and-second-vm-round-2026-11-21).
 The pre-purchase task 4 and decision gate (task 5) run on 0.2.5 and stay open.
 
+**2026-11-24: the current status is consolidated in one page, and the driver and
+its review fixes are re-verified.**
+[Current status](evidence/2026-11-24-virtual-cable-current-status.md) records the
+verified freeze (no driver commit since `7c88895c2`, no PDB), every review-fix
+item with its code location and host test, the VCAB-24/25/27/28/30
+requirement-to-evidence gap, and the single remaining ordered VM block. The host
+driver suite passes 10,915,246 checks and the Rust R1 regression passes. The
+round-2 guest run now refuses to start without the host-load sampler and records
+host CPU/memory per block, so a freeze on a busy PC can no longer be mistaken for
+a driver defect. No VM was started and no driver was installed on 2026-11-24.
+Remaining work is qualification on human/hardware gates (VM night, then Stage C);
+see the current-status page and `human-gated-tasks.md`.
+
 - WP-09b portable capture-analysis and reporting code is in place; the required
   endpoint measurement matrix has not been run.
 - WP-10 host implementation is archived. The attended app gate needs the signed

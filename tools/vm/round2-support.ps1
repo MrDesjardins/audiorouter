@@ -127,6 +127,73 @@ function Compare-RenderAb {
     return [pscustomobject]@{ Verdict = $verdict; Detail = $detail; Shapes = [pscustomobject]$shapes }
 }
 
+# --- host load (the PC sampler, read through the share) -----------------------
+# tools\vm\host-load.ps1 runs on the PC and writes one row per interval to the
+# share root (C:\VMs\ar-share\host-load.csv), so the guest reads the same file as
+# Z:\host-load.csv. Rows carry a full UTC timestamp, which survives midnight and
+# a guest clock that is wrong (the 2026-11-22 core showed the guest clock hours
+# behind the host). A block is judged by ROW POSITION, never by comparing the
+# guest clock with host rows.
+function Get-HostLoadRows {
+    param([string[]] $Lines)
+    $rows = New-Object System.Collections.Generic.List[object]
+    foreach ($line in @($Lines)) {
+        if (-not $line -or $line.Trim() -eq '' -or $line -match '^utc,') { continue }
+        $parts = $line -split ','
+        if ($parts.Count -ne 4) { continue }
+        $utc = [DateTime]::MinValue
+        if (-not [DateTime]::TryParseExact($parts[0].Trim(), 'yyyy-MM-ddTHH:mm:ssZ',
+                [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AdjustToUniversal, [ref]$utc)) { continue }
+        $values = @()
+        foreach ($index in 1..3) {
+            $value = 0.0
+            if (-not [double]::TryParse($parts[$index].Trim(), [Globalization.NumberStyles]::Float,
+                    [Globalization.CultureInfo]::InvariantCulture, [ref]$value)) { $values = @(); break }
+            if ($value -lt 0) { $values = @(); break }
+            $values += $value
+        }
+        if ($values.Count -ne 3) { continue }
+        $rows.Add([pscustomobject]@{ Utc = $utc; CpuPercent = $values[0]; AvailableMb = $values[1]; PagesPerSec = $values[2] })
+    }
+    # ToArray, not @($rows): Windows PowerShell 5.1 throws "Argument types do
+    # not match" from @() over an empty generic List[object].
+    return $rows.ToArray()
+}
+# Summary of rows [From, To); To = 0 means "to the end". Row positions, not time.
+function Get-HostLoadWindow {
+    param([object[]] $Rows, [int] $From = 0, [int] $To = 0)
+    $all = @($Rows)
+    $end = if ($To -gt 0) { [Math]::Min($To, $all.Count) } else { $all.Count }
+    $first = [Math]::Max(0, $From)
+    $slice = if ($first -lt $end) { @($all[$first..($end - 1)]) } else { @() }
+    $summary = [ordered]@{ Count = $slice.Count; From = $first; To = $end
+        WorstCpuPercent = $null; MinAvailableMb = $null; FirstUtc = $null; LastUtc = $null }
+    if ($slice.Count -gt 0) {
+        $summary.WorstCpuPercent = [double](($slice | Measure-Object -Property CpuPercent -Maximum).Maximum)
+        $summary.MinAvailableMb = [double](($slice | Measure-Object -Property AvailableMb -Minimum).Minimum)
+        $summary.FirstUtc = $slice[0].Utc
+        $summary.LastUtc = $slice[$slice.Count - 1].Utc
+    }
+    return [pscustomobject]$summary
+}
+# Owner rule 2026-11-22: a freeze is a driver candidate only when the host
+# stayed under 20 percent CPU and kept 6 GB or more available.
+function Get-HostLoadVerdict {
+    param($Summary, [double] $MaxCpuPercent = 20, [int] $MinAvailableMb = 6000)
+    if (-not $Summary -or $Summary.Count -eq 0) {
+        return [pscustomobject]@{ Verdict = 'NoData'
+            Detail = 'no host-load samples for this window; start tools\vm\round2-host-preflight.ps1 on the PC before the VM' }
+    }
+    $detail = "{0:N0} samples, worst CPU {1:N0} %, least available {2:N0} MB" -f $Summary.Count, $Summary.WorstCpuPercent, $Summary.MinAvailableMb
+    if ($Summary.WorstCpuPercent -gt $MaxCpuPercent) {
+        return [pscustomobject]@{ Verdict = 'Starved'; Detail = "$detail (host CPU above $MaxCpuPercent %)" }
+    }
+    if ($Summary.MinAvailableMb -lt $MinAvailableMb) {
+        return [pscustomobject]@{ Verdict = 'Starved'; Detail = "$detail (host memory below $MinAvailableMb MB)" }
+    }
+    return [pscustomobject]@{ Verdict = 'Idle'; Detail = "$detail (host idle)" }
+}
+
 # --- guest auto-logon (reversible; the guest is a throwaway VM) -----------------
 # A planned restart resumes through a logon task, so an unattended night needs the
 # guest to sign in by itself. The password is stored in the Winlogon key only for
