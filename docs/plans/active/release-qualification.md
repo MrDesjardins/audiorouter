@@ -265,3 +265,34 @@ reconcile the intended release source with the VST handoff, and record the exact
 candidate plus present/absent snapshot UUIDs. Then run the remaining interactive
 RQ-05 cases on those bytes; rerun RQ-04 if the selected installer differs from
 the qualified combined candidate. No VM is restored during plan preparation.
+
+### Harness repair: startup-failure diagnostic (2026-11-24)
+
+Branch `fix/packaged-shell-windows-snapshot`, from `origin/main` `53e1de80e`.
+Local only; no commit, push, PR or VM run.
+
+`tools/quality/packaged-shell-smoke.mjs` called `windows("Snapshot", …)` in the
+baseline startup-failure path but never defined or imported `windows`. A shell
+that died before its DevTools endpoint existed therefore reported
+`windows is not defined` and lost the owned-process snapshot that RQ-02/RQ-03
+rely on; the sibling qualifier had its own private copy, which is how the drift
+went unnoticed. The GHA packaged-smoke job only takes the passing path, so no
+hosted run reported it.
+
+Fix: `tools/quality/packaged-shell-windows.mjs` now holds the single
+PowerShell-invocation wrapper (`windows`, `windowsHelperPath`). Both the smoke
+runner and `qualify-packaged-shell-smoke.mjs` import it, so a call site cannot
+reference a binding that one copy dropped. `tools/quality/packaged-shell-windows.test.mjs`
+covers the helper and, as a direct regression for the defect, fails on the old
+file because it calls `windows()` without binding it. The test is wired into
+the `policy` check in `tools/quality/checks.mjs`, so it runs on every fast and
+full profile, on Windows and elsewhere (the process-snapshot cases skip off
+Windows).
+
+Checks: `node --test` over the `policy` selection (policy, verify,
+quality-history-chart, packaged-shell-windows, code-size) passes 91 tests; the
+new file passes its 4. Not run: a real shell launch, because the owner's app
+holds the default control pipe and the plan keeps the shell off limits, and
+hosted CI. The end-to-end baseline startup-failure case remains to be exercised
+on the frozen candidate in a disposable guest before RQ-02/RQ-03 are re-cited
+against this harness revision.
