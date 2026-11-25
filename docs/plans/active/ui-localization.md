@@ -935,14 +935,43 @@ placeholder and glossary rules, the validation/audit commands, the 200 % browser
 check and the fluent-review queue. The validation command is the coverage
 report: a new English key fails until every language covers it.
 
-Still open after this pass: `NodeEditors.tsx` still derives its "Device busy"
-hint from the English `snapshot.audio.reason`; the audio status has no
-device-busy code, so that is a further contract change (and the branch may be
-dead with current backend reasons). The native standalone-instance/recovery
-TaskDialog text is still English; backend-seeded plugin/preset descriptions
-remain English. Human-only: fluent review, packaged shell/tray, Narrator,
-Windows 150/200% scaling, live audio continuity. See the final handback for the
-human-gate list.
+### 2026-11-24 — Native instance dialogs and the last prose-based status
+
+Requirements: L10N-01/03/06, UI-11. Local commits only.
+
+- `src-tauri/src/instance_windows.rs` now draws the standalone-instance and
+  recovery dialog from `native.*` keys: instruction, content, the force-close
+  command link, the dialog-failure fallback, and the ownership, session,
+  starting, closing and "another session" errors. `main.rs` resolves the saved
+  or Windows language from the database path before claiming the instance (the
+  path resolution moved above the claim; reading `shell-settings.json` is not
+  opening storage) and passes it to `show_running_instance`, `claim_or_recover`
+  and the error dialog. Buffers are NUL-terminated UTF-16 kept alive across the
+  modal call. Regenerated `ui_language.rs`.
+- `NodeEditors.tsx` no longer derives a "Device busy" pill or exclusive-use
+  note from `snapshot.audio.reason`. No current status reason contains "in
+  use"/"owned", so the branch was dead prose dependence; the live pill now
+  follows the structured readings (Live / Waiting for Play / No readings and
+  the application-capture state). The unused `workflowUi.deviceBusy` and
+  `workflowUi.exclusiveNote` keys are removed. Regression:
+  `NodeEditors.test.tsx` renders a running tool with a meter and an English
+  reason containing "in use" and requires Live, not Device busy.
+
+Checks (Windows 11, 2026-11-24): `cargo test --manifest-path
+src-tauri/Cargo.toml` 142 passed, 4 ignored; `cargo clippy --manifest-path
+src-tauri/Cargo.toml --all-targets --all-features -- -D warnings` pass; both
+`cargo fmt --check` runs pass; `i18n:check` 3 languages/3,768 messages; UI
+`typecheck:all`, `lint`, `format:check`, `npm test` 137 files/1,201 tests pass;
+docs 307 files/1,701 links pass; `git diff --check` pass. Not run: a packaged
+Windows launch of the new dialog in each language, Narrator, fluent review,
+live audio.
+
+Everything an agent can do on this plan is done. The remaining items need a
+person, hardware, VM, purchase or an owner decision; see the final handback,
+which supplies the exact steps and pass criteria for the manager's
+`human-gated-tasks.md`. Accepted, non-blocking limitation: backend-originated
+Fun Voice Changer preset names/descriptions and a few node-issue details stay
+English where the backend supplies them (recorded 2026-11-19).
 
 ## References
 
