@@ -71,6 +71,7 @@ fn no_goal_binds_a_device_or_arms_a_recorder() {
     let mut plane = ControlPlane::new("test");
     for goal in [
         "clean-mic",
+        "mic-discord",
         "game-discord",
         "podcast",
         "record-app",
@@ -80,7 +81,7 @@ fn no_goal_binds_a_device_or_arms_a_recorder() {
             &mut plane,
             goal,
             goal,
-            game().filter(|_| goal != "clean-mic"),
+            game().filter(|_| !matches!(goal, "clean-mic" | "mic-discord")),
         );
         let session: Session = serde_json::from_value(result["session"].clone()).unwrap();
         for node in &session.nodes {

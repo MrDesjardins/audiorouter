@@ -11,6 +11,7 @@ import { packagedShellEnvironment } from "./packaged-shell-environment.mjs";
 import { assertStandardUser } from "./standard-user.mjs";
 import { dismissFirstLaunchGoal } from "./packaged-shell-onboarding.mjs";
 import { requireDisabledBrowserKeys } from "./packaged-shell-browser-keys.mjs";
+import { windows } from "./packaged-shell-windows.mjs";
 
 const MAX_TIMEOUT_MS = 120_000;
 const MAX_LOG_BYTES = 5 * 1024 * 1024;

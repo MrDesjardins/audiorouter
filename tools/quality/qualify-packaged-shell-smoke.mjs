@@ -9,12 +9,10 @@ import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { assertStandardUser } from "./standard-user.mjs";
+import { windows, windowsHelperPath } from "./packaged-shell-windows.mjs";
 
 const runnerFile = fileURLToPath(
   new URL("./packaged-shell-smoke.mjs", import.meta.url),
-);
-const windowsHelper = fileURLToPath(
-  new URL("./packaged-shell-windows.ps1", import.meta.url),
 );
 const controlPipe = String.raw`\\.\pipe\audiorouter-control`;
 const caseNames = [
@@ -62,33 +60,6 @@ function args(argv) {
     cases: selected ? [selected] : caseNames,
     timeout,
   };
-}
-
-function windows(operation, extra) {
-  const result = spawnSync(
-    "powershell.exe",
-    [
-      "-NoProfile",
-      "-NonInteractive",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-File",
-      windowsHelper,
-      "-Operation",
-      operation,
-      ...extra,
-    ],
-    {
-      encoding: "utf8",
-      windowsHide: true,
-      timeout: 15_000,
-    },
-  );
-  if (result.error || result.status !== 0)
-    throw new Error(
-      `${operation} helper failed: ${result.error?.message ?? result.stderr}`,
-    );
-  return JSON.parse(result.stdout.trim());
 }
 
 async function assertPipeFree() {
@@ -286,7 +257,7 @@ async function runCase(name, options) {
             "-ExecutionPolicy",
             "Bypass",
             "-File",
-            windowsHelper,
+            windowsHelperPath,
             "-Operation",
             "Launch",
             "-Executable",

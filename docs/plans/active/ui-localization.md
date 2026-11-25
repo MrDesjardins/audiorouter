@@ -780,7 +780,8 @@ Reviewer follow-ups (fr and zh-Hans text was written by the agent, from the
 existing catalog terms, and needs the fluent reviewer): all of
 `workspaceEvents.*` (safety wording: device changed, recovery failed, virtual
 cable link), `draftErrors.*`, `signalFlowDialogs.*`, `discordRoute.*`,
-`svgHandle.hint`, `appShell.*`. Terms reused: Lecture/播放, Arrêter/停止,
+`svgHandle.hint`, `appShell.*`. Added 2026-11-24 with the new “Mic to
+Discord” goal: `h2.goalTitleMicDiscord`, `h2.goalSumMicDiscord`. Terms reused: Lecture/播放, Arrêter/停止,
 Propriétés/属性, mélangeur/混音器, outil/工具, sidechain/侧链. French now
 says "Aller à {{name}}" for the button and "Connexion au clavier" for the
 keyboard dialog; `fr` "bus" is kept as in the existing catalog.

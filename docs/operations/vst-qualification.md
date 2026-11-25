@@ -70,12 +70,14 @@ generated from an owner-run census, not from this runner.
 Known results that are not failures of this runner: DPF Kars and Nekobi
 VST3 32-bit stay silent with a held note (a defect in that DPF build; see
 `plugin-census.md`), so the census lists them and the runner only plays the
-64-bit Kars. On GitHub's runner the DPF ProM editor entry is reported as
-`skipped` with its reason (and a notice annotation): the runner has no GPU
-driver, and ProM's OpenGL editor ended its worker there with `0xC0150011`, an
-activation-context fault inside the plugin, while AGain's editor passed. It
-runs, and passes, on a desktop PC. A skipped entry is not a failure and is not
-counted in the "of N passed" total.
+64-bit Kars. On GitHub's runner both editor-lifecycle entries (AGain fixed size
+and DPF ProM resizable) are reported as `skipped` with their reason and a notice
+annotation: the hosted runner is headless with no interactive desktop or GPU
+driver. AGain's VSTGUI editor creates no window there (`cycle 0: the plugin
+created no window`) and ProM's OpenGL editor ends its worker with `0xC0150011`,
+an activation-context fault inside the plugin. Both run, and are expected to
+pass, on a desktop PC. A skipped entry is not a failure and is not counted in
+the "of N passed" total.
 
 ## What it cannot check
 

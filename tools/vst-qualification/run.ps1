@@ -217,11 +217,12 @@ function T([string]$Package, [string]$Target, [string]$Name, [hashtable]$Environ
     if (-not $Label) { $Label = $Name }
     return @{ Package = $Package; Target = $Target; Name = $Name; Environment = $Environment; Label = $Label; Features = $Features; SkipReason = $SkipReason }
 }
-# GitHub's Windows runner has no GPU driver. DPF editors draw with OpenGL, and
-# the ProM editor ended its worker there with 0xC0150011 (an activation
-# context fault inside the plugin) while AGain's editor passed; run it locally.
-$noOpenGl = ''
-if ($env:GITHUB_ACTIONS -eq 'true') { $noOpenGl = 'the hosted runner has no OpenGL driver for DPF editors; run locally' }
+# GitHub's Windows runner runs headless: no interactive desktop or GPU driver.
+# A plugin editor window is an attended check. AGain's VSTGUI editor creates no
+# window there ("cycle 0: the plugin created no window") and DPF's OpenGL editor
+# ends its worker with 0xC0150011; run both locally.
+$noEditor = ''
+if ($env:GITHUB_ACTIONS -eq 'true') { $noEditor = 'the hosted runner has no interactive desktop for plugin windows; run locally' }
 $ph = 'audiorouter-plugin-host'
 $ctl = 'audiorouter-control'
 $fx = @('test-fixtures')
@@ -251,7 +252,7 @@ $tests = @(
     (T $ph 'worker_process' 'verified_native_vst3_async_bus_worker_bridges_the_graph_scheduler' @{ AUDIOROUTER_VST3_FIXTURE = $again } -Features $fx),
     (T $ph 'worker_process' 'native_vst3_fixture_signal_report' @{ AUDIOROUTER_VST3_FIXTURE = $again } -Features $fx),
     # Hidden parent window: open, resize and close three times while audio flows.
-    (T $ph 'worker_process' 'native_vst3_editor_survives_repeated_open_resize_and_close' @{ AUDIOROUTER_VST3_FIXTURE = $again } 'vst3 editor lifecycle (AGain, fixed size)' -Features $fx),
+    (T $ph 'worker_process' 'native_vst3_editor_survives_repeated_open_resize_and_close' @{ AUDIOROUTER_VST3_FIXTURE = $again } 'vst3 editor lifecycle (AGain, fixed size)' -Features $fx -SkipReason $noEditor),
     (T $ph 'deterministic_audio' 'native_vst3_again_matches_exact_gain_and_bypass_transfer' @{ AUDIOROUTER_VST3_FIXTURE = $again } -Features $fx),
     (T $ph 'vst3_bus_discovery' 'real_worker_describes_buses_without_interrupting_processing' @{ AUDIOROUTER_TEST_VST3_EFFECT = $again }),
     (T $ph 'vst3_bus_discovery' 'a_missing_requested_class_never_substitutes_another_effect' @{ AUDIOROUTER_TEST_VST3_EFFECT = $again }),
@@ -280,7 +281,7 @@ if ($haveDpf) {
         (T $ph 'vst3_stateless_state' 'a_stateless_dpf_plugin_restores_its_own_saved_state' @{ AUDIOROUTER_TEST_VST3_STATELESS = (Join-Path $dpf64 'ProM.vst3') } 'vst3 stateless restore x64 (DPF ProM)'),
         (T $ph 'vst3_stateless_state' 'a_stateless_dpf_plugin_restores_its_own_saved_state' @{ AUDIOROUTER_TEST_VST3_STATELESS = (Join-Path $dpf32 'ProM.vst3'); AUDIOROUTER_TEST_VST3_NATIVE_WORKER = $worker.Vst3X86 } 'vst3 stateless restore x86 (DPF ProM)'),
         (T $ph 'vst3_instrument' 'a_vst3_instrument_sounds_when_it_gets_a_note_and_not_before' @{ AUDIOROUTER_TEST_VST3_INSTRUMENT = (Join-Path $dpf64 'Kars.vst3') } 'vst3 instrument x64 (DPF Kars)'),
-        (T $ph 'worker_process' 'native_vst3_editor_survives_repeated_open_resize_and_close' @{ AUDIOROUTER_VST3_FIXTURE = (Join-Path $dpf64 'ProM.vst3') } 'vst3 editor lifecycle (DPF ProM, resizable)' -Features $fx -SkipReason $noOpenGl)
+        (T $ph 'worker_process' 'native_vst3_editor_survives_repeated_open_resize_and_close' @{ AUDIOROUTER_VST3_FIXTURE = (Join-Path $dpf64 'ProM.vst3') } 'vst3 editor lifecycle (DPF ProM, resizable)' -Features $fx -SkipReason $noEditor)
     )
 }
 if ($Only) { $tests = @($tests | Where-Object { $_.Label -match $Only -or $_.Name -match $Only }) }
