@@ -82,6 +82,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
             protocol: "1.1",
             defaultPeriodFrames: 480,
             cableCount: cables.length,
+            maxCables: 8,
             cables,
           },
         });

@@ -144,7 +144,7 @@ fn main() {
                 cables = value
                     .parse()
                     .ok()
-                    .filter(|n| (1..=8).contains(n))
+                    .filter(|n| (1..=audiorouter_domain::MAX_CABLES).contains(n))
                     .unwrap_or_else(|| exit_usage())
             }
             "--max-min-period" => max_min_period = value.parse().unwrap_or_else(|_| exit_usage()),

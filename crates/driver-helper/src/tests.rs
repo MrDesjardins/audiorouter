@@ -71,6 +71,10 @@ struct Fake {
     descriptions: BTreeMap<String, String>,
     calls: Vec<String>,
     slept: u64,
+    /// QUERY `MaxCables`: 8 like the 0.2.5 driver unless a test says otherwise.
+    max_cables: u32,
+    /// QUERY calls that find no bridge (a restarting device) before it answers.
+    silent_queries: u32,
 }
 
 impl Fake {
@@ -94,11 +98,15 @@ impl Fake {
             descriptions: BTreeMap::new(),
             calls: Vec::new(),
             slept: 0,
+            max_cables: 8,
+            silent_queries: 0,
         }
     }
+    /// Like the driver: an absent or out-of-range CableCount means the default.
     fn count(&self) -> u8 {
         self.dwords
             .get("CableCount")
+            .filter(|v| (1..=self.max_cables).contains(v))
             .map(|v| *v as u8)
             .unwrap_or(DEFAULT_CABLE_COUNT)
     }
@@ -228,16 +236,30 @@ impl Platform for Fake {
         }
         result
     }
-    fn query_driver(&mut self) -> Option<(u16, u16, u32, u32, u32)> {
-        self.device
-            .as_ref()
-            .map(|_| (1, 1, 0x3f, u32::from(self.count()), 480))
+    fn query_driver(&mut self) -> Option<DriverQuery> {
+        self.device.as_ref()?;
+        if self.silent_queries > 0 {
+            self.silent_queries -= 1;
+            return None;
+        }
+        Some(query(0x3f, u32::from(self.count()), self.max_cables))
     }
     fn sleep_ms(&mut self, ms: u64) {
         self.slept += ms;
     }
     fn now_utc(&mut self) -> String {
         "2026-10-06T12:00:00Z".into()
+    }
+}
+
+fn query(capabilities: u32, cable_count: u32, max_cables: u32) -> DriverQuery {
+    DriverQuery {
+        protocol_major: 1,
+        protocol_minor: 1,
+        capabilities,
+        cable_count,
+        max_cables,
+        default_period_frames: 480,
     }
 }
 
@@ -311,10 +333,10 @@ fn arguments_follow_the_command_contract() {
         "status --package C:\\x",
         "set-cables",
         "set-cables --count 0",
-        "set-cables --count 9",
+        "set-cables --count 17",
         "remove --count 2",
         "configure",
-        "configure --name 9=X",
+        "configure --name 17=X",
         "configure --name 1=",
         "configure --name 1=a(b)",
         "configure --param MinPeriodFrames=63",
@@ -350,7 +372,7 @@ fn filter_references_identify_every_cable_and_nothing_else() {
     for other in [
         "",
         "wavecable",
-        "wavecableirender",
+        "wavecableqrender",
         "wavecablearenderx",
         "wavespeaker",
         "topologycableArender",
@@ -595,7 +617,7 @@ fn endpoint_names_are_recognised_through_renames() {
     for other in [
         "Speakers (Realtek(R) Audio)",
         "CABLE Input (VB-Audio Virtual Cable)",
-        "AudioRouter Cable I Input",
+        "AudioRouter Cable Q Input",
         "Speakers (AudioRouter Cable A Input) ",
         "audiorouter cable a input",
         "",
@@ -637,24 +659,33 @@ fn status_has_the_five_states() {
     assert_eq!(classify_status(false, false, false, None), "notInstalled");
     assert_eq!(classify_status(true, false, false, None), "needsRepair");
     assert_eq!(
-        classify_status(true, true, true, Some((1, 1, 0x20, 2, 480))),
+        classify_status(true, true, true, Some(query(0x20, 2, 8))),
         "installed"
     );
     assert_eq!(
-        classify_status(true, true, false, Some((1, 1, 0x20, 2, 480))),
+        classify_status(true, true, false, Some(query(0x20, 2, 8))),
         "needsRepair"
     );
     assert_eq!(classify_status(true, true, true, None), "needsRestart");
     assert_eq!(
-        classify_status(true, true, true, Some((2, 0, 0x20, 2, 480))),
+        classify_status(
+            true,
+            true,
+            true,
+            Some(DriverQuery {
+                protocol_major: 2,
+                protocol_minor: 0,
+                ..query(0x20, 2, 8)
+            })
+        ),
         "incompatible"
     );
     assert_eq!(
-        classify_status(true, true, true, Some((1, 1, 0, 2, 480))),
+        classify_status(true, true, true, Some(query(0, 2, 8))),
         "incompatible"
     );
     assert_eq!(
-        classify_status(false, true, true, Some((1, 1, 0x20, 2, 480))),
+        classify_status(false, true, true, Some(query(0x20, 2, 8))),
         "installed",
         "installed without the helper"
     );
@@ -969,6 +1000,171 @@ fn set_cables_changes_the_count_and_waits_for_exactly_n() {
         run(&Request::SetCables { count: 2 }, &mut empty, &fresh.context).kind,
         ExitKind::InvalidRequest
     );
+}
+
+/// The 0.2.5 driver reads an out-of-range CableCount as 2, so writing 9 would
+/// remove cables C-H from Windows. The helper must refuse before the write.
+#[test]
+fn set_cables_refuses_more_than_the_driver_offers_before_writing() {
+    let env = Env::new(false);
+    let mut fake = Fake::new();
+    run(
+        &Request::Install {
+            package: env.package(),
+        },
+        &mut fake,
+        &env.context,
+    );
+    run(&Request::SetCables { count: 8 }, &mut fake, &env.context);
+    fake.calls.clear();
+    let outcome = run(&Request::SetCables { count: 9 }, &mut fake, &env.context);
+    assert_eq!(outcome.kind, ExitKind::InvalidRequest, "{}", outcome.json);
+    assert!(
+        outcome.json.to_string().contains("at most 8 cables"),
+        "{}",
+        outcome.json
+    );
+    assert!(
+        !fake
+            .calls
+            .iter()
+            .any(|call| call.starts_with("dword") || call == "restart"),
+        "{:?}",
+        fake.calls
+    );
+    assert_eq!(fake.count(), 8);
+
+    // A driver that does not answer is treated as a 0.2.5 driver.
+    fake.max_cables = 16;
+    fake.silent_queries = 1;
+    let outcome = run(&Request::SetCables { count: 12 }, &mut fake, &env.context);
+    assert_eq!(outcome.kind, ExitKind::InvalidRequest, "{}", outcome.json);
+    assert_eq!(fake.count(), 8);
+
+    // A driver reporting 16 accepts 9 through 16.
+    for count in [9, 15, 16] {
+        let outcome = run(&Request::SetCables { count }, &mut fake, &env.context);
+        assert_eq!(outcome.kind, ExitKind::Success, "{}", outcome.json);
+        assert_eq!(
+            outcome.json["endpoints"].as_array().unwrap().len(),
+            usize::from(count) * 2
+        );
+    }
+    let report = status_report(&mut fake, None).unwrap();
+    assert_eq!((report.cable_count, report.max_cables), (16, 16));
+}
+
+#[test]
+fn status_reports_the_driver_capacity_and_the_count_it_really_uses() {
+    let env = Env::new(false);
+    let mut fake = Fake::new();
+    run(
+        &Request::Install {
+            package: env.package(),
+        },
+        &mut fake,
+        &env.context,
+    );
+    let report = status_report(&mut fake, None).unwrap();
+    assert_eq!((report.cable_count, report.max_cables), (2, 8));
+    // A count left by a newer driver after a downgrade: the 0.2.5 driver
+    // uses 2, and the status says so instead of waiting for 12.
+    fake.dwords.insert("CableCount".into(), 12);
+    let report = status_report(&mut fake, None).unwrap();
+    assert_eq!((report.cable_count, report.max_cables), (2, 8));
+    // No bridge answer: capacity falls back to 8, never more.
+    fake.max_cables = 16;
+    fake.silent_queries = 1;
+    assert_eq!(status_report(&mut fake, None).unwrap().max_cables, 8);
+    assert_eq!(status_report(&mut fake, None).unwrap().max_cables, 16);
+    assert_eq!(cable_capacity(Some(&query(0x3f, 2, 40))), MAX_CABLES);
+    assert_eq!(cable_capacity(Some(&query(0x3f, 2, 0))), 8);
+}
+
+/// After an update to a 16-cable driver, the expected count is read once
+/// the new driver's bridge answers, not from a 0.2.5 assumption.
+#[test]
+fn update_waits_for_the_new_driver_before_counting_cables() {
+    let env = Env::new(false);
+    let mut fake = Fake::new();
+    fake.max_cables = 16;
+    run(
+        &Request::Install {
+            package: env.package(),
+        },
+        &mut fake,
+        &env.context,
+    );
+    run(&Request::SetCables { count: 12 }, &mut fake, &env.context);
+    fake.silent_queries = 4;
+    let outcome = run(
+        &Request::Repair {
+            package: env.package(),
+        },
+        &mut fake,
+        &env.context,
+    );
+    assert_eq!(outcome.kind, ExitKind::Success, "{}", outcome.json);
+    assert_eq!(outcome.json["endpoints"].as_array().unwrap().len(), 24);
+}
+
+#[test]
+fn configure_refuses_names_for_cables_the_driver_cannot_offer() {
+    let env = Env::new(false);
+    let mut fake = Fake::new();
+    run(
+        &Request::Install {
+            package: env.package(),
+        },
+        &mut fake,
+        &env.context,
+    );
+    let named = |index: u8| Request::Configure {
+        names: BTreeMap::from([(index, "Stream".to_owned())]),
+        params: BTreeMap::new(),
+    };
+    let outcome = run(&named(8), &mut fake, &env.context);
+    assert_eq!(outcome.kind, ExitKind::InvalidRequest, "{}", outcome.json);
+    assert!(
+        outcome.json.to_string().contains("at most 8 cables"),
+        "{}",
+        outcome.json
+    );
+    assert!(!env
+        .context
+        .state
+        .load()
+        .unwrap()
+        .unwrap()
+        .cable_names
+        .contains_key(&8));
+    assert_eq!(
+        run(&named(7), &mut fake, &env.context).kind,
+        ExitKind::Success
+    );
+    fake.max_cables = 16;
+    assert_eq!(
+        run(&named(15), &mut fake, &env.context).kind,
+        ExitKind::Success
+    );
+}
+
+#[test]
+fn cable_numbers_accept_one_to_sixteen() {
+    assert!(parse_cable_count("16").is_ok());
+    assert!(parse_cable_count("17").is_err());
+    assert!(parse_cable_count("0").is_err());
+    assert_eq!(
+        parse_name_assignment("16=Stream").unwrap(),
+        (15, "Stream".to_owned())
+    );
+    assert!(parse_name_assignment("17=Stream").is_err());
+    assert_eq!(classify_filter_reference("wavecablep_capture"), None);
+    assert_eq!(
+        classify_filter_reference("wavecablepcapture"),
+        Some((15, Direction::Output))
+    );
+    assert_eq!(classify_filter_reference("wavecableqcapture"), None);
 }
 
 #[test]

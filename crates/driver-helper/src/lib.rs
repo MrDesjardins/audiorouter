@@ -22,7 +22,9 @@ pub const INF_NAME: &str = "audioroutervirtual.inf";
 pub const SYS_NAME: &str = "audioroutervirtual.sys";
 pub const CAT_NAME: &str = "audioroutervirtual.cat";
 pub const PACKAGE_JSON: &str = "package.json";
-pub const MAX_CABLES: u8 = 8;
+/// App maximum and the capacity assumed for a driver that does not report
+/// one; the limit on one PC is [`cable_capacity`].
+pub use audiorouter_domain::{LEGACY_DRIVER_MAX_CABLES, MAX_CABLES};
 pub const DEFAULT_CABLE_COUNT: u8 = 2;
 pub const STATE_SCHEMA: u32 = 1;
 pub const MAX_STATE_BYTES: u64 = 64 * 1024;
@@ -289,9 +291,11 @@ fn parse_cable_count(text: &str) -> Result<u8, Failure> {
 
 /// `--name 2=Discord` → (1, "Discord"). Cable numbers are 1-based for users.
 fn parse_name_assignment(text: &str) -> Result<(u8, String), Failure> {
-    let (index, name) = text
-        .split_once('=')
-        .ok_or_else(|| Failure::invalid(format!("--name expects <1-8>=<text>, not {text}")))?;
+    let (index, name) = text.split_once('=').ok_or_else(|| {
+        Failure::invalid(format!(
+            "--name expects <1-{MAX_CABLES}>=<text>, not {text}"
+        ))
+    })?;
     let index = parse_cable_count(index)
         .map_err(|_| Failure::invalid(format!("--name cable must be 1-{MAX_CABLES}")))?;
     validate_cable_name(name)?;
@@ -895,8 +899,8 @@ pub trait Platform {
     fn default_endpoints(&mut self) -> Vec<(String, String)>;
     /// Present AudioRouter endpoints.
     fn cable_endpoints(&mut self) -> Vec<CableEndpoint>;
-    /// Bridge QUERY: (protocol major, minor, capabilities, enabled cables).
-    fn query_driver(&mut self) -> Option<(u16, u16, u32, u32, u32)>;
+    /// Bridge QUERY, when the driver is started and answers.
+    fn query_driver(&mut self) -> Option<DriverQuery>;
     fn sleep_ms(&mut self, ms: u64);
     fn now_utc(&mut self) -> String;
 }
@@ -991,11 +995,61 @@ fn verified_package(
     Ok(package)
 }
 
-fn configured_count(platform: &mut dyn Platform, instance_id: &str) -> u8 {
+/// The fields of the bridge QUERY reply the helper uses.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DriverQuery {
+    pub protocol_major: u16,
+    pub protocol_minor: u16,
+    pub capabilities: u32,
+    /// Cables the driver enabled at start.
+    pub cable_count: u32,
+    /// Cables this driver image can offer (`AR_BRIDGE_MAX_CABLES`).
+    pub max_cables: u32,
+    pub default_period_frames: u32,
+}
+
+/// Most cables the installed driver accepts: its QUERY `MaxCables`, within
+/// the app maximum. A driver that does not answer counts as a 0.2.5 driver
+/// (8), never as a larger one, because that driver reads an out-of-range
+/// `CableCount` as the default and would silently drop cables.
+pub fn cable_capacity(query: Option<&DriverQuery>) -> u8 {
+    match query.map(|query| query.max_cables) {
+        Some(max) if max >= 1 => max.min(u32::from(MAX_CABLES)) as u8,
+        _ => LEGACY_DRIVER_MAX_CABLES,
+    }
+}
+
+/// The `CableCount` the driver will use: like the driver, an absent or
+/// out-of-range value means the default.
+fn configured_count(platform: &mut dyn Platform, instance_id: &str, capacity: u8) -> u8 {
     match platform.read_device_dword(instance_id, "CableCount") {
-        Ok(Some(value)) if (1..=u32::from(MAX_CABLES)).contains(&value) => value as u8,
+        Ok(Some(value)) if (1..=u32::from(capacity)).contains(&value) => value as u8,
         _ => DEFAULT_CABLE_COUNT,
     }
+}
+
+/// [`configured_count`] for a running driver.
+fn current_count(platform: &mut dyn Platform, instance_id: &str) -> u8 {
+    let capacity = cable_capacity(platform.query_driver().as_ref());
+    configured_count(platform, instance_id, capacity)
+}
+
+/// [`configured_count`] after an install or update restarted the device: the
+/// capacity is the new driver's, so wait (bounded) for its bridge to answer
+/// before assuming a 0.2.5 driver.
+fn started_count(platform: &mut dyn Platform, instance_id: &str) -> u8 {
+    let mut waited = 0;
+    let query = loop {
+        if let Some(query) = platform.query_driver() {
+            break Some(query);
+        }
+        if waited >= ENDPOINT_WAIT_MS {
+            break None;
+        }
+        platform.sleep_ms(ENDPOINT_POLL_MS);
+        waited += ENDPOINT_POLL_MS;
+    };
+    configured_count(platform, instance_id, cable_capacity(query.as_ref()))
 }
 
 /// True when exactly cables 0..count are present in both directions.
@@ -1058,6 +1112,8 @@ pub struct StatusReport {
     pub installed_driver_version: Option<String>,
     pub device_instance_id: Option<String>,
     pub cable_count: u8,
+    /// Most cables the installed driver accepts ([`cable_capacity`]).
+    pub max_cables: u8,
     /// Configured preferred route block size from the bridge QUERY response.
     pub default_period_frames: Option<u32>,
     /// User names committed by `configure`, even while an endpoint is absent.
@@ -1075,12 +1131,13 @@ pub fn status_report(
     let device = platform.find_device()?;
     let endpoints = platform.cable_endpoints();
     let query = platform.query_driver();
+    let capacity = cable_capacity(query.as_ref());
     let installed_version = match &device {
         Some(id) => platform.device_driver_version(id)?,
         None => None,
     };
     let count = match &device {
-        Some(id) => configured_count(platform, id),
+        Some(id) => configured_count(platform, id, capacity),
         None => DEFAULT_CABLE_COUNT,
     };
     let label = classify_status(
@@ -1095,12 +1152,13 @@ pub fn status_report(
         installed_driver_version: installed_version.map(|v| v.to_string()),
         device_instance_id: device,
         cable_count: count,
-        default_period_frames: query.map(|(_, _, _, _, frames)| frames),
+        max_cables: capacity,
+        default_period_frames: query.map(|query| query.default_period_frames),
         cable_names: state
             .map(|state| state.cable_names.clone())
             .unwrap_or_default(),
-        protocol: query.map(|(major, minor, _, _, _)| format!("{major}.{minor}")),
-        capabilities: query.map(|(_, _, caps, _, _)| caps),
+        protocol: query.map(|query| format!("{}.{}", query.protocol_major, query.protocol_minor)),
+        capabilities: query.map(|query| query.capabilities),
         endpoints,
     })
 }
@@ -1117,6 +1175,7 @@ pub fn status(platform: &mut dyn Platform, context: &Context) -> Result<Outcome,
             "installedDriverVersion": report.installed_driver_version,
             "deviceInstanceId": report.device_instance_id,
             "cableCount": report.cable_count,
+            "maxCables": report.max_cables,
             "defaultPeriodFrames": report.default_period_frames,
             "protocol": report.protocol,
             "capabilities": report.capabilities,
@@ -1133,7 +1192,7 @@ pub fn classify_status(
     has_state: bool,
     has_device: bool,
     endpoints_ok: bool,
-    query: Option<(u16, u16, u32, u32, u32)>,
+    query: Option<DriverQuery>,
 ) -> &'static str {
     const SAMPLE_FLOAT64: u32 = 0x20;
     if !has_state && !has_device {
@@ -1143,8 +1202,10 @@ pub fn classify_status(
         return "needsRepair";
     }
     match query {
-        Some((major, minor, caps, _, _))
-            if major != 1 || minor < 1 || caps & SAMPLE_FLOAT64 == 0 =>
+        Some(query)
+            if query.protocol_major != 1
+                || query.protocol_minor < 1
+                || query.capabilities & SAMPLE_FLOAT64 == 0 =>
         {
             "incompatible"
         }
@@ -1170,7 +1231,7 @@ pub fn install(
         if installed == Some(package.version)
             && existing_state.as_ref().map(|s| s.package_version) == Some(package.version)
         {
-            let count = configured_count(platform, &device);
+            let count = current_count(platform, &device);
             let endpoints = platform.cable_endpoints();
             if cables_match(&endpoints, count) {
                 return Ok(success(
@@ -1248,7 +1309,7 @@ pub fn install(
             }),
         ));
     }
-    let count = configured_count(platform, &device);
+    let count = started_count(platform, &device);
     let endpoints = wait_for_cables(platform, count)?;
     let defaults_after = platform.default_endpoints();
     Ok(success(
@@ -1321,7 +1382,7 @@ fn apply_to_existing(
             }),
         ));
     }
-    let count = configured_count(platform, &device);
+    let count = started_count(platform, &device);
     let endpoints = wait_for_cables(platform, count)?;
     let defaults_after = platform.default_endpoints();
     Ok(success(
@@ -1418,7 +1479,15 @@ fn restart_and_wait(
 
 pub fn set_cables(count: u8, platform: &mut dyn Platform) -> Result<Outcome, Failure> {
     let device = require_device(platform)?;
-    let previous = configured_count(platform, &device);
+    let capacity = cable_capacity(platform.query_driver().as_ref());
+    // Checked before any write: a driver given more than it supports falls
+    // back to 2 cables and the others vanish from Windows.
+    if count > capacity {
+        return Err(Failure::invalid(format!(
+            "the installed cable driver supports at most {capacity} cables; update the driver to use {count}"
+        )));
+    }
+    let previous = configured_count(platform, &device, capacity);
     platform.write_device_dword(&device, "CableCount", u32::from(count))?;
     restart_and_wait(
         "set-cables",
@@ -1436,6 +1505,17 @@ pub fn configure(
     context: &Context,
 ) -> Result<Outcome, Failure> {
     let device = require_device(platform)?;
+    if let Some(index) = names.keys().max() {
+        // A name for a cable this driver cannot offer means nothing, and an
+        // older helper refuses a state file that holds one.
+        let capacity = cable_capacity(platform.query_driver().as_ref());
+        if *index >= capacity {
+            return Err(Failure::invalid(format!(
+                "the installed cable driver supports at most {capacity} cables; cable {} cannot be named",
+                index + 1
+            )));
+        }
+    }
     for name in names.values() {
         validate_cable_name(name)?;
     }
@@ -1474,7 +1554,7 @@ pub fn configure(
             .extend(names.iter().map(|(index, name)| (*index, name.clone())));
         context.state.save(&state)?;
     }
-    let count = configured_count(platform, &device);
+    let count = current_count(platform, &device);
     if params.is_empty() {
         // Names only: a name is AudioRouter's label for the cable (17 §5.5);
         // Windows names stay the driver's, so nothing restarts or changes.

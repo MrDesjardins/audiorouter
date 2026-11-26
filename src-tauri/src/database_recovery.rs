@@ -126,9 +126,14 @@ pub fn restore(database: &Path, name: &str) -> Result<(), String> {
 mod tests {
     use super::*;
     fn directory() -> PathBuf {
+        // Tests run in parallel, and the Windows clock can give two of them
+        // the same timestamp (CI, 2026-11-26: AlreadyExists), so a counter
+        // keeps each name unique.
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let path = std::env::temp_dir().join(format!(
-            "audiorouter-restore-{}-{}",
+            "audiorouter-restore-{}-{}-{}",
             std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()

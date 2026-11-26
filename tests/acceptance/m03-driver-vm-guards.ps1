@@ -71,7 +71,7 @@ if ($retrySource.IndexOf('Assert-DriverTestVmIdentity') -gt $retrySource.IndexOf
 $script:count += 2
 $nameFixtures = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'm03-endpoint-names.json') -Raw | ConvertFrom-Json
 foreach ($fixture in $nameFixtures) {
-    foreach ($cable in 0..7) {
+    foreach ($cable in 0..15) {
         foreach ($direction in @('input', 'output')) {
             $label = if ($direction -eq 'input') { 'Input' } else { 'Output' }
             $expectedName = "AudioRouter Cable $([char](65 + $cable)) $label"

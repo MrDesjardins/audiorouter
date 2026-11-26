@@ -254,9 +254,7 @@ pub(crate) struct CableRouteShape {
 
 fn cable_bus(node: &Node) -> Option<String> {
     let bus = node.parameters.get("busId").and_then(Value::as_str)?;
-    let bytes = bus.as_bytes();
-    (bytes.len() == 7 && bus.starts_with("cable-") && (b'a'..=b'h').contains(&bytes[6]))
-        .then(|| bus.to_owned())
+    audiorouter_domain::cable_bus_index(bus).map(|_| bus.to_owned())
 }
 
 fn cable_label(bus: &str) -> String {
@@ -300,9 +298,7 @@ pub(crate) fn cable_route_shape(
     }
     let (source, sink) = (sources[0], sinks[0]);
     let (Some(render_bus), Some(capture_bus)) = (cable_bus(source), cable_bus(sink)) else {
-        return refuse(
-            "choose the cable (Cable A to Cable H) for each cable node in its Properties".into(),
-        );
+        return refuse("choose the cable for each cable node in its Properties".into());
     };
     if render_bus == capture_bus {
         return refuse(format!(
@@ -1249,7 +1245,7 @@ mod tests {
         .contains("Cable A cannot feed itself"));
         assert!(reason(&session(vec![
             a(),
-            cable("out", NodeKind::VirtualCaptureSink, "cable-i", 2)
+            cable("out", NodeKind::VirtualCaptureSink, "cable-q", 2)
         ]))
         .contains("choose the cable"));
         // Not stereo: needs one direct connection and no tools.
