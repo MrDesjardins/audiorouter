@@ -19,7 +19,8 @@ const changedPages = encodedChangedPages === undefined
 const checkChangedOnly = check && process.argv.includes("--check-changed") && changedPages !== null;
 
 const pages = [
-  ...(await readdir(site)).filter((name) => name.endsWith(".html")),
+  // 404.html is served for missing addresses: no canonical URL, not in the sitemap.
+  ...(await readdir(site)).filter((name) => name.endsWith(".html") && name !== "404.html"),
   ...(await readdir(resolve(site, "tools")))
     .filter((name) => name.endsWith(".html"))
     .map((name) => "tools/" + name),
