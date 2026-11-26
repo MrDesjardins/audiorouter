@@ -340,6 +340,26 @@ to 16 now, ahead of D2):
   8 to 16. The 0.2.5-pinned Stage A bundle does not apply. The 16-cable soak bundle still needs
   `m00-probe.exe` from an audio-tools update.
 - **Not run:** anything inside the VM. Blocked by D1.
+- 16-cable soak bundle `C:\VMs\ar-share\rc-0.2.7-soak` (source `2002d7734`, driver 0.2.7.0,
+  SYS `041E4EA281D3`, `cables: 16`): tools from `prepare-cable-latency-update.ps1` on base
+  `rc-0.2.7-r2` (`C:\VMs\ar-share\rc-0.2.7-tools`), then `prepare-soak-bundle.ps1 -Cables 16`.
+  Start it with `soak.cmd start -Bundle rc-0.2.7-soak`.
+
+**Night run 2026-11-25 (about 10 h, owner asleep, WSL and Firefox closed).** The password
+for `artest` is the guide's unattended-install value, now expired; the owner changes it at
+sign-in (D1) and hands the new one over through a secret prompt.
+
+| Block | Time | What | Stop rule |
+| --- | --- | --- | --- |
+| 0 | 10 min, owner present | Host preflight green; restore `02-test-signing-ready`; owner signs in and sets the password; agent turns off password expiry and, if approved, saves `04-signed-in` | Preflight red: stop |
+| 1 | about 1 h | `rc-0.2.7-r2` `vm-checks.ps1`: preflight, install, status, cables (2-8-9-16-17 refused-2), tone, update to 0.2.8, update-verify, fuzz | A failure ends driver blocks; keep evidence, go to 2 |
+| 2 | about 2 h | D2 freeze reproduction on the frozen 0.2.5 (`rc-0.2.5-r7`, 5 boots, fuzz 300 s), fresh restore of `04-signed-in` | Freeze over 10 min: keep `round2-state.json`, host load and `VBox.log`, reset |
+| 3 | about 1 h | D2 control: the same boots with no driver installed (W1 item 1) | Freeze here means the VM, not the driver |
+| 4 | rest, until the owner's time | Soak rehearsal on 0.2.7 at 16 cables, 2 routes, fresh restore of `04-signed-in` | Rehearsal hours never count for 0.3.0 |
+
+No host build or other load runs during blocks 2-4, so the idle verdict holds. Every block
+writes its evidence under `C:\VMs\ar-share`; the morning report maps each result to
+VCAB-01, VCAB-24, VCAB-30, SEC-08 and G4.
 
 Owner: D1, then the first rehearsal night. Agent: read its records, then the churn runner.
 Rollback: delete the soak files and revert `-RouteCount`; nothing else depends on them.
