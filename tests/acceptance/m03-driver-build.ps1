@@ -29,8 +29,11 @@ if (-not $waveTable.Contains('C_ASSERT(KSAUDIO_SPEAKER_7POINT1_SURROUND == 0x63F
     $waveTable.Contains('AR_CHANNEL_FORMATS(8, KSAUDIO_SPEAKER_7POINT1),')) {
     throw 'driver and user-mode inventory must agree on surround 7.1 mask 0x63F, not obsolete wide 0xFF'
 }
-$displayInventoryStart = $windowsAudioSource.IndexOf('unsafe fn enumerate_display_info_after_com_init()')
-$stateInventoryStart = $windowsAudioSource.IndexOf('unsafe fn enumerate_states_after_com_init()', $displayInventoryStart)
+# Match the name only: rustfmt may wrap the parameter list (c183b09c0 did).
+$displayInventoryStart = $windowsAudioSource.IndexOf('unsafe fn enumerate_display_info_after_com_init(')
+$stateInventoryStart = if ($displayInventoryStart -lt 0) { -1 } else {
+    $windowsAudioSource.IndexOf('unsafe fn enumerate_states_after_com_init(', $displayInventoryStart)
+}
 if ($displayInventoryStart -lt 0 -or $stateInventoryStart -le $displayInventoryStart) {
     throw 'active endpoint display inventory function boundary is missing'
 }
@@ -38,7 +41,10 @@ $displayInventorySource = $windowsAudioSource.Substring(
     $displayInventoryStart,
     $stateInventoryStart - $displayInventoryStart
 )
-if (-not $displayInventorySource.Contains('EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE)') -or
+# Since c183b09c0 the caller chooses: active endpoints for the format
+# inventory, all states only for missing-microphone recovery.
+if (-not $displayInventorySource.Contains('EnumAudioEndpoints(flow, state_mask)') -or
+    -not ($displayInventorySource -match 'let state_mask = if active_only \{\s*DEVICE_STATE_ACTIVE') -or
     $displayInventorySource.Contains('DEVICE_STATE_ALL')) {
     throw 'endpoint format inventory must inspect active endpoints only, not disabled/stale endpoint records'
 }
@@ -48,6 +54,7 @@ foreach ($required in @(
         'AUDIOROUTERVIRTUAL.WaveCableARender.szPname="AudioRouter Cable A Input"',
         'AUDIOROUTERVIRTUAL.WaveCableACapture.szPname="AudioRouter Cable A Output"',
         'AUDIOROUTERVIRTUAL.WaveCableHCapture.szPname="AudioRouter Cable H Output"',
+        'AUDIOROUTERVIRTUAL.WaveCablePCapture.szPname="AudioRouter Cable P Output"',
         'AUDIOROUTERVIRTUAL_SA.DeviceDesc="AudioRouter Virtual Cable"',
         'HKR,,CableCount,0x00010001,2',
         'ROOT\AudioRouterVirtual')) {
@@ -56,8 +63,8 @@ foreach ($required in @(
     }
 }
 if ($infSource.Contains('SWD\AudioRouterVirtual') -or
-    ([regex]::Matches($infSource, '(?m)^AddInterface=')).Count -ne 80) {
-    throw 'driver INF must contain only the root device and all 80 interfaces for eight cable pairs'
+    ([regex]::Matches($infSource, '(?m)^AddInterface=')).Count -ne 160) {
+    throw 'driver INF must contain only the root device and all 160 interfaces for sixteen cable pairs'
 }
 foreach ($required in @(
         'CableRenderWaveFilterDescriptor',
@@ -65,7 +72,11 @@ foreach ($required in @(
         'DEFINE_CABLE_TOPOLOGY_PAIR(letter)',
         'eCableHRender, eCableHCapture',
         '&CableHRenderMiniports',
-        '&CableHCaptureMiniports')) {
+        '&CableHCaptureMiniports',
+        'eCablePRender, eCablePCapture',
+        '&CablePRenderMiniports',
+        '&CablePCaptureMiniports',
+        'C_ASSERT(eMaxDeviceType == 2 * AR_BRIDGE_MAX_CABLES);')) {
     if (-not $miniPairs.Contains($required)) {
         throw "cable-specific endpoint pair wiring is missing: $required"
     }
@@ -81,10 +92,10 @@ if (-not $miniPairs.Contains('&DEVPKEY_KsAudio_PacketSize_Constraints2') -or
 }
 $pinCategoryGuids = Join-Path $workspace 'drivers/audiorouter-virtual/Source/Filters/cabletopotable.h'
 $pinCategoryGuids = Get-Content -LiteralPath $pinCategoryGuids -Raw
-if (([regex]::Matches($pinCategoryGuids, 'static const GUID Cable[A-H]RenderPinName')).Count -ne 8 -or
-    ([regex]::Matches($pinCategoryGuids, 'static const GUID Cable[A-H]CapturePinCategory')).Count -ne 8 -or
-    ([regex]::Matches($infSource, '(?m)^HKR,MediaCategories\\%GUID\.Cable[A-H]RenderPinName%,Name,,%Name\.Cable[A-H]RenderPinName%\r?$')).Count -ne 8 -or
-    ([regex]::Matches($infSource, '(?m)^HKR,MediaCategories\\%GUID\.Cable[A-H]CapturePinCategory%,Name,,%Name\.Cable[A-H]CapturePinCategory%\r?$')).Count -ne 8) {
+if (([regex]::Matches($pinCategoryGuids, 'static const GUID Cable[A-P]RenderPinName')).Count -ne 16 -or
+    ([regex]::Matches($pinCategoryGuids, 'static const GUID Cable[A-P]CapturePinCategory')).Count -ne 16 -or
+    ([regex]::Matches($infSource, '(?m)^HKR,MediaCategories\\%GUID\.Cable[A-P]RenderPinName%,Name,,%Name\.Cable[A-P]RenderPinName%\r?$')).Count -ne 16 -or
+    ([regex]::Matches($infSource, '(?m)^HKR,MediaCategories\\%GUID\.Cable[A-P]CapturePinCategory%,Name,,%Name\.Cable[A-P]CapturePinCategory%\r?$')).Count -ne 16) {
     throw 'each render bridge pin name and capture bridge pin category must be uniquely registered'
 }
 foreach ($required in @('&Cable##letter##RenderPinName', '&KSNODETYPE_ANALOG_CONNECTOR', '&Cable##letter##CapturePinCategory')) {
@@ -92,8 +103,8 @@ foreach ($required in @('&Cable##letter##RenderPinName', '&KSNODETYPE_ANALOG_CON
 }
 if (-not $topologyTable.Contains('KSPIN_DATAFLOW_OUT, KSPIN_COMMUNICATION_NONE, &KSNODETYPE_ANALOG_CONNECTOR, &Cable##letter##RenderPinName') -or
     $topologyTable.Contains('&KSNODETYPE_SPEAKER') -or
-    ([regex]::Matches($infSource, '(?m)^HKR,EP\\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101\r?$')).Count -ne 16) {
-    throw 'render bridges must use unique non-speaker names and explicit render-only enable policy on all 16 interfaces'
+    ([regex]::Matches($infSource, '(?m)^HKR,EP\\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101\r?$')).Count -ne 32) {
+    throw 'render bridges must use unique non-speaker names and explicit render-only enable policy on all 32 interfaces'
 }
 if (-not $bridgeHeader.Contains('#define AR_BRIDGE_LEASE_SLOTS (AR_BRIDGE_MAX_CABLES * 2)')) {
     throw 'bridge lease table must reserve one slot per cable and direction'

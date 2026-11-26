@@ -297,13 +297,36 @@ try {
             Check 'set-cables 8' ($r.Code -eq 0) "exit $($r.Code) $($r.Json.error)"
             $eight = Invoke-Inventory 8 'inventory-8'
             Check '16 endpoints with all formats (A15 count)' ($eight.Code -eq 0) 'inventory-8.txt'
+            $status = Invoke-Helper @('status') 'status-max'
+            $maxCables = [int]$status.Json.maxCables
+            Check 'helper reports the driver maximum' ($maxCables -in 8, 16) "maxCables $maxCables"
+            if ($maxCables -eq 16) {
+                # 16-cable driver (W2): the letter boundary, the maximum, a refused 17.
+                $lettersAH = [string[]]('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H')
+                $idsEight = Get-CableIds $eight $lettersAH
+                $r = Invoke-Helper @('set-cables', '--count', '9') 'set-cables-9'
+                Check 'set-cables 9 (Cable I)' ($r.Code -eq 0) "exit $($r.Code) $($r.Json.error)"
+                $nine = Invoke-Inventory 9 'inventory-9'
+                Check '18 endpoints with all formats' ($nine.Code -eq 0) 'inventory-9.txt'
+                $r = Invoke-Helper @('set-cables', '--count', '16') 'set-cables-16'
+                Check 'set-cables 16' ($r.Code -eq 0) "exit $($r.Code) $($r.Json.error)"
+                $sixteen = Invoke-Inventory 16 'inventory-16'
+                Check '32 endpoints with all formats' ($sixteen.Code -eq 0) 'inventory-16.txt'
+                $idsSixteen = Get-CableIds $sixteen $lettersAH
+                Check 'Cable A-H endpoint IDs unchanged after 8 -> 16 (VCAB-05)' ($idsEight.Count -eq 16 -and
+                    @($idsEight.Keys | Where-Object { $idsEight[$_] -ne $idsSixteen[$_] }).Count -eq 0)
+                $r = Invoke-Helper @('set-cables', '--count', '17') 'set-cables-17'
+                Check 'set-cables 17 refused' ($r.Code -eq 1) "exit $($r.Code)"
+                $still = Invoke-Inventory 16 'inventory-16-after-17'
+                Check 'still 16 cables after the refused 17' ($still.Code -eq 0) 'inventory-16-after-17.txt'
+            }
             $r = Invoke-Helper @('set-cables', '--count', '2') 'set-cables-2'
             Check 'set-cables 2' ($r.Code -eq 0) "exit $($r.Code) $($r.Json.error)"
             $after = Invoke-Inventory 2 'inventory-2-after'
             $idsAfter = Get-CableIds $after @('A', 'B')
             $same = $idsBefore.Count -eq 4 -and @($idsBefore.Keys | Where-Object { $idsBefore[$_] -ne $idsAfter[$_] }).Count -eq 0
-            Check 'Cable A/B endpoint IDs unchanged after 2 -> 8 -> 2 (VCAB-05)' $same
-            Check 'Cables C-H gone again' (@($after.Json.endpoints).Count -eq 4)
+            Check "Cable A/B endpoint IDs unchanged after 2 -> $maxCables -> 2 (VCAB-05)" $same
+            Check 'Cables C onward gone again' (@($after.Json.endpoints).Count -eq 4)
         }
         'rename' {
             $before = Get-CableIds (Invoke-Inventory 2 'inventory-before-rename') @('B')

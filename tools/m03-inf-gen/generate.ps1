@@ -13,14 +13,21 @@ if (-not $CableList) { $CableList = Join-Path $scriptRoot 'cables.json' }
 $topologyHeader = Join-Path $scriptRoot '../../drivers/audiorouter-virtual/Source/Filters/cabletopotable.h'
 
 $cableData = Get-Content -LiteralPath $CableList -Raw | ConvertFrom-Json
-if ($cableData.schemaVersion -ne 1 -or $cableData.cables.Count -ne 8) {
-    throw 'Cable list must contain exactly eight entries and schemaVersion 1.'
+# The list must match AR_BRIDGE_MAX_CABLES (16, cables A-P). A-H keep their
+# GUIDs and names forever: changing one looks like a new device to Windows.
+$cableCount = 16
+if ($cableData.schemaVersion -ne 1 -or $cableData.cables.Count -ne $cableCount) {
+    throw "Cable list must contain exactly $cableCount entries and schemaVersion 1."
 }
-for ($index = 0; $index -lt 8; $index++) {
+for ($index = 0; $index -lt $cableCount; $index++) {
     if ($cableData.cables[$index].index -ne $index -or
         $cableData.cables[$index].letter -cne [string][char](65 + $index)) {
-        throw "Cable list must be contiguous A-H at index $index."
+        throw "Cable list must be contiguous A-P at index $index."
     }
+}
+$bridgeHeader = Get-Content -LiteralPath (Join-Path $scriptRoot '../../drivers/audiorouter-virtual/Source/Inc/bridgeio.h') -Raw
+if ($bridgeHeader -notmatch "(?m)^#define AR_BRIDGE_MAX_CABLES $cableCount\r?$") {
+    throw "AR_BRIDGE_MAX_CABLES in bridgeio.h must be $cableCount."
 }
 $uniquePinNames = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 foreach ($cable in $cableData.cables) {

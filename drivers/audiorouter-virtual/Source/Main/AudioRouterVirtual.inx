@@ -57,6 +57,22 @@ HKR,MediaCategories\%GUID.CableGRenderPinName%,Name,,%Name.CableGRenderPinName%
 HKR,MediaCategories\%GUID.CableGCapturePinCategory%,Name,,%Name.CableGCapturePinCategory%
 HKR,MediaCategories\%GUID.CableHRenderPinName%,Name,,%Name.CableHRenderPinName%
 HKR,MediaCategories\%GUID.CableHCapturePinCategory%,Name,,%Name.CableHCapturePinCategory%
+HKR,MediaCategories\%GUID.CableIRenderPinName%,Name,,%Name.CableIRenderPinName%
+HKR,MediaCategories\%GUID.CableICapturePinCategory%,Name,,%Name.CableICapturePinCategory%
+HKR,MediaCategories\%GUID.CableJRenderPinName%,Name,,%Name.CableJRenderPinName%
+HKR,MediaCategories\%GUID.CableJCapturePinCategory%,Name,,%Name.CableJCapturePinCategory%
+HKR,MediaCategories\%GUID.CableKRenderPinName%,Name,,%Name.CableKRenderPinName%
+HKR,MediaCategories\%GUID.CableKCapturePinCategory%,Name,,%Name.CableKCapturePinCategory%
+HKR,MediaCategories\%GUID.CableLRenderPinName%,Name,,%Name.CableLRenderPinName%
+HKR,MediaCategories\%GUID.CableLCapturePinCategory%,Name,,%Name.CableLCapturePinCategory%
+HKR,MediaCategories\%GUID.CableMRenderPinName%,Name,,%Name.CableMRenderPinName%
+HKR,MediaCategories\%GUID.CableMCapturePinCategory%,Name,,%Name.CableMCapturePinCategory%
+HKR,MediaCategories\%GUID.CableNRenderPinName%,Name,,%Name.CableNRenderPinName%
+HKR,MediaCategories\%GUID.CableNCapturePinCategory%,Name,,%Name.CableNCapturePinCategory%
+HKR,MediaCategories\%GUID.CableORenderPinName%,Name,,%Name.CableORenderPinName%
+HKR,MediaCategories\%GUID.CableOCapturePinCategory%,Name,,%Name.CableOCapturePinCategory%
+HKR,MediaCategories\%GUID.CablePRenderPinName%,Name,,%Name.CablePRenderPinName%
+HKR,MediaCategories\%GUID.CablePCapturePinCategory%,Name,,%Name.CablePCapturePinCategory%
 ; END GENERATED PIN NAME/CATEGORY REGISTRATION
 
 ;
@@ -349,6 +365,278 @@ HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableHCapture.szPname%
 HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableHCapturePinCategory%
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.WaveCableIRender]
+AddReg=AUDIOROUTERVIRTUAL.I.WaveCableIRender.AddReg
+[AUDIOROUTERVIRTUAL.I.WaveCableIRender.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableIRender.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.TopologyCableIRender]
+AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableIRender.AddReg
+[AUDIOROUTERVIRTUAL.I.TopologyCableIRender.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableIRender.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.WaveCableICapture]
+AddReg=AUDIOROUTERVIRTUAL.I.WaveCableICapture.AddReg
+[AUDIOROUTERVIRTUAL.I.WaveCableICapture.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableICapture.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableICapturePinCategory%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.TopologyCableICapture]
+AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableICapture.AddReg
+[AUDIOROUTERVIRTUAL.I.TopologyCableICapture.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableICapture.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableICapturePinCategory%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.WaveCableJRender]
+AddReg=AUDIOROUTERVIRTUAL.I.WaveCableJRender.AddReg
+[AUDIOROUTERVIRTUAL.I.WaveCableJRender.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableJRender.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.TopologyCableJRender]
+AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableJRender.AddReg
+[AUDIOROUTERVIRTUAL.I.TopologyCableJRender.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableJRender.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.WaveCableJCapture]
+AddReg=AUDIOROUTERVIRTUAL.I.WaveCableJCapture.AddReg
+[AUDIOROUTERVIRTUAL.I.WaveCableJCapture.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableJCapture.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableJCapturePinCategory%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.TopologyCableJCapture]
+AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableJCapture.AddReg
+[AUDIOROUTERVIRTUAL.I.TopologyCableJCapture.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableJCapture.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableJCapturePinCategory%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.WaveCableKRender]
+AddReg=AUDIOROUTERVIRTUAL.I.WaveCableKRender.AddReg
+[AUDIOROUTERVIRTUAL.I.WaveCableKRender.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableKRender.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.TopologyCableKRender]
+AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableKRender.AddReg
+[AUDIOROUTERVIRTUAL.I.TopologyCableKRender.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableKRender.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.WaveCableKCapture]
+AddReg=AUDIOROUTERVIRTUAL.I.WaveCableKCapture.AddReg
+[AUDIOROUTERVIRTUAL.I.WaveCableKCapture.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableKCapture.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableKCapturePinCategory%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.TopologyCableKCapture]
+AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableKCapture.AddReg
+[AUDIOROUTERVIRTUAL.I.TopologyCableKCapture.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableKCapture.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableKCapturePinCategory%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.WaveCableLRender]
+AddReg=AUDIOROUTERVIRTUAL.I.WaveCableLRender.AddReg
+[AUDIOROUTERVIRTUAL.I.WaveCableLRender.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableLRender.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.TopologyCableLRender]
+AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableLRender.AddReg
+[AUDIOROUTERVIRTUAL.I.TopologyCableLRender.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableLRender.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.WaveCableLCapture]
+AddReg=AUDIOROUTERVIRTUAL.I.WaveCableLCapture.AddReg
+[AUDIOROUTERVIRTUAL.I.WaveCableLCapture.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableLCapture.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableLCapturePinCategory%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.TopologyCableLCapture]
+AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableLCapture.AddReg
+[AUDIOROUTERVIRTUAL.I.TopologyCableLCapture.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableLCapture.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableLCapturePinCategory%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.WaveCableMRender]
+AddReg=AUDIOROUTERVIRTUAL.I.WaveCableMRender.AddReg
+[AUDIOROUTERVIRTUAL.I.WaveCableMRender.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableMRender.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.TopologyCableMRender]
+AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableMRender.AddReg
+[AUDIOROUTERVIRTUAL.I.TopologyCableMRender.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableMRender.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.WaveCableMCapture]
+AddReg=AUDIOROUTERVIRTUAL.I.WaveCableMCapture.AddReg
+[AUDIOROUTERVIRTUAL.I.WaveCableMCapture.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableMCapture.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableMCapturePinCategory%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.TopologyCableMCapture]
+AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableMCapture.AddReg
+[AUDIOROUTERVIRTUAL.I.TopologyCableMCapture.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableMCapture.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableMCapturePinCategory%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.WaveCableNRender]
+AddReg=AUDIOROUTERVIRTUAL.I.WaveCableNRender.AddReg
+[AUDIOROUTERVIRTUAL.I.WaveCableNRender.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableNRender.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.TopologyCableNRender]
+AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableNRender.AddReg
+[AUDIOROUTERVIRTUAL.I.TopologyCableNRender.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableNRender.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.WaveCableNCapture]
+AddReg=AUDIOROUTERVIRTUAL.I.WaveCableNCapture.AddReg
+[AUDIOROUTERVIRTUAL.I.WaveCableNCapture.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableNCapture.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableNCapturePinCategory%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.TopologyCableNCapture]
+AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableNCapture.AddReg
+[AUDIOROUTERVIRTUAL.I.TopologyCableNCapture.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableNCapture.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableNCapturePinCategory%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.WaveCableORender]
+AddReg=AUDIOROUTERVIRTUAL.I.WaveCableORender.AddReg
+[AUDIOROUTERVIRTUAL.I.WaveCableORender.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableORender.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.TopologyCableORender]
+AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableORender.AddReg
+[AUDIOROUTERVIRTUAL.I.TopologyCableORender.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableORender.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.WaveCableOCapture]
+AddReg=AUDIOROUTERVIRTUAL.I.WaveCableOCapture.AddReg
+[AUDIOROUTERVIRTUAL.I.WaveCableOCapture.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableOCapture.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableOCapturePinCategory%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.TopologyCableOCapture]
+AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableOCapture.AddReg
+[AUDIOROUTERVIRTUAL.I.TopologyCableOCapture.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableOCapture.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableOCapturePinCategory%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.WaveCablePRender]
+AddReg=AUDIOROUTERVIRTUAL.I.WaveCablePRender.AddReg
+[AUDIOROUTERVIRTUAL.I.WaveCablePRender.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCablePRender.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.TopologyCablePRender]
+AddReg=AUDIOROUTERVIRTUAL.I.TopologyCablePRender.AddReg
+[AUDIOROUTERVIRTUAL.I.TopologyCablePRender.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCablePRender.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%
+HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.WaveCablePCapture]
+AddReg=AUDIOROUTERVIRTUAL.I.WaveCablePCapture.AddReg
+[AUDIOROUTERVIRTUAL.I.WaveCablePCapture.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCablePCapture.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CablePCapturePinCategory%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+[AUDIOROUTERVIRTUAL.I.TopologyCablePCapture]
+AddReg=AUDIOROUTERVIRTUAL.I.TopologyCablePCapture.AddReg
+[AUDIOROUTERVIRTUAL.I.TopologyCablePCapture.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCablePCapture.szPname%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CablePCapturePinCategory%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
 ; END GENERATED CABLE REGISTRY SECTIONS
 
 ;======================================================
@@ -442,6 +730,86 @@ AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_WaveCableHCapture%, AUDIOROUTERVIRTU
 AddInterface=%KSCATEGORY_CAPTURE%, %KSNAME_WaveCableHCapture%, AUDIOROUTERVIRTUAL.I.WaveCableHCapture
 AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_TopologyCableHCapture%, AUDIOROUTERVIRTUAL.I.TopologyCableHCapture
 AddInterface=%KSCATEGORY_TOPOLOGY%, %KSNAME_TopologyCableHCapture%, AUDIOROUTERVIRTUAL.I.TopologyCableHCapture
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_WaveCableIRender%, AUDIOROUTERVIRTUAL.I.WaveCableIRender
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_WaveCableIRender%, AUDIOROUTERVIRTUAL.I.WaveCableIRender
+AddInterface=%KSCATEGORY_RENDER%, %KSNAME_WaveCableIRender%, AUDIOROUTERVIRTUAL.I.WaveCableIRender
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_TopologyCableIRender%, AUDIOROUTERVIRTUAL.I.TopologyCableIRender
+AddInterface=%KSCATEGORY_TOPOLOGY%, %KSNAME_TopologyCableIRender%, AUDIOROUTERVIRTUAL.I.TopologyCableIRender
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_WaveCableICapture%, AUDIOROUTERVIRTUAL.I.WaveCableICapture
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_WaveCableICapture%, AUDIOROUTERVIRTUAL.I.WaveCableICapture
+AddInterface=%KSCATEGORY_CAPTURE%, %KSNAME_WaveCableICapture%, AUDIOROUTERVIRTUAL.I.WaveCableICapture
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_TopologyCableICapture%, AUDIOROUTERVIRTUAL.I.TopologyCableICapture
+AddInterface=%KSCATEGORY_TOPOLOGY%, %KSNAME_TopologyCableICapture%, AUDIOROUTERVIRTUAL.I.TopologyCableICapture
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_WaveCableJRender%, AUDIOROUTERVIRTUAL.I.WaveCableJRender
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_WaveCableJRender%, AUDIOROUTERVIRTUAL.I.WaveCableJRender
+AddInterface=%KSCATEGORY_RENDER%, %KSNAME_WaveCableJRender%, AUDIOROUTERVIRTUAL.I.WaveCableJRender
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_TopologyCableJRender%, AUDIOROUTERVIRTUAL.I.TopologyCableJRender
+AddInterface=%KSCATEGORY_TOPOLOGY%, %KSNAME_TopologyCableJRender%, AUDIOROUTERVIRTUAL.I.TopologyCableJRender
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_WaveCableJCapture%, AUDIOROUTERVIRTUAL.I.WaveCableJCapture
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_WaveCableJCapture%, AUDIOROUTERVIRTUAL.I.WaveCableJCapture
+AddInterface=%KSCATEGORY_CAPTURE%, %KSNAME_WaveCableJCapture%, AUDIOROUTERVIRTUAL.I.WaveCableJCapture
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_TopologyCableJCapture%, AUDIOROUTERVIRTUAL.I.TopologyCableJCapture
+AddInterface=%KSCATEGORY_TOPOLOGY%, %KSNAME_TopologyCableJCapture%, AUDIOROUTERVIRTUAL.I.TopologyCableJCapture
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_WaveCableKRender%, AUDIOROUTERVIRTUAL.I.WaveCableKRender
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_WaveCableKRender%, AUDIOROUTERVIRTUAL.I.WaveCableKRender
+AddInterface=%KSCATEGORY_RENDER%, %KSNAME_WaveCableKRender%, AUDIOROUTERVIRTUAL.I.WaveCableKRender
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_TopologyCableKRender%, AUDIOROUTERVIRTUAL.I.TopologyCableKRender
+AddInterface=%KSCATEGORY_TOPOLOGY%, %KSNAME_TopologyCableKRender%, AUDIOROUTERVIRTUAL.I.TopologyCableKRender
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_WaveCableKCapture%, AUDIOROUTERVIRTUAL.I.WaveCableKCapture
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_WaveCableKCapture%, AUDIOROUTERVIRTUAL.I.WaveCableKCapture
+AddInterface=%KSCATEGORY_CAPTURE%, %KSNAME_WaveCableKCapture%, AUDIOROUTERVIRTUAL.I.WaveCableKCapture
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_TopologyCableKCapture%, AUDIOROUTERVIRTUAL.I.TopologyCableKCapture
+AddInterface=%KSCATEGORY_TOPOLOGY%, %KSNAME_TopologyCableKCapture%, AUDIOROUTERVIRTUAL.I.TopologyCableKCapture
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_WaveCableLRender%, AUDIOROUTERVIRTUAL.I.WaveCableLRender
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_WaveCableLRender%, AUDIOROUTERVIRTUAL.I.WaveCableLRender
+AddInterface=%KSCATEGORY_RENDER%, %KSNAME_WaveCableLRender%, AUDIOROUTERVIRTUAL.I.WaveCableLRender
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_TopologyCableLRender%, AUDIOROUTERVIRTUAL.I.TopologyCableLRender
+AddInterface=%KSCATEGORY_TOPOLOGY%, %KSNAME_TopologyCableLRender%, AUDIOROUTERVIRTUAL.I.TopologyCableLRender
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_WaveCableLCapture%, AUDIOROUTERVIRTUAL.I.WaveCableLCapture
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_WaveCableLCapture%, AUDIOROUTERVIRTUAL.I.WaveCableLCapture
+AddInterface=%KSCATEGORY_CAPTURE%, %KSNAME_WaveCableLCapture%, AUDIOROUTERVIRTUAL.I.WaveCableLCapture
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_TopologyCableLCapture%, AUDIOROUTERVIRTUAL.I.TopologyCableLCapture
+AddInterface=%KSCATEGORY_TOPOLOGY%, %KSNAME_TopologyCableLCapture%, AUDIOROUTERVIRTUAL.I.TopologyCableLCapture
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_WaveCableMRender%, AUDIOROUTERVIRTUAL.I.WaveCableMRender
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_WaveCableMRender%, AUDIOROUTERVIRTUAL.I.WaveCableMRender
+AddInterface=%KSCATEGORY_RENDER%, %KSNAME_WaveCableMRender%, AUDIOROUTERVIRTUAL.I.WaveCableMRender
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_TopologyCableMRender%, AUDIOROUTERVIRTUAL.I.TopologyCableMRender
+AddInterface=%KSCATEGORY_TOPOLOGY%, %KSNAME_TopologyCableMRender%, AUDIOROUTERVIRTUAL.I.TopologyCableMRender
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_WaveCableMCapture%, AUDIOROUTERVIRTUAL.I.WaveCableMCapture
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_WaveCableMCapture%, AUDIOROUTERVIRTUAL.I.WaveCableMCapture
+AddInterface=%KSCATEGORY_CAPTURE%, %KSNAME_WaveCableMCapture%, AUDIOROUTERVIRTUAL.I.WaveCableMCapture
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_TopologyCableMCapture%, AUDIOROUTERVIRTUAL.I.TopologyCableMCapture
+AddInterface=%KSCATEGORY_TOPOLOGY%, %KSNAME_TopologyCableMCapture%, AUDIOROUTERVIRTUAL.I.TopologyCableMCapture
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_WaveCableNRender%, AUDIOROUTERVIRTUAL.I.WaveCableNRender
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_WaveCableNRender%, AUDIOROUTERVIRTUAL.I.WaveCableNRender
+AddInterface=%KSCATEGORY_RENDER%, %KSNAME_WaveCableNRender%, AUDIOROUTERVIRTUAL.I.WaveCableNRender
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_TopologyCableNRender%, AUDIOROUTERVIRTUAL.I.TopologyCableNRender
+AddInterface=%KSCATEGORY_TOPOLOGY%, %KSNAME_TopologyCableNRender%, AUDIOROUTERVIRTUAL.I.TopologyCableNRender
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_WaveCableNCapture%, AUDIOROUTERVIRTUAL.I.WaveCableNCapture
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_WaveCableNCapture%, AUDIOROUTERVIRTUAL.I.WaveCableNCapture
+AddInterface=%KSCATEGORY_CAPTURE%, %KSNAME_WaveCableNCapture%, AUDIOROUTERVIRTUAL.I.WaveCableNCapture
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_TopologyCableNCapture%, AUDIOROUTERVIRTUAL.I.TopologyCableNCapture
+AddInterface=%KSCATEGORY_TOPOLOGY%, %KSNAME_TopologyCableNCapture%, AUDIOROUTERVIRTUAL.I.TopologyCableNCapture
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_WaveCableORender%, AUDIOROUTERVIRTUAL.I.WaveCableORender
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_WaveCableORender%, AUDIOROUTERVIRTUAL.I.WaveCableORender
+AddInterface=%KSCATEGORY_RENDER%, %KSNAME_WaveCableORender%, AUDIOROUTERVIRTUAL.I.WaveCableORender
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_TopologyCableORender%, AUDIOROUTERVIRTUAL.I.TopologyCableORender
+AddInterface=%KSCATEGORY_TOPOLOGY%, %KSNAME_TopologyCableORender%, AUDIOROUTERVIRTUAL.I.TopologyCableORender
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_WaveCableOCapture%, AUDIOROUTERVIRTUAL.I.WaveCableOCapture
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_WaveCableOCapture%, AUDIOROUTERVIRTUAL.I.WaveCableOCapture
+AddInterface=%KSCATEGORY_CAPTURE%, %KSNAME_WaveCableOCapture%, AUDIOROUTERVIRTUAL.I.WaveCableOCapture
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_TopologyCableOCapture%, AUDIOROUTERVIRTUAL.I.TopologyCableOCapture
+AddInterface=%KSCATEGORY_TOPOLOGY%, %KSNAME_TopologyCableOCapture%, AUDIOROUTERVIRTUAL.I.TopologyCableOCapture
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_WaveCablePRender%, AUDIOROUTERVIRTUAL.I.WaveCablePRender
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_WaveCablePRender%, AUDIOROUTERVIRTUAL.I.WaveCablePRender
+AddInterface=%KSCATEGORY_RENDER%, %KSNAME_WaveCablePRender%, AUDIOROUTERVIRTUAL.I.WaveCablePRender
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_TopologyCablePRender%, AUDIOROUTERVIRTUAL.I.TopologyCablePRender
+AddInterface=%KSCATEGORY_TOPOLOGY%, %KSNAME_TopologyCablePRender%, AUDIOROUTERVIRTUAL.I.TopologyCablePRender
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_WaveCablePCapture%, AUDIOROUTERVIRTUAL.I.WaveCablePCapture
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_WaveCablePCapture%, AUDIOROUTERVIRTUAL.I.WaveCablePCapture
+AddInterface=%KSCATEGORY_CAPTURE%, %KSNAME_WaveCablePCapture%, AUDIOROUTERVIRTUAL.I.WaveCablePCapture
+AddInterface=%KSCATEGORY_AUDIO%, %KSNAME_TopologyCablePCapture%, AUDIOROUTERVIRTUAL.I.TopologyCablePCapture
+AddInterface=%KSCATEGORY_TOPOLOGY%, %KSNAME_TopologyCablePCapture%, AUDIOROUTERVIRTUAL.I.TopologyCablePCapture
 ; END GENERATED CABLE INTERFACES
 
 [AUDIOROUTERVIRTUAL_SA.NT.Services]
@@ -578,6 +946,102 @@ KSNAME_WaveCableHCapture="WaveCableHCapture"
 AUDIOROUTERVIRTUAL.WaveCableHCapture.szPname="AudioRouter Cable H Output"
 KSNAME_TopologyCableHCapture="TopologyCableHCapture"
 AUDIOROUTERVIRTUAL.TopologyCableHCapture.szPname="AudioRouter Cable H Output"
+GUID.CableIRenderPinName="{354CF021-E3A3-4B28-ABF3-12FC04512F79}"
+Name.CableIRenderPinName="AudioRouter Cable I Input"
+GUID.CableICapturePinCategory="{BB0A2187-CD69-433F-AC15-54FD7433683F}"
+Name.CableICapturePinCategory="AudioRouter Cable I Output"
+KSNAME_WaveCableIRender="WaveCableIRender"
+AUDIOROUTERVIRTUAL.WaveCableIRender.szPname="AudioRouter Cable I Input"
+KSNAME_TopologyCableIRender="TopologyCableIRender"
+AUDIOROUTERVIRTUAL.TopologyCableIRender.szPname="AudioRouter Cable I Input"
+KSNAME_WaveCableICapture="WaveCableICapture"
+AUDIOROUTERVIRTUAL.WaveCableICapture.szPname="AudioRouter Cable I Output"
+KSNAME_TopologyCableICapture="TopologyCableICapture"
+AUDIOROUTERVIRTUAL.TopologyCableICapture.szPname="AudioRouter Cable I Output"
+GUID.CableJRenderPinName="{9EE7B8EF-EC13-4EA9-BCA6-60069A30DB16}"
+Name.CableJRenderPinName="AudioRouter Cable J Input"
+GUID.CableJCapturePinCategory="{FCC16359-B295-45C4-84DA-20F9B09DDC37}"
+Name.CableJCapturePinCategory="AudioRouter Cable J Output"
+KSNAME_WaveCableJRender="WaveCableJRender"
+AUDIOROUTERVIRTUAL.WaveCableJRender.szPname="AudioRouter Cable J Input"
+KSNAME_TopologyCableJRender="TopologyCableJRender"
+AUDIOROUTERVIRTUAL.TopologyCableJRender.szPname="AudioRouter Cable J Input"
+KSNAME_WaveCableJCapture="WaveCableJCapture"
+AUDIOROUTERVIRTUAL.WaveCableJCapture.szPname="AudioRouter Cable J Output"
+KSNAME_TopologyCableJCapture="TopologyCableJCapture"
+AUDIOROUTERVIRTUAL.TopologyCableJCapture.szPname="AudioRouter Cable J Output"
+GUID.CableKRenderPinName="{488D5CEB-B6B7-498F-9A47-D20FA5594925}"
+Name.CableKRenderPinName="AudioRouter Cable K Input"
+GUID.CableKCapturePinCategory="{61175E35-9434-49A2-A975-1BF92FD568A6}"
+Name.CableKCapturePinCategory="AudioRouter Cable K Output"
+KSNAME_WaveCableKRender="WaveCableKRender"
+AUDIOROUTERVIRTUAL.WaveCableKRender.szPname="AudioRouter Cable K Input"
+KSNAME_TopologyCableKRender="TopologyCableKRender"
+AUDIOROUTERVIRTUAL.TopologyCableKRender.szPname="AudioRouter Cable K Input"
+KSNAME_WaveCableKCapture="WaveCableKCapture"
+AUDIOROUTERVIRTUAL.WaveCableKCapture.szPname="AudioRouter Cable K Output"
+KSNAME_TopologyCableKCapture="TopologyCableKCapture"
+AUDIOROUTERVIRTUAL.TopologyCableKCapture.szPname="AudioRouter Cable K Output"
+GUID.CableLRenderPinName="{6E59AD54-7695-4E39-8BEE-DB8BCA019B9D}"
+Name.CableLRenderPinName="AudioRouter Cable L Input"
+GUID.CableLCapturePinCategory="{806E3038-E9E3-4DEA-B50D-9EB3911623EE}"
+Name.CableLCapturePinCategory="AudioRouter Cable L Output"
+KSNAME_WaveCableLRender="WaveCableLRender"
+AUDIOROUTERVIRTUAL.WaveCableLRender.szPname="AudioRouter Cable L Input"
+KSNAME_TopologyCableLRender="TopologyCableLRender"
+AUDIOROUTERVIRTUAL.TopologyCableLRender.szPname="AudioRouter Cable L Input"
+KSNAME_WaveCableLCapture="WaveCableLCapture"
+AUDIOROUTERVIRTUAL.WaveCableLCapture.szPname="AudioRouter Cable L Output"
+KSNAME_TopologyCableLCapture="TopologyCableLCapture"
+AUDIOROUTERVIRTUAL.TopologyCableLCapture.szPname="AudioRouter Cable L Output"
+GUID.CableMRenderPinName="{5808EEE3-4D20-40B1-8EC3-1CD177106B32}"
+Name.CableMRenderPinName="AudioRouter Cable M Input"
+GUID.CableMCapturePinCategory="{B01FE3D5-3A31-46AC-AA12-C610949A0AE0}"
+Name.CableMCapturePinCategory="AudioRouter Cable M Output"
+KSNAME_WaveCableMRender="WaveCableMRender"
+AUDIOROUTERVIRTUAL.WaveCableMRender.szPname="AudioRouter Cable M Input"
+KSNAME_TopologyCableMRender="TopologyCableMRender"
+AUDIOROUTERVIRTUAL.TopologyCableMRender.szPname="AudioRouter Cable M Input"
+KSNAME_WaveCableMCapture="WaveCableMCapture"
+AUDIOROUTERVIRTUAL.WaveCableMCapture.szPname="AudioRouter Cable M Output"
+KSNAME_TopologyCableMCapture="TopologyCableMCapture"
+AUDIOROUTERVIRTUAL.TopologyCableMCapture.szPname="AudioRouter Cable M Output"
+GUID.CableNRenderPinName="{E076B44E-7230-4606-A5E2-76871E2CAD15}"
+Name.CableNRenderPinName="AudioRouter Cable N Input"
+GUID.CableNCapturePinCategory="{34648CC7-4FE9-4CA6-B203-046197F1681C}"
+Name.CableNCapturePinCategory="AudioRouter Cable N Output"
+KSNAME_WaveCableNRender="WaveCableNRender"
+AUDIOROUTERVIRTUAL.WaveCableNRender.szPname="AudioRouter Cable N Input"
+KSNAME_TopologyCableNRender="TopologyCableNRender"
+AUDIOROUTERVIRTUAL.TopologyCableNRender.szPname="AudioRouter Cable N Input"
+KSNAME_WaveCableNCapture="WaveCableNCapture"
+AUDIOROUTERVIRTUAL.WaveCableNCapture.szPname="AudioRouter Cable N Output"
+KSNAME_TopologyCableNCapture="TopologyCableNCapture"
+AUDIOROUTERVIRTUAL.TopologyCableNCapture.szPname="AudioRouter Cable N Output"
+GUID.CableORenderPinName="{A0CA62D3-88BE-43B2-95E8-A61F0181998B}"
+Name.CableORenderPinName="AudioRouter Cable O Input"
+GUID.CableOCapturePinCategory="{769C0888-994E-43F3-8548-E47CC4232239}"
+Name.CableOCapturePinCategory="AudioRouter Cable O Output"
+KSNAME_WaveCableORender="WaveCableORender"
+AUDIOROUTERVIRTUAL.WaveCableORender.szPname="AudioRouter Cable O Input"
+KSNAME_TopologyCableORender="TopologyCableORender"
+AUDIOROUTERVIRTUAL.TopologyCableORender.szPname="AudioRouter Cable O Input"
+KSNAME_WaveCableOCapture="WaveCableOCapture"
+AUDIOROUTERVIRTUAL.WaveCableOCapture.szPname="AudioRouter Cable O Output"
+KSNAME_TopologyCableOCapture="TopologyCableOCapture"
+AUDIOROUTERVIRTUAL.TopologyCableOCapture.szPname="AudioRouter Cable O Output"
+GUID.CablePRenderPinName="{74C63333-B2BD-4C27-95B3-9DACAC9E9761}"
+Name.CablePRenderPinName="AudioRouter Cable P Input"
+GUID.CablePCapturePinCategory="{BF0B5285-AEA5-47F5-9784-E135868D7050}"
+Name.CablePCapturePinCategory="AudioRouter Cable P Output"
+KSNAME_WaveCablePRender="WaveCablePRender"
+AUDIOROUTERVIRTUAL.WaveCablePRender.szPname="AudioRouter Cable P Input"
+KSNAME_TopologyCablePRender="TopologyCablePRender"
+AUDIOROUTERVIRTUAL.TopologyCablePRender.szPname="AudioRouter Cable P Input"
+KSNAME_WaveCablePCapture="WaveCablePCapture"
+AUDIOROUTERVIRTUAL.WaveCablePCapture.szPname="AudioRouter Cable P Output"
+KSNAME_TopologyCablePCapture="TopologyCablePCapture"
+AUDIOROUTERVIRTUAL.TopologyCablePCapture.szPname="AudioRouter Cable P Output"
 ; END GENERATED CABLE STRINGS
 
 Proxy.CLSID="{17CCA71B-ECD7-11D0-B908-00A0C9223196}"
