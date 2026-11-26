@@ -99,19 +99,25 @@ function Test-NewDump {
     }
 }
 Test-NewDump
-function Invoke-SetEight {
+# The bundle says how many cables to enable (cables.txt: 8 for 0.2.5, 16 for
+# the 16-cable driver); without the file, 8.
+$cableCount = 8
+$cablesFile = Join-Path $bundle 'cables.txt'
+if (Test-Path -LiteralPath $cablesFile) { $cableCount = [int]([IO.File]::ReadAllText($cablesFile).Trim()) }
+if ($cableCount -lt 1 -or $cableCount -gt 16) { throw "cables.txt must hold 1-16, not $cableCount." }
+function Invoke-SetCables {
     $inventory = & (Join-Path $bundle 'tools\m00-probe.exe') inventory | Out-String
     if ($LASTEXITCODE -ne 0) { throw "The audio inventory failed (exit $LASTEXITCODE)." }
-    $active = @([regex]::Matches($inventory, '(?m)^render\[\d+\] name=AudioRouter Cable [A-H] Input \(AudioRouter Virtual Cable\) id=')).Count
-    if ($active -eq 8) { return }
+    $active = @([regex]::Matches($inventory, '(?m)^render\[\d+\] name=AudioRouter Cable [A-P] Input \(AudioRouter Virtual Cable\) id=')).Count
+    if ($active -eq $cableCount) { return }
     $env:AUDIOROUTER_ALLOW_TEST_DRIVER = '1'
     $process = Start-Process -FilePath (Join-Path $bundle 'tools\audiorouter-driver-helper.exe') -Wait -PassThru -WindowStyle Hidden `
-        -ArgumentList "set-cables --count 8 --result `"$work\set-cables.json`"" -RedirectStandardOutput "$work\set-cables.txt" -RedirectStandardError "$work\set-cables-error.txt"
-    if ($process.ExitCode -eq 5) { throw 'Windows needs a restart to enable eight cables. Restart the VM, sign in and run this command again.' }
-    if ($process.ExitCode -ne 0) { throw "Could not enable eight cables (helper exit $($process.ExitCode)); see $work\set-cables.json." }
+        -ArgumentList "set-cables --count $cableCount --result `"$work\set-cables.json`"" -RedirectStandardOutput "$work\set-cables.txt" -RedirectStandardError "$work\set-cables-error.txt"
+    if ($process.ExitCode -eq 5) { throw "Windows needs a restart to enable $cableCount cables. Restart the VM, sign in and run this command again." }
+    if ($process.ExitCode -ne 0) { throw "Could not enable $cableCount cables (helper exit $($process.ExitCode)); see $work\set-cables.json." }
     Start-Sleep -Seconds 5
 }
-Invoke-SetEight
+Invoke-SetCables
 
 # --- segments -----------------------------------------------------------------
 Write-Host 'Ready. Use soak.cmd start / pause / status on the PC. Leave this window open.' -ForegroundColor Green

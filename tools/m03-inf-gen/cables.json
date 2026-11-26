@@ -8,6 +8,14 @@
     { "index": 4, "letter": "E", "renderPinNameGuid": "{7AAD623E-878F-46F5-BCBD-790D1ED6D374}", "capturePinCategoryGuid": "{89CD2009-D9EF-4DD3-A6C9-CA859DA7EE7A}" },
     { "index": 5, "letter": "F", "renderPinNameGuid": "{81CFE35B-23B8-4715-89B2-09308E237471}", "capturePinCategoryGuid": "{8F29DC80-794D-4BFA-A315-A2C4524BDA72}" },
     { "index": 6, "letter": "G", "renderPinNameGuid": "{B5A1784E-1324-4B3F-AC86-2A3A4CFD18F9}", "capturePinCategoryGuid": "{C45B9A3F-F715-47C1-9AF9-28F83563C78A}" },
-    { "index": 7, "letter": "H", "renderPinNameGuid": "{88583CEB-D6B6-4E78-8672-53E4ED95BA32}", "capturePinCategoryGuid": "{637B0783-F72A-48AF-8E52-6BD8F47277B9}" }
+    { "index": 7, "letter": "H", "renderPinNameGuid": "{88583CEB-D6B6-4E78-8672-53E4ED95BA32}", "capturePinCategoryGuid": "{637B0783-F72A-48AF-8E52-6BD8F47277B9}" },
+    { "index": 8, "letter": "I", "renderPinNameGuid": "{354CF021-E3A3-4B28-ABF3-12FC04512F79}", "capturePinCategoryGuid": "{BB0A2187-CD69-433F-AC15-54FD7433683F}" },
+    { "index": 9, "letter": "J", "renderPinNameGuid": "{9EE7B8EF-EC13-4EA9-BCA6-60069A30DB16}", "capturePinCategoryGuid": "{FCC16359-B295-45C4-84DA-20F9B09DDC37}" },
+    { "index": 10, "letter": "K", "renderPinNameGuid": "{488D5CEB-B6B7-498F-9A47-D20FA5594925}", "capturePinCategoryGuid": "{61175E35-9434-49A2-A975-1BF92FD568A6}" },
+    { "index": 11, "letter": "L", "renderPinNameGuid": "{6E59AD54-7695-4E39-8BEE-DB8BCA019B9D}", "capturePinCategoryGuid": "{806E3038-E9E3-4DEA-B50D-9EB3911623EE}" },
+    { "index": 12, "letter": "M", "renderPinNameGuid": "{5808EEE3-4D20-40B1-8EC3-1CD177106B32}", "capturePinCategoryGuid": "{B01FE3D5-3A31-46AC-AA12-C610949A0AE0}" },
+    { "index": 13, "letter": "N", "renderPinNameGuid": "{E076B44E-7230-4606-A5E2-76871E2CAD15}", "capturePinCategoryGuid": "{34648CC7-4FE9-4CA6-B203-046197F1681C}" },
+    { "index": 14, "letter": "O", "renderPinNameGuid": "{A0CA62D3-88BE-43B2-95E8-A61F0181998B}", "capturePinCategoryGuid": "{769C0888-994E-43F3-8548-E47CC4232239}" },
+    { "index": 15, "letter": "P", "renderPinNameGuid": "{74C63333-B2BD-4C27-95B3-9DACAC9E9761}", "capturePinCategoryGuid": "{BF0B5285-AEA5-47F5-9784-E135868D7050}" }
   ]
 }

@@ -84,18 +84,36 @@ DEFINE_CABLE_PAIR(E, L"E", eCableERender, eCableECapture)
 DEFINE_CABLE_PAIR(F, L"F", eCableFRender, eCableFCapture)
 DEFINE_CABLE_PAIR(G, L"G", eCableGRender, eCableGCapture)
 DEFINE_CABLE_PAIR(H, L"H", eCableHRender, eCableHCapture)
+DEFINE_CABLE_PAIR(I, L"I", eCableIRender, eCableICapture)
+DEFINE_CABLE_PAIR(J, L"J", eCableJRender, eCableJCapture)
+DEFINE_CABLE_PAIR(K, L"K", eCableKRender, eCableKCapture)
+DEFINE_CABLE_PAIR(L, L"L", eCableLRender, eCableLCapture)
+DEFINE_CABLE_PAIR(M, L"M", eCableMRender, eCableMCapture)
+DEFINE_CABLE_PAIR(N, L"N", eCableNRender, eCableNCapture)
+DEFINE_CABLE_PAIR(O, L"O", eCableORender, eCableOCapture)
+DEFINE_CABLE_PAIR(P, L"P", eCablePRender, eCablePCapture)
 #undef DEFINE_CABLE_PAIR
 
 static PENDPOINT_MINIPAIR g_RenderEndpoints[] = {
     &CableARenderMiniports, &CableBRenderMiniports, &CableCRenderMiniports,
     &CableDRenderMiniports, &CableERenderMiniports, &CableFRenderMiniports,
-    &CableGRenderMiniports, &CableHRenderMiniports,
+    &CableGRenderMiniports, &CableHRenderMiniports, &CableIRenderMiniports,
+    &CableJRenderMiniports, &CableKRenderMiniports, &CableLRenderMiniports,
+    &CableMRenderMiniports, &CableNRenderMiniports, &CableORenderMiniports,
+    &CablePRenderMiniports,
 };
 static PENDPOINT_MINIPAIR g_CaptureEndpoints[] = {
     &CableACaptureMiniports, &CableBCaptureMiniports, &CableCCaptureMiniports,
     &CableDCaptureMiniports, &CableECaptureMiniports, &CableFCaptureMiniports,
-    &CableGCaptureMiniports, &CableHCaptureMiniports,
+    &CableGCaptureMiniports, &CableHCaptureMiniports, &CableICaptureMiniports,
+    &CableJCaptureMiniports, &CableKCaptureMiniports, &CableLCaptureMiniports,
+    &CableMCaptureMiniports, &CableNCaptureMiniports, &CableOCaptureMiniports,
+    &CablePCaptureMiniports,
 };
+// One render and one capture endpoint per bus, in bus order (endpoint / 2).
+C_ASSERT(ARRAYSIZE(g_RenderEndpoints) == AR_BRIDGE_MAX_CABLES);
+C_ASSERT(ARRAYSIZE(g_CaptureEndpoints) == AR_BRIDGE_MAX_CABLES);
+C_ASSERT(eMaxDeviceType == 2 * AR_BRIDGE_MAX_CABLES);
 static ULONG g_EnabledCableCount = 2;
 #define g_cRenderEndpoints (SIZEOF_ARRAY(g_RenderEndpoints))
 #define g_cCaptureEndpoints (SIZEOF_ARRAY(g_CaptureEndpoints))

@@ -10,7 +10,9 @@ param(
     [string] $BaseBundle = 'C:\VMs\ar-share\rc-0.2.5-r7',
     [string] $Destination = 'C:\VMs\ar-share\rc-0.2.5-soak',
     # Rehearsal only: the manifest then says the scripts were not committed.
-    [switch] $AllowDirty
+    [switch] $AllowDirty,
+    # Cables the guest enables (cables.txt): 8 for 0.2.5, 16 for the 16-cable driver.
+    [ValidateRange(1, 16)] [int] $Cables = 8
 )
 $ErrorActionPreference = 'Stop'
 $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
@@ -35,11 +37,12 @@ foreach ($entry in @(Get-Content -LiteralPath (Join-Path $base 'MANIFEST.txt') |
     Copy-Item -LiteralPath (Join-Path $base $relative) -Destination $file
 }
 foreach ($script in $scripts) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot $script) -Destination (Join-Path $output $script) -Force }
+[IO.File]::WriteAllText((Join-Path $output 'cables.txt'), "$Cables")
 $sys = (Get-FileHash -LiteralPath (Join-Path $output 'driver\audioroutervirtual.sys') -Algorithm SHA256).Hash
 $package = Get-Content -LiteralPath (Join-Path $output 'driver\package.json') -Raw | ConvertFrom-Json
 if ($package.signed -ne 'test' -or $package.timingDiagnostics -or $package.dirty) { throw 'The driver is not a clean, test-signed build without timing diagnostics.' }
 $manifest = @('AudioRouter driver soak; guest-only measurement', "source: $commit$(if ($dirty.Count) { ' plus uncommitted soak scripts' })",
-    "base: $base", "driver: $($package.driverVersion) SYS $sys", '')
+    "base: $base", "driver: $($package.driverVersion) SYS $sys", "cables: $Cables", '')
 foreach ($file in Get-ChildItem -LiteralPath $output -File -Recurse | Where-Object { $_.Name -ne 'MANIFEST.txt' } | Sort-Object FullName) {
     $manifest += '{0}  {1}' -f (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLower(), $file.FullName.Substring($output.Length + 1)
 }

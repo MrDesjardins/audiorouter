@@ -15,18 +15,20 @@ if ((Get-FileHash -LiteralPath $first -Algorithm SHA256).Hash -ne
     throw 'Cable INF generation is not deterministic.'
 }
 $generated = Get-Content -LiteralPath $first -Raw
-if (([regex]::Matches($generated, '(?m)^AddInterface=')).Count -ne 80) {
-    throw 'Generated INF must contain 80 cable interfaces.'
+if (([regex]::Matches($generated, '(?m)^AddInterface=')).Count -ne 160) {
+    throw 'Generated INF must contain 160 cable interfaces.'
 }
-if (([regex]::Matches($generated, '(?m)^HKR,MediaCategories\\%GUID\.Cable[A-H]RenderPinName%,Name,,%Name\.Cable[A-H]RenderPinName%\r?$')).Count -ne 8 -or
-    ([regex]::Matches($generated, '(?m)^HKR,MediaCategories\\%GUID\.Cable[A-H]CapturePinCategory%,Name,,%Name\.Cable[A-H]CapturePinCategory%\r?$')).Count -ne 8) {
-    throw 'Generated INF must register eight render pin names and eight capture pin categories.'
+if (([regex]::Matches($generated, '(?m)^HKR,MediaCategories\\%GUID\.Cable[A-P]RenderPinName%,Name,,%Name\.Cable[A-P]RenderPinName%\r?$')).Count -ne 16 -or
+    ([regex]::Matches($generated, '(?m)^HKR,MediaCategories\\%GUID\.Cable[A-P]CapturePinCategory%,Name,,%Name\.Cable[A-P]CapturePinCategory%\r?$')).Count -ne 16) {
+    throw 'Generated INF must register sixteen render pin names and sixteen capture pin categories.'
 }
 foreach ($expected in @(
         'WaveCableARender', 'TopologyCableACapture',
         'WaveCableHRender', 'TopologyCableHCapture',
         'AudioRouter Cable A Input', 'AudioRouter Cable A Output',
         'AudioRouter Cable H Input', 'AudioRouter Cable H Output',
+        'WaveCablePRender', 'TopologyCablePCapture',
+        'AudioRouter Cable P Input', 'AudioRouter Cable P Output',
         'Name.CableARenderPinName="AudioRouter Cable A Input"',
         'Name.CableHCapturePinCategory="AudioRouter Cable H Output"')) {
     if (-not $generated.Contains($expected)) { throw "Generated INF omitted $expected." }
@@ -80,4 +82,4 @@ try { & $generator -CableList $duplicatePath -OutputInf (Join-Path $output 'dupl
 catch { $rejected = $true }
 if (-not $rejected) { throw 'Duplicate pin names must be rejected.' }
 & $generator -Check | Out-Null
-Write-Output 'M03 cable INF generator acceptance passed (80 interfaces, deterministic output, invalid list rejected).'
+Write-Output 'M03 cable INF generator acceptance passed (160 interfaces, deterministic output, invalid list rejected).'

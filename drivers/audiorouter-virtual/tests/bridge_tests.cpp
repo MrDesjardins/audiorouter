@@ -775,7 +775,8 @@ int main() {
             occupiedLeaseSlots[slot] = true;
         }
     }
-    WCHAR unknownBus[] = L"cable-i";
+    require(AR_BRIDGE_MAX_CABLES == 16, "cables A-P");
+    WCHAR unknownBus[] = L"cable-q";
     USHORT ignoredBus = 0;
     require(AudioRouterParseCableBusId(unknownBus, sizeof(unknownBus) - sizeof(WCHAR),
         &ignoredBus) == STATUS_OBJECT_NAME_NOT_FOUND, "unknown cable id rejected");
@@ -969,7 +970,7 @@ int main() {
     AR_BRIDGE_CONFIG reported = config; reported.CableCount = 3; reported.MinPeriodFrames = 256;
     AudioRouterFillDriverInfo(&info, &reported);
     require(info.ProtocolMajor == 1 && info.ProtocolMinor == 1 && info.CableCount == 3 &&
-        info.MaxCables == 8 && info.MaxChannels == 8, "QUERY reports protocol and limits");
+        info.MaxCables == 16 && info.MaxChannels == 8, "QUERY reports protocol and limits");
     require((info.Capabilities & AR_BRIDGE_CAP_SAMPLE_FLOAT64) &&
         (info.Capabilities & AR_BRIDGE_CAP_STREAM_COUNTERS) &&
         (info.Capabilities & AR_BRIDGE_CAP_LOW_LATENCY_PERIODS) &&

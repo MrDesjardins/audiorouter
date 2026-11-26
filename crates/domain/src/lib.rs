@@ -3937,21 +3937,17 @@ mod tests {
         }
     }
 
-    /// The app may address more cables than a driver offers (the QUERY decides
-    /// at run time), never fewer. Becomes an equality in the 0.3.0 driver
-    /// commit that raises `AR_BRIDGE_MAX_CABLES`.
+    /// The app maximum is the driver's own (16, cables A-P). An older driver
+    /// reports fewer through QUERY and the app follows it at run time.
     #[test]
-    fn app_cable_maximum_covers_the_driver_header() {
+    fn app_cable_maximum_matches_the_driver_header() {
         let header = include_str!("../../../drivers/audiorouter-virtual/Source/Inc/bridgeio.h");
         let value: u8 = header
             .lines()
             .find_map(|line| line.trim().strip_prefix("#define AR_BRIDGE_MAX_CABLES "))
             .and_then(|value| value.trim().parse().ok())
             .expect("AR_BRIDGE_MAX_CABLES in bridgeio.h");
-        assert!(
-            (LEGACY_DRIVER_MAX_CABLES..=MAX_CABLES).contains(&value),
-            "header says {value}"
-        );
+        assert_eq!(value, MAX_CABLES, "header says {value}");
     }
 
     #[test]
