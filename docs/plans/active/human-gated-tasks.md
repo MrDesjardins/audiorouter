@@ -217,7 +217,13 @@ Driver RC 0.2.5 (`7c88895c2`). Test-signed drivers never go on this PC. Guide:
   4. Optional decision: allow **one new snapshot** after that, so this is needed
   only once. 5. Tell the agent the VM is ready and for how long the PC is quiet.
 - **Pass:** you are at the guest desktop and the preflight is still green.
-- **Result:** open. **D2–D5 need it.**
+- **Result:** done 2026-11-25 by the agent, with the owner's authorization. Changing the
+  expired password failed with "Access is denied" both at sign-in and through ADSI, so the
+  guest was booted with its clock set back 36 days, signed in with the old password, and the
+  new password was set from an admin terminal. The password no longer expires, and the
+  maximum password age is unlimited. Snapshot `04-signed-in` (powered off, 8 GB, clock
+  settings restored) has autologon and an elevated task `ArAdmin` that runs
+  `C:\ar\admin-job.ps1`. The password is in `C:\VMs\artest-password.txt` on the PC.
 
 ### D2. Freeze reproduction (Verifier)
 

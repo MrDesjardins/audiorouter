@@ -347,11 +347,11 @@ to 16 now, ahead of D2):
 
 **Night run 2026-11-25 (about 10 h, owner asleep, WSL and Firefox closed).** The password
 for `artest` is the guide's unattended-install value, now expired; the owner changes it at
-sign-in (D1) and hands the new one over through a secret prompt.
+sign-in (D1). Owner answers: the PC is needed back at 10:00, the freeze check is wanted.
 
 | Block | Time | What | Stop rule |
 | --- | --- | --- | --- |
-| 0 | 10 min, owner present | Host preflight green; restore `02-test-signing-ready`; owner signs in and sets the password; agent turns off password expiry and, if approved, saves `04-signed-in` | Preflight red: stop |
+| 0 | done before the night | D1 done by the agent (owner authorized); snapshot `04-signed-in` saved; at the signal only the host preflight | Preflight red: stop |
 | 1 | about 1 h | `rc-0.2.7-r2` `vm-checks.ps1`: preflight, install, status, cables (2-8-9-16-17 refused-2), tone, update to 0.2.8, update-verify, fuzz | A failure ends driver blocks; keep evidence, go to 2 |
 | 2 | about 2 h | D2 freeze reproduction on the frozen 0.2.5 (`rc-0.2.5-r7`, 5 boots, fuzz 300 s), fresh restore of `04-signed-in` | Freeze over 10 min: keep `round2-state.json`, host load and `VBox.log`, reset |
 | 3 | about 1 h | D2 control: the same boots with no driver installed (W1 item 1) | Freeze here means the VM, not the driver |
