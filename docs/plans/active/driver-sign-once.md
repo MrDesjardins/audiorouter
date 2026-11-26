@@ -322,6 +322,25 @@ The soak is fixed at eight cables and 2 or 4 routes; W2 must extend it to 16 bef
   A direct bridge OPEN of `cable-i` against 0.2.5 reports "driver unavailable", not "cable not
   enabled"; only the route compiler opens bridges, and it checks QUERY first.
 
+**W2, driver** (branch `feat/driver-16-cables`, 2026-11-25; the owner asked to raise the driver
+to 16 now, ahead of D2):
+
+- `AR_BRIDGE_MAX_CABLES = 16`. Cables I-P were added to the endpoint enum, the minipair
+  tables and the generated INF, with new GUIDs. A-H keep their GUIDs, filter names and endpoint
+  names, and the INF diff only adds lines. `C_ASSERT`s tie the tables to the constant, and the
+  domain test now requires `MAX_CABLES` to equal the header value.
+- Host checks: driver unit tests pass (10,915,271 checks). The ASan variant cannot link on this PC
+  (`clang_rt.asan_static_runtime_thunk` missing). `m03-inf-gen.ps1` passes (160 interfaces),
+  `infverif` reports the INF valid, the domain tests pass, and the soak tests pass.
+  `m03-driver-build.ps1` was already stale after `c183b09c0`. Two of its checks were repaired, and
+  it still fails at a check of `adapter.cpp`, which this change did not touch.
+- VM share `C:\VMs\ar-share\rc-0.2.7-r2` (commit `c6ed3b79b`) holds a test-signed driver 0.2.7
+  and 0.2.8 for the upgrade step, both built from the same source. The guest `cables` step now
+  goes 2 -> 8 -> 9 -> 16 -> refused 17 -> 2 and checks that the A-H endpoint IDs are kept from
+  8 to 16. The 0.2.5-pinned Stage A bundle does not apply. The 16-cable soak bundle still needs
+  `m00-probe.exe` from an audio-tools update.
+- **Not run:** anything inside the VM. Blocked by D1.
+
 Owner: D1, then the first rehearsal night. Agent: read its records, then the churn runner.
 Rollback: delete the soak files and revert `-RouteCount`; nothing else depends on them.
 No pull request, purchase or driver edit is authorized here.
