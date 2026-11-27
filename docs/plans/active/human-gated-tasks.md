@@ -240,8 +240,9 @@ Driver RC 0.2.5 (`7c88895c2`). Test-signed drivers never go on this PC. Guide:
   and `VBox.log`, note the boot, then `VBoxManage controlvm AR-DriverTest reset`.
 - **Pass:** 5 boots, every fuzz passes, no freeze, `host load` line INFO "host idle".
   A freeze on an idle host is a driver defect and blocks signing.
-- **IDs:** SEC-08, VCAB-24, VCAB-30 (A11). **Result:** passed 2026-11-26 with WSL on; the
-  owner decides whether a WSL-off repeat is needed. VCAB-24 stays open (NEM stalls).
+- **IDs:** SEC-08, VCAB-24, VCAB-30 (A11). **Result:** passed 2026-11-26 with WSL on, accepted
+  by the owner the same day: WSL stays on for VM runs (T3 Code uses it), so the
+  preflight's WSL check is an expected caveat, not a stop. VCAB-24 stays open (NEM stalls).
 
 ### D3. Frame-clock A/B, tagged pool, Verifier and live update
 
