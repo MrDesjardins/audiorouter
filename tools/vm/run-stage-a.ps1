@@ -186,6 +186,28 @@ if ($AutoLogon) {
         Write-Host 'Auto-logon is on for this run.' -ForegroundColor Cyan
     }
 }
+# --- host load (round2) --------------------------------------------------------
+# The PC sampler writes C:\VMs\ar-share\host-load.csv, which the guest sees as
+# Z:\host-load.csv. Blocks are judged by row position; the guest clock is not
+# compared with the host clock (the 2026-11-22 core showed they differ by hours).
+# Defined before the resume check below, which calls Add-HostLoadResult after an
+# unplanned restart (2026-11-27: defined later, the resumed run died on it).
+function Read-HostLoadRows {
+    param([string] $Path = $hostLoadPeer)
+    if (-not (Test-Path -LiteralPath $Path)) { return @() }
+    try { return @(Get-HostLoadRows @(Get-Content -LiteralPath $Path -ErrorAction Stop)) } catch { return @() }
+}
+function Add-HostLoadResult {
+    param([string] $Name, [int] $From = 0, [string] $Note = '')
+    $window = Get-HostLoadWindow -Rows (Read-HostLoadRows) -From $From
+    $verdict = Get-HostLoadVerdict $window
+    $detail = $verdict.Detail
+    if ($Note) { $detail = "$detail; $Note" }
+    if ($verdict.Verdict -eq 'Idle') { Add-Result "host load ($Name)" 'INFO' $detail }
+    elseif ($verdict.Verdict -eq 'Starved') { Add-Result "host load ($Name)" 'REVIEW' "$detail; host starvation, so this window is not a driver result" }
+    else { Add-Result "host load ($Name)" 'REVIEW' $detail }
+}
+
 Register-Resume
 if ($state.current -and -not $done.Contains($state.current)) {
     # The VM restarted while a step was running and nobody asked for it.
@@ -506,26 +528,6 @@ function Grade-Pool([string] $Label, $Samples) {
     if ($perHourMiB -le 1) { Add-Result $Label 'PASS' $detail }
     elseif ($perHourMiB -le 8) { Add-Result $Label 'REVIEW' "$detail (whole-system pool; check pool.csv)" }
     else { Add-Result $Label 'FAIL' $detail }
-}
-
-# --- host load (round2) --------------------------------------------------------
-# The PC sampler writes C:\VMs\ar-share\host-load.csv, which the guest sees as
-# Z:\host-load.csv. Blocks are judged by row position; the guest clock is not
-# compared with the host clock (the 2026-11-22 core showed they differ by hours).
-function Read-HostLoadRows {
-    param([string] $Path = $hostLoadPeer)
-    if (-not (Test-Path -LiteralPath $Path)) { return @() }
-    try { return @(Get-HostLoadRows @(Get-Content -LiteralPath $Path -ErrorAction Stop)) } catch { return @() }
-}
-function Add-HostLoadResult {
-    param([string] $Name, [int] $From = 0, [string] $Note = '')
-    $window = Get-HostLoadWindow -Rows (Read-HostLoadRows) -From $From
-    $verdict = Get-HostLoadVerdict $window
-    $detail = $verdict.Detail
-    if ($Note) { $detail = "$detail; $Note" }
-    if ($verdict.Verdict -eq 'Idle') { Add-Result "host load ($Name)" 'INFO' $detail }
-    elseif ($verdict.Verdict -eq 'Starved') { Add-Result "host load ($Name)" 'REVIEW' "$detail; host starvation, so this window is not a driver result" }
-    else { Add-Result "host load ($Name)" 'REVIEW' $detail }
 }
 
 # --- steps ---------------------------------------------------------------------

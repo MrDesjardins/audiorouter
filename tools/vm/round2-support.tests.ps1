@@ -238,6 +238,24 @@ $runnerText = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'run-stage-a.ps1
 Assert-That 'runner: round2 stops without a host-load sampler' ($runnerText -match 'host-load sampler' -and $runnerText -match "'SKIP' 'the host-load sampler check did not pass")
 Assert-That 'runner: each round2 block records host load' ($runnerText -match 'Add-HostLoadResult "\$block block" \$from')
 Assert-That 'runner: an unexpected restart is classified against host load' ($runnerText -match 'until the restart')
+# A script runs top to bottom: a function called by top-level code (not from
+# inside another function) must be defined above that call. 2026-11-27 the
+# resume path called Add-HostLoadResult 300 lines before its definition, so the
+# first unplanned restart killed the resumed run.
+$runnerAst = [Management.Automation.Language.Parser]::ParseInput($runnerText, [ref]$null, [ref]$null)
+$defined = @{}
+foreach ($fn in $runnerAst.FindAll({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] }, $true)) { $defined[$fn.Name] = $fn.Extent.StartOffset }
+$lateCalls = @()
+foreach ($call in $runnerAst.FindAll({ param($n) $n -is [Management.Automation.Language.CommandAst] }, $true)) {
+    $name = $call.GetCommandName()
+    if (-not $name -or -not $defined.ContainsKey($name)) { continue }
+    $inFunction = $false
+    for ($p = $call.Parent; $p; $p = $p.Parent) {
+        if ($p -is [Management.Automation.Language.FunctionDefinitionAst] -or $p -is [Management.Automation.Language.ScriptBlockExpressionAst]) { $inFunction = $true; break }
+    }
+    if (-not $inFunction -and $call.Extent.StartOffset -lt $defined[$name]) { $lateCalls += "$name (line $($call.Extent.StartLineNumber))" }
+}
+Assert-That 'runner: top-level code calls only functions defined above it' ($lateCalls.Count -eq 0) ($lateCalls -join ', ')
 # A 24 h pool run: allowed by the parameter, its state survives the JSON
 # round-trip, its samples are copied to the share, and the sampler outlasts it.
 $longSeries = 0..2879 | ForEach-Object { [pscustomobject]@{ Minutes = $_ / 2.0; Bytes = 134MB } }
