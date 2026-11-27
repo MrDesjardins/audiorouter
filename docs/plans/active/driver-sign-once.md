@@ -340,7 +340,85 @@ to 16 now, ahead of D2):
   8 to 16. The 0.2.5-pinned Stage A bundle does not apply. The 16-cable soak bundle still needs
   `m00-probe.exe` from an audio-tools update.
 - **Not run:** anything inside the VM. Blocked by D1.
+- 16-cable soak bundle `C:\VMs\ar-share\rc-0.2.7-soak` (source `2002d7734`, driver 0.2.7.0,
+  SYS `041E4EA281D3`, `cables: 16`): tools from `prepare-cable-latency-update.ps1` on base
+  `rc-0.2.7-r2` (`C:\VMs\ar-share\rc-0.2.7-tools`), then `prepare-soak-bundle.ps1 -Cables 16`.
+  Start it with `soak.cmd start -Bundle rc-0.2.7-soak`.
+
+**Night run 2026-11-25 (about 10 h, owner asleep, WSL and Firefox closed).** The password
+for `artest` is the guide's unattended-install value, now expired; the owner changes it at
+sign-in (D1). Owner answers: the PC is needed back at 10:00, the freeze check is wanted.
+
+| Block | Time | What | Stop rule |
+| --- | --- | --- | --- |
+| 0 | done before the night | D1 done by the agent (owner authorized); snapshot `04-signed-in` saved; at the signal only the host preflight | Preflight red: stop |
+| 1 | about 1 h | `rc-0.2.7-r2` `vm-checks.ps1`: preflight, install, status, cables (2-8-9-16-17 refused-2), tone, update to 0.2.8, update-verify, fuzz | A failure ends driver blocks; keep evidence, go to 2 |
+| 2 | about 2 h | D2 freeze reproduction on the frozen 0.2.5 (`rc-0.2.5-r7`, 5 boots, fuzz 300 s), fresh restore of `04-signed-in` | Freeze over 10 min: keep `round2-state.json`, host load and `VBox.log`, reset |
+| 3 | about 1 h | D2 control: the same boots with no driver installed (W1 item 1) | Freeze here means the VM, not the driver |
+| 4 | rest, until the owner's time | Soak rehearsal on 0.2.7 at 16 cables, 2 routes, fresh restore of `04-signed-in` | Rehearsal hours never count for 0.3.0 |
+
+No host build or other load runs during blocks 2-4, so the idle verdict holds. Every block
+writes its evidence under `C:\VMs\ar-share`; the morning report maps each result to
+VCAB-01, VCAB-24, VCAB-30, SEC-08 and G4.
 
 Owner: D1, then the first rehearsal night. Agent: read its records, then the churn runner.
 Rollback: delete the soak files and revert `-RouteCount`; nothing else depends on them.
 No pull request, purchase or driver edit is authorized here.
+
+**What happened (2026-11-25/26).** The night did not run. The host preflight failed
+because T3 Code (`T3 Code (Beta).exe`) restarts its own WSL runtime after
+`wsl --shutdown`, and the agent stopped to ask instead of running with WSL on. Owner rule
+since then: in an unattended run, take the degraded option, record the caveat, never
+block on a question. A 3-hour window on 2026-11-26 (16:15-19:15) ran blocks 1 and 2
+instead, **with WSL running** (preflight exit 2: non-VM CPU about 15 %, about 13 GB free;
+the host-load sampler then showed other-process CPU mostly 0-9 %).
+
+Block 1, `rc-0.2.7-r2` plus the `rc-0.2.7-tools` overlay, fresh restore of `04-signed-in`
+(evidence: `C:\VMs\ar-share\results-20261126-1617-block1` and `results-20261126-1717-block1b`,
+guest folders under `evidence\`):
+
+| Step | Result | Notes |
+| --- | --- | --- |
+| preflight, install, status | PASS | driver 0.2.7.0, protocol 1.1, `maxCables` 16, 2 cables by default |
+| cables | PASS, 13 checks | 2 -> 8 (16 endpoints) -> 9 -> 16 (32 endpoints, all formats); 17 refused (exit 1) and 16 kept; A-H IDs unchanged 8 -> 16; A/B unchanged 2 -> 16 -> 2; C onward gone. VCAB-01, VCAB-05 |
+| tone | not run (harness) | the tool stopped before audio: "no capture consumer acknowledged the primed block; enable Listen before running". The snapshot has no Listen or recorder on Cable B; all error counters zero. Needs the Listen setting in the snapshot, not a driver change |
+| update to 0.2.8, restart, update-verify | PASS (block 1b) | the first try failed only because `rc-0.2.7-r2` has no `m03_cable_format.exe`; the `rc-0.2.7-tools` overlay was not copied in. A13, VCAB-05 |
+| verifier-on, fuzz 900 s, verifier-off | PASS | 8,298,935 calls, 596,608 accepted, 0 unexpected, 1,175 opens, under Driver Verifier. SEC-08, VCAB-30 |
+
+During the fuzz the guest's clock fell behind: VirtualBox logged "TM: Giving up catch-up
+attempt at a 1 342 s lag", so 900 guest seconds took about 30 host minutes, and guest
+control stopped answering until the fuzz ended. The guest did not freeze and the fuzz
+passed; the host script's 30-minute wait expired first. Treat long Verifier runs under NEM
+as about 2x slower than wall time when setting waits.
+
+Block 2, D2 on `rc-0.2.5-r7` (`-Session round2 -Blocks repro -FuzzSeconds 300 -ReproBoots 5`,
+no `-AutoLogon` since the snapshot signs in by itself), fresh restore of `04-signed-in`,
+17:28-18:14. Evidence: `C:\VMs\ar-share\results-20261126-1726-d2` (`stage-a-round2-20261126-181344.zip`,
+`host.log`, `host-load.csv`, screenshots, guest CPU state).
+
+- **All 5 boots PASS**: 0.2.5 identity D2C26DD92C00, Verifier on `audioroutervirtual.sys`, each
+  300 s fuzz with no crash and no unexpected result, each 2-minute stall watch PASS, no
+  bugcheck event or dump, Verifier off and removal PASS. No freeze over 10 minutes.
+- Host during the run (129 samples): other-process CPU mean 2.2 % (2 samples over 20 %, max
+  60 %), least available memory 7.9 GB. So, apart from WSL being on, this was a quiet host.
+  The guest's own host-load check said REVIEW ("no host-load samples for this window"); it
+  did not match the rows, most likely because the guest clock ran minutes behind.
+- **Minute-long VM stalls happen under Verifier fuzz and recover.** In boot 1 the guest's
+  screen and clock stopped at 17:37 for about 10 minutes, then the run went on and passed;
+  boot 2 and later boots showed shorter frozen-screen periods (up to 7 minutes). The guest
+  clock fell up to 9 minutes behind. The guest's own stall watch reported at most 7.5 s,
+  because the guest clock stops too: **an in-guest stall watch cannot see a VM-level stall**;
+  only the host can (screen hash, VBox `TM` catch-up lines). During the boot 1 stall the
+  agent saved `debugvm info cpumguest` (vCPUs 1-2 at one RIP, 0 and 3 at another, interrupts
+  enabled) and a core, `C:\VMs\ar-dump-d2-20261126.elf` (8.7 GB, not analyzed; delete when
+  no longer needed).
+- Reading: D2's pass rule is met except the idle-host verdict (WSL on). The earlier
+  "freezes" were judged at 10-12 minutes; this run shows a stall of that length can end by
+  itself, so the 2026-11-22 abort may have been one. Host-side wait rules for Verifier runs
+  should be 30 minutes, not 10.
+
+Not run in this window: block 3 (no-driver control; less needed now that D2 did not freeze),
+block 4 (soak rehearsal), the tone step (needs Listen in the snapshot). Requirement IDs:
+VCAB-01 and VCAB-05 (cables), A13 (update), SEC-08 and VCAB-30 (fuzz under Verifier, both
+drivers), VCAB-24 stays open (stalls on NEM). Next: D3 (`-Blocks ab,pool,verifier,live`), which
+needed D2 clean, in a window of at least 4 hours.

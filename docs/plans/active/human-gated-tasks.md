@@ -217,12 +217,22 @@ Driver RC 0.2.5 (`7c88895c2`). Test-signed drivers never go on this PC. Guide:
   4. Optional decision: allow **one new snapshot** after that, so this is needed
   only once. 5. Tell the agent the VM is ready and for how long the PC is quiet.
 - **Pass:** you are at the guest desktop and the preflight is still green.
-- **Result:** open. **D2–D5 need it.**
+- **Result:** done 2026-11-25 by the agent, with the owner's authorization. Changing the
+  expired password failed with "Access is denied" both at sign-in and through ADSI, so the
+  guest was booted with its clock set back 36 days, signed in with the old password, and the
+  new password was set from an admin terminal. The password no longer expires, and the
+  maximum password age is unlimited. Snapshot `04-signed-in` (powered off, 8 GB, clock
+  settings restored) has autologon and an elevated task `ArAdmin` that runs
+  `C:\ar\admin-job.ps1`. The password is in `C:\VMs\artest-password.txt` on the PC.
 
 ### D2. Freeze reproduction (Verifier)
 
-- **Status: FAILED so far.** Freezes were reproduced on 2026-11-21/22; the 2026-11-22
-  repeat was aborted because the PC was overloaded.
+- **Status: PASSED 2026-11-26, one caveat.** 5 of 5 boots passed, no freeze, no bugcheck, on
+  a quiet host (other-process CPU mean 2.2 %), but with WSL on (T3 Code restarts it).
+  Minute-long VM stalls under the fuzz recovered by themselves. Details:
+  [driver sign-once plan](driver-sign-once.md), "What happened (2026-11-25/26)".
+  Earlier: freezes on 2026-11-21/22; the 2026-11-22 repeat was aborted because the PC was
+  overloaded.
 - **Agent can run after D1**, in an Administrator PowerShell in the guest:
   `robocopy Z:\rc-0.2.5-r7 C:\ar\rc-0.2.5-r7 /MIR`, then in that folder
   `powershell -NoProfile -ExecutionPolicy Bypass -File .\run-stage-a.ps1 -Session round2 -Blocks repro -FuzzSeconds 300 -ReproBoots 5 -AutoLogon`.
@@ -230,7 +240,9 @@ Driver RC 0.2.5 (`7c88895c2`). Test-signed drivers never go on this PC. Guide:
   and `VBox.log`, note the boot, then `VBoxManage controlvm AR-DriverTest reset`.
 - **Pass:** 5 boots, every fuzz passes, no freeze, `host load` line INFO "host idle".
   A freeze on an idle host is a driver defect and blocks signing.
-- **IDs:** SEC-08, VCAB-24, VCAB-30 (A11). **Result:** failed, not repeated cleanly.
+- **IDs:** SEC-08, VCAB-24, VCAB-30 (A11). **Result:** passed 2026-11-26 with WSL on, accepted
+  by the owner the same day: WSL stays on for VM runs (T3 Code uses it), so the
+  preflight's WSL check is an expected caveat, not a stop. VCAB-24 stays open (NEM stalls).
 
 ### D3. Frame-clock A/B, tagged pool, Verifier and live update
 
