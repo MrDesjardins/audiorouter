@@ -50,3 +50,4 @@ date,commit,rust_lines,shell_lines,ui_lines,soak_p99_us,soak_p999_us,soak_heap_g
 2026-11-24,0fb41911,79.4,59.4,73.6,122,176,0.0,0.0,433,,,,,,,,
 2026-11-25,4d62a1ea,80.6,62.5,73.7,184,266,0.0,0.0,449,901,0,0,0,0,20,809.5,https://github.com/MrDesjardins/audiorouter/actions/runs/45617979503
 2026-11-26,2002d773,80.6,66.0,73.7,168,233,0.0,0.0,602,901,0,0,0,0,20,852.2,https://github.com/MrDesjardins/audiorouter/actions/runs/45820390010
+2026-11-27,9931bb42,80.6,66.0,73.7,126,176,0.0,-0.1,410,901,0,0,0,0,20,828.2,https://github.com/MrDesjardins/audiorouter/actions/runs/45997319749
