@@ -506,6 +506,22 @@ fresh restore, new watcher):**
   "review item 3 NOT verified". This is the owner's decision in D3: accept "restart required"
   under a playing route, or ask for a new RC.
 
+**Headless soak check (`results-20261127-0905-soak`, 09:05-10:05, same bundle, VM started
+headless before `soak.cmd start`, session 2):** the GUI-versus-headless hypothesis is **not
+supported**. The headless VM stalled too: VBox.log "TM: Giving up catch-up attempt at a
+120 534 800 079 ns lag" (about 2 minutes) during segment 1. Segment 1 = `fail` ("a route or
+probe ended with an error"): both route pairs exited 1 and lost about 84 % of impulses with 0
+corrupted, and 92 of 104 events were VM-wide. Segment 2 = `invalid` (guest stall, vm-correlated;
+84 impulses lost, 0 corrupted). Host non-VM CPU mean 1.6 % and 3.5 %. Driver pool tags were the
+same in both segments (MNWR 13,312 B, SyAu 38,736 B, AUDR 272 B). The second incident ("last
+heard s ago") is a harness artifact: the VM was already running, so the monitor had no
+fresh-boot grace before the guest runner existed. Reading: on this PC under NEM, 20-minute
+soak segments keep getting caught by VM-wide stalls, so the soak cannot collect clean hours
+here. That agrees with the 2026-10-10 lesson (VCAB-24 needs native VT-x or bare metal).
+The segment-1 `fail` comes from the route exiting inside a stall, so the classifier treats a
+route that exited 1 during a VM-wide stall as a failure; review that rule before the real
+0.3.0 soak.
+
 Summary for D3: the A/B fails (with the post-restart confound above), pool passes, Verifier
 fuzz is not judged (two fuzz rounds still needed, in a run of several hours with no other
 block), and live update and removal need a restart while a client is attached.
