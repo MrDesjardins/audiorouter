@@ -31,7 +31,7 @@ export const checks = {
   'probe-build': [cargo('check', '--manifest-path', 'tools/m00-wasapi-probe/Cargo.toml', '--locked'), ps('tests/acceptance/m00-native-build.ps1')],
   'cli-parity': [{ ...ps('tests/acceptance/m01-cli.ps1'), args: [...ps('tests/acceptance/m01-cli.ps1').args, '-AllowNoAudioEndpoints'] }],
   'sdk-provenance': [ps('tests/acceptance/m06-sdk-installer.ps1')],
-  'release-tests': ['prepare-artifacts', 'verify-artifacts', 'runbook-command', 'app-only-release'].map(name => ps(`tools/release/test-${name}.ps1`)).concat(lifecycle),
+  'release-tests': ['prepare-artifacts', 'verify-artifacts', 'runbook-command', 'app-only-release'].map(name => ps(`tools/release/test-${name}.ps1`)).concat(lifecycle, [{ executable: 'node', args: ['--test', 'tools/test-ui-hooks.mjs'], windows: true }]),
   'release-build': [{ ...ps('tests/acceptance/m08-release.ps1'), args: [...ps('tests/acceptance/m08-release.ps1').args, '-AppOnly'] }],
   'cargo-deny': [{ ...cargo('deny', '--manifest-path', 'Cargo.toml', 'check', 'advisories', 'licenses', 'sources', 'bans'), windows: false }, { ...cargo('deny', '--manifest-path', 'src-tauri/Cargo.toml', 'check', 'advisories', 'licenses', 'sources', 'bans'), windows: false }],
   'npm-audit': ['ui', 'contracts', 'tools/streamdeck'].map(dir => npm(dir, 'audit', '--omit=dev', '--audit-level=high')),

@@ -20,6 +20,12 @@ names another one.
 
 Results that are **FAILED today** are marked so. Nothing on this page has passed.
 
+2026-11-27 app-only follow-up: the frontend port, automated keyboard/layout/MCP
+checks and a fresh installer's signed-in VM lifecycle passed; see the
+[qualification record](evidence/2026-11-27-ui-app-qualification.md). These do not
+close the attended, clean-Defender, MOTW, reference-PC or second-build gates below.
+The owner deferred the eight-hour soak.
+
 ### Common preparation
 
 - **Build:** `powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-desktop.ps1`,

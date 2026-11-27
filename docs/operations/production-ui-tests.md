@@ -95,6 +95,13 @@ fixtures remain explicitly opt-in; a skip is not a product pass.
 
 ## Separate packaged gate
 
+Tauri's development and build hooks run `tools/run-ui.ps1` from the `ui/`
+frontend directory. The build hook must actually finish `npm run build` before
+the shell embeds `ui/dist`; an executable timestamp alone does not prove fresh
+frontend assets. `node --test tools/test-ui-hooks.mjs` exercises both configured
+commands through Windows `cmd.exe`, including failure exit codes and paths with
+spaces. These regressions run in the shared `release-tests` check.
+
 The [quality roadmap](../plans/archived/2026-11-24-application-quality.md) requires an exact
 release-shell smoke with an isolated database and WebView2 profile, native
 bridge, usable canvas, stopped first launch and save/reload evidence. Build the
