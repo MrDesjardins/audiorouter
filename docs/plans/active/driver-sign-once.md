@@ -459,8 +459,8 @@ turns the guest display timeout off.
 
 **Soak rehearsal (`rc-0.2.7-soak`, 16 cables, 2 routes), 02:02-04:50: a 2.6-hour VM stall.**
 The chained soak started when the first D3 launch ended. Install, 16 cables and "Ready" took
-7 minutes (the first attempt only timed out on the guest's 10-minute quiet wait). About 8
-minutes into segment 1 the guest stopped writing its heartbeat; `soak.ps1` recorded an
+7 minutes (the first attempt only timed out on the guest's 10-minute quiet wait). Segment 1
+began at 02:08, and about 4 minutes later the guest stopped writing its heartbeat; `soak.ps1` recorded an
 incident and reset nothing, as designed. The VM resumed by itself about 04:45: VBox.log says
 "TM: Giving up catch-up attempt at a 9 276 650 145 548 ns lag" (9,277 s), and the guest
 additions logged a "radical host time change" of the same size. The PC was awake the whole
@@ -472,8 +472,8 @@ shut down in time and was saved, then discarded by the next restore).
 Untested hypothesis for that stall: `soak.ps1` starts the VM with `--type gui`, while every
 Stage A runner this week started it headless, and the headless D3 VM kept real time for an
 hour in the same window. A 2.6-hour stall with the host idle is far longer than the
-Verifier-fuzz stalls seen on 2026-11-26 (up to 10 minutes). Follow-up: run the soak headless
-once and compare; no change to `soak.ps1` until that is measured. VCAB-24 stays open.
+Verifier-fuzz stalls seen on 2026-11-26 (up to 10 minutes). Checked the same morning: the
+headless VM stalls too (below), so `soak.ps1` stays as it is. VCAB-24 stays open.
 
 **D3 relaunch (`results-20261127-0455-d3b`, `-Blocks pool,verifier,live -PoolMinutes 60`,
 fresh restore, new watcher):**
@@ -486,12 +486,16 @@ fresh restore, new watcher):**
 - **Verifier: not judged.** Verifier was turned on and the guest restarted at 06:14. It then
   showed no sign of life for over 20 minutes (no guest-additions log, screenshots failing,
   no echo) while the VM used 12 % of host CPU. The agent read the vCPU stacks (all four in
-  the kernel, System address space) as a boot hang and reset the VM at 06:40. That was wrong:
-  the state file showed that the guest had booted, confirmed Verifier active and started
-  fuzz round 1 (the share copy's timestamp is the guest clock, which lagged). So it was a
-  NEM stall, like D2's, and the agent's reset cut round 1 short. After that reset, the
-  watcher saw a real 30-minute silence (a working, unchanged screenshot and no echo) and
-  reset again at 07:21. The resumed runner then recorded round 1 as "the VM restarted
+  the kernel, System address space, in interrupt and cross-processor paths) as a boot hang
+  and reset the VM at 06:40. That was premature. The guest's runner had resumed at 06:32
+  (18 minutes after the restart), confirmed Verifier active and started fuzz round 1, so the
+  guest was alive, though very slow to answer. VBox.log shows a timer lag of only 15 s at that
+  reset, so the VM itself was executing in real time: this was not a NEM stall. Whether it
+  was a slowdown under Verifier fuzz or the start of a guest hang cannot be told; the agent's
+  reset cut round 1 short. After that reset, the watcher saw a 30-minute silence (a working,
+  unchanged screenshot and no echo) and reset again at 07:21. VBox.log logged "Giving up
+  catch-up attempt at a 1 767 309 877 686 ns lag" at that moment: the VM had not executed for
+  about 29.5 minutes, a NEM stall, so that reset says nothing about the driver. The resumed runner then recorded round 1 as "the VM restarted
   during this step" and died on its own bug: `run-stage-a.ps1` called `Add-HostLoadResult`
   in the resume path 300 lines before defining it. Fixed on this branch with a test that
   any function called from top-level code is defined above the call. No bugcheck and no
@@ -525,6 +529,13 @@ route that exited 1 during a VM-wide stall as a failure; review that rule before
 Summary for D3: the A/B fails (with the post-restart confound above), pool passes, Verifier
 fuzz is not judged (two fuzz rounds still needed, in a run of several hours with no other
 block), and live update and removal need a restart while a client is attached.
+
+Next action: before any further Verifier run, rebuild the round-2 bundle
+(`tools\vm\prepare-round2-bundle.ps1`) so the guest gets the fixed `run-stage-a.ps1`; the copies
+under `C:\VMs\ar-share\rc-0.2.5-r7` still call `Add-HostLoadResult` before defining it and die on
+the first unplanned restart. Then run `-Blocks verifier` alone, in a window of several hours,
+with the multi-signal watcher (the host scripts used tonight are saved beside the evidence as
+`d3b.ps1` and `soakrun.ps1`). Owner decisions are listed in D3 of the human-gated tasks.
 
 Requirement IDs: VCAB-24, VCAB-25 (A/B), VCAB-28 (pool), SEC-08 and VCAB-30 (Verifier),
 VDEV-09 (live update), NFR-02.
