@@ -335,7 +335,7 @@ describe("VB-Cable endpoint selection", () => {
     await renderReady(<App backend={backend} />);
     await openSettingsPage("When AudioRouter starts");
     fireEvent.click(screen.getByRole("checkbox", { name: "Start AudioRouter when I sign in to Windows" }));
-    expect(await screen.findByText(/backend apply rejected/)).toBeTruthy();
+    expect(await screen.findByText(/Backend apply rejected\./)).toBeTruthy();
     expect(registerStartup).not.toHaveBeenCalled();
   });
 
@@ -2343,7 +2343,7 @@ describe("keyboard connection dialog", () => {
     const panel = await screen.findByRole("region", { name: "Recorder" });
     fireEvent.click(within(panel).getByRole("button", { name: "Arm" }));
     await waitFor(() => expect(within(panel).getByText("failed")).toBeTruthy());
-    expect(within(panel).getByText("disk full")).toBeTruthy();
+    expect(within(panel).getByText("Disk full.")).toBeTruthy();
   });
 
   it("prevents duplicate recorder lifecycle actions while one is pending", async () => {
