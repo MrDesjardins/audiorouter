@@ -546,6 +546,27 @@ watcher's reset limit, so the Verifier rounds cannot be judged here with a 30-mi
 Options: a reset limit of 2-3 hours (the soak's 2.6-hour stall did recover by itself), or
 Verifier on a native VT-x host or bare metal (VCAB-24's own requirement).
 
+**A/B repeat with `-AbSameStart` (`results-20261127-1156-ab`, bundle `rc-0.2.5-r9`,
+11:56-13:27): stopped after 2 of 6 phases by two restart hangs.** The new switch worked: both
+drivers restarted after install and waited 180 s. Phase 1 (0.2.5) steady underruns 1027 and 0
+frames (restarts: one invalid run, one 9321), phase 2 (RC3) steady 432 and 0 (restarts 5520,
+2160). With the same start, the two drivers' steady runs look alike, but two phases are far
+from the 4 valid runs per shape the verdict needs, so there is no verdict.
+
+**Restart hangs, three times today, both drivers.** Twice in this run (12:49 after RC3's
+install restart, 13:27 after 0.2.5's) the guest stayed on Windows' "Restarting" screen for 30
+minutes while the VM executed in real time (timer lag at the reset: none and 14 ms). The vCPU
+instruction pointers were identical in both, and identical (same low 21 address bits, same
+kernel build) to the 06:39 stacks from the D3 relaunch. That capture was symbolized: CPU 2 inside
+`HalReturnToFirmware`, the kernel's final restart call, CPUs 0 and 1 in interrupt handling, CPU 3
+idle. Reading, with the caveat that the symbols are nearest exports only: Windows had finished
+shutting down (drivers already stopped) and asked the virtual hardware to reset, and VirtualBox
+under NEM did not do it. A host-side reset then booted normally each time. This
+matches nothing in the driver, happens with RC3 too, and may explain some earlier "freezes"
+that followed a restart (the 06:39 capture came after Verifier's restart in the D3 relaunch).
+Harness consequence: a guest frozen on "Restarting" with no timer lag can be reset safely
+after a few minutes rather than 30; that rule is not yet in the runner.
+
 Next action: use bundle `rc-0.2.5-r9` (source `6892adb93`: the runner fix plus `-AbSameStart`);
 `rc-0.2.5-r7` still has the resume bug. The owner decides whether Verifier is retried here with a
 reset limit of 2-3 hours or moved to native hardware. The host runner used for these runs is

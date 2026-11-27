@@ -265,6 +265,10 @@ Driver RC 0.2.5 (`7c88895c2`). Test-signed drivers never go on this PC. Guide:
   now fixed); **live update/remove: helper exit 5 again**, the route survived, no bugcheck.
   Details: [driver sign-once plan](driver-sign-once.md), "What happened (2026-11-27 night, D3)".
   Your decisions above still stand; the Verifier rounds need their own long window.
+- **2026-11-27 afternoon:** Verifier alone: not judged (a 30-minute NEM stall in fuzz round 1,
+  no dump). A/B repeat with both drivers restarted alike (`-AbSameStart`): 2 of 6 phases, steady
+  runs similar for both, no verdict. Stopped by **restart hangs** with both drivers: Windows
+  finished shutting down and VirtualBox did not reset it. See the plan.
 
 ### D4. 24-hour tagged pool
 
