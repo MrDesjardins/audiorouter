@@ -422,3 +422,58 @@ block 4 (soak rehearsal), the tone step (needs Listen in the snapshot). Requirem
 VCAB-01 and VCAB-05 (cables), A13 (update), SEC-08 and VCAB-30 (fuzz under Verifier, both
 drivers), VCAB-24 stays open (stalls on NEM). Next: D3 (`-Blocks ab,pool,verifier,live`), which
 needed D2 clean, in a window of at least 4 hours.
+
+## What happened (2026-11-27 night, D3)
+
+The owner gave a 10-hour window (00:20-10:20) with WSL on. Plan: D3, then the 16-cable soak
+rehearsal (block 4). Evidence: `C:\VMs\ar-share\results-20261127-0022-d3`,
+`results-20261127-0202-soak` and the D3 relaunch `results-20261127-0455-d3b`.
+
+**A/B (frame clock, RC3 0.2.4 against 0.2.5), 00:30-00:52, fresh restore: FAIL again, now on a
+quiet host** (non-VM CPU mean 2.3 %, peak 14 %, least available memory 8.2 GB). 23 of 24 tone
+runs valid. Verdict line: "REGRESSED; steady: RC3 6 valid runs (median underrun 0, late 0, gap
+11.15 ms); 0.2.5 6 valid runs (median underrun 1436, late 2, gap 91.8 ms) | no regression;
+restarts: RC3 5 valid runs (median underrun 1920, late 1, gap 33.1 ms); 0.2.5 6 valid runs
+(median underrun 2783, late 1.5, gap 216.2 ms)". So the steady shape fails and the restart shape
+passes.
+
+One confound for the owner's decision: installing 0.2.5 over RC3 returned exit 5 (restart
+required) in phases 3 and 5, so those 0.2.5 tone runs started a few minutes after a reboot,
+while every RC3 phase installed without one. The bad steady medians come from those runs:
+phase 1 (0.2.5, no restart) had steady underruns 127 and 0, close to RC3; phases 3 and 5
+(after a restart) had 4176/1355 and 7281/1517. This does not change the verdict, but a repeat
+that settles every phase for the same time after install (or restarts before both drivers)
+would tell a frame-clock regression from post-boot noise. Only the summary rows survive
+(`round2-ab-rows.jsonl`, state JSON); the per-run tone folders were in the guest and were lost
+with the next snapshot restore.
+
+**Pool, Verifier and live update in the first launch: not judged, harness defect.** The host
+watcher reset the VM at 01:27 and 02:02, during the 120-minute pool block, and then stopped
+the run. Its rule counted a failed screenshot as "screen unchanged". When the guest is
+quiet its display blanks, VirtualBox's `screenshotpng` then fails (E_FAIL), and 30 minutes of
+failed screenshots looked like a 30-minute freeze. VBox.log shows only about 2 s of timer lag
+at the first reset: the VM was running. These were not freezes; the relaunch uses a watcher
+that counts a failed screenshot as no information and needs the screen, the guest's state file
+on the share and a guest-control echo all to be silent for 30 minutes before a reset, and it
+turns the guest display timeout off.
+
+**Soak rehearsal (`rc-0.2.7-soak`, 16 cables, 2 routes), 02:02-04:50: a 2.6-hour VM stall.**
+The chained soak started when the first D3 launch ended. Install, 16 cables and "Ready" took
+7 minutes (the first attempt only timed out on the guest's 10-minute quiet wait). About 8
+minutes into segment 1 the guest stopped writing its heartbeat; `soak.ps1` recorded an
+incident and reset nothing, as designed. The VM resumed by itself about 04:45: VBox.log says
+"TM: Giving up catch-up attempt at a 9 276 650 145 548 ns lag" (9,277 s), and the guest
+additions logged a "radical host time change" of the same size. The PC was awake the whole
+time (no power events, the soak sampler wrote every 20 s), other-process CPU stayed low, and
+the VirtualBox processes used a steady 4 % of host CPU. No segment finished, so the soak
+produced no hours. The campaign was stopped at about 04:50 (`soak.cmd stop`; the VM did not
+shut down in time and was saved, then discarded by the next restore).
+
+Untested hypothesis for that stall: `soak.ps1` starts the VM with `--type gui`, while every
+Stage A runner this week started it headless, and the headless D3 VM kept real time for an
+hour in the same window. A 2.6-hour stall with the host idle is far longer than the
+Verifier-fuzz stalls seen on 2026-11-26 (up to 10 minutes). Follow-up: run the soak headless
+once and compare; no change to `soak.ps1` until that is measured. VCAB-24 stays open.
+
+Requirement IDs: VCAB-24, VCAB-25 (A/B), VCAB-28 (pool), SEC-08 and VCAB-30 (Verifier),
+VDEV-09 (live update), NFR-02.

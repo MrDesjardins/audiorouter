@@ -257,6 +257,12 @@ Driver RC 0.2.5 (`7c88895c2`). Test-signed drivers never go on this PC. Guide:
   above 0.2.6 (which restarts Stage A); accept "restart required" under a
   playing route, or ask for a new RC. No driver source change before you choose.
 - **IDs:** VCAB-05/24/25/30, VDEV-09, SEC-08, NFR-02. **Result:** failed, needs a clean run.
+- **2026-11-27 run (WSL on):** A/B **FAILED again on a quiet host** (steady shape: RC3 median
+  underrun 0 against 0.2.5 1436 frames; restart shape passes), with a confound: the 0.2.5
+  phases that needed a restart ran right after a reboot. The first launch's pool, Verifier
+  and live blocks were lost to a watcher defect (no freeze); see
+  [driver sign-once plan](driver-sign-once.md), "What happened (2026-11-27 night, D3)", for
+  the relaunch result.
 
 ### D4. 24-hour tagged pool
 
