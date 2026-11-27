@@ -260,9 +260,11 @@ Driver RC 0.2.5 (`7c88895c2`). Test-signed drivers never go on this PC. Guide:
 - **2026-11-27 run (WSL on):** A/B **FAILED again on a quiet host** (steady shape: RC3 median
   underrun 0 against 0.2.5 1436 frames; restart shape passes), with a confound: the 0.2.5
   phases that needed a restart ran right after a reboot. The first launch's pool, Verifier
-  and live blocks were lost to a watcher defect (no freeze); see
-  [driver sign-once plan](driver-sign-once.md), "What happened (2026-11-27 night, D3)", for
-  the relaunch result.
+  and live blocks were lost to a watcher defect (no freeze). Relaunch: **pool PASS** (60 min,
+  0 MiB/h); **Verifier not judged** (NEM stalls, one reset by the agent, then a runner bug,
+  now fixed); **live update/remove: helper exit 5 again**, the route survived, no bugcheck.
+  Details: [driver sign-once plan](driver-sign-once.md), "What happened (2026-11-27 night, D3)".
+  Your decisions above still stand; the Verifier rounds need their own long window.
 
 ### D4. 24-hour tagged pool
 

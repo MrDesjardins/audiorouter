@@ -475,5 +475,40 @@ hour in the same window. A 2.6-hour stall with the host idle is far longer than 
 Verifier-fuzz stalls seen on 2026-11-26 (up to 10 minutes). Follow-up: run the soak headless
 once and compare; no change to `soak.ps1` until that is measured. VCAB-24 stays open.
 
+**D3 relaunch (`results-20261127-0455-d3b`, `-Blocks pool,verifier,live -PoolMinutes 60`,
+fresh restore, new watcher):**
+
+- **Pool: PASS.** Driver tags (MNWR, MNTR, SyAu, AUDR) 524 KiB to 524 KiB over 60 min, growth
+  0 MiB/h, live allocations 28 to 28, whole non-paged pool -1.5 MiB/h, 121 samples; host
+  non-VM CPU mean 3.2 %. The pool was shortened from 120 to 60 minutes to fit the window
+  (a deviation from the D3 command; a 60-minute pool had passed before). VCAB-28's 24 h run
+  (D4) is still open.
+- **Verifier: not judged.** Verifier was turned on and the guest restarted at 06:14. It then
+  showed no sign of life for over 20 minutes (no guest-additions log, screenshots failing,
+  no echo) while the VM used 12 % of host CPU. The agent read the vCPU stacks (all four in
+  the kernel, System address space) as a boot hang and reset the VM at 06:40. That was wrong:
+  the state file showed that the guest had booted, confirmed Verifier active and started
+  fuzz round 1 (the share copy's timestamp is the guest clock, which lagged). So it was a
+  NEM stall, like D2's, and the agent's reset cut round 1 short. After that reset, the
+  watcher saw a real 30-minute silence (a working, unchanged screenshot and no echo) and
+  reset again at 07:21. The resumed runner then recorded round 1 as "the VM restarted
+  during this step" and died on its own bug: `run-stage-a.ps1` called `Add-HostLoadResult`
+  in the resume path 300 lines before defining it. Fixed on this branch with a test that
+  any function called from top-level code is defined above the call. No bugcheck and no
+  crash dump were found in any boot. Saved: stacks, vCPU state and a core
+  (`C:\VMs\ar-dump-d3b-20261127.elf`, 8.1 GB, not analyzed; NMI injection to get a Windows
+  dump is not supported under NEM).
+- **Live update and removal under a playing route (`results-20261127-0843-d3b`, `-Blocks
+  live`, fresh restore, 08:46-09:02): same as 2026-11-22.** The route was running before both
+  operations and was still "running" after the update. The helper returned exit 5 (restart
+  required) for both the update and the removal. After the update the driver reported 0.2.6.0,
+  and after the removal no AudioRouter device was left. No bugcheck. Runner verdicts: REVIEW,
+  "review item 3 NOT verified". This is the owner's decision in D3: accept "restart required"
+  under a playing route, or ask for a new RC.
+
+Summary for D3: the A/B fails (with the post-restart confound above), pool passes, Verifier
+fuzz is not judged (two fuzz rounds still needed, in a run of several hours with no other
+block), and live update and removal need a restart while a client is attached.
+
 Requirement IDs: VCAB-24, VCAB-25 (A/B), VCAB-28 (pool), SEC-08 and VCAB-30 (Verifier),
 VDEV-09 (live update), NFR-02.
