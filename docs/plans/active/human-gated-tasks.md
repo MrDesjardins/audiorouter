@@ -227,8 +227,12 @@ Driver RC 0.2.5 (`7c88895c2`). Test-signed drivers never go on this PC. Guide:
 
 ### D2. Freeze reproduction (Verifier)
 
-- **Status: FAILED so far.** Freezes were reproduced on 2026-11-21/22; the 2026-11-22
-  repeat was aborted because the PC was overloaded.
+- **Status: PASSED 2026-11-26, one caveat.** 5 of 5 boots passed, no freeze, no bugcheck, on
+  a quiet host (other-process CPU mean 2.2 %), but with WSL on (T3 Code restarts it).
+  Minute-long VM stalls under the fuzz recovered by themselves. Details:
+  [driver sign-once plan](driver-sign-once.md), "What happened (2026-11-25/26)".
+  Earlier: freezes on 2026-11-21/22; the 2026-11-22 repeat was aborted because the PC was
+  overloaded.
 - **Agent can run after D1**, in an Administrator PowerShell in the guest:
   `robocopy Z:\rc-0.2.5-r7 C:\ar\rc-0.2.5-r7 /MIR`, then in that folder
   `powershell -NoProfile -ExecutionPolicy Bypass -File .\run-stage-a.ps1 -Session round2 -Blocks repro -FuzzSeconds 300 -ReproBoots 5 -AutoLogon`.
@@ -236,7 +240,8 @@ Driver RC 0.2.5 (`7c88895c2`). Test-signed drivers never go on this PC. Guide:
   and `VBox.log`, note the boot, then `VBoxManage controlvm AR-DriverTest reset`.
 - **Pass:** 5 boots, every fuzz passes, no freeze, `host load` line INFO "host idle".
   A freeze on an idle host is a driver defect and blocks signing.
-- **IDs:** SEC-08, VCAB-24, VCAB-30 (A11). **Result:** failed, not repeated cleanly.
+- **IDs:** SEC-08, VCAB-24, VCAB-30 (A11). **Result:** passed 2026-11-26 with WSL on; the
+  owner decides whether a WSL-off repeat is needed. VCAB-24 stays open (NEM stalls).
 
 ### D3. Frame-clock A/B, tagged pool, Verifier and live update
 
