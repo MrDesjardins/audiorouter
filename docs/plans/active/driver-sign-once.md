@@ -530,12 +530,27 @@ Summary for D3: the A/B fails (with the post-restart confound above), pool passe
 fuzz is not judged (two fuzz rounds still needed, in a run of several hours with no other
 block), and live update and removal need a restart while a client is attached.
 
-Next action: before any further Verifier run, rebuild the round-2 bundle
-(`tools\vm\prepare-round2-bundle.ps1`) so the guest gets the fixed `run-stage-a.ps1`; the copies
-under `C:\VMs\ar-share\rc-0.2.5-r7` still call `Add-HostLoadResult` before defining it and die on
-the first unplanned restart. Then run `-Blocks verifier` alone, in a window of several hours,
-with the multi-signal watcher (the host scripts used tonight are saved beside the evidence as
-`d3b.ps1` and `soakrun.ps1`). Owner decisions are listed in D3 of the human-gated tasks.
+**Verifier alone, same day 10:56-11:55 (`results-20261127-1056-verifier`, bundle `rc-0.2.5-r8` =
+r7 plus the runner fix, `-Blocks verifier`, fresh restore): not judged again, a NEM stall.**
+Install, quiet guest, Verifier on and active passed. About 25 minutes into fuzz round 1 the
+guest went silent (screenshot working and unchanged, no echo, state unchanged). The watcher
+reset it after 30 minutes, at 11:52, and VBox.log logged "Giving up catch-up attempt at a
+1 773 783 773 830 ns lag" at that moment: the VM had not executed for about 29.6 minutes. Host
+non-VM CPU mean 0.0 % (peak 3 %) over that window. The fixed runner then resumed correctly:
+round 1 = "the VM restarted during this step", the later steps SKIP, Verifier off and removal
+PASS. "No bugcheck" = FAIL with 1 unexpected-power event and 0 dumps; with no dump and a
+host-side reset at 11:52 this is most likely the Kernel-Power event the reset itself causes
+(the event text was not kept in the zip). Reading: under VirtualBox NEM on this PC the IOCTL
+fuzz under Verifier keeps meeting VM stalls of about 30 minutes, at least as long as the
+watcher's reset limit, so the Verifier rounds cannot be judged here with a 30-minute limit.
+Options: a reset limit of 2-3 hours (the soak's 2.6-hour stall did recover by itself), or
+Verifier on a native VT-x host or bare metal (VCAB-24's own requirement).
+
+Next action: use bundle `rc-0.2.5-r9` (source `6892adb93`: the runner fix plus `-AbSameStart`);
+`rc-0.2.5-r7` still has the resume bug. The owner decides whether Verifier is retried here with a
+reset limit of 2-3 hours or moved to native hardware. The host runner used for these runs is
+saved beside the evidence (`d3v.ps1` in the Verifier and A/B results folders; older `d3b.ps1`,
+`soakrun.ps1`). Owner decisions are listed in D3 of the human-gated tasks.
 
 Requirement IDs: VCAB-24, VCAB-25 (A/B), VCAB-28 (pool), SEC-08 and VCAB-30 (Verifier),
 VDEV-09 (live update), NFR-02.
