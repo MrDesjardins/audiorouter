@@ -256,6 +256,13 @@ foreach ($call in $runnerAst.FindAll({ param($n) $n -is [Management.Automation.L
     if (-not $inFunction -and $call.Extent.StartOffset -lt $defined[$name]) { $lateCalls += "$name (line $($call.Extent.StartLineNumber))" }
 }
 Assert-That 'runner: top-level code calls only functions defined above it' ($lateCalls.Count -eq 0) ($lateCalls -join ', ')
+# -AbSameStart: both drivers restart after install and settle equally before the
+# tone runs, and a resumed run keeps the switch (it lives in the logon task).
+$phaseAb = $runnerAst.Find({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Phase-Ab' }, $true).Extent.Text
+Assert-That 'A/B: -AbSameStart restarts after every install, not only on exit 5' ($phaseAb -match 'if \(\$AbSameStart\) \{\s*Add-Result [^\r\n]*\r?\n\s*Complete-AndRestart')
+Assert-That 'A/B: -AbSameStart settles the same time for both drivers' ($phaseAb -match 'settle' -and $phaseAb -match 'Start-Sleep -Seconds \$AbSettleSeconds')
+$resume = $runnerAst.Find({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Register-Resume' }, $true).Extent.Text
+Assert-That 'A/B: a resumed run keeps -AbSameStart and its settle time' ($resume -match '-AbSameStart -AbSettleSeconds \$AbSettleSeconds')
 # A 24 h pool run: allowed by the parameter, its state survives the JSON
 # round-trip, its samples are copied to the share, and the sampler outlasts it.
 $longSeries = 0..2879 | ForEach-Object { [pscustomobject]@{ Minutes = $_ / 2.0; Bytes = 134MB } }
