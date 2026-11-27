@@ -565,13 +565,22 @@ under NEM did not do it. A host-side reset then booted normally each time. This
 matches nothing in the driver, happens with RC3 too, and may explain some earlier "freezes"
 that followed a restart (the 06:39 capture came after Verifier's restart in the D3 relaunch).
 Harness consequence: a guest frozen on "Restarting" with no timer lag can be reset safely
-after a few minutes rather than 30; that rule is not yet in the runner.
+after a few minutes rather than 30. VBox.log shows it plainly: a normal restart logs
+VBoxService's "main     Ended." and then "Reset initiated by ACPI" about 4 s later; in both
+hangs "Ended." was followed by nothing for 30 minutes. The host runner (`d3v.ps1`, below) now
+resets the VM 5 minutes after an "Ended." that no reset followed, and does not count that reset
+toward its stop limit.
 
-Next action: use bundle `rc-0.2.5-r9` (source `6892adb93`: the runner fix plus `-AbSameStart`);
-`rc-0.2.5-r7` still has the resume bug. The owner decides whether Verifier is retried here with a
-reset limit of 2-3 hours or moved to native hardware. The host runner used for these runs is
-saved beside the evidence (`d3v.ps1` in the Verifier and A/B results folders; older `d3b.ps1`,
-`soakrun.ps1`). Owner decisions are listed in D3 of the human-gated tasks.
+Next action (owner, 2026-11-27 afternoon: full A/B repeat on r9 during the next night, with
+enough work for about 10 hours): `C:\VMs\ar-share\night-tools\night.ps1 -End <HH:mm>` runs, in
+order, the A/B with `-AbSameStart` on `rc-0.2.5-r9` (at most 3 h), the Verifier block on r9 with
+a 150-minute silence limit (at most 5 h; the earlier stalls were about 30 minutes and the soak's
+2.6 h stall recovered by itself), then the 16-cable soak rehearsal for what is left. Bundle
+`rc-0.2.5-r9` was built from `6892adb93`, which became `37cb492c5` when this branch was rebased
+onto main (same files); `rc-0.2.5-r7` still has the resume bug. Moving Verifier to native
+hardware stays the fallback if the long limit still cannot judge it. The host runners are kept
+in `C:\VMs\ar-share\night-tools` and copied beside each run's evidence. Owner decisions are
+listed in D3 of the human-gated tasks.
 
 Requirement IDs: VCAB-24, VCAB-25 (A/B), VCAB-28 (pool), SEC-08 and VCAB-30 (Verifier),
 VDEV-09 (live update), NFR-02.

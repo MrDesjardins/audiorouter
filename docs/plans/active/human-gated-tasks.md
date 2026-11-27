@@ -269,6 +269,10 @@ Driver RC 0.2.5 (`7c88895c2`). Test-signed drivers never go on this PC. Guide:
   no dump). A/B repeat with both drivers restarted alike (`-AbSameStart`): 2 of 6 phases, steady
   runs similar for both, no verdict. Stopped by **restart hangs** with both drivers: Windows
   finished shutting down and VirtualBox did not reset it. See the plan.
+- **Next night (your decision, 2026-11-27):** full A/B repeat on r9 with `-AbSameStart`, then
+  Verifier with a 150-minute silence limit, then the soak for what is left (about 10 hours in
+  all). The host runner now resets a restart hang after 5 minutes. **Agent starts it when you
+  say so.**
 
 ### D4. 24-hour tagged pool
 
