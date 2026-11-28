@@ -13,7 +13,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-cli"
-version = "0.0.32"
+version = "0.0.33"
 dependencies = [
  "audiorouter-control",
  "audiorouter-domain",
@@ -26,7 +26,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-control"
-version = "0.0.32"
+version = "0.0.33"
 dependencies = [
  "audiorouter-domain",
  "audiorouter-driver-helper",
@@ -48,7 +48,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-domain"
-version = "0.0.32"
+version = "0.0.33"
 dependencies = [
  "serde",
  "serde_json",
@@ -56,7 +56,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-driver-helper"
-version = "0.0.32"
+version = "0.0.33"
 dependencies = [
  "audiorouter-domain",
  "audiorouter-windows-audio",
@@ -68,7 +68,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-dsp"
-version = "0.0.32"
+version = "0.0.33"
 dependencies = [
  "bytemuck",
  "microfft",
@@ -77,7 +77,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-engine"
-version = "0.0.32"
+version = "0.0.33"
 dependencies = [
  "arc-swap",
  "audiorouter-domain",
@@ -89,7 +89,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-plugin-host"
-version = "0.0.32"
+version = "0.0.33"
 dependencies = [
  "audiorouter-engine",
  "crossbeam-queue",
@@ -101,7 +101,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-protocol"
-version = "0.0.32"
+version = "0.0.33"
 dependencies = [
  "chacha20",
  "getrandom",
@@ -113,7 +113,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-recording"
-version = "0.0.32"
+version = "0.0.33"
 dependencies = [
  "crossbeam-queue",
  "flac-io",
@@ -124,7 +124,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-storage"
-version = "0.0.32"
+version = "0.0.33"
 dependencies = [
  "audiorouter-domain",
  "audiorouter-recording",
@@ -137,7 +137,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-transport"
-version = "0.0.32"
+version = "0.0.33"
 dependencies = [
  "audiorouter-control",
  "audiorouter-domain",
@@ -155,7 +155,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-windows-audio"
-version = "0.0.32"
+version = "0.0.33"
 dependencies = [
  "audiorouter-domain",
  "audiorouter-dsp",
