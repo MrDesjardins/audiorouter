@@ -76,6 +76,24 @@ gates cannot be replaced with simulated evidence.
 
 ## Next action
 
+Continuation authorized by owner "Go": add an opt-in packaged-app accessibility
+qualification over the existing isolated native smoke runner. Check F2 against
+real endpoint inventory and backend saves without starting audio; check language
+selection/persistence through the actual shell in all shipped languages and three
+themes. Preserve the original candidate bytes and profile. Desktop-control pipe
+is still unavailable, so retain the attended Narrator, tray, OS scaling, unplug
+and sleep gates explicitly. Revert this test-only extension if it disrupts the
+baseline runner; validate both the opt-in run and its ordinary behavior.
+
+Continuation result: native language/settings/reload and explicit endpoint Save
+checks passed with the route stopped and device consent denied. F2 CDP popup
+probes failed (Escape retained an unsaved value; Tab retained focus), while the
+backend route stayed unchanged. A physical-key check is required before a product
+fix can be justified. The attended Escape checkpoint timed out without owner
+confirmation and closed cleanly. No app behavior or candidate bytes changed.
+Owner then explicitly skipped the physical-key test. Keep F2 pending and do not
+repeat it without a new request; automated language qualification is retained.
+
 Owner can test the local build on this branch. Next M05 task: attend F1-F6
 (device/sleep, native keyboard, Windows scaling, Narrator, tray/dialog languages,
 live language switching). Next M08 task: clean-Defender and MOTW/second-PC

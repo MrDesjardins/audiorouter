@@ -373,6 +373,12 @@ Properties → Output device: Alt+Down, ArrowDown, **Escape** keeps the saved va
 open again, move, **Tab** leaves without applying; Enter then Save works.
 **IDs:** UI-11. **Result:** open.
 
+2026-11-27 follow-up: the real packaged backend was unchanged by Escape/Tab,
+but CDP popup input retained a changed draft value/focus. Physical keys must
+confirm whether this is a product defect or automation limitation. The attended
+checkpoint timed out without confirmation; no pass. See the
+[native continuation](evidence/2026-11-27-ui-app-qualification.md#native-accessibility-continuation-after-owner-go).
+
 ### F3. Windows scaling: 150 %, 200 % and a narrow 200 % window
 
 At 150 %, 200 % and 200 % with the window about half the screen, check the top bar,

@@ -95,6 +95,18 @@ fixtures remain explicitly opt-in; a skip is not a product pass.
 
 ## Separate packaged gate
 
+For device-free accessibility diagnostics on the real shell, append
+`--accessibility true` to the smoke command. It checks the real output picker,
+explicit route Save, native language preference persistence, translated reloads
+and three-theme screenshots. Failed keyboard probes remain failed in the report;
+CDP popup input does not replace physical-key qualification. For an attended
+run, also append `--manual-keyboard true`, using a new output directory. The runner
+publishes `manual-keyboard-ready.json` for Escape, Tab and Enter/Save in turn.
+After the person completes each action, the operator writes the matching phase
+to `manual-keyboard-continue.json`. Each phase times out after three minutes and
+the existing owned-process cleanup still applies. No endpoint is opened or audio
+started. Narrator, OS scaling, native tray and physical-device gates remain separate.
+
 Tauri's development and build hooks run `tools/run-ui.ps1` from the `ui/`
 frontend directory. The build hook must actually finish `npm run build` before
 the shell embeds `ui/dist`; an executable timestamp alone does not prove fresh

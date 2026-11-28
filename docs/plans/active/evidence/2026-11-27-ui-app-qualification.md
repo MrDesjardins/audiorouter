@@ -172,6 +172,45 @@ The known baseline's possible Defender exclusion remains unverified; no exclusio
 was added or removed. This is not clean-Defender, trust-prompt/MOTW, missing-WebView2,
 second-Windows-build or reference-PC recovery evidence. Those gates stay open.
 
+## Native accessibility continuation after owner "Go"
+
+Extended the guarded packaged smoke with opt-in `--accessibility true` and an
+attended physical-key mode, `--manual-keyboard true`. This changes qualification
+tooling only; the installer and executable bytes above remain unchanged.
+Windows desktop control again failed with "native pipe is unavailable".
+
+`target/ui-app-accessibility-native-diagnostics/result.json` is **failed**, not
+a passed F2 gate: CDP Alt+Down/ArrowDown/Escape retained a changed unsaved value,
+and CDP Tab did not move focus off the picker. In both cases the real backend
+session remained unchanged. The cause is not established; physical keys must
+distinguish native-popup automation limitations from a product defect. No guessed
+fix was made to the app's device picker.
+
+Independent checks in that same run passed: explicit Save persisted an exact
+real output endpoint through the backend; English, French and Simplified Chinese
+were written to the actual native settings file, survived page reload, and kept
+the backend route identical while switching among three themes. The route
+stayed stopped and device access denied. Process restart/save and cleanup also
+completed. This is not live-audio switching, native tray, Narrator or an OS-scaling
+pass. Screenshots are retained in that output folder.
+
+Runner syntax checks and **81 policy/verification/opt-in-validation tests passed**
+(`target/ui-app-qualification/accessibility-runner-tests.log`). Three new CLI
+regressions ensure invalid manual/accessibility flags fail before shell access.
+The attended run uses `target/ui-app-accessibility-attended/` and requires explicit
+owner confirmation at each physical-key step; no confirmation is inferred.
+The Escape phase received no confirmation within three minutes, so the attended
+run is **failed/incomplete**, with graceful owned-process exit and no cleanup
+failure. No physical keyboard pass is claimed. `manual-escape-ready.png` and
+`result.json` preserve the starting screen and timeout outcome.
+The owner subsequently chose **Skip physical keyboard test**; do not repeat that
+attended step without a new request. The ordinary smoke still passes with no
+accessibility flags (`target/ui-app-accessibility-baseline/result.json`).
+Shared `release-tests` passed again with all seven hook/opt-in CLI cases, artifact
+checks and VM-free lifecycle/recording guards (`accessibility-release-checks.log`).
+Documentation validation and the complete diff check passed. All owned shell
+processes are closed; no installed-app or installer bytes were changed.
+
 ## Next action
 
 Attend F1-F6 on the fresh app, then perform clean-Defender/MOTW and second-PC

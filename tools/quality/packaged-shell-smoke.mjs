@@ -12,6 +12,7 @@ import { assertStandardUser } from "./standard-user.mjs";
 import { dismissFirstLaunchGoal } from "./packaged-shell-onboarding.mjs";
 import { requireDisabledBrowserKeys } from "./packaged-shell-browser-keys.mjs";
 import { windows } from "./packaged-shell-windows.mjs";
+import { checkPackagedAccessibility } from "./packaged-shell-accessibility.mjs";
 
 const MAX_TIMEOUT_MS = 120_000;
 const MAX_LOG_BYTES = 5 * 1024 * 1024;
@@ -59,11 +60,23 @@ function parseArgs(argv) {
         "--timeout-ms",
         "--qualification-case",
         "--qualification-control",
+        "--accessibility",
+        "--manual-keyboard",
       ].includes(key)
     )
       throw new Error(`Unknown argument: ${key}`);
   }
   const qualificationCase = values.get("--qualification-case") ?? null;
+  if (values.has("--accessibility") && values.get("--accessibility") !== "true")
+    throw new Error("--accessibility accepts only true");
+  if (
+    values.has("--manual-keyboard") &&
+    (values.get("--manual-keyboard") !== "true" ||
+      values.get("--accessibility") !== "true")
+  )
+    throw new Error(
+      "--manual-keyboard requires --accessibility true and accepts only true",
+    );
   const qualificationControl = values.get("--qualification-control") ?? null;
   if (Boolean(qualificationCase) !== Boolean(qualificationControl))
     throw new Error(
@@ -81,6 +94,8 @@ function parseArgs(argv) {
     );
   return {
     qualificationCase,
+    accessibility: values.get("--accessibility") === "true",
+    manualKeyboard: values.get("--manual-keyboard") === "true",
     qualificationControl,
     shell: path.resolve(shell),
     output: path.resolve(
@@ -851,7 +866,10 @@ async function main() {
       deviceAccessAllowed: access.result.allowed,
     });
     metrics.initialBrowserKeys = requireDisabledBrowserKeys(
-      await readFile(path.join(data, "AudioRouter", "logs", "shell.jsonl"), "utf8"),
+      await readFile(
+        path.join(data, "AudioRouter", "logs", "shell.jsonl"),
+        "utf8",
+      ),
       child.pid,
       launchedAt,
     );
@@ -864,6 +882,14 @@ async function main() {
       options.output,
       "initial",
     );
+    if (options.accessibility)
+      metrics.accessibility = await checkPackagedAccessibility(
+        page,
+        rpc,
+        options.output,
+        path.join(data, "shell-settings.json"),
+        options.manualKeyboard,
+      );
     await page.getByRole("tab", { name: "Session", exact: true }).click();
     await page.getByRole("button", { name: "Rename", exact: true }).click();
     await page
@@ -1005,7 +1031,10 @@ async function main() {
       deviceAccessAllowed: relaunchedAccess.result.allowed,
     });
     metrics.restartedBrowserKeys = requireDisabledBrowserKeys(
-      await readFile(path.join(data, "AudioRouter", "logs", "shell.jsonl"), "utf8"),
+      await readFile(
+        path.join(data, "AudioRouter", "logs", "shell.jsonl"),
+        "utf8",
+      ),
       child.pid,
       relaunchedAt,
     );
@@ -1014,6 +1043,8 @@ async function main() {
         `Uncaught UI errors after restart: ${errors.join(" | ")}`,
       );
     metrics.warmUiReadyMs = Date.now() - relaunchedAt;
+    if (metrics.accessibility?.failures.length)
+      throw new Error(metrics.accessibility.failures.join("\n"));
     failure = undefined;
   } catch (error) {
     failure =
