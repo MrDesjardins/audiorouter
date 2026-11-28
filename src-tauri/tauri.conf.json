@@ -4,8 +4,8 @@
   "version": "0.0.32",
   "identifier": "com.audiorouter.desktop",
   "build": {
-    "beforeDevCommand": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"`$root = (& git rev-parse --show-toplevel).Trim(); if (`$LASTEXITCODE -ne 0) { exit 1 }; & npm.cmd run dev --prefix (Join-Path `$root 'ui')\"",
-    "beforeBuildCommand": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"`$root = (& git rev-parse --show-toplevel).Trim(); if (`$LASTEXITCODE -ne 0) { exit 1 }; & npm.cmd run build --prefix (Join-Path `$root 'ui'); exit `$LASTEXITCODE\"",
+    "beforeDevCommand": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../tools/run-ui.ps1 -Task dev",
+    "beforeBuildCommand": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../tools/run-ui.ps1 -Task build",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../ui/dist"
   },

@@ -6,7 +6,8 @@ import type { CanvasRect, LayoutAction } from "./canvasGeometry";
 import { useId, useRef, type Dispatch, type RefObject, type SetStateAction } from "react";
 import { useSvgTextFloor } from "./useSvgTextFloor";
 import type { DeviceListItem, DiagnosticsSnapshot, Node, Session } from "@audiorouter/contracts";
-import { errorMessage, say, type UiMessage } from "./actionMessage";
+import { say, type UiMessage } from "./actionMessage";
+import { uiError } from "./backend";
 import type { ApplicationRow, RecorderStatus, UiBackend, UiBackendSnapshot } from "./backend";
 import type { ProcessorDescriptor } from "./processorCatalog";
 import { MeterInspector } from "./MeterInspector";
@@ -331,9 +332,7 @@ export function PropertiesPanel({
                 );
                 setActionMessage(say("g4Panel.cableChanged"));
               } catch (error) {
-                setActionMessage(
-                  errorMessage(error instanceof Error ? error.message : tr("g4Panel.cableChangeFailed")),
-                );
+                setActionMessage(uiError(error, tr("g4Panel.cableChangeFailed")));
               }
             }}
           />

@@ -148,6 +148,14 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-11-27 — Exercise Tauri hooks through their real Windows command path.**
+  Evidence: [frontend/app qualification](docs/plans/active/evidence/2026-11-27-ui-app-qualification.md),
+  `tools/test-ui-hooks.mjs`. Scope: Tauri development/build hooks and embedded UI.
+  Consequence: nested PowerShell quoting printed the build program and returned
+  success, so a new shell embedded stale assets. Use a `.ps1` file, test from
+  Tauri's `ui/` working directory with spaces in its path, and verify npm's
+  execution and failure exit code before trusting an executable timestamp.
+
 - **2026-11-12 — Open a VST2 editor on the thread that loaded the plugin.**
   Evidence: [plugin reliability plan, owner session 2026-11-12](docs/plans/archived/2026-11-11-plugin-reliability.md),
   `supervised_vst2_worker_survives_its_editor_window_being_built`. Scope: VST2

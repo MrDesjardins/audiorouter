@@ -12,6 +12,7 @@ import { scrollBehavior } from "./reducedMotion";
 import { usePanelMemory } from "./usePanelMemory";
 import type { Session } from "@audiorouter/contracts";
 import type { ClientRow } from "./backend";
+import { formatUiError } from "./backend";
 import { lazy, startTransition, Suspense, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { i18n } from "./i18n";
 import type { MessageKey } from "./i18n/generated/messageKeys";
@@ -440,9 +441,7 @@ export function Workbench({
     setTunnelMessage("");
     void onOpenMcpSetupPage(page)
       .then(() => setTunnelMessage(tr("g6.wbTunnelOpened")))
-      .catch((error: unknown) =>
-        setTunnelMessage(error instanceof Error ? error.message : tr("g6.wbTunnelOpenFailed")),
-      );
+      .catch((error: unknown) => setTunnelMessage(formatUiError(error, tr("g6.wbTunnelOpenFailed"))));
   };
   const [tunnelBusy, setTunnelBusy] = useState(false);
   const [tunnelMessage, setTunnelMessage] = useState("");
@@ -1036,7 +1035,7 @@ export function Workbench({
                             })
                             .then(() => setTunnelMessage(tr("g6.wbTunnelStarting")))
                             .catch((error: unknown) =>
-                              setTunnelMessage(error instanceof Error ? error.message : tr("g6.wbTunnelConnectFailed")),
+                              setTunnelMessage(formatUiError(error, tr("g6.wbTunnelConnectFailed"))),
                             )
                             .finally(() => setTunnelBusy(false));
                         }}
@@ -1076,9 +1075,7 @@ export function Workbench({
                               void onMcpTunnelConnect()
                                 .then(() => setTunnelMessage(tr("g6.wbTunnelStarting")))
                                 .catch((error: unknown) =>
-                                  setTunnelMessage(
-                                    error instanceof Error ? error.message : tr("g6.wbTunnelConnectFailed"),
-                                  ),
+                                  setTunnelMessage(formatUiError(error, tr("g6.wbTunnelConnectFailed"))),
                                 )
                                 .finally(() => setTunnelBusy(false));
                             }}
@@ -1168,7 +1165,7 @@ export function Workbench({
                         void onExportCoworkPlugin()
                           .then((path) => setCoworkMessage(tr("g6.wbCoworkSaved", { path })))
                           .catch((error: unknown) =>
-                            setCoworkMessage(error instanceof Error ? error.message : String(error)),
+                            setCoworkMessage(formatUiError(error, tr("backendErrors.emptyFailure"))),
                           )
                           .finally(() => setCoworkBusy(false));
                       }}

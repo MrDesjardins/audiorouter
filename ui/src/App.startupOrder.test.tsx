@@ -49,7 +49,7 @@ describe("start-up order", () => {
       const copy = await screen.findByRole("button", { name: "Copy error" });
       fireEvent.click(copy);
       await screen.findByRole("button", { name: "Copied" });
-      expect(writeText).toHaveBeenCalledWith("Unable to load your saved session: Worker unavailable");
+      expect(writeText).toHaveBeenCalledWith("Unable to load your saved session: Worker unavailable.");
     } finally {
       if (original) Object.defineProperty(navigator, "clipboard", original);
       else Reflect.deleteProperty(navigator, "clipboard");

@@ -104,7 +104,7 @@ describe("SetupCheck", () => {
         refreshKey="a"
       />,
     );
-    await screen.findByText("Last check failed: denied");
+    await screen.findByText("Last check failed: Denied.");
     expect(screen.getByText("Setup check unavailable.")).toBeTruthy();
     expect(screen.queryByText("Checking your sessions and devices…")).toBeNull();
   });
@@ -181,7 +181,7 @@ describe("SetupCheck", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Check again" }));
     });
-    expect(await screen.findByText("Last check failed: backend busy")).toBeTruthy();
+    expect(await screen.findByText("Last check failed: Backend busy.")).toBeTruthy();
     expect(screen.getByText(/"Siege" uses Surround/)).toBeTruthy();
     expect(screen.getByText("1 problem, 1 tip in 2 sessions.")).toBeTruthy();
   });

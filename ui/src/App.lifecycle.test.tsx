@@ -819,7 +819,7 @@ describe("switching sessions", () => {
     await messageBar().findByText(/Audio session is running/);
     chooseSession(other.id);
     fireEvent.click(await screen.findByRole("button", { name: "Stop and switch" }));
-    await messageBar().findByText(/stop refused/);
+    await messageBar().findByText(/stop refused/i);
     expect((screen.getByLabelText("Choose session") as HTMLSelectElement).value).toBe(demoSession.id);
   });
 });

@@ -477,6 +477,8 @@ impl ControlPlane {
             self.multi_input_application_sources.clear();
         }
         self.runtimes.remove(id);
+        #[cfg(windows)]
+        self.device_lost_sessions.retain(|lost| lost != id);
         self.forget_session_recorder_nodes(id, &session);
         self.events
             .append(session.revision, None, "session.deleted", Some(id.clone()));
@@ -562,7 +564,7 @@ impl ControlPlane {
         candidate: Option<&Session>,
     ) -> Result<Value, ControlError> {
         self.ensure_session_loaded(id)?;
-        #[cfg(windows)]
+        self.refuse_lost_device_route(id)?;
         self.cancel_sleep_route_recovery(id);
         let saved_session = self.get_session(id)?.clone();
         let saved_revision = saved_session.revision;
@@ -776,6 +778,12 @@ impl ControlPlane {
             self.rollback_session_start(id);
             return Err(error);
         }
+        if self.last_audio_pump_error.as_deref().is_some_and(|reason| {
+            reason.starts_with("recovery cancelled:")
+                || reason.starts_with("resume offer excluded:")
+        }) {
+            self.last_audio_pump_error = None;
+        }
         self.events
             .append(session.revision, None, "runtime.started", Some(id.clone()));
         Ok(json!({
@@ -979,11 +987,12 @@ impl ControlPlane {
     pub(crate) fn stop_session_audio(&mut self, id: &EntityId) -> Result<Value, ControlError> {
         self.ensure_session_loaded(id)?;
         self.clear_comparison(id);
+        #[cfg(windows)]
+        self.device_lost_sessions.retain(|lost| lost != id);
         // Nothing is playing now, so the saved session cannot be stale and a
         // publication warning no longer describes a route the user can hear.
         self.live_graph_stale.remove(id);
         self.live_publication_warnings.remove(id);
-        #[cfg(windows)]
         self.cancel_sleep_route_recovery(id);
         let native_attached = self.native_endpoint_session_is_attached(id) || {
             #[cfg(windows)]
@@ -1188,14 +1197,33 @@ impl ControlPlane {
         attached
     }
 
-    /// `sessions.start` over the API (REST, MCP) must not report "running"
-    /// for a route that opens audio devices when none are prepared: the
-    /// runtime would start without a worker and nothing would play. The
-    /// window and `sessions.play` prepare first, so they pass.
-    ///
-    /// A one-shot command-line plane (build id `cli`) never keeps a worker
-    /// between commands, so its documented simulated lifecycle stays allowed.
+    /// All Play/Start entry points share the interrupted-runtime refusal.
+    pub(crate) fn refuse_lost_device_route(&self, id: &EntityId) -> Result<(), ControlError> {
+        #[cfg(windows)]
+        if self.device_lost_sessions.contains(id) {
+            let node_id = self
+                .get_session(id)?
+                .nodes
+                .iter()
+                .find(|node| node.enabled && node_kind_opens_audio_device(node.kind))
+                .map_or_else(
+                    || id.as_str().to_owned(),
+                    |node| node.id.as_str().to_owned(),
+                );
+            return Err(ControlError::NodeNotReady {
+                node_id,
+                message: "An audio device was lost. Stop this route before pressing Play again; automatic recovery of the exact saved devices remains pending when eligible.".into(),
+            });
+        }
+        #[cfg(not(windows))]
+        let _ = id;
+        Ok(())
+    }
+
+    /// API Start must not report running without a prepared device worker.
+    /// The one-shot CLI's documented simulated lifecycle stays allowed.
     fn refuse_unprepared_device_route(&self, id: &EntityId) -> Result<(), ControlError> {
+        self.refuse_lost_device_route(id)?;
         if self.build == "cli" {
             return Ok(());
         }

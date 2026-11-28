@@ -66,9 +66,12 @@ function useFrequencyAxes(height: number, dbMin: number, dbMax: number) {
       {dbTicks.map((db) => (
         <g key={`db${db}`}>
           <line x1={GL} x2={GR} y1={yForDb(db)} y2={yForDb(db)} className={db === 0 ? "tool-zero" : "dynamics-grid"} />
-          <text x={GL - 4} y={yForDb(db) + 3} textAnchor="end" className="dynamics-axis">
-            {db > 0 ? `+${db}` : db}
-          </text>
+          {/* The lowest level is left unlabelled: it sat on the "20" (Hz) in the corner. */}
+          {db !== dbTicks[0] && (
+            <text x={GL - 4} y={yForDb(db) + 3} textAnchor="end" className="dynamics-axis">
+              {db > 0 ? `+${db}` : db}
+            </text>
+          )}
         </g>
       ))}
       {FREQ_TICKS.map((hz) => (

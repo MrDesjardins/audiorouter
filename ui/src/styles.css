@@ -733,11 +733,26 @@ button:disabled {
   display: grid;
   gap: 0.75rem;
   width: min(34rem, 100%);
+  /* A tall dialog scrolls inside the window instead of running off its bottom. */
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
   padding: 1rem;
   border: 1px solid #70a8ff;
   border-radius: var(--radius-md);
   background: #141923;
   box-shadow: 0 1rem 3rem rgb(0 0 0 / 45%);
+}
+/* Fields, button rows and notes in the plugin panels keep one gap (they touched before). */
+.plugin-scan-panel,
+.loaded-plugins-panel {
+  display: grid;
+  gap: 0.75rem;
+}
+.plugin-scan-panel > .section-heading,
+.loaded-plugins-panel > .section-heading,
+.plugin-scan-panel > p,
+.loaded-plugins-panel > p {
+  margin: 0;
 }
 .connection-dialog label {
   display: grid;
@@ -1526,6 +1541,15 @@ button:disabled {
 }
 .workbench-page {
   padding: 1rem;
+}
+/* Stacked panels on a page, and a page's intro above them, keep one gap (they touched). */
+.workbench-page > .panel + .panel,
+.workbench-page > p + .panel {
+  margin-top: 0.75rem;
+}
+/* A button row inside a panel keeps space from the text above and below it. */
+.panel > .actions {
+  margin-block: 0.5rem;
 }
 .workbench-loading {
   min-height: 8rem;
@@ -4392,6 +4416,9 @@ input[aria-invalid="true"]:focus-visible {
   margin: 0.25rem 0 0;
   line-height: 1.4;
 }
+.mcp-client-access > button {
+  margin-top: 0.5rem;
+}
 .mcp-local-check {
   min-height: 3.2em;
   margin: 0;
@@ -5882,6 +5909,16 @@ input[aria-invalid="true"]:focus-visible {
   display: grid;
   gap: 0.5rem;
   margin-top: 0.5rem;
+}
+/* The section's "?" sits on the heading's row instead of hanging over the note below it. */
+.tool-plugin-group > .tool-library-entry:has(> h4) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.tool-plugin-group > .tool-library-entry:has(> h4) > .tool-guide-access.is-compact {
+  position: static;
 }
 .tool-plugin-group h4 {
   margin: 0.25rem 0 0;
@@ -8007,6 +8044,10 @@ input[type="color"] {
   align-items: flex-start;
   gap: 0.5rem;
 }
+/* A toggle row keeps space from the heading above and the note below (they touched). */
+.panel > .setting-toggle-row {
+  margin-block: 0.5rem;
+}
 .setting-toggle-row > label {
   flex: 1;
   min-width: 0;
@@ -8235,6 +8276,7 @@ input[type="color"] {
 }
 .virtual-cable-actions {
   display: grid;
+  gap: 0.5rem;
   margin-top: 0.75rem;
 }
 
