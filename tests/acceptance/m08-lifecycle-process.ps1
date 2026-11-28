@@ -31,8 +31,11 @@ Start-Sleep -Seconds 60
     Expect-Failure { Invoke-LifecycleProcess $exe 'hang' @('-NoProfile','-File',$hang,$marker) $evidence 4 -KillTree } '*timed out*'
     $childId, $ticks = (Get-Content -LiteralPath $marker) -split ' '
     $child = Get-Process -Id $childId -ErrorAction SilentlyContinue
-    if ($child -and $child.StartTime.ToUniversalTime().Ticks -eq [long]$ticks) {
-        $child.Kill()
+    # taskkill /T /F returns once termination is requested; the descendant can
+    # still be listed for a moment. It must be gone within 5 s, not instantly.
+    if ($child -and $child.StartTime.ToUniversalTime().Ticks -eq [long]$ticks -and
+        -not $child.WaitForExit(5000)) {
+        try { $child.Kill() } catch [InvalidOperationException] { }
         throw 'Owned descendant survived timeout'
     }
     if ($unrelated.HasExited) { throw 'Unrelated process was terminated' }

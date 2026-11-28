@@ -21,11 +21,12 @@ AUTO-06/10/15/18, R2-1a, R2-4, SEC-02, API-07, ARCH-08, NFR-03, UI-17, L10N-01.
 | --- | --- | --- |
 | A1 | Option (a): per-client recording opt-in, off by default, set in the window | This branch; decision record in `docs/spec/13-security.md` and AUTO-18 |
 | A2 | `sessions.rename` with the default MCP tool `rename_session` (Editor) | This branch |
-| A4 | Open. Not CABLE-B specific: AudioRouter must work with whatever virtual cables a PC has. An agent investigates and proposes | Investigation below; owner chooses |
+| A4 | Option (a), chosen 2026-11-27 after the investigation below: stereo routes play into the front left/right of any multichannel output device | Its own branch, stacked on this one |
 | A12, A13, A15–A18 | Defaults kept | Recorded in the human-gated table |
 | A14 | Site and guides use the app's words ("input device", "output device") | Separate site branch |
 
-A3 (bus lists stay expert-only) was not answered. The owner's flexibility goal
+A3 (bus lists stay expert-only): on 2026-11-27 the owner asked what "expert-only"
+means; it was explained and is still open. The owner's flexibility goal
 may argue for reversing it; ask before changing it.
 
 ## Tasks and status
@@ -48,7 +49,7 @@ may argue for reversing it; ask before changing it.
    screenshots showed the toggle and the Authorize button on one line, so the
    note now sits under the toggle and the button has its own row.
 5. Site wording (A14) goes on its own branch.
-6. A4 investigation, then ask the owner.
+6. Done: A4 investigation; the owner chose option (a) on 2026-11-27. Implementation is a separate branch.
 7. 0.0.33 candidate: once #199, the UI port and this branch are on `main`, or
    from a local integration if the owner wants to test first.
 
@@ -61,10 +62,11 @@ Findings (2026-11-27, code reading):
 - Output does not. `output_format_supported` (`crates/control/src/lib.rs`)
   accepts only stereo IEEE float32, so Play refuses any route whose output is
   a 4-, 6- or 8-channel endpoint ("output fan-out endpoints must be stereo
-  IEEE float32"), and `SharedRender::submit_bytes` rejects other frame sizes.
-- Common cables differ: VB-Cable and AudioRouter's own cables are stereo, but
-  VoiceMeeter's virtual inputs default to 8 channels and some users set
-  VB-Cable to 7.1. Those PCs cannot use such a cable as an output today.
+  IEEE float32"). `SharedRender::submit_bytes` accepted a narrower stride but
+  copied it packed, which would have scrambled the channels.
+- Cables differ by PC: the owner's CABLE-B Input is set to 7.1 on purpose, and
+  other virtual-cable products may default to more than two channels (not
+  verified here). Such a cable cannot be an output today.
 
 Options for the owner:
 
@@ -75,7 +77,49 @@ Options for the owner:
 | (c) | Keep stereo-only and explain it in the device picker | No engine work; such cables stay unusable |
 
 Either way, list every endpoint's channel count in `list_devices` so an
-assistant can see why a device is refused. Waiting for the owner's choice.
+assistant can see why a device is refused. **Owner choice (2026-11-27): option (a).**
+
+## A4 option (a): implementation plan (branch `feat/multichannel-output`)
+
+Scope: the multi-input output fan-out, which every Play uses. The older
+single-endpoint worker (`nativeEndpoints.prepare`) and the single application
+worker stay stereo-only, with their refusal messages unchanged.
+
+1. `SharedRender` records whether the stream is float32. `submit_bytes` keeps
+   the exact-width copy, and a narrower float32 source into a wider float32
+   stream is written frame by frame into the device buffer: the first channels
+   receive the source frame (a stereo route plays on channels 0 and 1, front
+   left/right in any standard layout), every other channel exactly 0.0. The
+   expansion is a pure helper on borrowed slices: no allocation, no pump or ring
+   changes, frame counts unchanged, so the drift controller and its queue math
+   are untouched.
+2. `output_format_supported` accepts float32 render devices with 2 to 32
+   channels at 8–192 kHz (mono still refused). The fan-out refusal message and
+   `setup_check` follow it. Spatial (binaural) capture rules are unchanged.
+3. The device list reports each device's channel count where it does not
+   already, so a script or assistant can see the layout.
+4. Docs: the API reference and the device guidance say what a multichannel
+   output plays.
+
+Verification: unit tests of the helper (3, 4, 6, 8, 16 and 32 channels,
+exact-width passthrough, refused partial, non-float or oversized frames);
+`setup_check_tests` flipped deliberately; the drift simulation suite and the
+windows-audio, control and engine suites; both Clippy runs. Hardware
+proof needs the continuity harness through CABLE-B set to 7.1, which plays into
+a cable the owner uses live: it waits for a quiet window, and A4 is not done
+before it passes.
+
+Rollback: revert the branch; devices with more than two channels are refused
+at Play again, as before.
+
+Status 2026-11-27: steps 1, 2 and 4 done; step 3 needed nothing, because
+`devices.list` already reports `format.channels` for every device and the UI
+labels it. The limit is 2–32 float channels. Local results: both `cargo fmt`
+checks and both Clippy runs clean; `audiorouter-windows-audio` (169, including
+the drift simulation suite and the three new tests) and `audiorouter-control`
+(530) passed, including the flipped `setup_check` tests. **Open:** the
+continuity harness through CABLE-B at 7.1 (needs the owner's quiet window), and
+an attended Play to a 7.1 output in the built app.
 
 ## 0.0.33 candidate (local branch `candidate/0.0.33`)
 

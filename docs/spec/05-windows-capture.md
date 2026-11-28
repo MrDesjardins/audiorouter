@@ -44,8 +44,13 @@ In a multi-path session, physical inputs, endpoint-loopback inputs (including
 CAP-14 surround) and physical outputs accept a float32 endpoint at any shared
 mix rate from 8 to 192 kHz. An endpoint not at 48 kHz is opened with its own
 channel layout at the 48 kHz graph rate, and the Windows audio engine
-resamples (`AUTOCONVERTPCM | SRC_DEFAULT_QUALITY`). The single-path endpoint
-bridge is unchanged: it runs its graph at the matching device rate. Evidence:
+resamples (`AUTOCONVERTPCM | SRC_DEFAULT_QUALITY`). A physical output in a
+multi-path session may have 2 to 32 float32 channels: the stereo route plays on
+its first two channels (front left/right in any standard layout) and every other
+channel is silent, so a 5.1/7.1 virtual cable or another multichannel virtual
+input is a usable output (owner decision A4, 2026-11-27). Mono outputs are refused.
+The single-path endpoint bridge and the single application worker stay stereo,
+and the endpoint bridge runs its graph at the matching device rate. Evidence:
 a 96 kHz 7.1 render endpoint rendered and loopback-captured at 48 kHz delivers
 48,022 frames/s, against 96,067 unconverted
 (`crates/windows-audio/tests/resampled_streams.rs`, opt-in).

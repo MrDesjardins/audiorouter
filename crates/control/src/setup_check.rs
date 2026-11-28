@@ -299,11 +299,16 @@ fn check_session_devices(
                     Severity::Problem,
                     Some(device),
                     format!(
-                        "\"{}\" plays to {}, which is set to {} channel(s) at {}. AudioRouter plays only to stereo devices, so Play is refused.",
-                        node.name, device.name, device.channels, format_rate(device.sample_rate_hz)
+                        "\"{}\" plays to {}, which is set to {} channel(s) at {}{}. AudioRouter plays to float devices with 2 to {} channels at 8–192 kHz, so Play is refused.",
+                        node.name,
+                        device.name,
+                        device.channels,
+                        format_rate(device.sample_rate_hz),
+                        if device.is_float32 { "" } else { " (not float)" },
+                        crate::MAX_OUTPUT_DEVICE_CHANNELS
                     ),
                     format!(
-                        "In Windows Sound settings, set {} to Stereo (Configure) at 48 kHz, or choose another output. If a game sends surround to this device, keep it and pick a different device for this output.",
+                        "In Windows Sound settings, set {} to Stereo or a surround layout at 48 kHz, or choose another output.",
                         device.name
                     ),
                 ));

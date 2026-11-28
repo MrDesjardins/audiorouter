@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,7 +12,10 @@ const hooks = JSON.parse(readFileSync(path.join(repo, 'src-tauri/tauri.conf.json
 for (const [hook, task] of [['beforeBuildCommand', 'build'], ['beforeDevCommand', 'dev']]) {
   for (const exitCode of [0, 7]) {
     test(`${hook} executes npm ${task} through cmd and preserves exit ${exitCode}`, { skip: process.platform !== 'win32' }, () => {
-      const fixture = mkdtempSync(path.join(tmpdir(), 'ar ui hook '));
+      // The hook reports the long final path. CI's TEMP is an 8.3 short path
+      // (C:\Users\RUNNER~1\...), so compare against the resolved long form.
+      const temp = realpathSync.native(tmpdir());
+      const fixture = realpathSync.native(mkdtempSync(path.join(temp, 'ar ui hook ')));
       try {
         mkdirSync(path.join(fixture, 'tools'));
         mkdirSync(path.join(fixture, 'ui'));
@@ -34,7 +37,7 @@ for (const [hook, task] of [['beforeBuildCommand', 'build'], ['beforeDevCommand'
         assert.equal(readFileSync(report, 'utf8').trim(), `--prefix "${path.join(fixture, 'ui')}" run ${task}`);
       } finally {
         const resolved = path.resolve(fixture);
-        assert.equal(path.dirname(resolved), path.resolve(tmpdir()));
+        assert.equal(path.dirname(resolved), temp);
         rmSync(resolved, { recursive: true, force: true });
       }
     });

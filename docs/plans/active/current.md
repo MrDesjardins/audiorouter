@@ -24,8 +24,9 @@ predate the fix.
 Owner requested the next non-driver work on 2026-11-27. Backend A5-A9 baseline
 investigation is in [recovery-state consistency](recovery-state-consistency.md);
 the owner approved all five repairs, now implemented and locally verified
-([evidence](evidence/2026-11-27-recovery-state-consistency.md)). One attended
-PD200X capture unplug/recovery cycle passed; broader hardware gates remain open.
+([evidence](evidence/2026-11-27-recovery-state-consistency.md)) and merged in #199.
+One attended PD200X capture unplug/recovery cycle passed; broader hardware gates
+remain open.
 
 Owner-selected work (2026-11-27): frontend spacing/error port, accessibility
 checks and fresh app-only build qualification are executing in
