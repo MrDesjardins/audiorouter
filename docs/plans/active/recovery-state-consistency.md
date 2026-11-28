@@ -68,6 +68,39 @@ existing recovery policy. Do not roll back microphone fail-closed protections.
 
 ## Evidence and next action
 
+Desktop continuation: owner requested the fresh build and isolated smoke.
+Build UI explicitly (this branch predates the independently fixed Tauri hook),
+then compile a separately named release shell so the running owner executable
+is not overwritten. Use the existing packaged-shell smoke runner's disposable
+database and WebView profile; no device route or long soak. Check build/assets
+timestamps, native bridge, Stop/Play offline paths and cleanup. Rollback consists
+of closing the owned smoke process and retaining/removing only its artifacts;
+the frontend branch and owner's live profile remain untouched.
+Build result 2026-11-27: UI build passed (`ui/dist` 17:40:44, newer than the
+last `ui/src` commit 117fb4dc4); release shell built at 17:42:00 as
+`src-tauri/target/release/deps/audiorouter_shell-recovery.exe` (`cargo rustc
+-C extra-filename` names the exe in `deps/`, not beside the owner's exe).
+Smoke blocked: the owner's `audiorouter-shell.exe` (release) is running and
+owns the default control pipe, which the smoke runner requires free
+(`assertNoExistingInstance`). Not stopped by the agent. Next: owner closes
+AudioRouter (tray Quit), then run
+`node tools/quality/packaged-shell-smoke.mjs --shell <deps exe> --output
+target/recovery-state-consistency/desktop-smoke-2 --timeout-ms 30000`
+(`desktop-smoke` holds the first attempt's ENOENT result, which pointed at the
+wrong exe path; the runner refuses to overwrite evidence).
+Smoke result 2026-11-27 (owner closed their shell): `desktop-smoke-2` failed,
+WebView stayed on `about:blank` with `buildId: development`, because the
+`cargo rustc` build omitted `--features custom-protocol` (known lesson,
+2026-09-26). Rebuilt with the feature (exe 18:11:53); `desktop-smoke-3` passed:
+standard-user token, native bridge `desktop-shell` protocol 1.0 on initial and
+restarted launches, cold UI ready 1074 ms, warm 1270 ms, opening route shown
+identically after restart, session save 80 ms, both children exited 0, no
+cleanup failure, no uncaught UI errors, no `outcome":"error"` in the backend
+log, no AudioRouter process left. This smoke does not exercise device routes,
+Play with real endpoints or recovery faults. Next: owner may relaunch their own
+AudioRouter; integrating into a desktop candidate or opening a PR still needs
+explicit approval.
+
 Physical continuation: owner selected USB Digital Audio for the brief disconnect
 test. Prepare an in-memory capture-to-Meter route using only its exact capture
 endpoint; no playback endpoint, recording, persisted profile, default-device
