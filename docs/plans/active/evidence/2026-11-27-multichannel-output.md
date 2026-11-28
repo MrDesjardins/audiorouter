@@ -73,7 +73,7 @@ devices or the owner's data.
 | Engine, all targets | `cargo test -p audiorouter-engine` | 189 unit + every integration suite passed |
 | Source layouts | inside the engine run: `source_combinations` | 6/6 passed |
 | Tool layouts | inside the engine run: `tool_combinations` | 6/6 passed |
-| Docs | `powershell -NoProfile -ExecutionPolicy Bypass -File .\\tests\\acceptance\\docs.ps1` | 331 files, 1952 links passed |
+| Docs | `powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\docs.ps1` | 331 files, 1952 links passed |
 
 The widening unit tests cover 3, 4, 6, 8 and 16 device channels, equal-width
 pass-through, partial/non-float/oversized refusals, and the float32 mix-format
