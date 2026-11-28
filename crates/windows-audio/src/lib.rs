@@ -4347,9 +4347,89 @@ pub struct SharedRender {
     /// `nBlockAlign` of the format the stream was initialized with: the
     /// largest per-frame stride a submit may write into WASAPI memory.
     stream_bytes_per_frame: usize,
+    /// Whether the stream's samples are IEEE float32, so a narrower float32
+    /// source frame may be widened into it (see [`widen_float32_frames`]).
+    stream_float32: bool,
     started: bool,
     event: EventHandle,
     _com: ComApartment,
+}
+
+/// Copy whole float32 frames of `source_bytes_per_frame` into wider float32
+/// device frames of `dest_bytes_per_frame`: each source frame fills the first
+/// channels of its device frame and every other channel is 0.0 (all-zero
+/// bytes). A stereo source thus plays on channels 0 and 1. WAVEFORMATEXTENSIBLE
+/// orders channels by speaker-mask bit and front left/right are bits 0 and 1,
+/// so whenever a layout has them they are channels 0 and 1; a layout without
+/// a mask uses its first two channels (owner decision A4, 2026-11-27).
+///
+/// The frame count is `source.len() / source_bytes_per_frame`; `dest` must hold
+/// that many device frames. Never allocates.
+fn widen_float32_frames(
+    source: &[u8],
+    source_bytes_per_frame: usize,
+    dest: &mut [u8],
+    dest_bytes_per_frame: usize,
+) -> Result<(), AudioError> {
+    if source_bytes_per_frame == 0
+        || source_bytes_per_frame % 4 != 0
+        || dest_bytes_per_frame % 4 != 0
+        || source_bytes_per_frame > dest_bytes_per_frame
+        || source.len() % source_bytes_per_frame != 0
+    {
+        return Err(AudioError::InvalidFrameSize);
+    }
+    let frames = source.len() / source_bytes_per_frame;
+    if frames
+        .checked_mul(dest_bytes_per_frame)
+        .is_none_or(|needed| needed > dest.len())
+    {
+        return Err(AudioError::InvalidFrameSize);
+    }
+    for (from, to) in source
+        .chunks_exact(source_bytes_per_frame)
+        .zip(dest.chunks_exact_mut(dest_bytes_per_frame))
+    {
+        let (used, silent) = to.split_at_mut(source_bytes_per_frame);
+        used.copy_from_slice(from);
+        silent.fill(0);
+    }
+    Ok(())
+}
+
+/// Whether a mix format describes interleaved IEEE float32 samples, read the
+/// same way as [`EndpointInfo::is_ieee_float32`].
+///
+/// # Safety
+/// `format` must point to a valid WAVEFORMATEX (extended to
+/// WAVEFORMATEXTENSIBLE when its tag says so and `cbSize >= 22`).
+unsafe fn mix_format_is_float32(format: *const windows::Win32::Media::Audio::WAVEFORMATEX) -> bool {
+    // SAFETY: the caller guarantees `format` is valid for reads.
+    let header = unsafe { std::ptr::read_unaligned(format) };
+    if header.wBitsPerSample != 32 {
+        return false;
+    }
+    match header.wFormatTag {
+        3 => true,
+        0xfffe if header.cbSize >= 22 => {
+            // SAFETY: the tag and size say the allocation is a full
+            // WAVEFORMATEXTENSIBLE; it is read unaligned and not retained.
+            let extensible = unsafe {
+                std::ptr::read_unaligned(
+                    format.cast::<windows::Win32::Media::Audio::WAVEFORMATEXTENSIBLE>(),
+                )
+            };
+            // SAFETY: as above; the field lies within the extensible structure.
+            let guid =
+                unsafe { std::ptr::read_unaligned(std::ptr::addr_of!(extensible.SubFormat)) };
+            // KSDATAFORMAT_SUBTYPE_IEEE_FLOAT is 00000003-0000-0010-8000-00aa00389b71.
+            guid.data1 == 3
+                && guid.data2 == 0
+                && guid.data3 == 0x0010
+                && guid.data4 == [0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71]
+        }
+        _ => false,
+    }
 }
 
 /// The process tree selection supported by Windows process-loopback capture.
@@ -5667,6 +5747,9 @@ impl SharedRender {
         // reading one field does not retain it. The stream is initialized with
         // this format, so its block size bounds every packet copy.
         let stream_bytes_per_frame = usize::from(unsafe { (*format).nBlockAlign });
+        // SAFETY: `format` is the same live mix-format allocation, which
+        // GetMixFormat sizes for its own tag (extensible when tagged so).
+        let stream_float32 = unsafe { mix_format_is_float32(format) };
         // SAFETY: `format` is the live mix-format allocation (possibly with its rate
         // changed in place) and is freed only after this call; no session GUID is
         // passed.
@@ -5708,6 +5791,7 @@ impl SharedRender {
             endpoint_id: endpoint_id.to_owned(),
             buffer_size,
             stream_bytes_per_frame,
+            stream_float32,
             started: false,
             event,
             _com: com,
@@ -5749,17 +5833,22 @@ impl SharedRender {
     }
 
     /// Copy caller-owned interleaved bytes into the currently available
-    /// render frames and release the WASAPI buffer. The caller must supply the
-    /// endpoint's mix-format bytes per frame; partial frames are rejected.
-    /// This method never allocates and never submits more than the available
-    /// device capacity.
+    /// render frames and release the WASAPI buffer. `bytes_per_frame` is the
+    /// source stride: either the stream's own frame size (copied as is), or,
+    /// for a float32 stream, a narrower float32 frame that is widened with
+    /// silent extra channels, so a stereo route plays on the front left/right
+    /// of a multichannel device (A4). Partial frames are rejected. This method
+    /// never allocates and never submits more than the available device
+    /// capacity.
     pub fn submit_bytes(&self, source: &[u8], bytes_per_frame: usize) -> Result<u32, AudioError> {
+        let exact = bytes_per_frame == self.stream_bytes_per_frame;
         // A stride above the stream's own block size would write past the
-        // end of the borrowed WASAPI buffer.
-        if bytes_per_frame == 0
-            || bytes_per_frame > self.stream_bytes_per_frame
-            || source.len() % bytes_per_frame != 0
-        {
+        // end of the borrowed WASAPI buffer; a narrower one is only meaningful
+        // as whole float32 samples into a float32 stream.
+        let widens = self.stream_float32
+            && bytes_per_frame % 4 == 0
+            && bytes_per_frame < self.stream_bytes_per_frame;
+        if bytes_per_frame == 0 || source.len() % bytes_per_frame != 0 || !(exact || widens) {
             return Err(AudioError::InvalidFrameSize);
         }
         // SAFETY: `self.client` is the initialized client owned by `self`.
@@ -5772,14 +5861,37 @@ impl SharedRender {
             return Ok(0);
         }
         let bytes = frames as usize * bytes_per_frame;
-        // SAFETY: GetBuffer lends `frames` frames of the stream format, where
-        // `frames` is at most the free capacity. `bytes_per_frame` was checked above
-        // to be at most the stream's block size and `source` holds at least `bytes`
-        // bytes, so the copy stays inside both buffers, which cannot overlap. The
-        // buffer is released before returning.
+        // SAFETY: GetBuffer lends `frames` frames of the stream format, that is
+        // `frames * stream_bytes_per_frame` writable bytes, where `frames` is at
+        // most the free capacity. `source` holds at least `bytes` bytes. An exact
+        // copy writes `bytes` (equal stride); a widening write is bounded by the
+        // device slice built from that same length and checked again by
+        // `widen_float32_frames`. WASAPI memory cannot overlap `source`, the slice
+        // is dropped before ReleaseBuffer, and the buffer is released on every
+        // path after GetBuffer succeeds (silent if widening refused, which the
+        // checks above already exclude).
         unsafe {
             let data = self.render.GetBuffer(frames)?;
-            std::ptr::copy_nonoverlapping(source.as_ptr(), data.cast::<u8>(), bytes);
+            if exact {
+                std::ptr::copy_nonoverlapping(source.as_ptr(), data.cast::<u8>(), bytes);
+            } else {
+                let device = std::slice::from_raw_parts_mut(
+                    data.cast::<u8>(),
+                    frames as usize * self.stream_bytes_per_frame,
+                );
+                if let Err(error) = widen_float32_frames(
+                    &source[..bytes],
+                    bytes_per_frame,
+                    device,
+                    self.stream_bytes_per_frame,
+                ) {
+                    self.render.ReleaseBuffer(
+                        frames,
+                        windows::Win32::Media::Audio::AUDCLNT_BUFFERFLAGS_SILENT.0 as u32,
+                    )?;
+                    return Err(error);
+                }
+            }
             self.render.ReleaseBuffer(frames, 0)?;
         }
         Ok(frames)
@@ -10383,6 +10495,100 @@ impl NativeBridgeSession {
 mod tests {
     use super::*;
     use audiorouter_engine::AudioTap;
+
+    fn float_bytes(samples: &[f32]) -> Vec<u8> {
+        samples
+            .iter()
+            .flat_map(|sample| sample.to_le_bytes())
+            .collect()
+    }
+
+    fn float_samples(bytes: &[u8]) -> Vec<f32> {
+        bytes
+            .chunks_exact(4)
+            .map(|sample| f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
+            .collect()
+    }
+
+    #[test]
+    fn stereo_plays_on_the_first_two_channels_of_any_wider_float_device() {
+        // Owner decision A4: a stereo route plays into the front left/right of
+        // a multichannel output; every other channel is exactly silent.
+        let source = float_bytes(&[0.25, -0.5, 0.75, -1.0, 0.125, 0.0625]);
+        for channels in [3_usize, 4, 6, 8, 16] {
+            // Pre-fill the device buffer with noise: every byte must be written.
+            let mut device = vec![0xA5_u8; 3 * channels * 4];
+            widen_float32_frames(&source, 8, &mut device, channels * 4).unwrap();
+            let samples = float_samples(&device);
+            for (frame, expected) in [[0.25, -0.5], [0.75, -1.0], [0.125, 0.0625]]
+                .iter()
+                .enumerate()
+            {
+                let row = &samples[frame * channels..(frame + 1) * channels];
+                assert_eq!(&row[..2], expected, "{channels} channels, frame {frame}");
+                assert!(
+                    row[2..].iter().all(|sample| sample.to_bits() == 0),
+                    "{channels} channels, frame {frame}: {row:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn widening_accepts_an_equal_width_and_refuses_partial_or_oversized_frames() {
+        let source = float_bytes(&[0.5, -0.5]);
+        let mut same = vec![0_u8; 8];
+        widen_float32_frames(&source, 8, &mut same, 8).unwrap();
+        assert_eq!(same, source);
+        let mut device = vec![0_u8; 32];
+        // A partial source frame, a stride that is not whole float32 samples, a
+        // source wider than the device frame and a device buffer too short for
+        // the frames are all refused without writing past the buffer.
+        assert!(widen_float32_frames(&source[..6], 8, &mut device, 32).is_err());
+        assert!(widen_float32_frames(&source, 6, &mut device, 32).is_err());
+        assert!(widen_float32_frames(&source, 8, &mut device[..4], 4).is_err());
+        assert!(widen_float32_frames(&source, 8, &mut device[..16], 32).is_err());
+        assert!(widen_float32_frames(&source, 0, &mut device, 32).is_err());
+    }
+
+    #[test]
+    fn only_ieee_float32_mix_formats_may_be_widened() {
+        use windows::Win32::Media::Audio::{WAVEFORMATEX, WAVEFORMATEXTENSIBLE};
+        let plain = |tag: u16, bits: u16| WAVEFORMATEX {
+            wFormatTag: tag,
+            nChannels: 8,
+            nSamplesPerSec: 48_000,
+            nAvgBytesPerSec: 48_000 * 8 * u32::from(bits / 8),
+            nBlockAlign: 8 * (bits / 8),
+            wBitsPerSample: bits,
+            cbSize: 0,
+        };
+        let extensible = |data1: u32| {
+            let mut format = WAVEFORMATEXTENSIBLE {
+                Format: plain(0xFFFE, 32),
+                ..Default::default()
+            };
+            format.Format.cbSize = 22;
+            format.dwChannelMask = 0x63F;
+            format.SubFormat = windows::core::GUID::from_values(
+                data1,
+                0,
+                0x0010,
+                [0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71],
+            );
+            format
+        };
+        let float_ext = extensible(3);
+        let pcm32_ext = extensible(1);
+        // SAFETY: each pointer refers to a live local of the matching layout.
+        unsafe {
+            assert!(mix_format_is_float32(&plain(3, 32)));
+            assert!(!mix_format_is_float32(&plain(1, 16)));
+            assert!(!mix_format_is_float32(&plain(1, 32)));
+            assert!(mix_format_is_float32(std::ptr::addr_of!(float_ext).cast()));
+            assert!(!mix_format_is_float32(std::ptr::addr_of!(pcm32_ext).cast()));
+        }
+    }
 
     #[test]
     fn requested_rate_keeps_layout_and_updates_the_byte_rate() {

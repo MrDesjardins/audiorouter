@@ -124,7 +124,7 @@ impl ControlPlane {
                 endpoint.sample_rate_hz,
             ) {
                 return Err(ControlError::InvalidRequest(
-                    "output fan-out endpoints must be stereo IEEE float32 at 8–192 kHz".into(),
+                    "output fan-out endpoints must be IEEE float32 with 2 to 32 channels at 8–192 kHz".into(),
                 ));
             }
             // 50 ms device headroom and an 8-quantum ring absorb capture

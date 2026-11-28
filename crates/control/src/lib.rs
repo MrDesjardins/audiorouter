@@ -332,8 +332,17 @@ fn multi_path_rate_supported(sample_rate_hz: u32) -> bool {
 }
 
 /// Shared output eligibility for native preparation and setup checks (UI-27).
+/// The most channels an output device may have. A stereo route plays on its
+/// first two (front left/right) and the rest stay silent (decision A4).
+pub(crate) const MAX_OUTPUT_DEVICE_CHANNELS: u16 = 32;
+
+/// Whether Play can send a stereo route to an output device: IEEE float32,
+/// stereo or wider (the render client widens each frame, owner decision A4,
+/// 2026-11-27), at a supported rate. Mono output devices stay refused.
 fn output_format_supported(is_float32: bool, channels: u16, sample_rate_hz: u32) -> bool {
-    is_float32 && channels == 2 && multi_path_rate_supported(sample_rate_hz)
+    is_float32
+        && (2..=MAX_OUTPUT_DEVICE_CHANNELS).contains(&channels)
+        && multi_path_rate_supported(sample_rate_hz)
 }
 
 /// Refuse unsupported format/layout before preparing surround capture.
