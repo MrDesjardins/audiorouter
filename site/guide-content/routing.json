@@ -28,7 +28,7 @@
   "tools": [
     {
       "kind": "physicalInput",
-      "title": "Physical Input",
+      "title": "Input device",
       "purpose": "Bring a microphone, audio interface, or virtual recording endpoint into your route.",
       "concept": "An input is where samples enter the graph. Its outgoing connection can feed several branches.",
       "signalBehavior": "Normal capture preserves stereo; mono handling creates the same signal in both ears. Surround rendering produces stereo from a qualified 5.1/7.1 source.",
@@ -128,7 +128,7 @@
     },
     {
       "kind": "physicalOutput",
-      "title": "Physical Output",
+      "title": "Output device",
       "purpose": "Hear a route through one selected Windows playback endpoint.",
       "concept": "The output is a destination for the branch connected to its input.",
       "signalBehavior": "Consumes routed samples; branch effects change this route rather than Windows master volume.",
@@ -160,7 +160,7 @@
         {
           "title": "Hear and record independently",
           "steps": [
-            "Branch the same processed tool to Physical Output and Recorder.",
+            "Branch the same processed tool to an Output device and a Recorder.",
             "Play to monitor; start the Recorder only when ready."
           ]
         }
@@ -203,7 +203,7 @@
         {
           "title": "Separate game and voice",
           "steps": [
-            "Add an Application Capture for the game and a Physical Input for your microphone.",
+            "Add an Application Capture for the game and an Input device for your microphone.",
             "Route each to its own processing chain.",
             "Combine them only where you want a mix."
           ]
@@ -257,7 +257,7 @@
         }
       ],
       "commonMistakes": [
-        "The current Properties panel has no dedicated Endpoint Loopback endpoint picker; do not assume the Physical Output picker configures this node.",
+        "The current Properties panel has no dedicated Endpoint Loopback endpoint picker; do not assume the Output device picker configures this node.",
         "A desktop mix is not every output device on the PC."
       ],
       "suggestedVisual": {
@@ -431,7 +431,7 @@
         {
           "title": "Find a broken connection",
           "steps": [
-            "Connect Test Signal → Meter → Physical Output.",
+            "Connect Test Signal → Meter → Output device.",
             "Choose the output and Save.",
             "Press the node Play button and follow the meters along the route."
           ]
@@ -1134,7 +1134,7 @@
           "title": "Play a synth to your headphones",
           "steps": [
             "Scan your plugin folder and add the synth from the Instruments list.",
-            "Connect Instrument → Physical Output, choose the output and Save.",
+            "Connect Instrument → Output device, choose the output and Save.",
             "Press Play, then press keys on the on-screen keyboard."
           ]
         },

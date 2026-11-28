@@ -2,7 +2,7 @@
   "nodeKinds": 38,
   "tools": [
     {
-      "name": "Physical input",
+      "name": "Input device",
       "category": "Sources",
       "description": "Bring in a selected microphone or other Windows capture endpoint.",
       "icon": "◉",
@@ -50,7 +50,7 @@
       "guide": "tools/network-receive.html"
     },
     {
-      "name": "Physical output",
+      "name": "Output device",
       "category": "Destinations",
       "description": "Render a route to a selected Windows audio output.",
       "icon": "◎",

@@ -37,13 +37,13 @@ for (const [method, path, operation] of [
 ]) operations.push({ method, path, operation, permission: method === "PUT" ? "SessionControl" : "Read", effect: "HTTP convenience route" });
 
 const tools = [
-  ["Physical input", "Sources", "Bring in a selected microphone or other Windows capture endpoint."],
+  ["Input device", "Sources", "Bring in a selected microphone or other Windows capture endpoint."],
   ["Application capture", "Sources", "Capture audio from a selected running application process tree."],
   ["Endpoint loopback", "Sources", "Capture the sound being rendered by a selected output endpoint."],
   ["Test signal", "Sources", "Generate a controlled tone to check a route and its levels."],
   ["Audio file", "Sources", "Play imported WAV or MP3 audio into a session, with optional looping."],
   ["Network receive", "Sources", "Receive an AudioRouter audio stream from another computer on your network."],
-  ["Physical output", "Destinations", "Render a route to a selected Windows audio output."],
+  ["Output device", "Destinations", "Render a route to a selected Windows audio output."],
   ["Recorder", "Destinations", "Record one route branch to WAV, FLAC, or MP3."],
   ["Network send", "Destinations", "Send audio from a branch to another AudioRouter computer over UDP."],
   ["Mixer", "Routing", "Combine explicit upstream sources and set each input's level."],
@@ -74,9 +74,9 @@ const tools = [
 ].map(([name, category, description]) => {
   // Match the tool symbols used by Workbench.tsx; Duck uses its real SVG mark.
   const appGlyphs = {
-    "Physical input": "◉", "Application capture": "application", "Endpoint loopback": "↶",
+    "Input device": "◉", "Application capture": "application", "Endpoint loopback": "↶",
     "Test signal": "∿", "Audio file": "♫", "Network receive": "⇣",
-    "Physical output": "◎", Recorder: "●", "Network send": "⇡", Mixer: "⋈",
+    "Output device": "◎", Recorder: "●", "Network send": "⇡", Mixer: "⋈",
     "Input switch": "⇄", Gain: "◢", Volume: "◖", Mute: "⊘", Meter: "▥",
     "Parametric EQ": "⌁", "Graphic EQ": "▤", "Bass & Treble": "♮",
     "FIR Filter": "⧉", Compressor: "⤓", "Gate / Expander": "⊐", Limiter: "⊤",
