@@ -52,6 +52,31 @@ may argue for reversing it; ask before changing it.
 7. 0.0.33 candidate: once #199, the UI port and this branch are on `main`, or
    from a local integration if the owner wants to test first.
 
+## A4 investigation: virtual cables other than stereo
+
+Findings (2026-11-27, code reading):
+
+- Capture already copes: `adapt_native_paths_session` widens or folds a
+  route to the endpoint's channel count, and 5.1/7.1 capture is supported.
+- Output does not. `output_format_supported` (`crates/control/src/lib.rs`)
+  accepts only stereo IEEE float32, so Play refuses any route whose output is
+  a 4-, 6- or 8-channel endpoint ("output fan-out endpoints must be stereo
+  IEEE float32"), and `SharedRender::submit_bytes` rejects other frame sizes.
+- Common cables differ: VB-Cable and AudioRouter's own cables are stereo, but
+  VoiceMeeter's virtual inputs default to 8 channels and some users set
+  VB-Cable to 7.1. Those PCs cannot use such a cable as an output today.
+
+Options for the owner:
+
+| Option | What changes | Cost and risk |
+| --- | --- | --- |
+| (a) Recommended | Write the stereo route into the front left/right channels of any float32 render endpoint and leave the other channels silent; same for 16/24-bit PCM through the existing conversion | Small, contained in the output pump; needs 4/6/8-channel tests, `source_combinations` coverage and a continuity run in a quiet window |
+| (b) | Full multichannel output routes (route channels map to endpoint channels) | Large: graph, UI, MCP and recorder changes |
+| (c) | Keep stereo-only and explain it in the device picker | No engine work; such cables stay unusable |
+
+Either way, list every endpoint's channel count in `list_devices` so an
+assistant can see why a device is refused. Waiting for the owner's choice.
+
 ## Validation
 
 - `sessions_rename_saves_a_revision_through_dispatch_and_respects_roles`
