@@ -437,7 +437,7 @@ export function ClientsPanel({ backend, initialClientId }: { backend: UiBackend;
       <p className="muted" id="client-recording-note">
         {tr("g3Adv.allowRecordingNote")}
       </p>
-      <div>
+      <div className="actions">
         <button
           type="button"
           className="secondary"
