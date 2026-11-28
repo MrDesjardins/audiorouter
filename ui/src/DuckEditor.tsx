@@ -393,7 +393,8 @@ export function DuckEditor({
         {!roundMode && (
           <>
             <rect x={L} y={T} width={R - L} height={B - T} className="dynamics-plot" />
-            {[-80, -60, -40, -20, 0].map((value) => (
+            {/* No label at -80: it sat on the strip's "0" just below (spacing audit). */}
+            {[-60, -40, -20, 0].map((value) => (
               <g key={value}>
                 <line x1={L} x2={R} y1={y(value)} y2={y(value)} className="dynamics-grid" />
                 <text x={L - 4} y={Math.max(17, y(value) + 3)} textAnchor="end" className="dynamics-axis">

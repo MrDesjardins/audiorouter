@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { formatUiError } from "./backend";
 import { FlowAnimationSetting } from "./FlowAnimationSetting";
 import { LiveAutosaveSetting } from "./LiveAutosaveSetting";
 import { type FlowAnimationMode, type ThemeMode } from "./preferences";
@@ -162,7 +163,7 @@ export function UiOptionsWorkbench({
       setConfirmDelete(false);
       return library;
     } catch (cause) {
-      report(cause instanceof Error ? cause.message : tr("g1.themeCouldNotAdd"), true);
+      report(formatUiError(cause, tr("g1.themeCouldNotAdd")), true);
       return null;
     }
   };
@@ -257,7 +258,7 @@ export function UiOptionsWorkbench({
                     );
                 })
                 .catch((cause: unknown) => {
-                  report(cause instanceof Error ? cause.message : tr("g1.themeCouldNotRead"), true);
+                  report(formatUiError(cause, tr("g1.themeCouldNotRead")), true);
                 });
             }}
           />

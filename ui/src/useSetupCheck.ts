@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SetupCheckResult } from "@audiorouter/contracts";
 import { tx } from "./i18n";
+import { formatUiError } from "./backend";
 
 export type SetupCheckState = {
   connected: boolean;
@@ -38,7 +39,7 @@ export function useSetupCheck({
       setFailure(null);
     } catch (error) {
       if (request !== latest.current) return;
-      setFailure(error instanceof Error ? error.message : tx("g1.setupCheckFailed"));
+      setFailure(formatUiError(error, tx("g1.setupCheckFailed")));
     } finally {
       if (request === latest.current) setChecking(false);
     }

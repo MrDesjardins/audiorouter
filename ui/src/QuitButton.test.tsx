@@ -39,7 +39,7 @@ it("disarms after five seconds and reports a refused quit", async () => {
   await act(async () => fireEvent.click(screen.getByRole("button")));
   expect(onMessage).toHaveBeenCalledWith(
     expect.objectContaining({
-      text: expect.stringContaining("Quit refused: a recording is still finishing"),
+      text: "Quit refused: A recording is still finishing. Audio keeps playing; stop any recording and try again.",
     }),
   );
   expect(screen.getByRole("button").textContent).toBe("Quit");

@@ -1,4 +1,5 @@
 import { say, type UiMessage } from "./actionMessage";
+import { formatUiError } from "./backend";
 import { useEffect, useState } from "react";
 import { useMessages } from "./i18n/useMessages";
 
@@ -51,7 +52,7 @@ export function QuitButton({
         setUnresponsive(true);
         onMessage(say("quit.unresponsiveMessage"));
       } else {
-        onMessage(say("quit.refusedMessage", { reason }));
+        onMessage(say("quit.refusedMessage", { reason: formatUiError(error, tr("backendErrors.emptyFailure")) }));
       }
       setArmed(false);
     } finally {

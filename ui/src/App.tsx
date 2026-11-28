@@ -2774,7 +2774,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setActionMessage(say("g1.appPluginAdded", { name: inserted?.name ?? tm("g1.appPlugin") }));
       return inserted?.id;
     } catch (error) {
-      setActionMessage(errorMessage(error instanceof Error ? error.message : tm("g1.appPluginAddFail")));
+      setActionMessage(uiError(error, tm("g1.appPluginAddFail")));
       return undefined;
     }
   };
@@ -2805,7 +2805,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       }
       closePluginPicker();
     } catch (error) {
-      setActionMessage(errorMessage(error instanceof Error ? error.message : tm("g1.appPluginPlaceholderFail")));
+      setActionMessage(uiError(error, tm("g1.appPluginPlaceholderFail")));
     }
   };
   // A new cable node starts on a present cable (sources Cable A, outputs
@@ -3204,7 +3204,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setActionMessage(say("g1.appAppCaptureAdded"));
       closeApplicationPicker();
     } catch (error) {
-      setActionMessage(errorMessage(error instanceof Error ? error.message : tm("g1.appAppCaptureFail")));
+      setActionMessage(uiError(error, tm("g1.appAppCaptureFail")));
     }
   };
   /** Returns why the path was refused, so the picker can say so next to the field; null when added. */
@@ -3219,7 +3219,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       closeApplicationPicker();
       return null;
     } catch (error) {
-      const message = error instanceof Error ? error.message : tm("g1.appAppCaptureFail");
+      const message = formatUiError(error, tm("g1.appAppCaptureFail"));
       setActionMessage(errorMessage(message));
       return message;
     }
@@ -3237,7 +3237,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       closeApplicationPicker();
       return true;
     } catch (error) {
-      setActionMessage(errorMessage(error instanceof Error ? error.message : tm("g1.appAppGroupFail")));
+      setActionMessage(uiError(error, tm("g1.appAppGroupFail")));
       return false;
     }
   };
@@ -3248,7 +3248,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         say("g1.appAppSourceChanged", { executable: application.executable, pid: application.processId }),
       );
     } catch (error) {
-      setActionMessage(errorMessage(error instanceof Error ? error.message : tm("g1.appAppSourceFail")));
+      setActionMessage(uiError(error, tm("g1.appAppSourceFail")));
     }
   };
   const removeConnection = (edgeId: string) => {

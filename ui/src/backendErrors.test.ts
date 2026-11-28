@@ -19,7 +19,7 @@ describe("localized recovery sentences", () => {
     );
   });
 
-  it("localizes the retry hint while keeping the backend's technical detail", async () => {
+  it("localizes recovery guidance without exposing wire codes or generic remediation", async () => {
     await applyLanguage("fr");
     const retryable = new AudioRouterRpcError({
       code: -32000,
@@ -33,9 +33,28 @@ describe("localized recovery sentences", () => {
       },
     });
     const text = formatUiError(retryable, "fallback");
-    expect(text).toContain("Une nouvelle tentative peut aboutir.");
-    expect(text).toContain("[audioFailure]");
-    expect(text).toContain("retry the operation");
+    expect(text).toContain("Audio endpoint failed.");
+    expect(text).toContain("Réessayez.");
+    expect(text).toContain("Journaux et assistance");
+    expect(text).not.toContain("[audioFailure]");
+    expect(text).not.toContain("retry the operation");
+  });
+
+  it("translates the new errors on every language switch and preserves Chinese punctuation", async () => {
+    const failure = new AudioRouterRpcError({
+      code: -32000,
+      message: "unsupported format",
+      data: { code: "unsupportedFormat", fieldPath: null, resourceIds: [], retryable: false, remediation: "" },
+    });
+    await applyLanguage("en");
+    expect(formatUiError(failure, "fallback")).toContain("This device uses a sound format");
+    await applyLanguage("fr");
+    expect(formatUiError(failure, "fallback")).toContain("AudioRouter ne peut pas ouvrir");
+    await applyLanguage("zh-Hans");
+    expect(formatUiError(failure, "fallback")).toContain("AudioRouter 无法打开");
+    expect(formatUiError(new Error("设备不可用。"), "fallback")).toBe("设备不可用。");
+    await applyLanguage("en");
+    expect(formatUiError(failure, "fallback")).toContain("This device uses a sound format");
   });
 
   it("localizes the named busy-endpoint guidance in Simplified Chinese", async () => {

@@ -370,7 +370,7 @@ export function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
       if (!Array.isArray(parsed)) throw new Error(tr("g2.vrNotArray"));
       routes = parsed as import("@audiorouter/contracts").VirtualBusRoute[];
     } catch (error) {
-      setMessage(errorMessage(error instanceof Error ? error.message : tr("g2.vrJsonInvalid")));
+      setMessage(uiError(error, tr("g2.vrJsonInvalid")));
       return;
     }
     setBusy(true);
@@ -948,7 +948,7 @@ export function NativeMultiInputPanel({
         };
       });
     } catch (error) {
-      setMessage(errorMessage(error instanceof Error ? error.message : tr("g2.nmBindFail")));
+      setMessage(uiError(error, tr("g2.nmBindFail")));
       return;
     }
     setBusy(true);
