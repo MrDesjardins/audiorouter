@@ -162,9 +162,14 @@ You give a time window; **an agent can run** all commands.
 
 - **Status: FAILED today, 3 of 6 runs** (2026-11-24; gain 2/3, ten-tool chain 1/3).
   The cables were not proven free: Discord and Zoom were open, and CABLE-A Output
-  is your default communications microphone. The cause is **not known**.
+  is your default communications microphone. The cause is **not known**. On
+  2026-11-27 the failed logs were audited and test-only capture provenance
+  (`device_position` gaps, `SILENT` flags, measurement underrun delta) plus a
+  read-only endpoint preflight were added; no tone was rendered. See the
+  [preparation record](evidence/2026-11-27-live-audio-reliability-gates.md).
 - **You do:** close Discord, Zoom, games and AudioRouter, and say the cables are
-  free for 15 minutes. Nobody may be listening to CABLE-A.
+  free for 15 minutes. Nobody may be listening to CABLE-A. The agent repeats the
+  read-only preflight before every run.
 - **Agent runs:**
 
   ```powershell
@@ -179,22 +184,37 @@ You give a time window; **an agent can run** all commands.
   cargo test -p audiorouter-transport --test live_audio_continuity --release --locked -- live::live_backend_service_keeps_a_routed_tone_continuous --ignored --exact --nocapture
   ```
 
-  Three times with `gain`, then three times with
+  Before each run, prove the endpoints are free without opening a stream:
+  `$env:AUDIOROUTER_CONTINUITY_PREFLIGHT='1'; cargo test -p audiorouter-transport
+  --test live_audio_continuity --locked live::live_continuity_endpoints_are_unused_preflight
+  -- --ignored --exact --nocapture`. Three times with `gain`, then three times with
   `gain,parametricEq,graphicEq,bassTreble,dehum,compressor,gate,limiter,delay,meter`.
 - **Pass:** 3 of 3 for each chain; zero routed glitches and silent runs on a clean
-  reference. A repeatable glitch is a defect to trace.
+  reference. A repeatable glitch is a defect to trace. The new lines say whether
+  it was a capture position gap, a SILENT-flagged packet, a measurement-window
+  underrun, or a contiguous capture with rendered silence.
 - **IDs:** ARCH-08, CAP-04, NFR-03. Source: [Code review fixes](code-review-fixes.md),
-  [record](evidence/2026-11-24-code-review-fixes-residual.md). **Result:** failed.
+  [record](evidence/2026-11-24-code-review-fixes-residual.md),
+  [preparation](evidence/2026-11-27-live-audio-reliability-gates.md). **Result:** failed.
 
 ### C2. Live fault cases and recovery
 
 - **Needs:** four named endpoints nobody uses, and your presence for unplugging.
+- **Prepared 2026-11-27 (no tone rendered):** an opt-in privacy-mute test
+  (`AUDIOROUTER_LIVE_PRIVACY_MUTE=1`) asserts silence, a still-running route, a
+  restore on clear and no output underrun. UDP under load reuses
+  `AUDIOROUTER_CONTINUITY_NETWORK` plus `AUDIOROUTER_CONTINUITY_STRESS`. A
+  read-only preflight proves the endpoints have no active session before a run.
+  Worker kill, endpoint removal and sleep/resume are owner-attended steps in the
+  [preparation record](evidence/2026-11-27-live-audio-reliability-gates.md).
 - **Steps:** on a disposable route, do privacy mute, kill a plugin worker on a
   protected microphone path (also a sidechain plugin), remove and return an
   endpoint, sleep and resume, and a UDP network route under controlled load.
 - **Pass:** protected paths go silent until you press Stop, then Play; nothing
   starts by itself; Windows defaults and volumes are unchanged; UDP is continuous.
-- **IDs:** QUAL-01–06, NFR-04/09/10/11, RES-3, CAP-11. Source: Q4.6/Q4.7. **Result:** open.
+  The agent does not invoke sleep, stop your app or change OS settings.
+- **IDs:** QUAL-01–06, NFR-04/09/10/11, RES-3, CAP-11. Source: Q4.6/Q4.7.
+  **Result:** open.
 
 ### C3. Eight-hour soak, memory and your real library
 
@@ -460,10 +480,16 @@ Watch each window, including the single-plugin case; write down the demo dialog.
 
 ### G8. Licensed plugin that changes latency (not Blue Cat)
 
-You name the plugin and sign in; **agent can run** the C1 command in a quiet window with
-`AUDIOROUTER_CONTINUITY_PLUGIN_DB`, `_PLUGIN_SESSION`, `_PLUGINS` (a copy of your session)
-and `AUDIOROUTER_PLUGIN_WORKER_PATH`, once active and once bypassed. **Pass:** latency
-reported, continuous, audibly different from bypass. **IDs:** PLUG-05/07. **Result:** open.
+- **Prepared 2026-11-27 (no tone rendered):** the continuity harness can force a
+  copied plugin node active or bypassed (`_CLEAR_BYPASS` / `_FORCE_BYPASS`),
+  require its reported delay and a running worker (`_EXPECT_PLUGIN_DELAY_MS`,
+  `_REQUIRE_PLUGIN_RUNNING`), dump both runs (`_DUMP_PREFIX`) and reject a
+  sample-identical result (`_EXPECT_DIFFERENT_FROM`). See the
+  [preparation record](evidence/2026-11-27-live-audio-reliability-gates.md).
+- You name the plugin and sign in; **agent can run** the C1 command in a quiet window with
+  `AUDIOROUTER_CONTINUITY_PLUGIN_DB`, `_PLUGIN_SESSION`, `_PLUGINS` (a copy of your session)
+  and `AUDIOROUTER_PLUGIN_WORKER_PATH`, once active and once bypassed. **Pass:** latency
+  reported, continuous, audibly different from bypass. **IDs:** PLUG-05/07. **Result:** open.
 
 ### G9. Audible Instrument guide video
 

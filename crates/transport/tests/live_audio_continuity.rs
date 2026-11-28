@@ -81,6 +81,93 @@ fn tone(index: u64) -> f32 {
         as f32
 }
 
+/// How a capture packet's device position relates to the previous packet's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CaptureStep {
+    Continuous,
+    /// The device position jumped forward: these frames never reached us, so
+    /// the gap is on the capture side, not a silence the route rendered.
+    Lost(u64),
+    /// The position moved backward or overlapped the previous packet.
+    Overlap(u64),
+    /// No usable device position (for example a source that reports zero).
+    Unknown,
+}
+
+/// Classify two WASAPI capture packets by `(device_position, frames)`.
+/// Shared-mode capture advances the device position by exactly the previous
+/// packet's frame count, so any other step is a capture-side gap or reset.
+/// This separates a lost capture packet from a render that wrote silence.
+fn capture_step(previous: (u64, u32), current: (u64, u32)) -> CaptureStep {
+    if previous.0 == 0 || current.0 == 0 {
+        return CaptureStep::Unknown;
+    }
+    let expected = previous.0.saturating_add(u64::from(previous.1));
+    if current.0 == expected {
+        CaptureStep::Continuous
+    } else if current.0 > expected {
+        CaptureStep::Lost(current.0 - expected)
+    } else {
+        CaptureStep::Overlap(expected - current.0)
+    }
+}
+
+/// Relative RMS difference of two recordings compared sample by sample from
+/// their starts. 0 means every compared sample is identical; 1 means the
+/// difference has the energy of the reference (a +6 dB or inverted copy is
+/// 2). Used to require that a plugin changed the tone, not only its latency.
+fn relative_difference(left: &[f32], right: &[f32]) -> f64 {
+    let length = left.len().min(right.len());
+    if length == 0 {
+        return 0.0;
+    }
+    let mut difference = 0.0_f64;
+    let mut reference = 0.0_f64;
+    for index in 0..length {
+        let delta = f64::from(left[index]) - f64::from(right[index]);
+        difference += delta * delta;
+        reference += f64::from(right[index]).powi(2);
+    }
+    if reference <= f64::EPSILON {
+        return if difference > 0.0 { f64::INFINITY } else { 0.0 };
+    }
+    (difference / reference).sqrt()
+}
+
+#[test]
+fn capture_position_gaps_are_classified_without_audio() {
+    assert_eq!(
+        capture_step((1_000, 480), (1_480, 480)),
+        CaptureStep::Continuous
+    );
+    // One 10 ms packet (480 frames) missing from the captured stream.
+    assert_eq!(
+        capture_step((1_000, 480), (1_960, 480)),
+        CaptureStep::Lost(480)
+    );
+    assert_eq!(
+        capture_step((1_000, 480), (1_500, 480)),
+        CaptureStep::Lost(20)
+    );
+    // A shorter packet, then a position that rewinds.
+    assert_eq!(
+        capture_step((1_000, 480), (1_400, 480)),
+        CaptureStep::Overlap(80)
+    );
+    // A first packet at position zero, as some sources report, is not a gap.
+    assert_eq!(capture_step((0, 480), (480, 480)), CaptureStep::Unknown);
+}
+
+#[test]
+fn recording_difference_detects_amplitude_and_phase_changes() {
+    let clean: Vec<f32> = (0..4_800).map(tone).collect();
+    assert_eq!(relative_difference(&clean, &clean), 0.0);
+    let louder: Vec<f32> = clean.iter().map(|sample| sample * 2.0).collect();
+    assert!((relative_difference(&louder, &clean) - 1.0).abs() < 1e-5);
+    let inverted: Vec<f32> = clean.iter().map(|sample| -sample).collect();
+    assert!((relative_difference(&inverted, &clean) - 2.0).abs() < 1e-5);
+}
+
 #[test]
 fn glitch_detector_is_silent_on_a_clean_tone_and_finds_dropped_blocks() {
     let clean: Vec<f32> = (0..48_000).map(tone).collect();
@@ -578,6 +665,11 @@ mod live {
     struct Recording {
         left: Vec<f32>,
         discontinuity_flags: usize,
+        silent_packets: usize,
+        capture_gaps: usize,
+        capture_lost_frames: u64,
+        capture_overlaps: usize,
+        capture_unknown_positions: usize,
     }
 
     /// Record the left channel of `endpoint_id` until stopped.
@@ -605,7 +697,16 @@ mod live {
             let mut recording = Recording {
                 left: Vec::with_capacity(48_000 * 120),
                 discontinuity_flags: 0,
+                silent_packets: 0,
+                capture_gaps: 0,
+                capture_lost_frames: 0,
+                capture_overlaps: 0,
+                capture_unknown_positions: 0,
             };
+            // The previous measured packet's device position and frame count.
+            // Reset across gaps in measurement so a pre-measurement packet
+            // cannot look like a position jump.
+            let mut previous_position: Option<(u64, u32)> = None;
             capture.start().unwrap();
             while !stop.load(Ordering::Acquire) {
                 capture.wait_for_data(20).unwrap();
@@ -614,12 +715,31 @@ mod live {
                     .unwrap()
                 {
                     if !measuring.load(Ordering::Acquire) {
+                        previous_position = None;
                         continue;
                     }
                     // AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY
                     if packet.flags & 0x1 != 0 {
                         recording.discontinuity_flags += 1;
                     }
+                    // AUDCLNT_BUFFERFLAGS_SILENT: the engine supplied zeros
+                    // instead of device samples. Counted separately from a
+                    // position gap so the two failure shapes stay distinct.
+                    if packet.flags & 0x2 != 0 {
+                        recording.silent_packets += 1;
+                    }
+                    if let Some(previous) = previous_position {
+                        match capture_step(previous, (packet.device_position, packet.frames)) {
+                            CaptureStep::Continuous => {}
+                            CaptureStep::Lost(frames) => {
+                                recording.capture_gaps += 1;
+                                recording.capture_lost_frames += frames;
+                            }
+                            CaptureStep::Overlap(_) => recording.capture_overlaps += 1,
+                            CaptureStep::Unknown => recording.capture_unknown_positions += 1,
+                        }
+                    }
+                    previous_position = Some((packet.device_position, packet.frames));
                     for frame in buffer[..bytes].chunks_exact(bytes_per_frame) {
                         recording
                             .left
@@ -667,9 +787,31 @@ mod live {
             zero_samples,
             recording.discontinuity_flags
         );
+        // Where a gap came from: a lost capture packet moves the device
+        // position forward, while a render that wrote silence leaves the
+        // position continuous and (usually) arrives as a SILENT packet.
+        if recording.capture_gaps > 0
+            || recording.capture_overlaps > 0
+            || recording.capture_unknown_positions > 0
+            || recording.silent_packets > 0
+        {
+            eprintln!(
+                "  capture position: {} gaps ({} frames lost), {} overlaps, {} unknown-position packets, {} SILENT-flagged packets",
+                recording.capture_gaps,
+                recording.capture_lost_frames,
+                recording.capture_overlaps,
+                recording.capture_unknown_positions,
+                recording.silent_packets
+            );
+        } else {
+            eprintln!(
+                "  capture position: contiguous (no lost packets, no SILENT-flagged packets)"
+            );
+        }
         if let Ok(path) = std::env::var("AUDIOROUTER_CONTINUITY_DUMP_DIR") {
+            let prefix = std::env::var("AUDIOROUTER_CONTINUITY_DUMP_PREFIX").unwrap_or_default();
             let file = std::path::Path::new(&path).join(format!(
-                "{}.f32",
+                "{prefix}{}.f32",
                 label.split_whitespace().next().unwrap_or("recording")
             ));
             let bytes: Vec<u8> = steady
@@ -751,7 +893,9 @@ mod live {
         let pipe = format!(r"\\.\pipe\audiorouter-continuity-{}", std::process::id());
         // Optional real plugins: nodes (with saved state) copied from a
         // session in a COPY of a user database. Needs a built worker in
-        // AUDIOROUTER_PLUGIN_WORKER_PATH.
+        // AUDIOROUTER_PLUGIN_WORKER_PATH. `_CLEAR_BYPASS` forces the saved
+        // nodes active and `_FORCE_BYPASS` forces them bypassed, so the same
+        // copy can serve an active and a bypassed G8 run.
         let plugin_database = std::env::var_os("AUDIOROUTER_CONTINUITY_PLUGIN_DB");
         let plugin_ids: Vec<String> = std::env::var("AUDIOROUTER_CONTINUITY_PLUGINS")
             .unwrap_or_else(|_| "reafir,reaeq,reacomp,reagate".into())
@@ -890,6 +1034,9 @@ mod live {
                     .map(|mut node: Node| {
                         if std::env::var_os("AUDIOROUTER_CONTINUITY_CLEAR_BYPASS").is_some() {
                             node.bypass = false;
+                        }
+                        if std::env::var_os("AUDIOROUTER_CONTINUITY_FORCE_BYPASS").is_some() {
+                            node.bypass = true;
                         }
                         node
                     })
@@ -1046,11 +1193,11 @@ mod live {
         });
         // UI-like control load: 20 Hz diagnostics and a 10 Hz counter pump.
         let until = Instant::now() + Duration::from_secs(seconds);
-        let mut last_service = Value::Null;
         let mut last_thread = Value::Null;
         let mut last_underruns = Value::Null;
         let mut last_quanta = Value::Null;
         let mut underruns_seen = 0_u64;
+        let mut underruns_at_start: Option<u64> = None;
         let mut quanta_seen = 0_u64;
         let mut host_cpu = HostCpu::new();
         let mut tick = 0_u64;
@@ -1138,10 +1285,12 @@ mod live {
                     },
                     json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }),
                 );
-                last_service = pump["audioService"].clone();
                 last_thread = pump["audioThread"].clone();
                 last_underruns = pump["outputUnderruns"].clone();
                 last_quanta = pump["submittedQuanta"].clone();
+                if underruns_at_start.is_none() {
+                    underruns_at_start = last_underruns.as_u64();
+                }
             }
             if tick % 20 == 0 {
                 // One line a second: the output queue in ms and the worker
@@ -1215,6 +1364,25 @@ mod live {
             std::thread::sleep(Duration::from_millis(50));
         }
         measuring.store(false, Ordering::Release);
+        // One last counter read so the reported underruns cover the whole
+        // measured window, not the last 50 ms poll.
+        let final_pump = rpc(
+            &pipe,
+            if endpoint_mode {
+                "nativeEndpoints.pump"
+            } else {
+                "nativeMultiInputs.pump"
+            },
+            json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }),
+        );
+        let final_service = &final_pump["audioService"];
+        last_underruns = final_pump["outputUnderruns"].clone();
+        if let (Some(start), Some(end)) = (underruns_at_start, last_underruns.as_u64()) {
+            eprintln!(
+                "output underruns during measurement: {} (start {start}, end {end})",
+                end.saturating_sub(start)
+            );
+        }
         // A Stop/Play detaches the Recorder; only CABLE recordings remain.
         if record_mode() && !restarted {
             eprintln!(
@@ -1256,7 +1424,7 @@ mod live {
         }
 
         eprintln!(
-            "chain: {chain:?}; audio service: {last_service}; output underruns: {last_underruns}"
+            "chain: {chain:?}; audio service: {final_service}; output underruns: {last_underruns}"
         );
         for item in diagnostics["nodeTelemetry"]
             .as_array()
@@ -1267,6 +1435,46 @@ mod live {
                 "  {} timing={} plugin={} network={} processor={}",
                 item["nodeId"], item["timing"], item["plugin"], item["network"], item["processor"]
             );
+        }
+        // G8: a licensed latency-changing plugin must report its latency.
+        // This is only asserted when the owner names the expectation, because
+        // a plugin that adds no latency is valid for other runs.
+        let plugin_items: Vec<&Value> = diagnostics["nodeTelemetry"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|item| item["plugin"].is_object())
+            .collect();
+        if !plugin_items.is_empty() {
+            let plugin_delay_ms: f64 = plugin_items
+                .iter()
+                .filter_map(|item| item["timing"]["delayMs"].as_f64())
+                .sum();
+            eprintln!(
+                "plugin nodes: {}; total reported plugin delay {plugin_delay_ms:.2} ms",
+                plugin_items.len()
+            );
+            if let Some(expected) = std::env::var("AUDIOROUTER_CONTINUITY_EXPECT_PLUGIN_DELAY_MS")
+                .ok()
+                .and_then(|value| value.parse::<f64>().ok())
+            {
+                assert!(
+                    plugin_delay_ms >= expected,
+                    "plugin-reported delay {plugin_delay_ms:.2} ms is below the expected {expected:.2} ms"
+                );
+            }
+            if std::env::var("AUDIOROUTER_CONTINUITY_REQUIRE_PLUGIN_RUNNING").as_deref() == Ok("1")
+            {
+                for item in &plugin_items {
+                    assert_eq!(
+                        item["plugin"]["state"].as_str(),
+                        Some("running"),
+                        "plugin worker for {} is not running: {}",
+                        item["nodeId"],
+                        item["plugin"]
+                    );
+                }
+            }
         }
         if std::env::var_os("AUDIOROUTER_CONTINUITY_TOGGLE").is_some() {
             let levels: Vec<String> = result
@@ -1283,6 +1491,27 @@ mod live {
         }
         let reference_glitches = report("reference (CABLE Output)", &reference);
         let result_glitches = report("routed result (CABLE-B Output)", &result);
+        // G8: run the same route bypassed first with
+        // `AUDIOROUTER_CONTINUITY_DUMP_PREFIX=bypass`, then active with
+        // `AUDIOROUTER_CONTINUITY_EXPECT_DIFFERENT_FROM=<bypass routed.f32>`.
+        // This proves the samples changed; the owner's ears still judge
+        // whether the change is useful.
+        if let Ok(baseline_path) = std::env::var("AUDIOROUTER_CONTINUITY_EXPECT_DIFFERENT_FROM") {
+            let bytes = std::fs::read(&baseline_path)
+                .unwrap_or_else(|error| panic!("{baseline_path}: {error}"));
+            let baseline: Vec<f32> = bytes
+                .chunks_exact(4)
+                .map(|sample| f32::from_le_bytes(sample.try_into().unwrap()))
+                .collect();
+            let steady = steady_region(&result.left, AMPLITUDE / 4.0)
+                .expect("routed result has a steady tone to compare");
+            let difference = relative_difference(steady, &baseline);
+            eprintln!("routed result differs from {baseline_path} by relative RMS {difference:.3}");
+            assert!(
+                difference > 0.1,
+                "the routed result is sample-identical to the bypassed baseline (relative RMS {difference:.3}); the plugin did not change the tone"
+            );
+        }
         let recording_glitches = recording_path
             .as_deref()
             .filter(|_| !restarted)
@@ -1293,11 +1522,17 @@ mod live {
                     &Recording {
                         left: wav_float32_left(path),
                         discontinuity_flags: 0,
+                        silent_packets: 0,
+                        capture_gaps: 0,
+                        capture_lost_frames: 0,
+                        capture_overlaps: 0,
+                        capture_unknown_positions: 0,
                     },
                 )
             });
         assert_eq!(
-            last_service["active"], true,
+            final_service["active"].as_bool(),
+            Some(true),
             "backend must own audio service"
         );
         assert!(
@@ -1313,6 +1548,234 @@ mod live {
             0,
             "the recording has discontinuities"
         );
+    }
+
+    /// Read-only proof that the four continuity endpoints have no active
+    /// Windows audio session before any tone is rendered. This enumerates
+    /// session managers only; it opens no capture or render stream and plays
+    /// nothing. A human still closes Discord, Zoom, games and AudioRouter;
+    /// this check verifies that they did, and is repeated before each run.
+    #[test]
+    #[ignore = "live Windows audio: read-only endpoint usage preflight"]
+    fn live_continuity_endpoints_are_unused_preflight() {
+        if std::env::var("AUDIOROUTER_CONTINUITY_PREFLIGHT").as_deref() != Ok("1") {
+            return;
+        }
+        let endpoints = [
+            endpoint(
+                "AUDIOROUTER_CONTINUITY_TONE_RENDER_ID",
+                "{0.0.0.00000000}.{71f96f14-94c1-4189-b9b9-df8c960db8f2}",
+                EndpointDirection::Render,
+            ),
+            endpoint(
+                "AUDIOROUTER_CONTINUITY_ROUTE_CAPTURE_ID",
+                "{0.0.1.00000000}.{06268191-5f8c-42ed-827e-d3c7a19637ed}",
+                EndpointDirection::Capture,
+            ),
+            endpoint(
+                "AUDIOROUTER_CONTINUITY_ROUTE_RENDER_ID",
+                "{0.0.0.00000000}.{7ebf5c2d-9a8e-4056-8dc9-277cb59ec3e8}",
+                EndpointDirection::Render,
+            ),
+            endpoint(
+                "AUDIOROUTER_CONTINUITY_RESULT_CAPTURE_ID",
+                "{0.0.1.00000000}.{ef18e30a-69c9-4299-bae2-1a2452fb8e4f}",
+                EndpointDirection::Capture,
+            ),
+        ];
+        let ignore_pid = std::env::var("AUDIOROUTER_CONTINUITY_PREFLIGHT_IGNORE_PID")
+            .ok()
+            .and_then(|value| value.parse::<u32>().ok());
+        let inventory = audiorouter_windows_audio::enumerate_application_audio().unwrap();
+        let mut busy = Vec::new();
+        for endpoint_id in &endpoints {
+            let users: Vec<String> = inventory
+                .iter()
+                .filter(|app| app.process_id != ignore_pid.unwrap_or(0))
+                .filter(|app| {
+                    app.endpoints
+                        .iter()
+                        .any(|usage| usage.endpoint_id == *endpoint_id && usage.active)
+                })
+                .map(|app| format!("{} ({:?})", app.process_id, app.display_names))
+                .collect();
+            eprintln!("{endpoint_id}: {} active session(s)", users.len());
+            if !users.is_empty() {
+                busy.push(format!("{endpoint_id} used by {users:?}"));
+            }
+        }
+        assert!(
+            busy.is_empty(),
+            "the continuity endpoints are not free; render no tone: {busy:?}"
+        );
+    }
+
+    /// Destination output level from the backend's own meter. The route must
+    /// already be running; no capture device is opened here.
+    fn destination_rms_db(pipe: &str) -> f64 {
+        let diagnostics = rpc(pipe, "system.diagnostics", Value::Null);
+        diagnostics["nodeTelemetry"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|node| node["nodeId"] == "destination")
+            .and_then(|node| node["meter"]["rmsDb"].as_f64())
+            .unwrap_or(f64::NEG_INFINITY)
+    }
+
+    /// Best-of-three destination level, so a meter refresh between polls does
+    /// not make a steady tone look silent.
+    fn sampled_rms_db(pipe: &str) -> f64 {
+        let mut best = f64::NEG_INFINITY;
+        for _ in 0..3 {
+            best = best.max(destination_rms_db(pipe));
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        best
+    }
+
+    /// C2: privacy mute silences a running physical-input route without
+    /// stopping it, and clearing the latch resumes the same route. The source
+    /// is a virtual-cable input; no microphone is opened and no user audio is
+    /// recorded. Opt-in and requires the owner's quiet window.
+    #[test]
+    #[ignore = "live Windows audio: privacy mute on a running CABLE route"]
+    fn live_privacy_mute_silences_and_resumes_a_running_route() {
+        if std::env::var("AUDIOROUTER_LIVE_PRIVACY_MUTE").as_deref() != Ok("1") {
+            return;
+        }
+        let tone_render = endpoint(
+            "AUDIOROUTER_CONTINUITY_TONE_RENDER_ID",
+            "{0.0.0.00000000}.{71f96f14-94c1-4189-b9b9-df8c960db8f2}",
+            EndpointDirection::Render,
+        );
+        let route_capture = endpoint(
+            "AUDIOROUTER_CONTINUITY_ROUTE_CAPTURE_ID",
+            "{0.0.1.00000000}.{06268191-5f8c-42ed-827e-d3c7a19637ed}",
+            EndpointDirection::Capture,
+        );
+        let route_render = endpoint(
+            "AUDIOROUTER_CONTINUITY_ROUTE_RENDER_ID",
+            "{0.0.0.00000000}.{7ebf5c2d-9a8e-4056-8dc9-277cb59ec3e8}",
+            EndpointDirection::Render,
+        );
+        let session_id = "privacy-mute";
+        let pipe = format!(r"\\.\pipe\audiorouter-privacy-{}", std::process::id());
+        let server_pipe = pipe.clone();
+        let (capture, render) = (route_capture.clone(), route_render.clone());
+        std::thread::spawn(move || {
+            let mut plane = audiorouter_control::ControlPlane::default();
+            let mut candidate = route(&capture, &render, &[NodeKind::Gain], Vec::new());
+            candidate.id = EntityId::new(session_id);
+            plane.insert_session(candidate).unwrap();
+            let grant = audiorouter_control::ClientGrant::with_scopes([
+                audiorouter_domain::PermissionScope::Read,
+                audiorouter_domain::PermissionScope::GraphWrite,
+                audiorouter_domain::PermissionScope::SessionControl,
+                audiorouter_domain::PermissionScope::DeviceAdministration,
+            ]);
+            let _ = audiorouter_transport::serve_control_connections_forever_with_grant(
+                &server_pipe,
+                plane,
+                grant,
+            );
+        });
+        std::thread::sleep(Duration::from_millis(300));
+        let stop = Arc::new(AtomicBool::new(false));
+        let tone = generator(tone_render, Arc::clone(&stop));
+        let prepared = rpc(
+            &pipe,
+            "nativePaths.prepare",
+            json!({ "sessionId": session_id }),
+        );
+        eprintln!("prepared: {prepared}");
+        let started = rpc(
+            &pipe,
+            "session.start",
+            json!({ "sessionId": session_id, "idempotencyKey": format!("privacy-start-{}", std::process::id()) }),
+        );
+        let generation = started["generation"].as_u64().unwrap();
+        std::thread::sleep(Duration::from_secs(1));
+
+        let before = sampled_rms_db(&pipe);
+        assert!(
+            before > -40.0,
+            "the tone is not present before privacy mute: {before:.1} dBFS"
+        );
+        let underruns_before = rpc(
+            &pipe,
+            "nativeMultiInputs.pump",
+            json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }),
+        )["outputUnderruns"]
+            .as_u64()
+            .unwrap_or(0);
+
+        rpc(
+            &pipe,
+            "safety.setPrivacyMute",
+            json!({ "muted": true, "idempotencyKey": format!("privacy-mute-{}", std::process::id()) }),
+        );
+        std::thread::sleep(Duration::from_millis(500));
+        let muted = sampled_rms_db(&pipe);
+        assert!(
+            muted < before - 30.0,
+            "privacy mute did not silence the running route: before {before:.1}, muted {muted:.1} dBFS"
+        );
+        let running = rpc(&pipe, "system.diagnostics", Value::Null);
+        assert_eq!(
+            running["audio"]["state"].as_str(),
+            Some("running"),
+            "privacy mute stopped the route instead of silencing it: {running}"
+        );
+        assert_eq!(
+            running["nativeSessionId"].as_str(),
+            Some(session_id),
+            "privacy mute detached the native route: {running}"
+        );
+        let pump_after_mute = rpc(
+            &pipe,
+            "nativeMultiInputs.pump",
+            json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }),
+        );
+        assert_eq!(
+            pump_after_mute["audioService"]["active"].as_bool(),
+            Some(true),
+            "privacy mute restarted or detached the route: {pump_after_mute}"
+        );
+
+        rpc(
+            &pipe,
+            "safety.setPrivacyMute",
+            json!({ "muted": false, "idempotencyKey": format!("privacy-unmute-{}", std::process::id()) }),
+        );
+        std::thread::sleep(Duration::from_millis(500));
+        let after = sampled_rms_db(&pipe);
+        assert!(
+            (after - before).abs() < 10.0,
+            "the route did not resume after clearing privacy mute: before {before:.1}, after {after:.1} dBFS"
+        );
+        let underruns_after = rpc(
+            &pipe,
+            "nativeMultiInputs.pump",
+            json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }),
+        )["outputUnderruns"]
+            .as_u64()
+            .unwrap_or(0);
+        assert_eq!(
+            underruns_after, underruns_before,
+            "privacy mute caused an output underrun instead of a clean silence"
+        );
+        eprintln!(
+            "privacy mute: before {before:.1} dBFS, muted {muted:.1}, after {after:.1}; underruns {underruns_before} -> {underruns_after}"
+        );
+
+        rpc(
+            &pipe,
+            "session.stop",
+            json!({ "sessionId": session_id, "idempotencyKey": format!("privacy-stop-{}", std::process::id()) }),
+        );
+        stop.store(true, Ordering::Release);
+        tone.join().unwrap();
     }
 
     /// Attended, opt-in synthetic comparison on one explicitly selected output.
