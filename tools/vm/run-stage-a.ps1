@@ -53,6 +53,8 @@
                -Blocks picks and orders nothing, it only selects among:
                  ab        paired RC3 / 0.2.5 render comparison, alternating
                            installs, steady and restarting render streams
+                           (-AbSameStart: restart after every install and
+                           wait -AbSettleSeconds, so both start alike)
                  pause     (only with -WithHostPause) a cable route across a
                            90 s host-side VM pause; needs round2-pause-watcher.ps1
                  live      driver update and removal while a cable route plays
@@ -74,6 +76,12 @@ param(
     # round2 only
     [ValidatePattern('^(ab|pause|live|pool|verifier|control|repro)(,(ab|pause|live|pool|verifier|control|repro))*$')][string] $Blocks = 'ab,pool,verifier,live',
     [ValidateRange(2, 8)][int] $AbPhases = 6,
+    # A/B: restart after every install, whichever driver, and wait the same time
+    # before the tone runs. Without it only 0.2.5 (exit 5 on install) started
+    # from a fresh boot, and its worst steady runs were the post-boot ones
+    # (2026-11-27 D3).
+    [switch] $AbSameStart,
+    [ValidateRange(0, 1800)][int] $AbSettleSeconds = 180,
     [ValidateRange(1, 12)][int] $ReproBoots = 5,
     [switch] $WithHostPause,
     # round2: sign in by itself after every planned restart (asks for the guest
@@ -154,6 +162,7 @@ function Register-Resume {
     # Every option is repeated: a resumed run must behave like the one that started.
     $extra = "-SettleSeconds $SettleSeconds -FuzzSeconds $FuzzSeconds -PoolMinutes $PoolMinutes -EightMinutes $EightMinutes -Blocks $Blocks -AbPhases $AbPhases -ReproBoots $ReproBoots"
     if ($WithHostPause) { $extra += ' -WithHostPause' }
+    if ($AbSameStart) { $extra += " -AbSameStart -AbSettleSeconds $AbSettleSeconds" }
     $action = New-ScheduledTaskAction -Execute $powershell `
         -Argument "-NoProfile -ExecutionPolicy Bypass -NoExit -File `"$PSCommandPath`" -Session $Session -Resume $extra" `
         -WorkingDirectory $bundle
@@ -186,6 +195,28 @@ if ($AutoLogon) {
         Write-Host 'Auto-logon is on for this run.' -ForegroundColor Cyan
     }
 }
+# --- host load (round2) --------------------------------------------------------
+# The PC sampler writes C:\VMs\ar-share\host-load.csv, which the guest sees as
+# Z:\host-load.csv. Blocks are judged by row position; the guest clock is not
+# compared with the host clock (the 2026-11-22 core showed they differ by hours).
+# Defined before the resume check below, which calls Add-HostLoadResult after an
+# unplanned restart (2026-11-27: defined later, the resumed run died on it).
+function Read-HostLoadRows {
+    param([string] $Path = $hostLoadPeer)
+    if (-not (Test-Path -LiteralPath $Path)) { return @() }
+    try { return @(Get-HostLoadRows @(Get-Content -LiteralPath $Path -ErrorAction Stop)) } catch { return @() }
+}
+function Add-HostLoadResult {
+    param([string] $Name, [int] $From = 0, [string] $Note = '')
+    $window = Get-HostLoadWindow -Rows (Read-HostLoadRows) -From $From
+    $verdict = Get-HostLoadVerdict $window
+    $detail = $verdict.Detail
+    if ($Note) { $detail = "$detail; $Note" }
+    if ($verdict.Verdict -eq 'Idle') { Add-Result "host load ($Name)" 'INFO' $detail }
+    elseif ($verdict.Verdict -eq 'Starved') { Add-Result "host load ($Name)" 'REVIEW' "$detail; host starvation, so this window is not a driver result" }
+    else { Add-Result "host load ($Name)" 'REVIEW' $detail }
+}
+
 Register-Resume
 if ($state.current -and -not $done.Contains($state.current)) {
     # The VM restarted while a step was running and nobody asked for it.
@@ -506,26 +537,6 @@ function Grade-Pool([string] $Label, $Samples) {
     if ($perHourMiB -le 1) { Add-Result $Label 'PASS' $detail }
     elseif ($perHourMiB -le 8) { Add-Result $Label 'REVIEW' "$detail (whole-system pool; check pool.csv)" }
     else { Add-Result $Label 'FAIL' $detail }
-}
-
-# --- host load (round2) --------------------------------------------------------
-# The PC sampler writes C:\VMs\ar-share\host-load.csv, which the guest sees as
-# Z:\host-load.csv. Blocks are judged by row position; the guest clock is not
-# compared with the host clock (the 2026-11-22 core showed they differ by hours).
-function Read-HostLoadRows {
-    param([string] $Path = $hostLoadPeer)
-    if (-not (Test-Path -LiteralPath $Path)) { return @() }
-    try { return @(Get-HostLoadRows @(Get-Content -LiteralPath $Path -ErrorAction Stop)) } catch { return @() }
-}
-function Add-HostLoadResult {
-    param([string] $Name, [int] $From = 0, [string] $Note = '')
-    $window = Get-HostLoadWindow -Rows (Read-HostLoadRows) -From $From
-    $verdict = Get-HostLoadVerdict $window
-    $detail = $verdict.Detail
-    if ($Note) { $detail = "$detail; $Note" }
-    if ($verdict.Verdict -eq 'Idle') { Add-Result "host load ($Name)" 'INFO' $detail }
-    elseif ($verdict.Verdict -eq 'Starved') { Add-Result "host load ($Name)" 'REVIEW' "$detail; host starvation, so this window is not a driver result" }
-    else { Add-Result "host load ($Name)" 'REVIEW' $detail }
 }
 
 # --- steps ---------------------------------------------------------------------
@@ -1096,6 +1107,10 @@ function Phase-Ab([int] $Index, [string] $Driver) {
             Complete-AndRestart "${P}install" 'Windows needs a restart to finish installing the driver.'
         }
         if ($run.Code -ne 0) { throw 'install failed; see its output above.' }
+        if ($AbSameStart) {
+            Add-Result "${P}install" 'PASS' 'installed; restarting so both drivers start from a fresh boot (-AbSameStart)'
+            Complete-AndRestart "${P}install" 'Restarting so both drivers start their tone runs from a fresh boot.'
+        }
         Add-Result "${P}install" 'PASS' 'installed'
     }
     Step "${P}status" {
@@ -1103,6 +1118,12 @@ function Phase-Ab([int] $Index, [string] $Driver) {
         $loaded = Test-ExpectedDriverLoaded $package
         $ok = ($run.Code -eq 0) -and $loaded.Ok
         Add-Result "${P}status" $(if ($ok) { 'PASS' } else { 'FAIL' }) "$(($run.Checks | Select-Object -First 1).detail); $($loaded.Detail)"
+    }
+    if ($AbSameStart) {
+        Step "${P}settle" {
+            Start-Sleep -Seconds $AbSettleSeconds
+            Add-Result "${P}settle" 'INFO' "waited $AbSettleSeconds s after the restart, the same for both drivers"
+        }
     }
     foreach ($shape in @(@('steady', 1), @('steady', 2), @('restarts', 1), @('restarts', 2))) {
         $variant = $shape[0]
