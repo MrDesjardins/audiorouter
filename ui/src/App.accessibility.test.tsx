@@ -1423,25 +1423,39 @@ describe("VB-Cable endpoint selection", () => {
 
 describe("committed history and client authorization", () => {
   it("lists known clients and authorizes a new one", async () => {
-    let clients = [{ clientId: "cli-1", role: "operator", revoked: false }];
+    let clients = [{ clientId: "cli-1", role: "operator", revoked: false, allowRecording: false }];
     const listClients = vi.fn(async () => clients);
-    const authorizeClient = vi.fn(async (clientId: string, role: "observer" | "editor" | "operator") => {
-      clients = [...clients, { clientId, role, revoked: false }];
-      return { clientId, role, revoked: false as const };
-    });
+    const authorizeClient = vi.fn(
+      async (clientId: string, role: "observer" | "editor" | "operator", _key: string, allowRecording?: boolean) => {
+        clients = [...clients, { clientId, role, revoked: false, allowRecording: allowRecording === true }];
+        return { clientId, role, revoked: false as const, allowRecording: allowRecording === true };
+      },
+    );
     await renderReady(<App backend={{ ...connectedPreviewBackend(), listClients, authorizeClient }} />);
     await openSettingsPage("Connected clients");
     expect(await screen.findByText("cli-1")).toBeTruthy();
+    const recordBox = screen.getByRole("checkbox", { name: "Also allow recordings" }) as HTMLInputElement;
+    // A1: recording control is off unless the user ticks it.
+    expect(recordBox.checked).toBe(false);
     fireEvent.change(screen.getByLabelText("New client ID"), { target: { value: "mcp-2" } });
     fireEvent.change(screen.getByLabelText("New client role"), { target: { value: "editor" } });
     fireEvent.click(screen.getByRole("button", { name: "Authorize client" }));
-    await waitFor(() => expect(authorizeClient).toHaveBeenCalledWith("mcp-2", "editor", expect.any(String)));
+    await waitFor(() => expect(authorizeClient).toHaveBeenCalledWith("mcp-2", "editor", expect.any(String), false));
     expect(await screen.findByText("mcp-2")).toBeTruthy();
-    expect(await screen.findByText(/Authorized mcp-2 as editor/)).toBeTruthy();
+    expect(await screen.findByText(/Authorized mcp-2 as editor\.$/)).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("New client ID"), { target: { value: "mcp-3" } });
+    fireEvent.click(recordBox);
+    fireEvent.click(screen.getByRole("button", { name: "Authorize client" }));
+    await waitFor(() => expect(authorizeClient).toHaveBeenCalledWith("mcp-3", "editor", expect.any(String), true));
+    expect(await screen.findByText(/It can also start and stop recordings/)).toBeTruthy();
+    expect(await screen.findByText(/may record/)).toBeTruthy();
+    // The box resets after each authorization.
+    expect(recordBox.checked).toBe(false);
   });
 
   it("revokes a known client", async () => {
-    let clients = [{ clientId: "cli-1", role: "operator", revoked: false }];
+    let clients = [{ clientId: "cli-1", role: "operator", revoked: false, allowRecording: false }];
     const listClients = vi.fn(async () => clients);
     const revokeClient = vi.fn(async (clientId: string) => {
       clients = clients.map((client) => (client.clientId === clientId ? { ...client, revoked: true } : client));

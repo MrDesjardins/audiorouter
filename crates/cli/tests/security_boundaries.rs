@@ -359,3 +359,179 @@ fn real_mcp_pipe_preserves_roles_and_live_revocation() {
         }
     }
 }
+
+/// Runs one API method on the database through `audiorouter-cli api call`,
+/// as the window's enrollment and revocation tests do.
+fn cli_api_call(database: &str, method: &str, params: Value, key: &str) {
+    let root = std::path::Path::new(database).parent().unwrap();
+    let file = root.join(format!("api-{key}.json"));
+    std::fs::write(&file, params.to_string()).unwrap();
+    let result = Command::new(env!("CARGO_BIN_EXE_audiorouter-cli"))
+        .args([
+            "api",
+            "call",
+            method,
+            file.to_str().unwrap(),
+            "--database",
+            database,
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{method}: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+}
+
+/// Owner decision A1 (2026-11-27), through the real forwarding adapter: an
+/// assistant reaches the recording tools only after the window allowed it,
+/// and loses them live when the window turns the option off or revokes it.
+#[test]
+fn real_mcp_pipe_honors_the_recording_opt_in_and_its_live_removal() {
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!(
+        "audiorouter-recording-opt-in-{}-{nonce}",
+        std::process::id()
+    ));
+    std::fs::create_dir(&root).unwrap();
+    let database = root.join("review.db");
+    let database = database.to_str().unwrap();
+    let pipe = format!(
+        r"\\.\pipe\audiorouter-recording-opt-in-{}-{nonce}",
+        std::process::id()
+    );
+    let sid = audiorouter_transport::current_user_sid().unwrap();
+    let assistant = format!("assistant-{nonce}");
+    enroll(database, &sid, "operator", "owner");
+    enroll(database, &assistant, "editor", "assistant");
+    let backend_log = root.join("backend.stderr");
+    let mut backend = spawn_logged(
+        Command::new(env!("CARGO_BIN_EXE_audiorouter-cli"))
+            .args([
+                "backend",
+                "serve",
+                "--database",
+                database,
+                "--pipe",
+                &pipe,
+                "--connections",
+                "40",
+            ])
+            .env("LOCALAPPDATA", &root)
+            .stdout(Stdio::null()),
+        &backend_log,
+    );
+    let request = audiorouter_protocol::encode_frame(
+        &json!({"jsonrpc":"2.0","id":1,"method":"system.describe"}),
+    )
+    .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while audiorouter_transport::round_trip(&pipe, &request).is_err() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "backend failed to start: {:?}; backend stderr: {}",
+            backend.0.try_wait(),
+            stderr_tail(&backend_log)
+        );
+        std::thread::yield_now();
+    }
+    let mcp_log = root.join("mcp.stderr");
+    let logs = Logs {
+        mcp: &mcp_log,
+        backend: &backend_log,
+    };
+    // Default tools only: no --advanced-tools.
+    let mut mcp = spawn_logged(
+        Command::new(env!("CARGO_BIN_EXE_audiorouter-cli"))
+            .args([
+                "mcp",
+                "serve",
+                "--database",
+                database,
+                "--client-id",
+                &assistant,
+                "--pipe",
+                &pipe,
+            ])
+            .env("LOCALAPPDATA", &root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped()),
+        &mcp_log,
+    );
+    let mut input = mcp.0.stdin.take().unwrap();
+    let mut output = BufReader::new(mcp.0.stdout.take().unwrap());
+    call(
+        &mut input,
+        &mut output,
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}}),
+        &logs,
+    );
+    let mut next_id = 10;
+    let mut stop_code =
+        |input: &mut std::process::ChildStdin,
+         output: &mut BufReader<std::process::ChildStdout>| {
+            next_id += 1;
+            let response = call(
+                input,
+                output,
+                json!({"jsonrpc":"2.0","id":next_id,"method":"tools/call","params":{"name":"stop_recording","arguments":{"node":"No such recorder"}}}),
+                &logs,
+            );
+            response["result"]["structuredContent"]["error"]["data"]["code"]
+                .as_str()
+                .unwrap_or("none")
+                .to_owned()
+        };
+    assert_eq!(
+        stop_code(&mut input, &mut output),
+        "permissionDenied",
+        "off by default"
+    );
+    cli_api_call(
+        database,
+        "clients.authorize",
+        json!({"clientId":assistant,"role":"editor","allowRecording":true,"idempotencyKey":"allow"}),
+        "allow",
+    );
+    let allowed = stop_code(&mut input, &mut output);
+    assert_ne!(
+        allowed, "permissionDenied",
+        "the live sidecar gains the opt-in"
+    );
+    cli_api_call(
+        database,
+        "clients.authorize",
+        json!({"clientId":assistant,"role":"editor","idempotencyKey":"disallow"}),
+        "disallow",
+    );
+    assert_eq!(
+        stop_code(&mut input, &mut output),
+        "permissionDenied",
+        "turning the option off takes effect live"
+    );
+    cli_api_call(
+        database,
+        "clients.authorize",
+        json!({"clientId":assistant,"role":"editor","allowRecording":true,"idempotencyKey":"allow-again"}),
+        "allow-again",
+    );
+    cli_api_call(
+        database,
+        "clients.revoke",
+        json!({"clientId":assistant,"idempotencyKey":"revoke"}),
+        "revoke",
+    );
+    assert_eq!(
+        stop_code(&mut input, &mut output),
+        "permissionDenied",
+        "a revoked assistant loses recording at once"
+    );
+    drop(mcp);
+    drop(backend);
+    let _ = std::fs::remove_dir_all(&root);
+}

@@ -811,10 +811,10 @@ console.log(
 const catalogPath = resolve(site, "assets/tool-catalog.json");
 const catalog = JSON.parse(await readFile(catalogPath, "utf8"));
 const alias = {
-  "Physical input": "physicalInput",
+  "Input device": "physicalInput",
   "Application capture": "applicationCapture",
   "Endpoint loopback": "endpointLoopback",
-  "Physical output": "physicalOutput",
+  "Output device": "physicalOutput",
   "Parametric EQ": "parametricEq",
   "Gate / Expander": "gate",
   Delay: "delay",

@@ -32,7 +32,10 @@ and [Cowork architecture overview](https://support.claude.com/en/articles/144792
 
    Start with a stopped test session. Starting audio (Play) opens your audio
    devices, which needs device administration that MCP clients never receive:
-   press Play in AudioRouter yourself. Recording needs its own record scope.
+   press Play in AudioRouter yourself. Recording needs its own permission:
+   tick **Also allow recordings** when you authorize the client in
+   Settings, Connected clients, if you want the assistant to start and stop
+   recordings. It is off by default.
    No role is universal authority.
 
 The ZIP contains only the manifest and a README. Its exact CLI, database and

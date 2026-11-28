@@ -136,15 +136,15 @@ selected input and output. Adjusting that node is a real graph change: use
 already running. The same path is used for EQ, gate, compressor, limiter, and
 other built-in processors added from the canvas.
 
-An ordinary input port accepts one incoming connection. If a Physical output
+An ordinary input port accepts one incoming connection. If an Output device
 already receives another source, dragging Test Signal to that input shows the
 current source and offers **Replace input connection**. This changes only the
 draft; **Undo** restores the old edge, and **Save** persists the chosen
 route. To combine both sources in the graph, add a visible Mixer and connect
 them through it rather than stacking two edges on the output port. Native
 activation of a combined route still requires its own validation. The current
-single-endpoint engine supports one stereo Physical Input and one stereo Test
-Signal feeding the same Mixer and one Physical Output. Other source mixes may
+single-endpoint engine supports one stereo Input device and one stereo Test
+Signal feeding the same Mixer and one Output device. Other source mixes may
 still return an unsupported-route message before audio starts.
 
 While the session plays, **Enabled** and **Bypass** on an already prepared
@@ -250,7 +250,7 @@ Reconnect an input and save to include that chain again.
 To connect Advanced EQ to a Mixer, start dragging at the **EQ's blue sending
 dot**, then drop on the **Mixer's orange receiving dot**, which appears during
 the drag. Every source and tool follows that same direction. Then drag from
-the **Mixer's blue dot** to the **Physical Output's orange dot**. An EQ output
+the **Mixer's blue dot** to the **Output device's orange dot**. An EQ output
 can feed Scarlett directly and also feed a Mixer that combines it with Discord
 for another output. Adding the Mixer branch preserves the Scarlett connection.
 If an ordinary receiving input is occupied, the notice offers **Replace input

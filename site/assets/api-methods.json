@@ -1,5 +1,5 @@
 {
-  "backendMethods": 132,
+  "backendMethods": 133,
   "operations": [
     {
       "method": "POST",
@@ -880,6 +880,13 @@
       "method": "POST",
       "path": "/api/v1/sessions/delete",
       "operation": "sessions.delete",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sessions/rename",
+      "operation": "sessions.rename",
       "permission": "GraphWrite",
       "effect": "Mutating"
     },

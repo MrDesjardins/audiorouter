@@ -288,6 +288,7 @@ impl ControlPlane {
             test_signal_sources: HashMap::new(),
             soundboard_sources: HashMap::new(),
             enrollments: HashMap::new(),
+            recording_clients: std::collections::HashSet::new(),
             events: EventLog::new(backend_epoch),
             mutation_limiter: MutationRateLimiter::default(),
             operation_outcomes: HashMap::new(),

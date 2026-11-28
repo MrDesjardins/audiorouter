@@ -1122,7 +1122,7 @@
       "title": "Every setting",
       "video": "assets/tool-guides/physicalInput-overview.mp4",
       "poster": "assets/tool-guides/physicalInput-overview.jpg",
-      "description": "A silent tour of the Physical Input Properties panel. It scrolls through every setting, then returns to the top."
+      "description": "A silent tour of the Input device Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "physicalOutput": [
@@ -1130,7 +1130,7 @@
       "title": "Every setting",
       "video": "assets/tool-guides/physicalOutput-overview.mp4",
       "poster": "assets/tool-guides/physicalOutput-overview.jpg",
-      "description": "A silent tour of the Physical Output Properties panel. It scrolls through every setting, then returns to the top."
+      "description": "A silent tour of the Output device Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "applicationCapture": [

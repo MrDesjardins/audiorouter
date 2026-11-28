@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+## 0.0.33 — not yet released (unsigned experimental preview)
+
+- **Assistants can record, if you allow it.** In Settings > Connected clients,
+  tick "Also allow recordings" when you authorize a client. That client (for
+  example an assistant over MCP) can then start, stop, rename and tag
+  recordings; it still cannot choose the recording folder. It is off by
+  default, the client list shows "may record", and authorizing again without
+  the tick or revoking the client turns it off at once.
+- **Rename a session from a script or an assistant.** New API method
+  `sessions.rename` and MCP tool `rename_session` (Editor). It saves a
+  revision, so Undo brings the old name back.
+- **Assistants can see the virtual buses.** The read-only lists
+  `list_virtual_devices` and `list_virtual_routes` are now default MCP tools.
+  Creating, removing or rerouting buses still needs device administration,
+  which assistants are not given.
+- **Safer device recovery.** Editing a route, starting a recording or a plugin
+  failing while a device is being recovered now stops the route with a reason
+  instead of restarting it. Play on a route whose device is still missing says
+  so instead of playing silence. Several sleeps in a row keep every stopped
+  route on the resume list, routes with a failed plugin are no longer offered
+  for restart, and recovery never re-arms a recorder.
+- **Retried requests after a restart.** Repeating an old Play or recording
+  request with the same key after AudioRouter restarts no longer answers
+  "running" for audio that stopped; it is refused and starts nothing.
+- **Mic to Discord goal.** A new starting point: Microphone → Speech Denoise →
+  Gate → Compressor → Voice to Discord.
+- **Clearer layout and errors.** Spacing fixes across panels, recovery errors
+  in plain words (English, French and Simplified Chinese), stronger field
+  borders, focus ring and pressed-toggle contrast, and dialogs that keep focus
+  and show their errors in front.
+- **Up to 16 virtual cables** can be addressed, limited to what the installed
+  driver reports (the current driver offers 8).
+- **Fixes from testing:** opening a WAV file whose header claims an impossible
+  channel count is refused instead of crashing the decoder; a busy control pipe waits for its request's timeout
+  instead of failing after 2 s; an Instrument counts as a sound source in the
+  OBS and app checks.
+- **Website:** the site and guides say "Input device" and "Output device", as
+  the app does.
+
 ## 0.0.32 — 2026-11-22 (unsigned experimental preview)
 
 - **More reliable backend startup.** A client connecting at exactly the wrong

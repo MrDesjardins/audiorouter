@@ -296,6 +296,9 @@ export function ClientsPanel({ backend, initialClientId }: { backend: UiBackend;
   const [busy, setBusy] = useState(false);
   const [newClientId, setNewClientId] = useState("");
   const [newClientRole, setNewClientRole] = useState<(typeof CLIENT_ROLES)[number]>("observer");
+  // Owner decision A1 (2026-11-27): recording control is a separate opt-in,
+  // off unless ticked for this authorization.
+  const [newClientRecords, setNewClientRecords] = useState(false);
   const refreshGeneration = useRef(0);
   useEffect(() => {
     if (initialClientId) setNewClientId(initialClientId);
@@ -321,9 +324,20 @@ export function ClientsPanel({ backend, initialClientId }: { backend: UiBackend;
     if (!clientId || busy || !backend.connected) return;
     setBusy(true);
     try {
-      await backend.authorizeClient(clientId, newClientRole, uiIdempotencyKey(`client-authorize-${clientId}`));
-      setMessage(say("g3Adv.authorized", { id: clientId, role: roleLabel(newClientRole).toLowerCase() }));
+      await backend.authorizeClient(
+        clientId,
+        newClientRole,
+        uiIdempotencyKey(`client-authorize-${clientId}`),
+        newClientRecords,
+      );
+      setMessage(
+        say(newClientRecords ? "g3Adv.authorizedRecording" : "g3Adv.authorized", {
+          id: clientId,
+          role: roleLabel(newClientRole).toLowerCase(),
+        }),
+      );
       setNewClientId("");
+      setNewClientRecords(false);
       refresh();
     } catch (error) {
       setMessage(uiError(error, tr("g3Adv.authorizeFailed")));
@@ -365,6 +379,7 @@ export function ClientsPanel({ backend, initialClientId }: { backend: UiBackend;
               <strong>{client.clientId}</strong>{" "}
               <small>
                 {roleLabel(client.role).toLowerCase()}
+                {client.allowRecording && !client.revoked ? tr("g3Adv.recordingTag") : ""}
                 {client.revoked ? tr("g3Adv.revokedTag") : ""}
               </small>{" "}
               {!client.revoked && (
@@ -408,6 +423,21 @@ export function ClientsPanel({ backend, initialClientId }: { backend: UiBackend;
             ))}
           </select>
         </label>
+        <label className="autoplay-toggle">
+          <input
+            type="checkbox"
+            checked={newClientRecords}
+            disabled={!backend.connected || busy}
+            aria-describedby="client-recording-note"
+            onChange={(event) => setNewClientRecords(event.target.checked)}
+          />
+          {tr("g3Adv.allowRecording")}
+        </label>
+      </div>
+      <p className="muted" id="client-recording-note">
+        {tr("g3Adv.allowRecordingNote")}
+      </p>
+      <div className="actions">
         <button
           type="button"
           className="secondary"

@@ -25,8 +25,13 @@ pub(crate) const SIMPLE_METHODS: &[(&str, bool)] = &[
     ("nodes.remove", true),
     ("connections.add", true),
     ("connections.remove", true),
+    ("sessions.rename", true),
     ("meters.levels", false),
 ];
+
+/// Longest session name `sessions.rename` accepts, in characters; the same
+/// limit as the window's rename field (`setSessionDraftName`).
+pub(crate) const MAX_SESSION_NAME_CHARS: usize = 120;
 
 /// Display name, ports and a one-line plain description of a node kind that
 /// can be added by kind alone. Kinds that need an identity chosen in the UI
@@ -1050,6 +1055,33 @@ impl ControlPlane {
                     ));
                 }
                 detail = json!({ "removed": before - candidate.edges.len() });
+            }
+            "sessions.rename" => {
+                let name = text_param(params, "name")?.trim();
+                if name.is_empty() || name.chars().any(char::is_control) {
+                    return Err(ControlError::InvalidRequest(
+                        "name must be non-empty text without control characters".into(),
+                    ));
+                }
+                if name.chars().count() > MAX_SESSION_NAME_CHARS {
+                    return Err(ControlError::InvalidRequest(format!(
+                        "name must be at most {MAX_SESSION_NAME_CHARS} characters"
+                    )));
+                }
+                if name == current.name {
+                    // Already named so: succeed without a new revision, so a
+                    // repeated rename (new key, same name) is harmless.
+                    return Ok(json!({
+                        "sessionId": session_id,
+                        "name": name,
+                        "previousName": current.name,
+                        "unchanged": true,
+                        "revision": current.revision,
+                        "activation": Value::Null,
+                    }));
+                }
+                candidate.name = name.to_owned();
+                detail = json!({ "name": name, "previousName": current.name });
             }
             _ => return Err(ControlError::InvalidRequest("method not found".into())),
         }
