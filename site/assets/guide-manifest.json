@@ -171,14 +171,14 @@
     },
     {
       "kind": "physicalInput",
-      "title": "Physical Input",
+      "title": "Input device",
       "path": "tools/physical-input.html",
       "propertyCount": 4,
       "audioRelevant": false
     },
     {
       "kind": "physicalOutput",
-      "title": "Physical Output",
+      "title": "Output device",
       "path": "tools/physical-output.html",
       "propertyCount": 1,
       "audioRelevant": false
