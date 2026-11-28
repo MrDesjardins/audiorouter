@@ -49,8 +49,9 @@ unrelated untracked files or owner profiles are used.
    the owner's app and profiles out of every run.
 6. Record results in a unique evidence file, update this plan and add the
    verified status to `current.md` only after the checks and build finish.
-7. Commit the audited source, plan and evidence changes and open one stacked PR
-   for review. Do not tag, publish or merge it.
+7. Commit the audited source, plan and evidence changes and open one PR for
+   review. PR #207 now targets `main` and contains the merged #201/#203/#205 work.
+   Do not tag, publish or merge it.
 
 ## Validation matrix and evidence
 
@@ -75,20 +76,23 @@ unrelated untracked files or owner profiles are used.
 
 ## Results
 
-Integration commit `8b7d3af48` is clean and locally qualified. Both formatting
-and Clippy runs are clean; 64 workspace test targets (1,683 passed, 0 failed), 186
-`src-tauri` tests, 1,210 UI tests and 35 Stream Deck tests passed. Contract drift
-(157 methods), documentation validation (332 files), site/CSP tests, UI hooks,
-quality policy tests and `release-tests` passed. One full run hit a transport
-timing flake (`busy_pipe_wait`); it passed 3/3 in isolation and in the complete
-rerun, and is reported without a product change.
+Integration commit `2323072e3` (current `main`, including #201, #203, #205 and
+aa95a6394) is clean and locally qualified. Both formatting and Clippy runs are
+clean; 64 workspace test targets (1,683 passed, 0 failed), 186 `src-tauri` tests,
+1,210 UI tests and 35 Stream Deck tests passed. Contract drift (157 methods),
+documentation validation (333 files), site/CSP tests, UI hooks, quality policy
+tests and `release-tests` passed. One full run hit a transport timing flake
+(`busy_pipe_wait`); it passed 3/3 in isolation and in the complete rerun, and is
+reported without a product change. The aa95 spacing change was checked separately
+through UI lint/format/typecheck, 1,210 UI tests and its 3/3 Edge recording-opt-in
+case with the new minimum-gap assertion.
 
 The app-only release preparation produced a complete unsigned 0.0.33 package
 (`AudioRouter_0.0.33_x64-setup.exe`, SHA-256
-`5aca2f06221c210556a0120952c5265c90e807c5b9c3d17a5706778ba798b259`) with the CLI,
+`405ae6bf6f941d5e1c92318b1afd44d4e1cc427e12b863976dab3ec2141a7583`) with the CLI,
 four workers, tunnel runtime, Stream Deck package, sound library, SBOMs and
 checksums. The manifest verifier passed. The qualified shell is
-`29b63d115d6b0902d1dbb409bafea48e6a8baa18ca3b0c5cb1a64f0f7c691039`.
+`0f319c482028034d2a9c15c068deda8fcf7f1c251e0f766c8aced55b7dbcf43e`.
 
 `fresh_install_shell` passed on that shell with a disposable database and
 WebView profile, and all eleven packaged-shell qualification cases passed. The

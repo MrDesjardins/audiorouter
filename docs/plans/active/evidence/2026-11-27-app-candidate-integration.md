@@ -10,9 +10,11 @@ profile were not used.
 - Windows 11 Home build 26300, WebView2 158.0.4370.45, Node 22.22.3, npm 10.9.8,
   pinned Rust/Cargo 1.96.0.
 - Branch `t3/integrate-next-app-candidate`; artifact source revision
-  `8b7d3af4891edba073ca78d9d91f7b734cea6680` (clean tree at build time).
+  `2323072e3c8145c4fa3e7c00221425cf2a40baf8` (clean tree at build time). This
+  includes the merged #201, #203 and #205 work, the aa95a6394 spacing fix and
+  current `origin/main`.
 - Qualified shell SHA-256
-  `29b63d115d6b0902d1dbb409bafea48e6a8baa18ca3b0c5cb1a64f0f7c691039`
+  `0f319c482028034d2a9c15c068deda8fcf7f1c251e0f766c8aced55b7dbcf43e`
   (28,065,792 bytes), file version 0.0.33.
 
 ## Audit and integration
@@ -43,8 +45,11 @@ twice as it advanced:
 
 `origin/docs/site-device-wording`, `origin/feat/mcp-rename-and-recording` and
 `origin/improve/ui-accessibility-app-qualification` were ancestors of that
-branch, so no duplicate merge was needed. Final integration commit:
-`8b7d3af4891edba073ca78d9d91f7b734cea6680`.
+branch, so no duplicate merge was needed. After #201 and #203 merged, the branch
+was updated with current `origin/main` (`d296f7bed`), which also brought #205,
+`8d7ba0d8d`/`9a8a15254` evidence and the `aa95a6394` recording-permission spacing
+fix. The final integration commit is
+`2323072e3c8145c4fa3e7c00221425cf2a40baf8`, and PR #207 now targets `main`.
 
 The A4 plan text was corrected to the code actually merged: float32 devices with
 2–32 channels in every worker, stereo on channels 0 and 1, every other channel
@@ -73,9 +78,10 @@ Commands ran in the integration worktree; logs are under
 | `cargo test --workspace --locked --no-fail-fast` | 64 targets, 1,683 passed, 0 failed, 77 ignored |
 | `cargo test --manifest-path src-tauri/Cargo.toml --locked` | 186 passed, 0 failed, 4 ignored |
 | contract drift | 157 methods, 38 node kinds, 20 processors, 24 event categories |
-| documentation validation | 332 Markdown files, 1,952 local links |
-| UI lint / Prettier / i18n / typecheck | clean; 3 catalogs, 3,807 messages (unchanged UI code) |
-| `npm --prefix ui test` | 137 files, 1,210 passed, 0 failed |
+| documentation validation | 333 Markdown files, 1,953 local links |
+| UI lint / Prettier / i18n / typecheck | clean; 3 catalogs, 3,807 messages |
+| `npm --prefix ui test` | 137 files, 1,210 passed, 0 failed (after the aa95 merge) |
+| `ui/e2e/clients-recording-opt-in.pw.ts` on compiled Edge fixtures | 3/3 themes passed, including the new 8 px minimum-gap assertion |
 | site CSP check and site tests | current; 4/4 |
 | site catalog and guide checks | 133 methods/138 operations/34 kinds; 39 guides, 151 anchors, 1,350 links |
 | UI hook tests / quality policy tests | 4/4; 78/78 |
@@ -104,8 +110,9 @@ Direct-entry regressions that cover the integrated behavior passed:
 `only_ieee_float32_mix_formats_may_be_widened` and
 `scheduler_bridge_keeps_a_stereo_graph_for_a_multichannel_render_device`.
 
-The fresh embedded UI (`ui/dist/index.html`, 05:45:51 UTC) predates the qualified
-shell (05:46:39 UTC). The current Vite chunk-size and third-party `use no memo` and
+The fresh embedded UI (`ui/dist/index.html`, 06:34:25 UTC) predates the qualified
+shell (06:35:14 UTC), and this build includes the aa95a6394 spacing fix. The
+current Vite chunk-size and third-party `use no memo` and
 Stream Deck Zod/Rollup warnings are the same retained warnings documented in the
 frontend qualification; none is a failed check.
 
@@ -113,23 +120,23 @@ frontend qualification; none is a failed check.
 
 Unsigned, unpublished local app-only package:
 
-`target/candidate-0.0.33-integrated-final/artifacts/AudioRouter_0.0.33_x64-setup.exe`,
-24,558,708 bytes, SHA-256
-`5aca2f06221c210556a0120952c5265c90e807c5b9c3d17a5706778ba798b259`.
-The manifest records `sourceRevision 8b7d3af48...`, `signed: false`,
+`target/candidate-0.0.33-main/artifacts/AudioRouter_0.0.33_x64-setup.exe`,
+24,562,846 bytes, SHA-256
+`405ae6bf6f941d5e1c92318b1afd44d4e1cc427e12b863976dab3ec2141a7583`.
+The manifest records `sourceRevision 2323072e3...`, `signed: false`,
 `publicationReady: false`, and notes the pending install/upgrade/uninstall,
 clean-machine and hardware blocks.
 
 Companion binaries used by the package:
 
-- `audiorouter-shell.exe` `29b63d115d6b0902d1dbb409bafea48e6a8baa18ca3b0c5cb1a64f0f7c691039`
+- `audiorouter-shell.exe` `0f319c482028034d2a9c15c068deda8fcf7f1c251e0f766c8aced55b7dbcf43e`
 - `audiorouter-cli.exe` `852a5377523d42318f80618dd2db324bcafe534812d9b240338a6c76c50abbc8`
 - `audiorouter-plugin-worker.exe` `3fe2743986c1efda6475c0458dddef8db9f002a53701b7ed51fea1c5be05bc38`
-- `audiorouter-vst3-worker.exe` `34426a2bda9ad8ae3c239b9e5e76c98753f8a036f85e9560a6bfae71a4404fa1`
+- `audiorouter-vst3-worker.exe` `a713be8af2c4a68cf32024bb3844e4e11927f0063a96a37d3593d9af82b4aa4d`
 - `audiorouter-plugin-worker-x86.exe` `813e44fc3ed3b4bfc784a551fb37c36b350c9fff3ead2ab303cdd35b71605cc`
-- `audiorouter-vst3-worker-x86.exe` `d48c9e960d208d374f025096b4e38cb505b43d6ced96816c124b2a161fe62aca`
+- `audiorouter-vst3-worker-x86.exe` `d602cc0ada02cffb45c029969c064aeca2c461148863efbc8683d03525451b81`
 
-The Stream Deck package is `e8bd2385eeab1cf4b611059192ca8bf98b8aef36301897bce4ed2698ebee0395`
+The Stream Deck package is `09313272f8b46f5b3613f84ba0f3d5e528a5fb55807b69fa590d431ecfe5a6a2`
 (93,317 bytes). `SHA256SUMS.txt`, Cargo/npm SBOMs, the pinned tunnel runtime
 notices and the release manifest accompany the installer.
 
@@ -137,14 +144,16 @@ notices and the release manifest accompany the installer.
 
 - `fresh_install_shell` on the qualified shell: passed with a new disposable
   database and WebView profile, default pipe and no `AUDIOROUTER_*` variables.
-  Backend answered in 264 ms; raw callers remained denied.
+  Backend answered in 90 ms; raw callers remained denied.
 - Packaged-shell qualifier on the same shell: **11/11 cases passed** — baseline,
   missing binary, occupied pipe, shell exit, bridge, readiness, page error,
   cleanup fallback and the three cancellation cases.
-- Final baseline: clean revision `8b7d3af48`, shell hash above, non-admin Medium
-  integrity, device access denied, cold UI ready 1,276 ms, warm restart 1,968 ms,
+- Final baseline: clean revision `2323072e3`, shell hash above, non-admin Medium
+  integrity, device access denied, cold UI ready 1,453 ms, warm restart 1,955 ms,
   no uncaught UI errors, both owned shells exited 0, graceful cleanup.
-  These are single samples, not OS-cold or p95 measurements.
+  These are single samples, not OS-cold or p95 measurements. The embedded UI
+  (06:34:25 UTC) predates the shell (06:35:14 UTC), and the rebuilt panel includes
+  the aa95a6394 spacing fix.
 
 ## Human and environment gates
 

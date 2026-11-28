@@ -30,10 +30,10 @@ the owner approved all five repairs, now implemented and locally verified
 One attended PD200X capture unplug/recovery cycle passed; broader hardware gates
 remain open.
 
-Owner-selected work (2026-11-27): frontend spacing/error port, accessibility
-checks and fresh app-only build qualification are executing in
-[frontend and app qualification](ui-app-qualification.md). Driver work is excluded.
-The owner's answers to A1–A4 and A12–A18 are in
+Owner-selected work (2026-11-27): the frontend spacing/error port, accessibility
+checks and fresh app-only build qualification are in
+[frontend and app qualification](ui-app-qualification.md); #201, #203 and #205 are
+merged. Driver work is excluded. The owner's answers to A1–A4 and A12–A18 are in
 [owner decisions 2026-11-27](owner-decisions-2026-11-27.md).
 
 1. **Owner gates.** Take any task from [human-gated tasks](human-gated-tasks.md).
@@ -43,14 +43,14 @@ The owner's answers to A1–A4 and A12–A18 are in
    quiet window (task C1). Plan: [code-review fixes](code-review-fixes.md).
 3. **API-07 and the 0.0.33 candidate.** The fresh local app-only build includes
    the fix, recording opt-in, `sessions.rename`, the A3 bus-list tools, the
-   frontend port, recovery repairs, site wording and A4 output widening. It is
-   qualified with isolated profiles and unsigned/unpublished; publication remains
-   an owner decision (E1).
+   frontend port and its aa95a6394 spacing fix, recovery repairs, site wording and
+   A4 output widening. It is updated to current `main`, qualified with isolated
+   profiles and unsigned/unpublished; publication remains an owner decision (E1).
 4. **Frontend port and qualification.** The port from `improve/ui-spacing-errors`
-   (`d61bfb7d4`) is adapted to current localization and is on `main` through #200;
-   the 0.0.33 candidate branch also contains it, with browser/native/installer
-   evidence in the [execution plan](ui-app-qualification.md). No merge of the
-   candidate or its stacked PRs is authorized. Attended accessibility and the
+   (`d61bfb7d4`) is adapted to current localization and is on `main` through #200
+   and #205; the 0.0.33 candidate branch also contains it, with
+   browser/native/installer evidence in the [execution plan](ui-app-qualification.md).
+   No merge of the candidate PR is authorized. Attended accessibility and the
    deferred soak remain open.
 5. **Nightly upkeep.** Read each failed nightly from its retained evidence; coverage
    rows collect for the A10 and A11 decisions.
