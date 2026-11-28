@@ -70,14 +70,18 @@ unrelated untracked files or owner profiles are used.
 - App qualification: fresh database/profile launch and the packaged-shell
   qualifier baseline, restart, bridge, readiness, error, cleanup and cancellation
   cases.
-- Not claimed: attended audio/device, CABLE-A continuity, 7.1 output continuity,
-  Windows scaling, Narrator, tray/dialog language, Defender/MOTW, clean machine,
-  second PC or signing. Those remain human/other-thread gates.
+- Not claimed: attended audio/device, CABLE-A continuity, attended 7.1 Play, the
+  application worker live, a hardware check of channels 3–8, Windows scaling,
+  Narrator, tray/dialog language, Defender/MOTW, clean machine, second PC or
+  signing. The 7.1 continuity gate passed in #206; the remaining items stay
+  human/other-thread gates.
 
 ## Results
 
-Integration commit `2323072e3` (current `main`, including #201, #203, #205 and
-aa95a6394) is clean and locally qualified. Both formatting and Clippy runs are
+Integration commit `2323072e3` (current `main`, including #201, #203, #205,
+aa95a6394 and the #206 docs/evidence merge) is clean and locally qualified. #206
+changed documentation/specification text only, so the qualified candidate bytes
+are unchanged. Both formatting and Clippy runs are
 clean; 64 workspace test targets (1,683 passed, 0 failed), 186 `src-tauri` tests,
 1,210 UI tests and 35 Stream Deck tests passed. Contract drift (157 methods),
 documentation validation (333 files), site/CSP tests, UI hooks, quality policy
@@ -114,6 +118,7 @@ retained under `target/candidate-0.0.33/bytes/` with recorded SHA-256 values.
 
 ## Evidence and next action
 
-Next: hand the candidate to the owner for attended testing; the multichannel
-thread supplies the quiet-window continuity evidence, the frontend thread owns
-attended accessibility, and publication/signing/PR approval remain separate.
+Next: hand the candidate to the owner for attended testing. The 7.1 continuity
+evidence is merged in #206; attended 7.1 Play and the application worker live
+path remain open, the frontend thread owns attended accessibility, and
+publication/signing/PR approval remain separate.

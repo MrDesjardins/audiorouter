@@ -50,13 +50,16 @@ was updated with current `origin/main` (`d296f7bed`), which also brought #205,
 `8d7ba0d8d`/`9a8a15254` evidence and the `aa95a6394` recording-permission spacing
 fix. The final integration commit is
 `2323072e3c8145c4fa3e7c00221425cf2a40baf8`, and PR #207 now targets `main`.
+After #206 merged, the branch was updated again; #206 changes documentation,
+specification and evidence text only, so the candidate bytes were not rebuilt.
 
 The A4 plan text was corrected to the code actually merged: float32 devices with
 2–32 channels in every worker, stereo on channels 0 and 1, every other channel
 silent. The multichannel thread's live 7.1 CABLE-B continuity results (clean
 multi-path and three clean single-endpoint runs; one unattributed endpoint
-failure that did not recur) are recorded in
-[the A4 plan](../owner-decisions-2026-11-27.md). This thread did not rerun them.
+failure that did not recur) are merged in #206 and recorded in
+[the multichannel evidence](2026-11-27-multichannel-output.md). This thread did
+not rerun them.
 
 The first ad-hoc installer command used the base `src-tauri/tauri.conf.json`,
 which has bundling disabled and no resources. It produced a shell-only package
@@ -78,7 +81,7 @@ Commands ran in the integration worktree; logs are under
 | `cargo test --workspace --locked --no-fail-fast` | 64 targets, 1,683 passed, 0 failed, 77 ignored |
 | `cargo test --manifest-path src-tauri/Cargo.toml --locked` | 186 passed, 0 failed, 4 ignored |
 | contract drift | 157 methods, 38 node kinds, 20 processors, 24 event categories |
-| documentation validation | 333 Markdown files, 1,953 local links |
+| documentation validation | 334 Markdown files, 1,960 local links |
 | UI lint / Prettier / i18n / typecheck | clean; 3 catalogs, 3,807 messages |
 | `npm --prefix ui test` | 137 files, 1,210 passed, 0 failed (after the aa95 merge) |
 | `ui/e2e/clients-recording-opt-in.pw.ts` on compiled Edge fixtures | 3/3 themes passed, including the new 8 px minimum-gap assertion |
@@ -158,16 +161,17 @@ notices and the release manifest accompany the installer.
 ## Human and environment gates
 
 Not run and not claimed: attended live audio/device (F1–F6), Windows 150/200%
-scaling, Narrator, native tray/dialog languages, CABLE-A continuity, a quiet-window
-7.1/multichannel output continuity rerun by this thread, the application worker
-live, a check that hardware channels 3–8 stay silent, attended Play to a 7.1
-device, Defender/MOTW/trust prompt, clean machine, second Windows build,
-reference-PC rollback, signing (E6) and the deferred eight-hour soak. The new
-installer was not installed; its VM lifecycle is a separate attended/VM gate. No
-public release, tag, draft or PR merge exists from this thread.
+scaling, Narrator, native tray/dialog languages, CABLE-A continuity, attended
+7.1 Play, the application worker live, a hardware check that channels 3–8 stay
+silent, Defender/MOTW/trust prompt, clean machine, second Windows build,
+reference-PC rollback, signing (E6) and the deferred eight-hour soak. The 7.1
+continuity gate was run by the multichannel thread and merged in #206; this
+thread did not rerun it. The new installer was not installed; its VM lifecycle
+is a separate attended/VM gate. No public release, tag, draft or PR merge exists
+from this thread.
 
 ## Next action
 
 The owner may test the local app-only package. The frontend thread owns attended
-accessibility, the multichannel thread owns the remaining 7.1 output evidence, and
-publication/signing/PR merge approval remain separate decisions.
+accessibility; attended 7.1 Play and the application worker live path remain open
+from #206, and publication/signing/PR merge approval remain separate decisions.
