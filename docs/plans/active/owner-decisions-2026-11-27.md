@@ -110,10 +110,10 @@ device width) and the application worker check were added before handoff.
 4. Docs: the API reference and the device guidance say what a multichannel
    output plays.
 
-Verification: unit tests of the helper (4, 6 and 8 channels, masks with and
-without front left/right, exact-width passthrough, refused partial or non-float
-input); `setup_check_tests` flipped deliberately; the drift simulation suite
-and the windows-audio, control and engine suites; both Clippy runs. Hardware
+Verification: unit tests of the helper (3, 4, 6, 8, 16 and 32 channels,
+exact-width passthrough, refused partial, non-float or oversized frames);
+`setup_check_tests` flipped deliberately; the drift simulation suite and the
+windows-audio, control and engine suites; both Clippy runs. Hardware
 proof needs the continuity harness through CABLE-B set to 7.1, which plays into
 a cable the owner uses live: it waits for a quiet window, and A4 is not done
 before it passes.
@@ -157,6 +157,30 @@ intact. The first endpoint failure kept no reference figures, so it cannot be
 attributed; it did not recur in three runs. Not checked: that channels 3–8 are
 silent on hardware (CABLE-B Output is read as stereo; the unit tests cover it),
 the application worker live, and an attended Play in the built app.
+
+## 0.0.33 candidate (local branch `candidate/0.0.33`)
+
+Historical first integration, superseded by the merged A4 branch and the complete
+package in [the integration record](evidence/2026-11-27-app-candidate-integration.md).
+
+Built 2026-11-27 from `main` (`babbf051b`, includes the API-07 fix) merged with
+#199 (`fix/recovery-state-consistency`), `improve/ui-accessibility-app-qualification`,
+`feat/mcp-rename-and-recording` and `docs/site-device-wording`, then a version
+bump by package name (only `audiorouter-*` lock entries changed). Plan-file
+conflicts were resolved by keeping both sides; the approved A5–A9 rows and the
+open A4 row stay.
+
+- On the merged tree: both `cargo fmt` checks, Clippy `-D warnings` (workspace and
+  `src-tauri`), all 64 workspace test targets, contract drift (157 methods), docs
+  validation (330 files), UI lint, format, i18n, typecheck and unit tests
+  (1210/1210), site CSP check and site tests (4/4) passed.
+- `tools/build-desktop.ps1` (release) succeeded. The shell exe (20:11:46) is
+  newer than `ui/dist/index.html` (20:10:42), and the bundle contains "Also allow
+  recordings". Shell SHA256 `3B6B86CD6CDEFE6803637D2D51A03C351B3D5308ECAF44192E77603BAEBCBDF0`.
+- `fresh_install_shell` on that exe (new database, fresh WebView profile, default
+  pipe, no `AUDIOROUTER_*` variables, no other AudioRouter running): passed.
+- Not done: installer packaging, release notes, signing and publication (owner
+  decision E1); no attended audio run on this build.
 
 ## Validation
 
