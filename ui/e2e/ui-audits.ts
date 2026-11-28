@@ -124,6 +124,117 @@ export const clippedText = (page: Page, where: string, scope = "body") =>
     [where, scope] as const,
   );
 
+// Spacing criterion for a dialog or panel: it fits the window, nothing sits closer than
+// `inset` px to its edge, no two visible items overlap, stacked items keep a gap, and
+// buttons that share a row line up. Items are the visible text runs and controls; a
+// control's own text is part of the control. Every visible match of `selector` is judged;
+// `fit: false` skips the window check for panels that scroll with the page.
+export const crampedLayout = (
+  page: Page,
+  where: string,
+  selector: string,
+  { inset = 12, fit = true, rows = "" }: { inset?: number; fit?: boolean; rows?: string } = {},
+) =>
+  page.evaluate(
+    ({ where, selector, inset, fit, rows }) => {
+      const found: string[] = [];
+      const CONTROL = "button, a[href], input:not([type=hidden]), select, textarea, [role=button], [role=switch]";
+      const visible = (element: Element) => {
+        const box = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return (
+          element.checkVisibility({ contentVisibilityAuto: true, opacityProperty: true, visibilityProperty: true }) &&
+          box.width > 0 &&
+          box.height > 0 &&
+          style.visibility !== "hidden" &&
+          Number(style.opacity) > 0.05
+        );
+      };
+      const roots = [...document.querySelectorAll<HTMLElement>(selector)].filter(
+        (element) => visible(element) && !element.closest("[aria-hidden=true]"),
+      );
+      for (const root of roots) {
+        const heading = root.querySelector("h2, h3, h4, legend")?.textContent?.trim().slice(0, 30);
+        const label = roots.length > 1 && heading ? `${where} › ${heading}` : where;
+        const frame = root.getBoundingClientRect();
+        if (
+          fit &&
+          (frame.left < 0 || frame.top < 0 || frame.right > innerWidth + 0.5 || frame.bottom > innerHeight + 0.5)
+        )
+          found.push(`${label}: does not fit the ${innerWidth}x${innerHeight} window`);
+        const name = (element: Element) =>
+          (element.getAttribute("aria-label") || element.textContent?.trim() || element.tagName.toLowerCase()).slice(
+            0,
+            28,
+          );
+        const items: { element: Element; box: DOMRect }[] = [];
+        for (const element of root.querySelectorAll(CONTROL)) {
+          if (visible(element) && !element.parentElement?.closest(CONTROL) && !element.closest("[aria-hidden=true]"))
+            items.push({ element, box: element.getBoundingClientRect() });
+        }
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+          const parent = text.parentElement;
+          if (!parent || !text.textContent?.trim() || parent.closest(CONTROL) || parent.closest("[aria-hidden=true]"))
+            continue;
+          if (!visible(parent) || items.some((item) => item.element === parent)) continue;
+          const range = document.createRange();
+          range.selectNodeContents(text);
+          const box = range.getBoundingClientRect();
+          if (box.width > 0 && box.height > 0) items.push({ element: parent, box });
+        }
+        // Items inside a scrolled list are judged against the list, not the dialog edge.
+        const scroller = (element: Element) => {
+          for (let node = element.parentElement; node && node !== root; node = node.parentElement)
+            if (/auto|scroll/.test(getComputedStyle(node).overflowY)) return node;
+          return null;
+        };
+        // A root taller than the window must scroll itself; then only its sides are judged here.
+        const scrolls = root.scrollHeight > root.clientHeight + 1;
+        if (scrolls && !/auto|scroll/.test(getComputedStyle(root).overflowY))
+          found.push(`${label}: content runs past the bottom without a scroll bar`);
+        for (const { element, box } of items) {
+          if (scroller(element)) continue;
+          const gaps = [box.left - frame.left, frame.right - box.right];
+          if (!scrolls) gaps.push(box.top - frame.top, frame.bottom - box.bottom);
+          if (Math.min(...gaps) < inset - 0.5)
+            found.push(`${label}: "${name(element)}" ${Math.round(Math.min(...gaps))} px from the edge`);
+        }
+        for (let i = 0; i < items.length; i += 1) {
+          for (let j = i + 1; j < items.length; j += 1) {
+            const [a, b] = [items[i], items[j]];
+            if (a.element.contains(b.element) || b.element.contains(a.element)) continue;
+            if (scroller(a.element) !== scroller(b.element)) continue;
+            // Rows of a list (`rows`) sit flush like menu items, and a row's own small
+            // buttons (pin, guide) may sit on it; overlap between two rows still counts.
+            const [rowA, rowB] = [a, b].map((item) => (rows ? item.element.closest(rows) : null));
+            const sameRow = rowA !== null && rowA === rowB;
+            const listed = rowA !== null && rowB !== null;
+            const across = Math.min(a.box.right, b.box.right) - Math.max(a.box.left, b.box.left);
+            const down = Math.min(a.box.bottom, b.box.bottom) - Math.max(a.box.top, b.box.top);
+            if (across > 1 && down > 1) {
+              if (!sameRow) found.push(`${label}: "${name(a.element)}" overlaps "${name(b.element)}"`);
+              continue;
+            }
+            // Stacked: one above the other with shared width; they need a visible gap.
+            const controls = [a, b].filter((item) => item.element.matches(CONTROL)).length;
+            if (across > 1 && down > -4 && controls > 0 && !listed)
+              found.push(`${label}: "${name(a.element)}" touches "${name(b.element)}" (${Math.round(-down)} px)`);
+            // Side by side: two buttons on one row share a top and a height.
+            const buttons = [a, b].every((item) => item.element.matches("button, [role=button]"));
+            if (buttons && down > Math.min(a.box.height, b.box.height) / 2 && across < 1) {
+              if (Math.abs(a.box.top - b.box.top) > 1 || Math.abs(a.box.height - b.box.height) > 1)
+                found.push(`${label}: buttons "${name(a.element)}" and "${name(b.element)}" do not line up`);
+            }
+          }
+        }
+      }
+      if (roots.length === 0) found.push(`${where}: ${selector} not found`);
+      return found;
+    },
+    { where, selector, inset, fit, rows },
+  );
+
 // Inputs criterion: every visible field has an accessible name (label, aria-label or
 // aria-labelledby), so Narrator announces what it is for.
 export const unnamedFields = (page: Page, where: string) =>

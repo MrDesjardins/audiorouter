@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { Dispatch, MouseEvent, ReactElement, RefObject, SetStateAction } from "react";
 import type { DiagnosticsSnapshot, Node, PluginScanEntry, Session } from "@audiorouter/contracts";
 import type { ApplicationRow, UiBackend } from "./backend";
+import { formatUiError } from "./backend";
 import { applicationCaptureChoices, applicationChoiceKey } from "./draft";
 import { LoadedPluginsPanel, PluginScanPanel } from "./PluginPanels";
 import { ApplicationChoiceOptions, applicationChoiceLabel } from "./NodeEditors";
@@ -343,7 +344,7 @@ export function SignalFlowPanel({
                         if (typeof path === "string" && path) setExecutablePath(path);
                         setPickerMessage("");
                       } catch (error) {
-                        setPickerMessage(error instanceof Error ? error.message : tr("signalFlowDialogs.pickerFailed"));
+                        setPickerMessage(formatUiError(error, tr("signalFlowDialogs.pickerFailed")));
                       }
                     }}
                   >

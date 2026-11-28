@@ -20,6 +20,12 @@ names another one.
 
 Results that are **FAILED today** are marked so. Nothing on this page has passed.
 
+2026-11-27 app-only follow-up: the frontend port, automated keyboard/layout/MCP
+checks and a fresh installer's signed-in VM lifecycle passed; see the
+[qualification record](evidence/2026-11-27-ui-app-qualification.md). These do not
+close the attended, clean-Defender, MOTW, reference-PC or second-build gates below.
+The owner deferred the eight-hour soak.
+
 ### Common preparation
 
 - **Build:** `powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-desktop.ps1`,
@@ -366,6 +372,12 @@ device, nothing moves, sound returns only after Stop + Play.
 Properties → Output device: Alt+Down, ArrowDown, **Escape** keeps the saved value;
 open again, move, **Tab** leaves without applying; Enter then Save works.
 **IDs:** UI-11. **Result:** open.
+
+2026-11-27 follow-up: the real packaged backend was unchanged by Escape/Tab,
+but CDP popup input retained a changed draft value/focus. Physical keys must
+confirm whether this is a product defect or automation limitation. The attended
+checkpoint timed out without confirmation; no pass. See the
+[native continuation](evidence/2026-11-27-ui-app-qualification.md#native-accessibility-continuation-after-owner-go).
 
 ### F3. Windows scaling: 150 %, 200 % and a narrow 200 % window
 

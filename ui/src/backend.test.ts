@@ -10,6 +10,9 @@ import {
   SnapshotCache,
   type UiBackend,
   notReadyNode,
+  lostBackend,
+  plainErrors,
+  plainSentence,
 } from "./backend";
 import { AudioRouterRpcError } from "@audiorouter/contracts";
 import { demoSession } from "./fixtures";
@@ -38,6 +41,84 @@ describe("disconnected backend", () => {
 });
 
 describe("UI error formatting", () => {
+  const PLAIN_ERRORS = plainErrors();
+  const rpc = (message: string, code: string | null, hresult?: number) =>
+    new AudioRouterRpcError({
+      code: code ? -32000 : -32602,
+      message,
+      ...(code
+        ? {
+            data: {
+              code,
+              fieldPath: null,
+              resourceIds: [],
+              retryable: false,
+              remediation: "inspect the error code and correct or explicitly retry the operation",
+              ...(hresult === undefined ? {} : { hresult }),
+            },
+          }
+        : {}),
+    });
+  // A shown error is a sentence with no code, HRESULT or Rust wrapper (owner, first-time
+  // walk-through: "select a running application…" and "…does not match the enabled node's
+  // identity" reached the screen as raw backend text).
+  const plain = (text: string) => {
+    expect(text).toMatch(/^["“A-Z]/);
+    expect(text).toMatch(/[.!?]$/);
+    expect(text).not.toMatch(/\[[a-z]+[A-Za-z]*[,\]]|0x[0-9A-F]{8}|HRESULT|\w+\("|InvalidRequest|Store\(/);
+  };
+  it("shows every backend error code as a plain sentence with a next step", () => {
+    const codes = [...Object.keys(PLAIN_ERRORS), "invalidRequest", "invalidGraph", "nodeNotReady", "someFutureCode"];
+    for (const code of codes) {
+      const text = formatUiError(
+        rpc("IAudioClient::Initialize failed with Windows audio HRESULT 0x88890008: format", code, 0x88890008),
+        "fallback",
+      );
+      if (code in PLAIN_ERRORS) plain(text);
+      expect(text, code).not.toContain("[");
+      expect(text, code).not.toContain("inspect the error code");
+    }
+  });
+  it("reads a plain string rejection from the desktop shell", () => {
+    expect(formatUiError("a recording is still finishing", "fallback")).toBe("A recording is still finishing.");
+    expect(formatUiError("  ", "fallback")).toBe("fallback");
+  });
+
+  it("treats inherited object property names as unknown wire error codes", () => {
+    for (const code of ["constructor", "__proto__", "toString"])
+      expect(formatUiError(rpc("operation failed", code), "fallback")).toBe(
+        "Operation failed. Try again. If it keeps happening, Settings → Logs and support has the details to send with a report.",
+      );
+  });
+
+  it("turns raw and debug-wrapped backend text into a sentence", () => {
+    expect(
+      formatUiError(rpc("application capture binding does not match the enabled node's identity", null), "x"),
+    ).toBe("Application capture binding does not match the enabled node's identity.");
+    expect(formatUiError(rpc('Store(InvalidGraph("edge e1 has no source"))', "invalidGraph"), "x")).toBe(
+      "Edge e1 has no source. The route was not saved. Fix it on the canvas, then press Save.",
+    );
+    plain(formatUiError(rpc('Json("expected value at line 1")', "someFutureCode"), "x"));
+    expect(formatUiError(rpc("Play stopped", "someFutureCode"), "x")).toContain("Settings → Logs and support");
+    expect(plainSentence("")).toBe("Something went wrong.");
+    expect(plainSentence("already a sentence!")).toBe("Already a sentence!");
+  });
+  it("names the device in a plain audio error when the device list knows it", () => {
+    rememberDeviceNames([{ id: "usb-mic", name: "USB Mic", direction: "capture" }] as never);
+    const error = new AudioRouterRpcError({
+      code: -32000,
+      message: "IAudioClient::Initialize failed",
+      data: {
+        code: "unsupportedFormat",
+        fieldPath: null,
+        resourceIds: ["usb-mic"],
+        retryable: false,
+        remediation: "",
+        hresult: 0x88890008,
+      },
+    });
+    expect(formatUiError(error, "x")).toMatch(/^"USB Mic": This device uses a sound format/);
+  });
   it("explains a save rejected because an audio file is still importing", () => {
     // CI flake on 720a6d9d: Save during an upload showed this raw backend text.
     const message = formatUiError(new Error("nodes[3].parameters.mediaId: parameter is invalid"), "Save failed");
@@ -195,7 +276,8 @@ describe("UI error formatting", () => {
   });
 
   it("uses the fallback for non-error failures", () => {
-    expect(formatUiError("bad failure", "Inventory unavailable")).toBe("Inventory unavailable");
+    expect(formatUiError({ reason: "bad failure" }, "Inventory unavailable")).toBe("Inventory unavailable");
+    expect(formatUiError(undefined, "Inventory unavailable")).toBe("Inventory unavailable");
   });
 
   it("recognizes revision conflicts from structured error data", () => {
@@ -296,7 +378,7 @@ describe("snapshot cache", () => {
       };
       const pending = cache.refresh(backend, undefined, { startup: true });
       await vi.advanceTimersByTimeAsync(1_000);
-      await expect(pending).resolves.toMatchObject({ stale: true, error: "Worker unavailable" });
+      await expect(pending).resolves.toMatchObject({ stale: true, error: "Worker unavailable." });
       expect(backend.snapshot).toHaveBeenCalledTimes(3);
     } finally {
       vi.useRealTimers();
@@ -314,7 +396,7 @@ describe("snapshot cache", () => {
       await vi.advanceTimersByTimeAsync(29_999);
       expect(cache.current().error).toBeNull();
       await vi.advanceTimersByTimeAsync(1);
-      await expect(pending).resolves.toMatchObject({ stale: true, error: "backend unavailable" });
+      await expect(pending).resolves.toMatchObject({ stale: true, error: "Backend unavailable." });
       const calls = vi.mocked(backend.snapshot).mock.calls.length;
       await vi.advanceTimersByTimeAsync(10_000);
       expect(backend.snapshot).toHaveBeenCalledTimes(calls);
@@ -575,7 +657,7 @@ describe("snapshot cache", () => {
     expect(first.snapshot?.session.id).toBe(demoSession.id);
     expect(second.snapshot?.session.id).toBe(demoSession.id);
     expect(second.stale).toBe(true);
-    expect(second.error).toBe("pipe closed");
+    expect(second.error).toBe(lostBackend());
   });
 
   it("does not publish an older concurrent snapshot after a newer refresh", async () => {
@@ -619,8 +701,7 @@ describe("snapshot cache", () => {
     };
     await expect(cache.refresh(failing)).resolves.toMatchObject({
       stale: true,
-      error:
-        "Audio status unavailable. [accessDenied, HRESULT 0x80070005] Check endpoint access and microphone privacy permissions.",
+      error: plainErrors().accessDenied,
     });
   });
 });
