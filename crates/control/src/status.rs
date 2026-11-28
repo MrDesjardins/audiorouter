@@ -31,6 +31,16 @@ impl ControlPlane {
         };
         let (recent_recovery_crashes, recovery_safe_mode) = self.recovery_status()?;
         let (audio, reason) = self.audio_status();
+        // Recovery cancellations must remain explainable after Stop removes
+        // the live worker (and its periodic audio-health snapshot).
+        let reason = self
+            .last_audio_pump_error
+            .as_deref()
+            .filter(|reason| {
+                reason.starts_with("recovery cancelled:")
+                    || reason.starts_with("resume offer excluded:")
+            })
+            .unwrap_or(reason);
         Ok(json!({
             "build": self.build,
             "audio": audio,

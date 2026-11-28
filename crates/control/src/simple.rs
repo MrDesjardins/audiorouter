@@ -664,6 +664,7 @@ impl ControlPlane {
 
     /// Prepare the saved route's devices (every path) and start, as Play does.
     fn simple_play(&mut self, session_id: &EntityId) -> Result<Value, ControlError> {
+        self.refuse_lost_device_route(session_id)?;
         if self.simple_running(session_id) {
             return Ok(
                 json!({ "sessionId": session_id, "state": "running", "alreadyPlaying": true }),
