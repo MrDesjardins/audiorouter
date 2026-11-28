@@ -846,17 +846,19 @@ naming the node. Changing the mode while playing needs Stop and Play.
 Windows offers right now and lists what does not fit, each with a fix:
 
 - **Problem:** Play will be refused or the audio loops. An output device that
-  is not stereo (a cable set to 7.1 is fine for a Surround input but not as an
-  output), a Surround input on a device that is not 5.1/7.1, a device that is
-  unplugged or got a new ID after a driver update, or a route whose output
-  returns to its own input.
+  is not IEEE float with 2 to 32 channels at 8–192 kHz (mono is refused), a
+  Surround input on a device that is not 5.1/7.1, a device that is unplugged or
+  got a new ID after a driver update, or a route whose output returns to its
+  own input. A 5.1/7.1 output is fine: a stereo route plays on its front left
+  and right, and the other channels stay silent.
 - **Warning:** two sessions that would send audio into each other, for example
   one plays into CABLE-B while the other records CABLE-B and plays back into
   the cable the first one records.
 - **Tip:** a virtual cable not at 48 kHz.
 
 A device is judged by how your sessions use it, so the same 7.1 cable can be
-correct in one place and wrong in another. The check runs after connection
+correct for a Surround input or an output and wrong for an ordinary stereo
+Input device. The check runs after connection
 and after devices, saved sessions or playing sessions change, even with Status closed;
 **Check again** runs it now. It checks saved routes, not unsaved drafts.
 A red dot on Status indicates problem findings. A stopped audio engine is

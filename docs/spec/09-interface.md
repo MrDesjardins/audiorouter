@@ -511,15 +511,18 @@ audio readiness and explains the exact endpoint and authorization steps.
   reads them through the default MCP tool `check_setup`.
   - **Judge use, not devices.** A device is judged only by how a session
     uses it: a 7.1 cable is correct for a Physical Input with Surround to
-    headphones and wrong for a Physical Output. A device no session binds is
-    never reported.
+    headphones, works as a Physical Output (a stereo route plays on its front
+    left/right and the other channels stay silent), and is wrong for an
+    ordinary stereo Input device. A device no session binds is never reported.
   - **Same rules as Play.** A finding that says Play will be refused uses the
     predicate that native preparation applies, so the check and the refusal
     cannot drift.
   - **Findings:** each names the session, node and device, has a severity
     (`problem`: Play is refused or audio loops; `warning`: likely wrong;
     `tip`: optional) and a plain fix.
-    - An output device that is not stereo float at 8–192 kHz (problem).
+    - An output device that is not IEEE float32 with 2 to 32 channels at
+      8–192 kHz (problem; mono is refused, a wider device plays the route on
+      its first two channels).
     - A Surround input whose device is not a supported 5.1/7.1 float device
       (problem).
     - A feedback loop inside a session (problem, the Play refusal) or across
