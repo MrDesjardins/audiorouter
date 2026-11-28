@@ -23,7 +23,9 @@ predate the fix.
 
 Owner requested the next non-driver work on 2026-11-27. Backend A5-A9 baseline
 investigation is in [recovery-state consistency](recovery-state-consistency.md);
-behavior choices are awaiting the owner's response. Prior frontend work is kept
+the owner approved all five repairs, now implemented and locally verified
+([evidence](evidence/2026-11-27-recovery-state-consistency.md)). Physical-device
+qualification remains a separate short attended gate. Prior frontend work is kept
 on `improve/ui-accessibility-app-qualification` and is not part of this branch.
 
 1. **Owner gates.** Take any task from [human-gated tasks](human-gated-tasks.md).

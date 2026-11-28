@@ -4,8 +4,8 @@
 
 2026-11-27: owner requested the next non-driver work after frontend/build
 qualification. Investigate and repair the five recorded M07 recovery cases
-A5-A9. The exact behavior choices are pending the owner's answer; reproduce
-the baseline first. Do not silently supersede the pinned owner-decision tests.
+A5-A9. The owner explicitly approved all five recommended repairs on 2026-11-27.
+The decisions below supersede the pinned current-behavior tests.
 Existing RES-3 permission for bounded automatic recovery of the exact saved
 endpoint remains unchanged. No driver work, PR, release, live profile/device
 changes, attended keyboard test or eight-hour soak is authorized here.
@@ -22,7 +22,7 @@ Branch `fix/recovery-state-consistency` starts from main `2f24ad436`, independen
 of the prior frontend branch. Preserve untracked `target-preview/`,
 `target-preview2/` and `ui/tsconfig.tsbuildinfo`.
 
-## Proposed decisions (awaiting owner response)
+## Approved decisions (2026-11-27)
 
 1. A5: a disqualified device recovery stops the stale runtime, finalizes any
    recorder safely and publishes a reason; it never starts the edited/faulted route.
@@ -68,8 +68,10 @@ existing recovery policy. Do not roll back microphone fail-closed protections.
 
 ## Evidence and next action
 
-Baseline output will be kept under `target/recovery-state-consistency/`.
-Run the existing fault suite and await the requested A5-A9 behavior decision.
+Implementation and local verification are complete. See the
+[evidence](evidence/2026-11-27-recovery-state-consistency.md) for regression
+proof, command outcomes and physical-hardware limits. Next: short attended
+exact-endpoint loss/resume qualification in a quiet device window; no long soak.
 
 2026-11-27 baseline: Windows, Rust 1.96.0. `cargo test -p audiorouter-control
 --lib fault_interleaving_tests --locked` passed all 29 tests (`baseline.log`),
@@ -77,5 +79,5 @@ including the five pinned current-behavior cases. `cargo test -p audiorouter-cli
 --lib every_api_method_is_reached_by_a_default_mcp_tool_or_excluded --locked`
 passed its reachability test (`mcp-baseline.log`). Contract drift passed for
 156 methods, 38 node kinds, 20 processors and 24 event categories. Documentation
-validation and diff whitespace checks passed. No implementation or specification
-behavior changed while the owner decision remains pending.
+validation and diff whitespace checks passed. These baseline checks preceded
+the owner's explicit approval; implementation then followed all five decisions.
