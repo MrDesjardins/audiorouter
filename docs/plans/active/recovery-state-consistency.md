@@ -68,6 +68,37 @@ existing recovery policy. Do not roll back microphone fail-closed protections.
 
 ## Evidence and next action
 
+Physical continuation: owner selected USB Digital Audio for the brief disconnect
+test. Prepare an in-memory capture-to-Meter route using only its exact capture
+endpoint; no playback endpoint, recording, persisted profile, default-device
+change or driver operation. A bounded example services the production control
+plane and endpoint notifications for at most five minutes, reports control
+events only, then stops and releases its own route. Keep USB Digital Audio
+connected until the runner reports ready. Owner performs unplug/reconnect;
+the agent verifies disappearance, exact-ID return and graph preservation.
+Rollback: stop/drop the in-memory runner; remove its test-only example.
+Preparation evidence: a Meter-only terminal was rejected by the existing native
+path compiler. Use capture -> Meter -> unarmed Recorder sink (no worker or file)
+so the existing native sink contract is met without an output device. The first
+five-minute run captured no device-loss events and stopped cleanly, then falsely
+failed graph preservation because JSON integer matrix entries differ from the
+backend's serialized floats. Compare canonical `sessions.get` snapshots before
+preparation and after the run instead. A fresh two-second preflight passed
+unchanged preparation/graph and bounded Stop (`capture-preflight.log`), with
+`qualified:false`: no physical loss/recovery occurred in that preflight.
+Owner subsequently confirmed no unplug occurred during the completed USB
+Digital Audio window, then selected the PD200X microphone instead. The next
+run binds only `Microphone (PD200X Podcast Microphone)` by its exact ID, with
+the same in-memory, unarmed, silent route and five-minute deadline.
+PD200X outcome: owner confirmed physical unplug/reconnect; native notifications
+invalidated the binding, then the exact saved route stopped/started and emitted
+`runtime.recovered`. Canonical graph unchanged, recovered status active/native,
+final Stop succeeded, exit 0, no test process remains. See the evidence's
+attended PD200X section. This passes one capture-only recovery cycle, not audible
+continuity, sleep, plugin/recording faults or a long soak. Next: integrate the
+reviewed branch into a fresh desktop candidate when requested; opening a PR or
+publishing still requires explicit approval.
+
 Continuation 2026-11-27: owner requested further work. Before the attended
 hardware gate, build and run the offline backend executable with an exclusively
 created disposable SQLite/recording directory. Exercise repeated Sleep through
@@ -84,7 +115,8 @@ action is the short attended physical-device gate, not another simulated run.
 Implementation and local verification are complete. See the
 [evidence](evidence/2026-11-27-recovery-state-consistency.md) for regression
 proof, command outcomes and physical-hardware limits. Next: short attended
-exact-endpoint loss/resume qualification in a quiet device window; no long soak.
+desktop-candidate integration when requested. One attended PD200X exact-endpoint
+loss/recovery cycle has passed; broader hardware gates and long soaks remain open.
 
 2026-11-27 baseline: Windows, Rust 1.96.0. `cargo test -p audiorouter-control
 --lib fault_interleaving_tests --locked` passed all 29 tests (`baseline.log`),

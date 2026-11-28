@@ -97,3 +97,39 @@ Workspace strict Clippy (including examples), both formatting checks and
 documentation validation passed. This adds real process/storage/file evidence;
 it still does not prove physical endpoint loss, actual suspend/resume, desktop
 UI behavior or audible continuity. The short attended hardware gate is next.
+
+## Attended PD200X endpoint recovery
+
+Owner first selected USB Digital Audio, then confirmed no unplug occurred in
+that window and selected PD200X instead. The new test-only
+`crates/control/examples/recovery_capture.rs` uses a disposable in-memory
+capture -> Meter -> unarmed Recorder sink. No recorder worker, audio file,
+playback endpoint, user profile, OS power change or driver operation is involved.
+The sink satisfies the existing native path compiler's terminal contract;
+a Meter-only terminal was rejected during preparation.
+
+The initial graph-preservation check incorrectly compared integer matrix
+entries in request JSON with serialized floating-point entries. It falsely
+failed after clean Stop. The runner now captures canonical `sessions.get`
+before preparing and compares that snapshot before Ready and after recovery.
+A two-second USB Digital Audio preflight passed without claiming recovery.
+
+The owner physically unplugged/reconnected PD200X during the running test and
+confirmed the action. Command after a fresh example build:
+`target/debug/examples/recovery_capture.exe <exact-PD200X-capture-ID> 300`.
+The exact saved endpoint was `{0.0.1.00000000}.{ea54cf92-7737-4b18-a7a5-19fea5135d02}`.
+Raw output: `target/recovery-state-consistency/capture-pd200x.log`.
+
+Observed sequence: `devices.changed`, `devices.bindingInvalidated`,
+`devices.changed`, `runtime.stopped`, `runtime.started`, `runtime.recovered`.
+The status read reported one active session, `audio: available`, and native
+multi-input audio running. The canonical saved graph remained unchanged.
+The runner reported both loss and recovery observed, stopped its route,
+returned exit 0 and left no `recovery_capture` process running.
+
+This is Windows physical endpoint-notification and exact-binding restart
+evidence for the unchanged approved RES-3 policy. It is one capture-only cycle,
+not proof of audible continuity, latency, actual sleep, failed-plugin recovery,
+recording integrity during unplug, desktop UI behavior or long-duration stability.
+The other A5-A9 paths retain their dispatcher/fault and process-level evidence.
+No additional hardware or release gate is waived.
