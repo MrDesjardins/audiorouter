@@ -85,15 +85,16 @@ Scope: the multi-input output fan-out, which every Play uses. The older
 single-endpoint worker (`nativeEndpoints.prepare`) and the single application
 worker stay stereo-only, with their refusal messages unchanged.
 
-1. `SharedRender` records the stream's channel count, float32 flag and the
-   positions of front left/right (from the channel mask; the first two channels
-   when the mask is 0 or lacks them). `submit_bytes` keeps the exact-width copy,
-   and a stereo float source into a wider float32 stream is written frame by
-   frame into the device buffer: L and R into those positions, every other
-   channel exactly 0.0. The expansion is a pure helper on borrowed slices: no
-   allocation, no pump or ring changes, frame counts unchanged, so the drift
-   controller and its queue math are untouched.
-2. `output_format_supported` accepts float32 render devices with 2 to 8
+1. `SharedRender` records the stream's float32 flag and byte stride.
+   `submit_bytes` keeps the exact-width copy, and a narrower float32 source into
+   a wider float32 stream is written frame by frame into the device buffer: the
+   source channels fill the first channels, every other channel exactly 0.0.
+   Windows orders standard masks front-left/right first, so a stereo route lands
+   on front L/R; the first two channels are used without a mask. The expansion
+   is a pure helper on borrowed slices: no allocation, no pump or ring changes,
+   frame counts unchanged, so the drift controller and its queue math are
+   untouched.
+2. `output_format_supported` accepts float32 render devices with 2 to 32
    channels at 8–192 kHz (mono still refused). The fan-out refusal message and
    `setup_check` follow it. Spatial (binaural) capture rules are unchanged.
 3. The device list reports each device's channel count where it does not
@@ -114,12 +115,22 @@ at Play again, as before.
 
 Status 2026-11-27: steps 1, 2 and 4 done; step 3 needed nothing, because
 `devices.list` already reports `format.channels` for every device and the UI
-labels it. The limit is 2–32 float channels. Local results: both `cargo fmt`
-checks and both Clippy runs clean; `audiorouter-windows-audio` (169, including
-the drift simulation suite and the three new tests) and `audiorouter-control`
-(530) passed, including the flipped `setup_check` tests. **Open:** the
-continuity harness through CABLE-B at 7.1 (needs the owner's quiet window), and
-an attended Play to a 7.1 output in the built app.
+labels it. The limit is 2–32 float channels. The coverage audit found three
+stale statements that still refused a multichannel output — the setup-check
+contract in `docs/spec/09-interface.md`, the quickstart's setup-check section,
+and the `nativeOutputs.prepare` text in the API reference — and corrected them.
+Local results on `t3/multichannel-output-qualification` (stacked on
+`feat/multichannel-output`): both `cargo fmt` checks and both Clippy runs clean;
+`audiorouter-windows-audio` 169 (including the drift simulation suite and the
+three widening tests); `audiorouter-control` 530 (including the flipped
+`setup_check` tests); the whole `audiorouter-engine` suite, including
+`source_combinations` (6/6) and `tool_combinations` (6/6); docs validation 331
+files. A desktop release build was prepared (shell SHA-256 `2ADA29A9…`) and the
+release continuity binary was compiled without running it. **Open:** the
+continuity harness through CABLE-B at 7.1 (needs the owner's quiet window, and
+CABLE-A is also used by C1, so the runs must not overlap), and an attended Play
+to a 7.1 output in the built app. Evidence:
+[multichannel output audit](evidence/2026-11-27-multichannel-output.md).
 
 ## Validation
 
