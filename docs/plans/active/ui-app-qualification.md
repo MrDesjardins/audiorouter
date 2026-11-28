@@ -99,3 +99,26 @@ Owner can test the local build on this branch. Next M05 task: attend F1-F6
 live language switching). Next M08 task: clean-Defender and MOTW/second-PC
 qualification of the recorded artifact; publication and a PR need separate
 approval. Do not start the deferred eight-hour soak.
+
+## Attended gate preparation (2026-11-27)
+
+The remaining gates were prepared and independently checked on a fresh shell
+built from `c27f6cfd1` (UI 20:57:45, shell 20:59:17; SHA-256
+`020389EC...D83CC3`). Build, 3,803-message catalog check, UI
+typecheck/lint/format, 130 focused unit tests, 27 scaled viewport cases, the
+packaged baseline smoke and focused Rust language/tray/OS-transition/instance/
+device-loss suites passed. The opt-in packaged accessibility run again failed
+only the known F2 CDP probes; explicit Save and three-language persistence with
+an unchanged stopped route passed. No live audio, Narrator, actual OS scaling,
+tray inspection or sleep was performed.
+
+The exact 50-70 minute attended runbook, launch block with isolated database and
+WebView profile, per-gate pass criteria, evidence capture and restore steps are
+in the [preparation record](evidence/2026-11-27-attended-ui-gates-preparation.md).
+F1, F3, F4, F5 and F6 remain open; F2 stays skipped by owner decision. A5-A9
+permits bounded automatic recovery of the exact saved endpoint, so F1 records
+that outcome rather than requiring Stop+Play after a brief reconnect.
+
+Next: request one quiet owner window and run that runbook. The 0.0.32 installer
+artifact predates A5-A9 and is not the build used for these gates; no fresh
+installer or release claim is made.
