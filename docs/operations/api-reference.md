@@ -126,7 +126,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `startup.apply` | `startupWrite` | mutating; requires an idempotency key |
 | `devices.list` | `read` | read-only |
 | `nativeEndpoints.prepare` | `deviceAdministration` | external operation; prepares exact stopped clients |
-| `nativeOutputs.prepare` | `deviceAdministration` | external operation; prepares 1–8 exact stopped stereo render clients for a generation (default: the session's next start generation) |
+| `nativeOutputs.prepare` | `deviceAdministration` | external operation; prepares 1–8 exact stopped IEEE-float render clients with 2–32 channels at 8–192 kHz for a generation (default: the session's next start generation); each plays the stereo route on its first two channels |
 | `nativeMultiInputs.prepare` | `deviceAdministration` | external operation; prepares 2–8 exact stopped physical and/or application-capture clients for the committed mixer/fan-out source order, resolving any required pre-bound plugin stages; `generation` defaults to the next start generation, and a closed application input starts silent and reconnects |
 | `nativePaths.prepare` | `deviceAdministration` | external operation; prepares every independent path of a saved session (sources and explicit connected Mixers with shared tool caches and separate output branches; direct pre-Mixer outputs exclude other mixed inputs; up to 8 sources and 8 outputs in total) from the exact `endpointId` stored on each Physical Input/Output node and the identity stored on each Application Capture node; a mono endpoint feeding a stereo node is duplicated to both channels; one render endpoint may serve several paths; start, pump, stop and detach use the `nativeMultiInputs` methods |
 | `nativeBridges.prepare` | `deviceAdministration` | external operation; prepares an exact stopped project-driver render-source/capture-sink lease pair |
@@ -243,17 +243,22 @@ always explicit and must revalidate the exact endpoint identity and format.
 
 `nativeEndpoints.prepare` requires exact active capture and render endpoint IDs
 and opens both clients stopped; it never changes the system default endpoint,
-volume, or mute state. `nativeEndpoints.pump` requires the prepared session's
-current positive runtime generation and drains only already-available packets,
-up to the documented per-wake bound. It does not wait, rebind, select a
-replacement endpoint, or activate a stopped session.
+volume, or mute state. A float32 render endpoint with 2 to 32 channels plays the
+stereo graph on its first two channels, with the other channels silent (A4,
+2026-11-27). `nativeEndpoints.pump` requires the prepared session's current
+positive runtime generation and drains only already-available packets, up to
+the documented per-wake bound. It does not wait, rebind, select a replacement
+endpoint, or activate a stopped session.
 `nativeOutputs.prepare` requires the exact active render endpoint IDs for a
 prepared native session and opens each stopped output branch without changing
-system defaults, volume, or mute state. It accepts one through eight stereo,
-48 kHz, IEEE-float render endpoints and binds them to the supplied positive
-session generation; it never substitutes a missing endpoint or starts the
-session. The running session's bounded pump reports fan-out packet, frame, and
-backpressure counters alongside the primary native worker counters.
+system defaults, volume, or mute state. It accepts one through eight IEEE-float
+render endpoints with 2 to 32 channels at 8–192 kHz and binds them to the
+supplied positive session generation; it never substitutes a missing endpoint
+or starts the session. Each output plays the session's stereo route on its
+first two channels (front left/right in a standard layout), with every other
+channel silent (A4, 2026-11-27). The running session's bounded pump reports
+fan-out packet, frame, and backpressure counters alongside the primary native
+worker counters.
 `nativeBridges.prepare` requires an enabled virtual bus, a positive graph
 generation, the fixed `\\.\AudioRouterVirtualBridge` device path, and two
 distinct absolute mapping paths. The backend derives matching protocol hellos
