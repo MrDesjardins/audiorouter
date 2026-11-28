@@ -257,6 +257,22 @@ Driver RC 0.2.5 (`7c88895c2`). Test-signed drivers never go on this PC. Guide:
   above 0.2.6 (which restarts Stage A); accept "restart required" under a
   playing route, or ask for a new RC. No driver source change before you choose.
 - **IDs:** VCAB-05/24/25/30, VDEV-09, SEC-08, NFR-02. **Result:** failed, needs a clean run.
+- **2026-11-27 run (WSL on):** A/B **FAILED again on a quiet host** (steady shape: RC3 median
+  underrun 0 against 0.2.5 1436 frames; restart shape passes), with a confound: the 0.2.5
+  phases that needed a restart ran right after a reboot. The first launch's pool, Verifier
+  and live blocks were lost to a watcher defect (no freeze). Relaunch: **pool PASS** (60 min,
+  0 MiB/h); **Verifier not judged** (NEM stalls, one reset by the agent, then a runner bug,
+  now fixed); **live update/remove: helper exit 5 again**, the route survived, no bugcheck.
+  Details: [driver sign-once plan](driver-sign-once.md), "What happened (2026-11-27 night, D3)".
+  Your decisions above still stand; the Verifier rounds need their own long window.
+- **2026-11-27 afternoon:** Verifier alone: not judged (a 30-minute NEM stall in fuzz round 1,
+  no dump). A/B repeat with both drivers restarted alike (`-AbSameStart`): 2 of 6 phases, steady
+  runs similar for both, no verdict. Stopped by **restart hangs** with both drivers: Windows
+  finished shutting down and VirtualBox did not reset it. See the plan.
+- **Next night (your decision, 2026-11-27):** full A/B repeat on r9 with `-AbSameStart`, then
+  Verifier with a 150-minute silence limit, then the soak for what is left (about 10 hours in
+  all). The host runner now resets a restart hang after 5 minutes. **Agent starts it when you
+  say so.**
 
 ### D4. 24-hour tagged pool
 

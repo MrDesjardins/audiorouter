@@ -422,3 +422,165 @@ block 4 (soak rehearsal), the tone step (needs Listen in the snapshot). Requirem
 VCAB-01 and VCAB-05 (cables), A13 (update), SEC-08 and VCAB-30 (fuzz under Verifier, both
 drivers), VCAB-24 stays open (stalls on NEM). Next: D3 (`-Blocks ab,pool,verifier,live`), which
 needed D2 clean, in a window of at least 4 hours.
+
+## What happened (2026-11-27 night, D3)
+
+The owner gave a 10-hour window (00:20-10:20) with WSL on. Plan: D3, then the 16-cable soak
+rehearsal (block 4). Evidence: `C:\VMs\ar-share\results-20261127-0022-d3`,
+`results-20261127-0202-soak` and the D3 relaunch `results-20261127-0455-d3b`.
+
+**A/B (frame clock, RC3 0.2.4 against 0.2.5), 00:30-00:52, fresh restore: FAIL again, now on a
+quiet host** (non-VM CPU mean 2.3 %, peak 14 %, least available memory 8.2 GB). 23 of 24 tone
+runs valid. Verdict line: "REGRESSED; steady: RC3 6 valid runs (median underrun 0, late 0, gap
+11.15 ms); 0.2.5 6 valid runs (median underrun 1436, late 2, gap 91.8 ms) | no regression;
+restarts: RC3 5 valid runs (median underrun 1920, late 1, gap 33.1 ms); 0.2.5 6 valid runs
+(median underrun 2783, late 1.5, gap 216.2 ms)". So the steady shape fails and the restart shape
+passes.
+
+One confound for the owner's decision: installing 0.2.5 over RC3 returned exit 5 (restart
+required) in phases 3 and 5, so those 0.2.5 tone runs started a few minutes after a reboot,
+while every RC3 phase installed without one. The bad steady medians come from those runs:
+phase 1 (0.2.5, no restart) had steady underruns 127 and 0, close to RC3; phases 3 and 5
+(after a restart) had 4176/1355 and 7281/1517. This does not change the verdict, but a repeat
+that settles every phase for the same time after install (or restarts before both drivers)
+would tell a frame-clock regression from post-boot noise. Only the summary rows survive
+(`round2-ab-rows.jsonl`, state JSON); the per-run tone folders were in the guest and were lost
+with the next snapshot restore.
+
+**Pool, Verifier and live update in the first launch: not judged, harness defect.** The host
+watcher reset the VM at 01:27 and 02:02, during the 120-minute pool block, and then stopped
+the run. Its rule counted a failed screenshot as "screen unchanged". When the guest is
+quiet its display blanks, VirtualBox's `screenshotpng` then fails (E_FAIL), and 30 minutes of
+failed screenshots looked like a 30-minute freeze. VBox.log shows only about 2 s of timer lag
+at the first reset: the VM was running. These were not freezes; the relaunch uses a watcher
+that counts a failed screenshot as no information and needs the screen, the guest's state file
+on the share and a guest-control echo all to be silent for 30 minutes before a reset, and it
+turns the guest display timeout off.
+
+**Soak rehearsal (`rc-0.2.7-soak`, 16 cables, 2 routes), 02:02-04:50: a 2.6-hour VM stall.**
+The chained soak started when the first D3 launch ended. Install, 16 cables and "Ready" took
+7 minutes (the first attempt only timed out on the guest's 10-minute quiet wait). Segment 1
+began at 02:08, and about 4 minutes later the guest stopped writing its heartbeat; `soak.ps1` recorded an
+incident and reset nothing, as designed. The VM resumed by itself about 04:45: VBox.log says
+"TM: Giving up catch-up attempt at a 9 276 650 145 548 ns lag" (9,277 s), and the guest
+additions logged a "radical host time change" of the same size. The PC was awake the whole
+time (no power events, the soak sampler wrote every 20 s), other-process CPU stayed low, and
+the VirtualBox processes used a steady 4 % of host CPU. No segment finished, so the soak
+produced no hours. The campaign was stopped at about 04:50 (`soak.cmd stop`; the VM did not
+shut down in time and was saved, then discarded by the next restore).
+
+Untested hypothesis for that stall: `soak.ps1` starts the VM with `--type gui`, while every
+Stage A runner this week started it headless, and the headless D3 VM kept real time for an
+hour in the same window. A 2.6-hour stall with the host idle is far longer than the
+Verifier-fuzz stalls seen on 2026-11-26 (up to 10 minutes). Checked the same morning: the
+headless VM stalls too (below), so `soak.ps1` stays as it is. VCAB-24 stays open.
+
+**D3 relaunch (`results-20261127-0455-d3b`, `-Blocks pool,verifier,live -PoolMinutes 60`,
+fresh restore, new watcher):**
+
+- **Pool: PASS.** Driver tags (MNWR, MNTR, SyAu, AUDR) 524 KiB to 524 KiB over 60 min, growth
+  0 MiB/h, live allocations 28 to 28, whole non-paged pool -1.5 MiB/h, 121 samples; host
+  non-VM CPU mean 3.2 %. The pool was shortened from 120 to 60 minutes to fit the window
+  (a deviation from the D3 command; a 60-minute pool had passed before). VCAB-28's 24 h run
+  (D4) is still open.
+- **Verifier: not judged.** Verifier was turned on and the guest restarted at 06:14. It then
+  showed no sign of life for over 20 minutes (no guest-additions log, screenshots failing,
+  no echo) while the VM used 12 % of host CPU. The agent read the vCPU stacks (all four in
+  the kernel, System address space, in interrupt and cross-processor paths) as a boot hang
+  and reset the VM at 06:40. That was premature. The guest's runner had resumed at 06:32
+  (18 minutes after the restart), confirmed Verifier active and started fuzz round 1, so the
+  guest was alive, though very slow to answer. VBox.log shows a timer lag of only 15 s at that
+  reset, so the VM itself was executing in real time: this was not a NEM stall. Whether it
+  was a slowdown under Verifier fuzz or the start of a guest hang cannot be told; the agent's
+  reset cut round 1 short. After that reset, the watcher saw a 30-minute silence (a working,
+  unchanged screenshot and no echo) and reset again at 07:21. VBox.log logged "Giving up
+  catch-up attempt at a 1 767 309 877 686 ns lag" at that moment: the VM had not executed for
+  about 29.5 minutes, a NEM stall, so that reset says nothing about the driver. The resumed runner then recorded round 1 as "the VM restarted
+  during this step" and died on its own bug: `run-stage-a.ps1` called `Add-HostLoadResult`
+  in the resume path 300 lines before defining it. Fixed on this branch with a test that
+  any function called from top-level code is defined above the call. No bugcheck and no
+  crash dump were found in any boot. Saved: stacks, vCPU state and a core
+  (`C:\VMs\ar-dump-d3b-20261127.elf`, 8.1 GB, not analyzed; NMI injection to get a Windows
+  dump is not supported under NEM).
+- **Live update and removal under a playing route (`results-20261127-0843-d3b`, `-Blocks
+  live`, fresh restore, 08:46-09:02): same as 2026-11-22.** The route was running before both
+  operations and was still "running" after the update. The helper returned exit 5 (restart
+  required) for both the update and the removal. After the update the driver reported 0.2.6.0,
+  and after the removal no AudioRouter device was left. No bugcheck. Runner verdicts: REVIEW,
+  "review item 3 NOT verified". This is the owner's decision in D3: accept "restart required"
+  under a playing route, or ask for a new RC.
+
+**Headless soak check (`results-20261127-0905-soak`, 09:05-10:05, same bundle, VM started
+headless before `soak.cmd start`, session 2):** the GUI-versus-headless hypothesis is **not
+supported**. The headless VM stalled too: VBox.log "TM: Giving up catch-up attempt at a
+120 534 800 079 ns lag" (about 2 minutes) during segment 1. Segment 1 = `fail` ("a route or
+probe ended with an error"): both route pairs exited 1 and lost about 84 % of impulses with 0
+corrupted, and 92 of 104 events were VM-wide. Segment 2 = `invalid` (guest stall, vm-correlated;
+84 impulses lost, 0 corrupted). Host non-VM CPU mean 1.6 % and 3.5 %. Driver pool tags were the
+same in both segments (MNWR 13,312 B, SyAu 38,736 B, AUDR 272 B). The second incident ("last
+heard s ago") is a harness artifact: the VM was already running, so the monitor had no
+fresh-boot grace before the guest runner existed. Reading: on this PC under NEM, 20-minute
+soak segments keep getting caught by VM-wide stalls, so the soak cannot collect clean hours
+here. That agrees with the 2026-10-10 lesson (VCAB-24 needs native VT-x or bare metal).
+The segment-1 `fail` comes from the route exiting inside a stall, so the classifier treats a
+route that exited 1 during a VM-wide stall as a failure; review that rule before the real
+0.3.0 soak.
+
+Summary for D3: the A/B fails (with the post-restart confound above), pool passes, Verifier
+fuzz is not judged (two fuzz rounds still needed, in a run of several hours with no other
+block), and live update and removal need a restart while a client is attached.
+
+**Verifier alone, same day 10:56-11:55 (`results-20261127-1056-verifier`, bundle `rc-0.2.5-r8` =
+r7 plus the runner fix, `-Blocks verifier`, fresh restore): not judged again, a NEM stall.**
+Install, quiet guest, Verifier on and active passed. About 25 minutes into fuzz round 1 the
+guest went silent (screenshot working and unchanged, no echo, state unchanged). The watcher
+reset it after 30 minutes, at 11:52, and VBox.log logged "Giving up catch-up attempt at a
+1 773 783 773 830 ns lag" at that moment: the VM had not executed for about 29.6 minutes. Host
+non-VM CPU mean 0.0 % (peak 3 %) over that window. The fixed runner then resumed correctly:
+round 1 = "the VM restarted during this step", the later steps SKIP, Verifier off and removal
+PASS. "No bugcheck" = FAIL with 1 unexpected-power event and 0 dumps; with no dump and a
+host-side reset at 11:52 this is most likely the Kernel-Power event the reset itself causes
+(the event text was not kept in the zip). Reading: under VirtualBox NEM on this PC the IOCTL
+fuzz under Verifier keeps meeting VM stalls of about 30 minutes, at least as long as the
+watcher's reset limit, so the Verifier rounds cannot be judged here with a 30-minute limit.
+Options: a reset limit of 2-3 hours (the soak's 2.6-hour stall did recover by itself), or
+Verifier on a native VT-x host or bare metal (VCAB-24's own requirement).
+
+**A/B repeat with `-AbSameStart` (`results-20261127-1156-ab`, bundle `rc-0.2.5-r9`,
+11:56-13:27): stopped after 2 of 6 phases by two restart hangs.** The new switch worked: both
+drivers restarted after install and waited 180 s. Phase 1 (0.2.5) steady underruns 1027 and 0
+frames (restarts: one invalid run, one 9321), phase 2 (RC3) steady 432 and 0 (restarts 5520,
+2160). With the same start, the two drivers' steady runs look alike, but two phases are far
+from the 4 valid runs per shape the verdict needs, so there is no verdict.
+
+**Restart hangs, three times today, both drivers.** Twice in this run (12:49 after RC3's
+install restart, 13:27 after 0.2.5's) the guest stayed on Windows' "Restarting" screen for 30
+minutes while the VM executed in real time (timer lag at the reset: none and 14 ms). The vCPU
+instruction pointers were identical in both, and identical (same low 21 address bits, same
+kernel build) to the 06:39 stacks from the D3 relaunch. That capture was symbolized: CPU 2 inside
+`HalReturnToFirmware`, the kernel's final restart call, CPUs 0 and 1 in interrupt handling, CPU 3
+idle. Reading, with the caveat that the symbols are nearest exports only: Windows had finished
+shutting down (drivers already stopped) and asked the virtual hardware to reset, and VirtualBox
+under NEM did not do it. A host-side reset then booted normally each time. This
+matches nothing in the driver, happens with RC3 too, and may explain some earlier "freezes"
+that followed a restart (the 06:39 capture came after Verifier's restart in the D3 relaunch).
+Harness consequence: a guest frozen on "Restarting" with no timer lag can be reset safely
+after a few minutes rather than 30. VBox.log shows it plainly: a normal restart logs
+VBoxService's "main     Ended." and then "Reset initiated by ACPI" about 4 s later; in both
+hangs "Ended." was followed by nothing for 30 minutes. The host runner (`d3v.ps1`, below) now
+resets the VM 5 minutes after an "Ended." that no reset followed, and does not count that reset
+toward its stop limit.
+
+Next action (owner, 2026-11-27 afternoon: full A/B repeat on r9 during the next night, with
+enough work for about 10 hours): `C:\VMs\ar-share\night-tools\night.ps1 -End <HH:mm>` runs, in
+order, the A/B with `-AbSameStart` on `rc-0.2.5-r9` (at most 3 h), the Verifier block on r9 with
+a 150-minute silence limit (at most 5 h; the earlier stalls were about 30 minutes and the soak's
+2.6 h stall recovered by itself), then the 16-cable soak rehearsal for what is left. Bundle
+`rc-0.2.5-r9` was built from `6892adb93`, which became `37cb492c5` when this branch was rebased
+onto main (same files); `rc-0.2.5-r7` still has the resume bug. Moving Verifier to native
+hardware stays the fallback if the long limit still cannot judge it. The host runners are kept
+in `C:\VMs\ar-share\night-tools` and copied beside each run's evidence. Owner decisions are
+listed in D3 of the human-gated tasks.
+
+Requirement IDs: VCAB-24, VCAB-25 (A/B), VCAB-28 (pool), SEC-08 and VCAB-30 (Verifier),
+VDEV-09 (live update), NFR-02.
