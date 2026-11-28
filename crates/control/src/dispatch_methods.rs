@@ -158,6 +158,7 @@ method_table! {
         "nodes.remove" => dispatch_simple,
         "connections.add" => dispatch_simple,
         "connections.remove" => dispatch_simple,
+        "sessions.rename" => dispatch_simple,
         "meters.levels" => dispatch_simple,
         "obs.status" => dispatch_obs,
         "obs.refresh" => dispatch_obs,

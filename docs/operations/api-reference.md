@@ -53,7 +53,7 @@ See [network privacy and permissions](privacy-permissions.md#audio-privacy-bound
 | `system.quit` | `sessionControl` | external operation; requires an idempotency key; finalizes active recorders before stopping running sessions |
 | `system.osTransition` | `sessionControl` | mutating; requires an idempotency key; reports routes requiring explicit resume validation |
 | `clients.list` | `read` | read-only |
-| `clients.authorize` | `deviceAdministration` | mutating; requires an idempotency key |
+| `clients.authorize` | `deviceAdministration` | mutating; requires an idempotency key; optional `allowRecording` (default `false`) adds the `record` scope for that client; each authorization restates it and revocation clears it; window only over HTTP |
 | `clients.revoke` | `deviceAdministration` | mutating; requires an idempotency key |
 | `operations.get` | `read` | read-only |
 | `operations.cancel` | `sessionControl` | mutating; requires an idempotency key |
@@ -205,6 +205,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `sessions.duplicate` | `graphWrite` | mutating; requires an idempotency key |
 | `meters.reset` | `sessionControl` | runtime statistics only; `nodeId` (ID or exact name) selects a prepared Meter, `sessionId` defaults to the active session; clears held peaks and clipping counters without changing sound or saving |
 | `sessions.delete` | `graphWrite` | mutating; requires an idempotency key |
+| `sessions.rename` | `graphWrite` | mutating; requires an idempotency key; `sessionId` defaults to the active session; 1–120 characters; saved as a new revision without interrupting audio; the current name returns `unchanged: true` |
 | `sessions.play` | `deviceAdministration` | external operation; prepares the devices saved on the nodes and starts, like Play; sessionId defaults to the active session |
 | `sessions.togglePlay` | `deviceAdministration` | external operation; stops if playing, otherwise plays |
 | `sessions.summary` | `read` | read-only; nodes with readable settings, connections by name with `fromOutput` and `toInput` ports, playing and mute state |

@@ -463,6 +463,9 @@ pub struct ControlPlane {
         HashMap<(EntityId, EntityId), std::sync::Arc<audiorouter_engine::SoundboardSource>>,
 
     enrollments: HashMap<String, (ClientRole, bool)>,
+    /// In-memory copy of the per-client recording opt-in (A1); storage holds
+    /// the durable value when present.
+    recording_clients: std::collections::HashSet<String>,
     events: EventLog,
     mutation_limiter: MutationRateLimiter,
     operation_outcomes: HashMap<String, Value>,
@@ -533,6 +536,9 @@ pub struct ControlPlane {
     os_suspended_native_sessions: Vec<EntityId>,
     #[cfg(windows)]
     sleep_route_recovery: Option<safety::SleepRouteRecovery>,
+    /// Lost-device Start is refused until Stop retires the interrupted runtime.
+    #[cfg(windows)]
+    device_lost_sessions: Vec<EntityId>,
     /// When device-loss recoveries were armed, to stop a flapping device
     /// from restarting the route without end.
     #[cfg(windows)]
@@ -695,6 +701,7 @@ impl ControlPlane {
             test_signal_sources: HashMap::new(),
             soundboard_sources: HashMap::new(),
             enrollments: HashMap::new(),
+            recording_clients: std::collections::HashSet::new(),
             events: EventLog::new(1),
             mutation_limiter: MutationRateLimiter::default(),
             operation_outcomes: HashMap::new(),
@@ -730,6 +737,8 @@ impl ControlPlane {
             os_suspended_native_sessions: Vec::new(),
             #[cfg(windows)]
             sleep_route_recovery: None,
+            #[cfg(windows)]
+            device_lost_sessions: Vec::new(),
             #[cfg(windows)]
             device_recovery_arms: VecDeque::new(),
             running_witness: None,

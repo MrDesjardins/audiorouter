@@ -1495,9 +1495,10 @@ fn method_output_schema_impl(name: &str) -> Value {
                 "properties": {
                     "clientId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                     "role": { "enum": ["observer", "editor", "operator"] },
-                    "revoked": { "type": "boolean" }
+                    "revoked": { "type": "boolean" },
+                    "allowRecording": { "type": "boolean" }
                 },
-                "required": ["clientId", "role", "revoked"],
+                "required": ["clientId", "role", "revoked", "allowRecording"],
                 "additionalProperties": false
             }
         }),
@@ -1506,7 +1507,8 @@ fn method_output_schema_impl(name: &str) -> Value {
             "properties": {
                 "clientId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "role": { "enum": ["observer", "editor", "operator"] },
-                "revoked": { "const": false }
+                "revoked": { "const": false },
+                "allowRecording": { "type": "boolean" }
             },
             "required": ["clientId", "role", "revoked"],
             "additionalProperties": false

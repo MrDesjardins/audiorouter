@@ -133,6 +133,8 @@ export function uiError(error: unknown, fallback: string): UiMessage {
 
 /** Readable text for a caught error. */
 export function formatUiError(error: unknown, fallback: string): string {
+  // Tauri rejects with strings as well as Error objects.
+  if (typeof error === "string" && error.trim()) error = new Error(error);
   if (!(error instanceof Error)) return fallback;
   if (
     /native (?:worker|render-source worker|output fan-out) (?:is )?already (?:attached|connected)/i.test(error.message)
@@ -183,14 +185,77 @@ export function formatUiError(error: unknown, fallback: string): string {
     const scope = permission?.[1] ?? tm("backendErrors.scopeRequired");
     return tm("backendErrors.permissionDenied", { scope });
   }
-  if (!(error instanceof AudioRouterRpcError) || !error.data) return error.message;
+  if (
+    /^(?:pipe closed|not connected|backend is disconnected|broken pipe|connection (?:reset|refused))\b/i.test(
+      error.message,
+    )
+  )
+    return lostBackend();
+  if (!(error instanceof AudioRouterRpcError) || !error.data) return plainSentence(error.message);
   // Already names the node and what to do there.
-  if (error.data.code === "nodeNotReady") return error.message;
-  const { code, hresult, remediation, retryable } = error.data;
-  const hresultText =
-    typeof hresult === "number" ? `, HRESULT 0x${(hresult >>> 0).toString(16).padStart(8, "0").toUpperCase()}` : "";
-  const retryText = retryable ? tm("backendErrors.retry") : "";
-  return `${error.message} [${code}${hresultText}] ${remediation}${retryText}`;
+  if (error.data.code === "nodeNotReady") return plainSentence(error.message);
+  const messages = plainErrors();
+  const plain = Object.hasOwn(messages, error.data.code) ? messages[error.data.code] : undefined;
+  if (plain) {
+    const device = failedDevice(error);
+    return device ? tm("backendErrors.namedFailure", { device: device.name, reason: plain }) : plain;
+  }
+  if (error.data.code === "invalidGraph")
+    return tm("backendErrors.invalidGraph", { reason: plainSentence(error.message) });
+  if (error.data.code === "invalidRequest") return plainSentence(error.message);
+  return tm("backendErrors.unknownFailure", { reason: plainSentence(error.message) });
+}
+
+export function lostBackend(): string {
+  return tm("backendErrors.lostBackend");
+}
+
+/** Translate at display time so switching language never retains an English map. */
+export function plainErrors(): Record<string, string> {
+  return {
+    invalidArgument: tm("backendErrors.plain.invalidArgument"),
+    accessDenied: tm("backendErrors.plain.accessDenied"),
+    exclusiveModeOnly: tm("backendErrors.plain.exclusiveModeOnly"),
+    unsupportedFormat: tm("backendErrors.plain.unsupportedFormat"),
+    deviceInUse: tm("backendErrors.plain.deviceInUse"),
+    serviceUnavailable: tm("backendErrors.plain.serviceUnavailable"),
+    bufferConstraint: tm("backendErrors.plain.bufferConstraint"),
+    other: tm("backendErrors.plain.other"),
+    planExpired: tm("backendErrors.plain.planExpired"),
+    planLimitReached: tm("backendErrors.plain.planLimitReached"),
+    storageFailure: tm("backendErrors.plain.storageFailure"),
+    corruptDatabase: tm("backendErrors.plain.corruptDatabase"),
+    deviceUnavailable: tm("backendErrors.plain.deviceUnavailable"),
+    notFound: tm("backendErrors.plain.notFound"),
+    idempotencyConflict: tm("backendErrors.plain.idempotencyConflict"),
+    noUndoAvailable: tm("backendErrors.plain.noUndoAvailable"),
+    rateLimited: tm("backendErrors.plain.rateLimited"),
+    internalError: tm("backendErrors.plain.internalError"),
+    invalidRoot: tm("backendErrors.plain.invalidRoot"),
+    tooManyCandidates: tm("backendErrors.plain.tooManyCandidates"),
+    tooManyDirectories: tm("backendErrors.plain.tooManyDirectories"),
+    cancelled: tm("backendErrors.plain.cancelled"),
+    deadlineExceeded: tm("backendErrors.plain.deadlineExceeded"),
+    io: tm("backendErrors.plain.io"),
+    outsideConfiguredRoot: tm("backendErrors.plain.outsideConfiguredRoot"),
+    unsupportedExtension: tm("backendErrors.plain.unsupportedExtension"),
+    missing: tm("backendErrors.plain.missing"),
+    tooLarge: tm("backendErrors.plain.tooLarge"),
+    notPe: tm("backendErrors.plain.notPe"),
+    unsupportedArchitecture: tm("backendErrors.plain.unsupportedArchitecture"),
+  };
+}
+
+/** Unwrap Rust debug errors without changing the underlying diagnostic record. */
+export function plainSentence(text: string): string {
+  let sentence = text.trim();
+  for (let wrapped = /^[A-Z]\w*\((.*)\)$/s.exec(sentence); wrapped; wrapped = /^[A-Z]\w*\((.*)\)$/s.exec(sentence)) {
+    sentence = wrapped[1].trim();
+    if (sentence.startsWith('"') && sentence.endsWith('"')) sentence = sentence.slice(1, -1).replace(/\\"/g, '"');
+  }
+  if (!sentence) return tm("backendErrors.emptyFailure");
+  sentence = sentence[0].toLocaleUpperCase() + sentence.slice(1);
+  return /[.!?…。！？]$/.test(sentence) ? sentence : `${sentence}.`;
 }
 
 /** Identifies a graph conflict without guessing from localized text. */
@@ -510,6 +575,8 @@ export interface UiBackend {
     clientId: string,
     role: "observer" | "editor" | "operator",
     idempotencyKey: string,
+    /** Also let this client control recordings (A1); omitted means no. */
+    allowRecording?: boolean,
   ): Promise<ClientAuthorizeResult>;
   revokeClient(clientId: string, idempotencyKey: string): Promise<ClientRevokeResult>;
   /** Opt-in verbose logging (P2-3); absent when there is no backend. */
@@ -1404,8 +1471,11 @@ export function createLiveBackend(
     async listClients() {
       return client.request("clients.list", undefined);
     },
-    async authorizeClient(clientId, role, idempotencyKey) {
-      return client.request("clients.authorize", { clientId, role, idempotencyKey });
+    async authorizeClient(clientId, role, idempotencyKey, allowRecording) {
+      return client.request(
+        "clients.authorize",
+        allowRecording ? { clientId, role, allowRecording: true, idempotencyKey } : { clientId, role, idempotencyKey },
+      );
     },
     async revokeClient(clientId, idempotencyKey) {
       return client.request("clients.revoke", { clientId, idempotencyKey });

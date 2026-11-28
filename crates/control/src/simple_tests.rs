@@ -846,3 +846,80 @@ fn device_tools_added_by_a_script_get_the_names_the_app_shows() {
     assert_eq!(name(NodeKind::PhysicalInput), "Input device");
     assert_eq!(name(NodeKind::PhysicalOutput), "Output device");
 }
+
+#[test]
+fn sessions_rename_saves_a_revision_through_dispatch_and_respects_roles() {
+    let mut plane = plane();
+    let before = session(&plane).revision;
+    let renamed = call(
+        &mut plane,
+        "sessions.rename",
+        json!({ "sessionId": "stream", "name": "  Evening stream  ", "idempotencyKey": "rn1" }),
+    )
+    .unwrap();
+    assert_eq!(renamed["name"], "Evening stream");
+    assert_eq!(renamed["previousName"], "Stream");
+    assert_eq!(session(&plane).name, "Evening stream");
+    assert_eq!(session(&plane).revision, before + 1);
+    // A retry with the same key replays; the same name with a new key is a
+    // harmless no-op that saves no revision.
+    let replay = call(
+        &mut plane,
+        "sessions.rename",
+        json!({ "sessionId": "stream", "name": "  Evening stream  ", "idempotencyKey": "rn1" }),
+    )
+    .unwrap();
+    assert_eq!(replay["revision"], renamed["revision"]);
+    let same = call(
+        &mut plane,
+        "sessions.rename",
+        json!({ "sessionId": "stream", "name": "Evening stream", "idempotencyKey": "rn2" }),
+    )
+    .unwrap();
+    assert_eq!(same["unchanged"], true);
+    assert_eq!(session(&plane).revision, before + 1);
+    // Invalid names are refused and change nothing.
+    for (name, key) in [("   ", "rn3"), ("a\nb", "rn4")] {
+        assert!(call(
+            &mut plane,
+            "sessions.rename",
+            json!({ "sessionId": "stream", "name": name, "idempotencyKey": key }),
+        )
+        .is_err());
+    }
+    let long = "x".repeat(MAX_SESSION_NAME_CHARS + 1);
+    assert!(call(
+        &mut plane,
+        "sessions.rename",
+        json!({ "sessionId": "stream", "name": long, "idempotencyKey": "rn5" }),
+    )
+    .is_err());
+    assert!(call(
+        &mut plane,
+        "sessions.rename",
+        json!({ "sessionId": "stream", "name": "X", "unknown": 1, "idempotencyKey": "rn6" }),
+    )
+    .is_err());
+    assert_eq!(session(&plane).name, "Evening stream");
+    // An Editor (GraphWrite) may rename; an Observer may not.
+    let request = |key: &str| JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(2)),
+        method: "sessions.rename".into(),
+        params: Some(json!({ "sessionId": "stream", "name": "Late show", "idempotencyKey": key })),
+    };
+    let observer = plane.dispatch_authorized_for_client(
+        request("obs"),
+        "observer-client",
+        &ClientGrant::for_role(ClientRole::Observer),
+    );
+    assert!(observer.error.is_some());
+    assert_eq!(session(&plane).name, "Evening stream");
+    let editor = plane.dispatch_authorized_for_client(
+        request("ed"),
+        "editor-client",
+        &ClientGrant::for_role(ClientRole::Editor),
+    );
+    assert!(editor.error.is_none(), "{:?}", editor.error);
+    assert_eq!(session(&plane).name, "Late show");
+}

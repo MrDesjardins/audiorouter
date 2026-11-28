@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Node } from "@audiorouter/contracts";
 import type { RecorderStatus, UiBackend } from "./backend";
+import { formatUiError } from "./backend";
 import { useMessages } from "./i18n/useMessages";
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -145,7 +146,7 @@ export function RecordingFolderField({
       setMessage(tr(result.created ? "recordingUi.folderCreated" : "recordingUi.folderSaved"));
       window.dispatchEvent(new Event(ROOT_CHANGED_EVENT));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
+      setMessage(formatUiError(error, tr("backendErrors.emptyFailure")));
     } finally {
       setBusy(false);
     }

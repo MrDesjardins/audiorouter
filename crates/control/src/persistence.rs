@@ -288,6 +288,7 @@ impl ControlPlane {
             test_signal_sources: HashMap::new(),
             soundboard_sources: HashMap::new(),
             enrollments: HashMap::new(),
+            recording_clients: std::collections::HashSet::new(),
             events: EventLog::new(backend_epoch),
             mutation_limiter: MutationRateLimiter::default(),
             operation_outcomes: HashMap::new(),
@@ -323,6 +324,8 @@ impl ControlPlane {
             os_suspended_native_sessions: Vec::new(),
             #[cfg(windows)]
             sleep_route_recovery: None,
+            #[cfg(windows)]
+            device_lost_sessions: Vec::new(),
             #[cfg(windows)]
             device_recovery_arms: std::collections::VecDeque::new(),
             running_witness: None,

@@ -636,6 +636,166 @@ fn storage_backed_enrollment_persists_and_revokes() {
     assert!(first.grant_for_client("operator").unwrap().is_none());
 }
 
+/// Owner decision A1 (2026-11-27): the window can let one enrolled assistant
+/// control recordings. Off by default; every authorization restates it; a
+/// revocation clears it; it survives a backend restart; and the dispatcher
+/// enforces it on the recording methods.
+#[test]
+fn recording_opt_in_is_per_client_off_by_default_and_cleared_by_revocation() {
+    let path = std::env::temp_dir().join(format!(
+        "audiorouter-recording-opt-in-{}.sqlite",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_file(&path);
+    // Enrolling is the window's decision after device consent.
+    let window =
+        ClientGrant::with_scopes([PermissionScope::Read, PermissionScope::DeviceAdministration]);
+    let call = |plane: &mut ControlPlane,
+                method: &str,
+                params: Value,
+                grant: &ClientGrant,
+                client: &str| {
+        plane.dispatch_authorized_for_client(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: Some(params),
+            },
+            client,
+            grant,
+        )
+    };
+    let denied = |response: &audiorouter_protocol::JsonRpcResponse| {
+        response
+            .error
+            .as_ref()
+            .and_then(|error| error.data.as_ref())
+            .is_some_and(|data| data["code"] == "permissionDenied")
+    };
+    let stop = json!({ "nodeId": "missing-recorder", "idempotencyKey": "stop-1" });
+    {
+        let mut plane = ControlPlane::with_storage("opt-in-first", Storage::open(&path).unwrap());
+        let plain = call(
+            &mut plane,
+            "clients.authorize",
+            json!({ "clientId": "assistant", "role": "operator", "idempotencyKey": "a1" }),
+            &window,
+            "window",
+        );
+        assert_eq!(
+            plain.result.as_ref().unwrap()["allowRecording"],
+            false,
+            "{plain:?}"
+        );
+        let grant = plane.grant_for_client("assistant").unwrap().unwrap();
+        assert!(!grant.allows(PermissionScope::Record));
+        assert!(denied(&call(
+            &mut plane,
+            "recorders.stopRecording",
+            stop.clone(),
+            &grant,
+            "assistant"
+        )));
+
+        let allowed = call(
+            &mut plane,
+            "clients.authorize",
+            json!({ "clientId": "assistant", "role": "editor", "allowRecording": true, "idempotencyKey": "a2" }),
+            &window,
+            "window",
+        );
+        assert_eq!(
+            allowed.result.as_ref().unwrap()["allowRecording"],
+            true,
+            "{allowed:?}"
+        );
+        let listed = call(&mut plane, "clients.list", json!({}), &window, "window");
+        assert_eq!(listed.result.unwrap()[0]["allowRecording"], true);
+        // A wrong type is refused rather than read as "off".
+        let wrong = call(
+            &mut plane,
+            "clients.authorize",
+            json!({ "clientId": "assistant", "role": "editor", "allowRecording": "yes", "idempotencyKey": "a3" }),
+            &window,
+            "window",
+        );
+        assert!(wrong.error.is_some());
+        // An assistant can never grant itself the opt-in.
+        let grant = plane.grant_for_client("assistant").unwrap().unwrap();
+        assert!(grant.allows(PermissionScope::Record));
+        assert!(denied(&call(
+            &mut plane,
+            "clients.authorize",
+            json!({ "clientId": "other", "role": "observer", "allowRecording": true, "idempotencyKey": "a4" }),
+            &grant,
+            "assistant"
+        )));
+        // Authorized, the recording method is no longer refused for scope.
+        let reached = call(
+            &mut plane,
+            "recorders.stopRecording",
+            stop.clone(),
+            &grant,
+            "assistant",
+        );
+        assert!(!denied(&reached), "{reached:?}");
+    }
+    {
+        // After a restart the choice is still there.
+        let mut plane = ControlPlane::with_storage("opt-in-second", Storage::open(&path).unwrap());
+        assert!(plane
+            .grant_for_client("assistant")
+            .unwrap()
+            .unwrap()
+            .allows(PermissionScope::Record));
+        // Changing the role without the box turns recording off again.
+        call(
+            &mut plane,
+            "clients.authorize",
+            json!({ "clientId": "assistant", "role": "operator", "idempotencyKey": "a5" }),
+            &window,
+            "window",
+        );
+        assert!(!plane
+            .grant_for_client("assistant")
+            .unwrap()
+            .unwrap()
+            .allows(PermissionScope::Record));
+        call(
+            &mut plane,
+            "clients.authorize",
+            json!({ "clientId": "assistant", "role": "operator", "allowRecording": true, "idempotencyKey": "a6" }),
+            &window,
+            "window",
+        );
+        let revoked = call(
+            &mut plane,
+            "clients.revoke",
+            json!({ "clientId": "assistant", "idempotencyKey": "r1" }),
+            &window,
+            "window",
+        );
+        assert!(revoked.error.is_none(), "{revoked:?}");
+        assert!(plane.grant_for_client("assistant").unwrap().is_none());
+        assert!(!plane.client_recording_allowed("assistant").unwrap());
+        // Authorized again, it starts without recording.
+        call(
+            &mut plane,
+            "clients.authorize",
+            json!({ "clientId": "assistant", "role": "operator", "idempotencyKey": "a7" }),
+            &window,
+            "window",
+        );
+        assert!(!plane
+            .grant_for_client("assistant")
+            .unwrap()
+            .unwrap()
+            .allows(PermissionScope::Record));
+    }
+    let _ = std::fs::remove_file(&path);
+}
+
 #[test]
 fn file_backed_enrollment_authorizes_after_control_restart() {
     let path = std::env::temp_dir().join(format!(

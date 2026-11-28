@@ -20,6 +20,12 @@ names another one.
 
 Results that are **FAILED today** are marked so. Nothing on this page has passed.
 
+2026-11-27 app-only follow-up: the frontend port, automated keyboard/layout/MCP
+checks and a fresh installer's signed-in VM lifecycle passed; see the
+[qualification record](evidence/2026-11-27-ui-app-qualification.md). These do not
+close the attended, clean-Defender, MOTW, reference-PC or second-build gates below.
+The owner deferred the eight-hour soak.
+
 ### Common preparation
 
 - **Build:** `powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-desktop.ps1`,
@@ -65,26 +71,26 @@ you do not answer.
 
 | ID | Question | Options and recommendation | Requirements | Source |
 | --- | --- | --- | --- | --- |
-| A1 | May an assistant start and stop recordings? | (a) per-client opt-in, off by default; (b) window only. Default: (b), as today. (a) needs a decision record in `docs/spec/13-security.md` and `11-automation.md` | R2-1a, AUTO-10/18, SEC-02 | [API and MCP](../archived/2026-11-24-api-mcp-quality.md) |
-| A2 | May an assistant rename a session? | (a) add `sessions.rename` with a default tool; (b) window only. Default: (b) | R2-4, AUTO-06/18 | [API and MCP](../archived/2026-11-24-api-mcp-quality.md) |
+| A1 | Assistant recordings | **Approved 2026-11-27: yes**, option (a): a per-client opt-in, off by default, set in the window. Owner goal: as much flexibility as possible for API and MCP users | R2-1a, AUTO-10/18, SEC-02 | [Owner decisions 2026-11-27](owner-decisions-2026-11-27.md) |
+| A2 | Assistant renames a session | **Approved 2026-11-27: yes**, add `sessions.rename` with a default MCP tool | R2-4, AUTO-06/18 | [Owner decisions 2026-11-27](owner-decisions-2026-11-27.md) |
 | A3 | Keep the virtual bus lists as expert-only tools? | An agent decided yes: no assistant role can set up buses. Say no to reverse it | R2-4 | [API and MCP](../archived/2026-11-24-api-mcp-quality.md) |
-| A4 | Support an 8-channel CABLE-B Input? | (a) keep stereo only and record the CABLE-B runs as not applicable; (b) support it, as its own change with layout tests. Today the worker refuses it; you use 7.1 there on purpose | ARCH-08, NFR-03 | [Code review fixes](code-review-fixes.md) |
-| A5 | What should a route show when its device recovery was dropped by an edit, a recording start or a failed plugin? | Today it still says running. Recommended: mark it stopped with the reason, never auto-restart. Alternative: keep the status, say "press Stop, then Play" | RES-3, STATE-10 | [Application quality](../archived/2026-11-24-application-quality.md), `a_graph_commit_during_device_recovery_cancels_the_stale_recovery` |
-| A6 | What should `sessions.start` do on a route that lost its device? | Today it succeeds and stays silent. Recommended: refuse with `nodeNotReady` ("stop, then play"). Alternative: recover automatically | RES-3, CAP-11 | `a_start_on_a_device_lost_route_cancels_its_recovery_and_starts_nothing` |
-| A7 | Two sleeps without a resume: keep the first list of stopped routes? | Today the second sleep empties it. Recommended: merge the lists, still never auto-start | STATE-11 | `a_second_sleep_forgets_the_first_sleeps_resume_list` |
-| A8 | Should the resume list skip routes whose plugin failed? | Today only crash recovery skips them. Recommended: skip in both, with a message | RES-3 | [Application quality](../archived/2026-11-24-application-quality.md) |
-| A9 | Does an armed recorder block sleep? | Today two checks disagree. Recommended: one "armed or recording" rule, and never re-arm after recovery | CAP-11 | `sleep_with_a_recording_changes_nothing_and_resume_after_it_restarts_nothing` |
+| A4 | Multichannel virtual-cable outputs | **Decided 2026-11-27: option (a).** AudioRouter must work with whatever virtual cables a PC has: a stereo route plays into the front left/right of any multichannel output device, other channels silent | ARCH-08, NFR-03 | [Owner decisions 2026-11-27](owner-decisions-2026-11-27.md) |
+| A5 | Cancelled device recovery | **Approved 2026-11-27:** stop with a reason and finalize recorders safely; never restart the edited/faulted route | RES-3, STATE-10 | [Recovery repairs](recovery-state-consistency.md) |
+| A6 | Start on a lost-device route | **Approved 2026-11-27:** `nodeNotReady` until Stop retires the interrupted runtime; eligible exact-device recovery remains automatic | RES-3, CAP-11 | [Recovery repairs](recovery-state-consistency.md) |
+| A7 | Repeated Sleep | **Approved 2026-11-27:** retain the union of eligible stopped-route offers; portable routes stay stopped | STATE-11 | [Recovery repairs](recovery-state-consistency.md) |
+| A8 | Failed-plugin restart offers | **Approved 2026-11-27:** exclude from crash/resume offers and explain the resume exclusion | RES-3 | [Recovery repairs](recovery-state-consistency.md) |
+| A9 | Armed recorder safety | **Approved 2026-11-27:** one armed-or-recording predicate; no automatic re-arming | CAP-11 | [Recovery repairs](recovery-state-consistency.md) |
 | A10 | Coverage floors per module? | **Needs** at least 14 nightly rows over 7 commits, collected automatically. Then pick floors from [the baselines](evidence/2026-11-24-q5-coverage-baselines.md) | ENG-02/03/04 | [Application quality](../archived/2026-11-24-application-quality.md) Q5.2 |
 | A11 | Gate CI on start-up and UI-ready timings? | **Needs** enough nightly rows to know runner noise. Default: report only | NFR-14 | Q5.6 |
-| A12 | Change the plugin-worker restart policy? | Default: keep it. A change needs its own tests | RES-10 | [Active plan](current.md) |
-| A13 | Build the deferred "Record clips" and "Hear game and Discord" goals, and OBS separate tracks/toast? | Default: not built | UI-26 | [OBS and Discord](../archived/2026-11-24-obs-discord.md) |
-| A14 | Public site and quickstart still say "Physical input/output"; the app says "input device/output device". Change the site? | Recommended: yes; an agent then updates the site and guides | UI wording | [UI quality](../archived/2026-11-24-ui-quality-review.md) |
-| A15 | Leave Fun Voice Changer preset names in English? | Default: yes (accepted limitation). Otherwise an agent adds a translation map | L10N-01/05 | [Localization](../archived/2026-11-24-ui-localization.md) |
-| A16 | Delete or restore the keyboard connection dialog that nothing opens? | Default: leave as it is | UI-11 | [Active plan](current.md) |
-| A17 | Future work: promote the signed updater (key custody, feed host, channels) or the UAD inventory? | Default: both stay in `future/` | SEC-11, PLUG | [Updater](../future/auto-update-tauri.md), [UAD](../future/uad-plugin-support.md) |
-| A18 | Allow more than 16,384 edits in 24 hours (automation)? | Above it new edits are refused until old records expire. Default: keep. A larger journal costs disk and time on every edit | API-07/11 | [Application quality](../archived/2026-11-24-application-quality.md) |
+| A12 | Plugin-worker restart policy | **Decided 2026-11-27: keep it** | RES-10 | [Owner decisions 2026-11-27](owner-decisions-2026-11-27.md) |
+| A13 | Deferred "Record clips", "Hear game and Discord", OBS tracks/toast | **Decided 2026-11-27: not built** | UI-26 | [Owner decisions 2026-11-27](owner-decisions-2026-11-27.md) |
+| A14 | Site says "Physical input/output" | **Approved 2026-11-27: yes**, update the site and guides to the app's words | UI wording | [Owner decisions 2026-11-27](owner-decisions-2026-11-27.md) |
+| A15 | Fun Voice Changer preset names | **Decided 2026-11-27: stay in English** (accepted limitation) | L10N-01/05 | [Owner decisions 2026-11-27](owner-decisions-2026-11-27.md) |
+| A16 | Unopened keyboard connection dialog | **Decided 2026-11-27: leave as it is** | UI-11 | [Owner decisions 2026-11-27](owner-decisions-2026-11-27.md) |
+| A17 | Signed updater, UAD inventory | **Decided 2026-11-27: both stay in `future/`** | SEC-11, PLUG | [Owner decisions 2026-11-27](owner-decisions-2026-11-27.md) |
+| A18 | Edit journal limit (16,384 per 24 h) | **Decided 2026-11-27: keep** | API-07/11 | [Owner decisions 2026-11-27](owner-decisions-2026-11-27.md) |
 
-**Result:** none recorded.
+**Result:** owner answers recorded 2026-11-27 (A1, A2, A4, A12–A18); A3, A10 and A11 still as above.
 
 ## B. Purchases and outside companies
 
@@ -366,6 +372,12 @@ device, nothing moves, sound returns only after Stop + Play.
 Properties → Output device: Alt+Down, ArrowDown, **Escape** keeps the saved value;
 open again, move, **Tab** leaves without applying; Enter then Save works.
 **IDs:** UI-11. **Result:** open.
+
+2026-11-27 follow-up: the real packaged backend was unchanged by Escape/Tab,
+but CDP popup input retained a changed draft value/focus. Physical keys must
+confirm whether this is a product defect or automation limitation. The attended
+checkpoint timed out without confirmation; no pass. See the
+[native continuation](evidence/2026-11-27-ui-app-qualification.md#native-accessibility-continuation-after-owner-go).
 
 ### F3. Windows scaling: 150 %, 200 % and a narrow 200 % window
 

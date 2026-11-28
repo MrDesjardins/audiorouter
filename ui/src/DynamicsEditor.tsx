@@ -256,7 +256,7 @@ function TransferCurve({
     <svg
       ref={svg}
       className="dynamics-graph dynamics-transfer"
-      viewBox="0 0 222 214"
+      viewBox="0 0 222 222"
       role="group"
       aria-label={tr("dynamicsUi.transferLabel")}
     >
@@ -269,9 +269,13 @@ function TransferCurve({
           <text x={L - 4} y={Math.max(17, y(value) + 3)} textAnchor="end" className="dynamics-axis">
             {value}
           </text>
-          <text x={x(value)} y={B + 11} textAnchor="middle" className="dynamics-axis">
-            {value}
-          </text>
+          {/* Across, every other number, and none in the corner the up axis already labels:
+              at Properties width the full set ran together (spacing audit). */}
+          {value % (2 * grid) === 0 && value !== min && (
+            <text x={x(value)} y={B + 12} textAnchor="middle" className="dynamics-axis">
+              {value}
+            </text>
+          )}
         </g>
       ))}
       {max > 0 && <rect x={L} y={T} width={R - L} height={y(0) - T} className="dynamics-over" />}
@@ -294,7 +298,7 @@ function TransferCurve({
           <title>{tr("dynamicsUi.now", { input: db(sample.inputDb), output: db(sample.outputDb) })}</title>
         </circle>
       )}
-      <text x={(L + R) / 2} y={212} textAnchor="middle" className="dynamics-axis-title">
+      <text x={(L + R) / 2} y={B + 29} textAnchor="middle" className="dynamics-axis-title">
         {tr("dynamicsUi.axisIn")}
       </text>
       <text
@@ -445,9 +449,13 @@ function LevelHistory({
       {ticks.map((value) => (
         <g key={value}>
           <line x1={L} x2={R} y1={y(value)} y2={y(value)} className="dynamics-grid" />
-          <text x={L - 4} y={Math.max(17, y(value) + 3)} textAnchor="end" className="dynamics-axis">
-            {value}
-          </text>
+          {/* Every other number, and none at the bottom beside the strip's own "0": a label
+              per grid line overlapped its neighbours at Properties width (spacing audit). */}
+          {value % (2 * grid) === 0 && value !== min && (
+            <text x={L - 4} y={Math.max(17, y(value) + 3)} textAnchor="end" className="dynamics-axis">
+              {value}
+            </text>
+          )}
         </g>
       ))}
       {statistics && (

@@ -397,32 +397,40 @@ mod device_loss {
         assert_eq!(rig.generation(&id), generation);
     }
 
-    /// Start pressed on a route whose device just left (the runtime still says
-    /// playing, its worker is gone): `session_start` cancels the pending
-    /// recovery and, finding the runtime running, starts nothing.
+    /// Start pressed on a route whose device just left must not report
+    /// success merely because the interrupted runtime still says playing.
     ///
-    /// OWNER DECISION (recorded, not changed): that leaves the route silent
-    /// with no recovery pending until the user presses Stop and Play. The
-    /// desktop Play prepares the route first, which refuses while the old
-    /// worker is attached, so the window is narrow; an API client that calls
-    /// `session.start` directly can reach it. Pinned as current behaviour.
+    /// Owner decision 2026-11-27: refuse Start until Stop retires the
+    /// interrupted runtime, retaining eligible exact-device recovery.
     #[test]
-    fn a_start_on_a_device_lost_route_cancels_its_recovery_and_starts_nothing() {
+    fn a_start_on_a_device_lost_route_requires_stop_and_preserves_recovery() {
         let mut rig = Rig::new();
         let id = running_device_route(&mut rig, "lost-then-started");
         rig.plane.arm_device_loss_recovery();
         let generation = rig.generation(&id);
-        rig.plane.session_start(&id).unwrap();
-        assert!(pending_recovery(&rig).is_none());
-        for _ in 0..3 {
-            rig.tick();
+        for _ in 0..2 {
+            let error = rig.start(&id).error.unwrap();
+            assert!(format!("{error:?}").contains("nodeNotReady"));
+            let error = rig
+                .change("sessions.play", json!({"sessionId": id}))
+                .error
+                .unwrap();
+            assert!(format!("{error:?}").contains("nodeNotReady"));
+            assert!(matches!(
+                rig.plane.session_start(&id),
+                Err(ControlError::NodeNotReady { .. })
+            ));
         }
+        assert!(pending_recovery(&rig).is_some());
         assert!(rig.running(&id));
         assert_eq!(rig.generation(&id), generation, "no second start happened");
         assert!(!rig
             .events()
             .iter()
             .any(|event| event == "runtime.recovered"));
+        assert!(rig.stop(&id).error.is_none());
+        assert!(!rig.running(&id));
+        assert!(rig.plane.session_start(&id).is_ok());
     }
 
     /// A device that never returns: the route is silenced on the first pass,
@@ -489,10 +497,7 @@ mod device_loss {
     /// The next pass must drop the recovery rather than restart the route
     /// under a recording.
     ///
-    /// OWNER DECISION (recorded, not changed): the dropped recovery leaves the
-    /// runtime marked running although its worker stopped with the device. The
-    /// UI is told by `devices.bindingInvalidated`; stopping here would
-    /// interact with recorder finalization, which needs the owner's call.
+    /// Owner decision 2026-11-27: stop and finalize the recorder safely.
     #[test]
     fn a_recording_started_after_a_device_loss_cancels_the_recovery() {
         let mut rig = Rig::new();
@@ -507,7 +512,19 @@ mod device_loss {
             generation,
             "the route was not restarted"
         );
-        assert_eq!(rig.plane.recorders[&id].state(), RecorderState::Recording);
+        assert!(!rig.running(&id));
+        assert_ne!(rig.plane.recorders[&id].state(), RecorderState::Recording);
+        let status = rig.call("status.get", json!({})).result.unwrap();
+        assert!(status["reason"]
+            .as_str()
+            .unwrap()
+            .contains("recovery cancelled"));
+        assert!(rig
+            .plane
+            .last_audio_pump_error
+            .as_ref()
+            .unwrap()
+            .contains("record"));
         assert!(!rig
             .events()
             .iter()
@@ -518,8 +535,7 @@ mod device_loss {
     /// recovery was armed for the saved revision, so it must not apply to the
     /// new one: it is dropped, and never restarts the edited route.
     ///
-    /// OWNER DECISION (recorded, not changed): as above, the dropped recovery
-    /// leaves the runtime marked running until the user presses Stop or Play.
+    /// The cancelled runtime is stopped; the edited graph remains saved.
     #[test]
     fn a_graph_commit_during_device_recovery_cancels_the_stale_recovery() {
         let mut rig = Rig::new();
@@ -543,6 +559,8 @@ mod device_loss {
         rig.tick();
         assert!(pending_recovery(&rig).is_none());
         assert_eq!(rig.generation(&id), generation);
+        assert!(!rig.running(&id));
+        assert!(rig.witnessed().is_empty());
         assert!(!rig
             .events()
             .iter()
@@ -566,6 +584,7 @@ mod device_loss {
         rig.tick();
         assert!(pending_recovery(&rig).is_none());
         assert_eq!(rig.generation(&id), generation);
+        assert!(!rig.running(&id));
         assert!(rig.witnessed().is_empty());
         assert!(rig.failed_plugin(&id));
         assert!(!rig
@@ -692,7 +711,8 @@ mod device_loss {
         rig.os("sleep");
         assert!(pending_recovery(&rig).is_some());
         rig.fail_plugin(&id);
-        rig.os("resume");
+        let resumed = rig.os("resume").result.unwrap();
+        assert_eq!(resumed["nativeSessionIds"], json!([]));
         let generation = rig.generation(&id);
         for _ in 0..3 {
             rig.tick();
@@ -754,15 +774,11 @@ mod device_loss {
     }
 
     /// Two sleeps without a resume between them (a missed notification). The
-    /// second sees nothing running and replaces the first sleep's resume list
-    /// with an empty one; pinned as the current, fail-closed behaviour.
-    ///
-    /// OWNER DECISION (recorded, not changed): the first sleep's list is
-    /// forgotten, so Resume offers nothing to restart although the first sleep
-    /// stopped a route. Nothing restarts silently, but a merged list would be
-    /// kinder. The route's own recovery is unaffected (it is kept paused).
+    /// second sees nothing running, but the first sleep's list is
+    /// retained, so Resume still offers the route stopped by the first sleep.
+    /// Nothing restarts silently. Native recovery remains paused.
     #[test]
-    fn a_second_sleep_forgets_the_first_sleeps_resume_list() {
+    fn a_second_sleep_retains_the_first_sleeps_resume_list() {
         let mut rig = Rig::new();
         let id = rig.add(talk("two-sleeps"));
         rig.start(&id);
@@ -770,7 +786,7 @@ mod device_loss {
         assert!(!rig.running(&id));
         rig.os("sleep");
         let resumed = rig.os("resume").result.unwrap();
-        assert_eq!(resumed["sessionIds"], json!([]));
+        assert_eq!(resumed["sessionIds"], json!([id]));
         assert!(!rig.running(&id));
     }
 }
@@ -778,6 +794,102 @@ mod device_loss {
 // ---------------------------------------------------------------------------
 // Delayed or duplicated OS transitions (portable)
 // ---------------------------------------------------------------------------
+
+#[test]
+fn failed_plugins_are_excluded_from_crash_and_resume_offers() {
+    for fail_after_sleep in [false, true] {
+        let mut rig = Rig::new();
+        let id = rig.add(talk("failed-restart-offer"));
+        rig.start(&id);
+        if !fail_after_sleep {
+            rig.fail_plugin(&id);
+            assert!(rig
+                .plane
+                .record_runtime_crash(1)
+                .unwrap()
+                .session_ids
+                .is_empty());
+        }
+        rig.os("sleep");
+        if fail_after_sleep {
+            rig.fail_plugin(&id);
+        }
+        rig.os("sleep");
+        let resumed = rig.os("resume").result.unwrap();
+        assert_eq!(resumed["sessionIds"], json!([]));
+        assert_eq!(resumed["action"], "remainStopped");
+        assert!(rig
+            .plane
+            .last_audio_pump_error
+            .as_ref()
+            .unwrap()
+            .contains("plugin failed"));
+        assert!(!rig.running(&id));
+        assert!(rig.failed_plugin(&id));
+        let status = rig.call("status.get", json!({})).result.unwrap();
+        assert!(status["reason"]
+            .as_str()
+            .unwrap()
+            .contains("resume offer excluded"));
+    }
+}
+
+#[test]
+fn armed_recorders_are_protected_from_every_recovery_offer() {
+    for state in [
+        RecorderState::Armed,
+        RecorderState::Recording,
+        RecorderState::Paused,
+        RecorderState::Stopping,
+    ] {
+        let mut rig = Rig::new();
+        let id = rig.add(talk("armed-recovery"));
+        rig.start(&id);
+        let mut recorder = RecorderController::new();
+        recorder.arm().unwrap();
+        if state != RecorderState::Armed {
+            recorder.start(0).unwrap();
+        }
+        if state == RecorderState::Paused {
+            recorder.pause(1).unwrap();
+        }
+        if state == RecorderState::Stopping {
+            recorder.request_stop(1).unwrap();
+        }
+        rig.plane.recorders.insert(id.clone(), recorder);
+        assert!(rig.plane.session_is_recording(&id));
+        rig.plane.publish_running_witness();
+        assert!(rig.witnessed().is_empty());
+        assert!(rig
+            .plane
+            .record_runtime_crash(1)
+            .unwrap()
+            .session_ids
+            .is_empty());
+        assert!(rig.os("sleep").error.is_some());
+        assert!(rig.running(&id));
+        assert_eq!(rig.plane.recorders[&id].state(), state);
+    }
+}
+
+#[test]
+fn repeated_sleep_retains_union_but_explicit_stop_removes_an_offer() {
+    let mut rig = Rig::new();
+    let first = rig.add(talk("first-sleeper"));
+    let second = rig.add(talk("second-sleeper"));
+    rig.start(&first);
+    rig.os("sleep");
+    rig.start(&second);
+    rig.os("sleep");
+    let resumed = rig.os("resume").result.unwrap();
+    assert_eq!(resumed["sessionIds"], json!([first, second]));
+    assert!(rig.active().is_empty());
+    rig.start(&first);
+    rig.os("sleep");
+    rig.stop(&first);
+    rig.os("sleep");
+    assert_eq!(rig.os("resume").result.unwrap()["sessionIds"], json!([]));
+}
 
 /// The shell retries a transition whose reply it never saw. A late duplicate
 /// "sleep" arrives after the machine resumed and the user pressed Play: the
@@ -1134,6 +1246,23 @@ mod seeded {
             trace.push(op);
             let context = || format!("seed {seed}, step {step}, trace {trace:?}");
             let before = [&device, &talk_id].map(|id| (rig.running(id), rig.generation(id)));
+            // Dispatch also services recovery. The preceding operation may
+            // have cancelled it and finalized the device recorder (A5).
+            if model.device_recording && !rig.running(&device) {
+                assert_ne!(
+                    rig.plane.recorders[&device].state(),
+                    RecorderState::Recording
+                );
+                assert!(
+                    rig.plane
+                        .last_audio_pump_error
+                        .as_ref()
+                        .is_some_and(|reason| reason.contains("recovery cancelled")),
+                    "{}",
+                    context()
+                );
+                model.device_recording = false;
+            }
             let any_recording = model.device_recording || model.talk_recording;
             let mut started = [false, false];
             let mut expected_refusal = false;
@@ -1141,9 +1270,14 @@ mod seeded {
                 Op::StartDevice => {
                     // A device route is started by the same call Play makes
                     // after preparing it (the API refuses an unprepared one).
-                    rig.plane.session_start(&device).unwrap();
-                    rig.replace_plugin_bridges(&device);
-                    started[0] = true;
+                    match rig.plane.session_start(&device) {
+                        Ok(_) => {
+                            rig.replace_plugin_bridges(&device);
+                            started[0] = true;
+                        }
+                        Err(ControlError::NodeNotReady { .. }) => {}
+                        Err(error) => panic!("unexpected Start failure: {error}; {}", context()),
+                    }
                 }
                 Op::StopDevice => {
                     assert!(rig.stop(&device).error.is_none(), "{}", context());
@@ -1184,7 +1318,25 @@ mod seeded {
                 Op::FailDevicePlugin => rig.fail_plugin(&device),
                 Op::FailTalkPlugin => rig.fail_plugin(&talk_id),
                 Op::LoseDevice => rig.plane.arm_device_loss_recovery(),
-                Op::Tick => rig.tick(),
+                Op::Tick => {
+                    let cancels_recording = model.device_recording
+                        && rig
+                            .plane
+                            .sleep_route_recovery
+                            .as_ref()
+                            .is_some_and(|pending| {
+                                pending.session_id == device && pending.next_attempt.is_some()
+                            });
+                    rig.tick();
+                    if cancels_recording {
+                        assert!(!rig.running(&device), "{}", context());
+                        assert_ne!(
+                            rig.plane.recorders[&device].state(),
+                            RecorderState::Recording
+                        );
+                        model.device_recording = false;
+                    }
+                }
                 Op::Rename => {
                     let mut candidate = rig.plane.get_session(&device).unwrap().clone();
                     let revision = candidate.revision;
