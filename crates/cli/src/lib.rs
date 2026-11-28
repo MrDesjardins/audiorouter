@@ -2580,6 +2580,10 @@ const DEFAULT_MCP_TOOLS: &[&str] = &[
     "list_presets",
     "get_status",
     "get_virtual_cable_status",
+    // Read-only bus lists (owner decision A3, 2026-11-27): changing buses
+    // still needs device administration, which no MCP role holds.
+    "list_virtual_devices",
+    "list_virtual_routes",
     "get_obs_status",
     "check_setup",
 ];
@@ -3006,8 +3010,8 @@ fn mcp_tools() -> Value {
         { "name": "list_devices", "description": "List this PC's audio devices (microphones, speakers, headsets, virtual cables) with the exact ID to put in a node's endpointId setting. Long lists come in pages: pass the returned cursor to read the next one.", "inputSchema": { "type": "object", "properties": { "cursor": { "type": ["string", "null"], "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "maximum": 500 } }, "additionalProperties": false } },
         { "name": "list_plugins", "description": "List the VST plugins AudioRouter found when the user last scanned their plugin folders, with each plugin's file path. Without directory, lists every remembered folder; with it, only that folder. Never scans or loads plugin code. Reads the remembered scan only; the user scans in the AudioRouter window.", "inputSchema": { "type": "object", "properties": { "directory": { "type": "string", "minLength": 1, "description": "Optional: one scanned folder." } }, "required": [], "additionalProperties": false } },
         { "name": "retry_plugins", "description": "Explicitly refresh a bounded plugin inventory after a prior scan failure; requires plugin-scan scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "directory": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["directory", "idempotencyKey"], "additionalProperties": false } },
-        { "name": "list_virtual_devices", "description": "List managed virtual bus desired state without activating endpoints. Optional cursor/limit fields return bounded pages.", "inputSchema": { "type": "object", "properties": { "cursor": { "type": ["string", "null"], "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "maximum": 500 } }, "additionalProperties": false } },
-        { "name": "list_virtual_routes", "description": "List explicit revisioned cross-session virtual-bus routes without activating endpoints.", "inputSchema": { "type": "object", "additionalProperties": false } },
+        { "name": "list_virtual_devices", "description": "List AudioRouter's virtual buses (its own virtual audio devices) and the state each one is set to. Read-only: it opens no device, and creating or removing buses is done in the window. Optional cursor and limit return pages.", "inputSchema": { "type": "object", "properties": { "cursor": { "type": ["string", "null"], "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "maximum": 500 } }, "additionalProperties": false } },
+        { "name": "list_virtual_routes", "description": "List which virtual bus carries audio from which session to which other session, with the list's revision. Read-only: it opens no device, and changing these routes needs device administration, which assistants are not given.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "replace_virtual_routes", "description": "Replace explicit cross-session virtual-bus routes as one revisioned, idempotent operation; requires device-administration scope and does not activate endpoints.", "inputSchema": { "type": "object", "properties": { "baseRevision": { "type": "integer", "minimum": 0 }, "routes": { "type": "array", "maxItems": 64, "items": { "type": "object", "properties": { "busId": { "type": "string", "minLength": 1, "maxLength": 128 }, "producerSessionId": { "type": "string", "minLength": 1, "maxLength": 128 }, "consumerSessionId": { "type": "string", "minLength": 1, "maxLength": 128 } }, "required": ["busId", "producerSessionId", "consumerSessionId"], "additionalProperties": false } }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["baseRevision", "routes", "idempotencyKey"], "additionalProperties": false } },
         { "name": "prepare_native_outputs", "description": "Prepare one-to-eight exact stopped physical render branches for a session generation; requires device-administration scope and never changes Windows defaults.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }, "generation": { "type": "integer", "minimum": 1 }, "renderEndpointIds": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "type": "string", "minLength": 1, "maxLength": audiorouter_control::MAX_CONTROL_STRING_BYTES } } }, "required": ["sessionId", "generation", "renderEndpointIds"], "additionalProperties": false } },
         { "name": "prepare_native_multi_inputs", "description": "Prepare two-to-eight exact stopped capture clients (physical microphones and/or application-loopback captures) for a validated mixer/fan-out graph; requires device-administration scope and never selects a fallback microphone or process.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }, "generation": { "type": "integer", "minimum": 1 }, "sources": { "type": "array", "minItems": 2, "maxItems": 8, "items": { "type": "object", "oneOf": [
@@ -4010,12 +4014,11 @@ mod tests {
         ("nativeBridges.heartbeat", NATIVE),
         ("nativeRenderSources.pump", NATIVE),
         // Virtual device lifecycle: driver administration, done in the window.
-        ("virtualDevices.list", VIRTUAL),
+        // The two read-only lists are default tools (A3, 2026-11-27).
         ("virtualDevices.plan", VIRTUAL),
         ("virtualDevices.apply", VIRTUAL),
         ("virtualDevices.provision", VIRTUAL),
         ("virtualDevices.remove", VIRTUAL),
-        ("virtualRoutes.list", VIRTUAL),
         ("virtualRoutes.replace", VIRTUAL),
     ];
     const ALIAS: &str = "older alias of a method a default tool already calls";
@@ -4619,6 +4622,28 @@ mod tests {
         );
     }
 
+    /// Owner decision A3 (2026-11-27): the two read-only bus lists are default
+    /// tools an Observer can call; changing buses stays out of reach.
+    #[test]
+    fn an_observer_reads_the_virtual_bus_lists_through_default_mcp_tools() {
+        let mut plane = ControlPlane::default();
+        let grant =
+            audiorouter_control::ClientGrant::for_role(audiorouter_control::ClientRole::Observer);
+        for name in ["list_virtual_devices", "list_virtual_routes"] {
+            assert!(is_default_mcp_tool(name), "{name}");
+            let response = mcp_tool_call(
+                &mut plane,
+                "assistant",
+                &grant,
+                None,
+                &json!({ "id": 1, "params": { "name": name, "arguments": {} } }),
+            );
+            assert_ne!(response["result"]["isError"], true, "{name}: {response}");
+        }
+        assert!(!is_default_mcp_tool("replace_virtual_routes"));
+        assert!(!is_default_mcp_tool("provision_virtual_device"));
+    }
+
     /// The other new task tools through the real MCP entry point: reads and
     /// session copies succeed, and runtime controls on a stopped session
     /// reach their own "not playing" refusal (the name and the open session
@@ -4649,6 +4674,8 @@ mod tests {
             "list_presets",
             "get_status",
             "get_virtual_cable_status",
+            "list_virtual_devices",
+            "list_virtual_routes",
             "get_obs_status",
         ] {
             let (error, payload) = call(&mut plane, name, json!({}));
