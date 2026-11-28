@@ -179,6 +179,26 @@ the application worker live, and an attended Play in the built app.
 
 ## Risks and rollback
 
+### PR #201 browser spacing regression (2026-11-27)
+
+CI run 46111602040 failed four panel-spacing cases: the new recording
+permission explanation sat only 1 px above Authorize client. Use the existing
+panel action-row class to reserve its standard spacing; no permission behavior
+changes. The recording-opt-in browser suite now asserts an 8 px minimum gap in
+all three themes. Verification uses that suite and the existing panel-spacing
+suite on Windows Edge, plus UI typecheck, format and strict lint. Rollback:
+revert this spacing change; no stored data changes.
+
+Windows dev PC results: panel-spacing plus recording-opt-in 11/11 passed;
+the added minimum-gap assertion then passed 3/3 in dark/light/high contrast.
+Screenshots inspected in all three themes. UI typecheck, format and strict lint
+passed. Both PR check annotations were read: each reports exit code 1 from
+the failed browser job and its dependent gate. The browser console also reports
+Node's conflicting NO_COLOR/FORCE_COLOR environment and React Flow attribution
+warnings; neither caused this failure, and this spacing repair changes neither
+environment flags nor licensing/attribution behavior. No guide control or audio
+behavior changed.
+
 A client given the opt-in can start recordings without the user pressing
 Record. That is the owner's explicit choice; it is per client, off by default
 and visible as "may record". The flag lives in `control_settings`, so an older
