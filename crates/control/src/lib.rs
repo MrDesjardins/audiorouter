@@ -533,6 +533,9 @@ pub struct ControlPlane {
     os_suspended_native_sessions: Vec<EntityId>,
     #[cfg(windows)]
     sleep_route_recovery: Option<safety::SleepRouteRecovery>,
+    /// Lost-device Start is refused until Stop retires the interrupted runtime.
+    #[cfg(windows)]
+    device_lost_sessions: Vec<EntityId>,
     /// When device-loss recoveries were armed, to stop a flapping device
     /// from restarting the route without end.
     #[cfg(windows)]
@@ -730,6 +733,8 @@ impl ControlPlane {
             os_suspended_native_sessions: Vec::new(),
             #[cfg(windows)]
             sleep_route_recovery: None,
+            #[cfg(windows)]
+            device_lost_sessions: Vec::new(),
             #[cfg(windows)]
             device_recovery_arms: VecDeque::new(),
             running_witness: None,

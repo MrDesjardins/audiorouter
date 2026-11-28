@@ -145,6 +145,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "system.describe"
                 | "system.diagnostics"
                 | "status.get"
+                | "system.osTransition"
                 | "routes.inspect"
                 | "events.subscribe"
                 | "safety.setPrivacyMute"

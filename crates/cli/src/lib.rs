@@ -4554,6 +4554,47 @@ mod tests {
     }
 
     #[test]
+    fn mcp_repeated_sleep_retains_offers_and_start_reports_node_not_ready() {
+        let mut plane = ControlPlane::default();
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        let id = session.id.clone();
+        plane.insert_session(session).unwrap();
+        plane.session_start(&id).unwrap();
+        let grant =
+            audiorouter_control::ClientGrant::for_role(audiorouter_control::ClientRole::Operator);
+        for (index, transition) in ["sleep", "sleep", "resume"].into_iter().enumerate() {
+            let response = mcp_tool_call(
+                &mut plane,
+                "assistant",
+                &grant,
+                None,
+                &json!({"id": 1, "params": {"name": "os_transition", "arguments": {"transition": transition, "idempotencyKey": format!("transition-{index}")}}}),
+            );
+            assert_eq!(response["result"]["isError"], false, "{response}");
+            if transition == "resume" {
+                assert_eq!(
+                    response["result"]["structuredContent"]["result"]["sessionIds"],
+                    json!([id])
+                );
+            }
+        }
+        let response = mcp_tool_call(
+            &mut plane,
+            "assistant",
+            &grant,
+            None,
+            &json!({"id": 2, "params": {"name": "control_session", "arguments": {"sessionId": id, "action": "start", "idempotencyKey": "start-after-resume"}}}),
+        );
+        assert_eq!(response["result"]["isError"], true, "{response}");
+        assert_eq!(
+            response["result"]["structuredContent"]["error"]["data"]["code"],
+            "nodeNotReady"
+        );
+    }
+
+    #[test]
     fn default_mcp_export_can_recover_original_stored_text() {
         let storage = audiorouter_storage::Storage::open_memory().unwrap();
         let session: audiorouter_domain::Session =
