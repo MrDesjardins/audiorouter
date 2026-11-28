@@ -159,8 +159,8 @@ it("guides the selected local MCP client and explains its current role", async (
         transport: "local named pipe",
       }}
       mcpClients={[
-        { clientId: "audiorouter-local", role: "editor", revoked: false },
-        { clientId: "audiorouter-chatgpt", role: "operator", revoked: false },
+        { clientId: "audiorouter-local", role: "editor", revoked: false, allowRecording: false },
+        { clientId: "audiorouter-chatgpt", role: "operator", revoked: false, allowRecording: false },
       ]}
     />,
   );
@@ -188,7 +188,7 @@ it("guides the selected local MCP client and explains its current role", async (
         pipeName: "\\\\.\\pipe\\audiorouter-control",
         transport: "local named pipe",
       }}
-      mcpClients={[{ clientId: "audiorouter-local", role: "observer", revoked: true }]}
+      mcpClients={[{ clientId: "audiorouter-local", role: "observer", revoked: true, allowRecording: false }]}
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "On this PC" }));
@@ -209,7 +209,7 @@ it("gives a next step for a redacted permission denial", () => {
         pipeName: "\\\\.\\pipe\\audiorouter-control",
         transport: "local named pipe",
       }}
-      mcpClients={[{ clientId: "audiorouter-local", role: "observer", revoked: false }]}
+      mcpClients={[{ clientId: "audiorouter-local", role: "observer", revoked: false, allowRecording: false }]}
       mcpActivity={[
         {
           timeUnixMs: Date.now(),

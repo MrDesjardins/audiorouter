@@ -228,6 +228,7 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "nodes.toggle" => "Flip one node's enabled, bypass, an on/off setting or a two-choice setting (for example an Input or Output Switch between A and B). Applied live and saved.",
         "nodes.add" => "Add a tool or device by kind (see nodes.catalog), optionally between two connected nodes or after a node. Saved.",
         "nodes.remove" => "Remove a node by ID or name; by default its upstream and downstream nodes are reconnected. Saved.",
+        "sessions.rename" => "Rename a session (default: the active one). Saved as a new revision; audio is not interrupted.",
         "connections.add" => "Connect two nodes by ID or name. Optionally select fromOutput and toInput by port name; defaults to the first output and first free input. Saved.",
         "connections.remove" => "Remove connections between two nodes, optionally limited by fromOutput and toInput port names. Saved.",
         "meters.levels" => "Current level of each playing node (peak and RMS dBFS, clipping, and reduction for Gate, Compressor, Limiter and Duck).",
@@ -336,6 +337,7 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
             json!({
                 "clientId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "role": { "enum": ["observer", "editor", "operator"] },
+                "allowRecording": { "type": "boolean", "description": "Also let this client start, stop, rename and tag recordings (default false). Each authorization sets it again; revoking clears it." },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
             }),
             &["clientId", "role", "idempotencyKey"],
@@ -1160,6 +1162,10 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
         "nodes.remove" => object_schema(
             json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "node": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Node ID or exact name." }, "bridge": { "type": "boolean", "description": "Reconnect its neighbours (default true)." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
             &["node", "idempotencyKey"],
+        ),
+        "sessions.rename" => object_schema(
+            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "name": { "type": "string", "minLength": 1, "maxLength": crate::simple::MAX_SESSION_NAME_CHARS, "description": "New session name." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
+            &["name", "idempotencyKey"],
         ),
         "connections.add" | "connections.remove" => object_schema(
             json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "from": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Source node ID or name." }, "to": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Destination node ID or name." }, "fromOutput": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Optional source output port name, such as a or b." }, "toInput": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Optional destination input port name." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
