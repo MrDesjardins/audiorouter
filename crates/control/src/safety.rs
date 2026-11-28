@@ -75,8 +75,8 @@ impl ControlPlane {
         }
     }
 
-    #[cfg(windows)]
     pub(crate) fn cancel_sleep_route_recovery(&mut self, id: &EntityId) {
+        #[cfg(windows)]
         if self
             .sleep_route_recovery
             .as_ref()
@@ -106,12 +106,36 @@ impl ControlPlane {
         }
         let id = recovery.session_id.clone();
         let id = &id;
-        if self
+        let cancelled_reason = if self
             .get_session(id)
             .map_or(true, |session| session.revision != recovery.revision)
-            || self.session_is_recording(id)
-            || self.session_has_failed_plugin(id)
         {
+            Some("saved route changed or was removed")
+        } else if self.session_is_recording(id) {
+            Some("recorder armed or recording")
+        } else if self.session_has_failed_plugin(id) {
+            Some("plugin failed; deliberate recovery required")
+        } else {
+            None
+        };
+        if let Some(reason) = cancelled_reason {
+            // Retire audio before bounded recorder finalization. A stale runtime
+            // must never remain marked playing after its recovery is cancelled.
+            let stopped = self.session_stop(id);
+            self.last_audio_pump_error = Some(match stopped {
+                Ok(_) => format!("recovery cancelled: {reason}"),
+                Err(error) => format!(
+                    "recovery cancelled: {reason}; stop: {}",
+                    audio_pump_error_category(&error)
+                ),
+            });
+            self.publish_running_witness();
+            self.events.append(
+                recovery.revision,
+                None,
+                "runtime.recoveryFailed",
+                Some(recovery.session_id),
+            );
             return;
         }
         let running = self
@@ -227,15 +251,8 @@ impl ControlPlane {
                 .filter(|(id, runtime)| {
                     runtime.state() == RuntimeState::Running
                         && !self.native_worker_attached_to(id)
-                        && !self.recorders.get(*id).is_some_and(|recorder| {
-                            matches!(
-                                recorder.state(),
-                                RecorderState::Armed
-                                    | RecorderState::Recording
-                                    | RecorderState::Paused
-                                    | RecorderState::Stopping
-                            )
-                        })
+                        && !self.session_is_recording(id)
+                        && !self.session_has_failed_plugin(id)
                 })
                 .map(|(id, _)| id.clone())
                 .collect()
@@ -426,17 +443,7 @@ impl ControlPlane {
             .collect::<Vec<_>>();
         let recording_sessions = running_sessions
             .iter()
-            .filter(|id| {
-                self.recorders.get(*id).is_some_and(|recorder| {
-                    matches!(
-                        recorder.state(),
-                        RecorderState::Armed
-                            | RecorderState::Recording
-                            | RecorderState::Paused
-                            | RecorderState::Stopping
-                    )
-                })
-            })
+            .filter(|id| self.session_is_recording(id))
             .cloned()
             .collect::<Vec<_>>();
 
@@ -491,7 +498,9 @@ impl ControlPlane {
                 } else {
                     None
                 };
-                let resumable = decision
+                let previous_sessions = self.os_suspended_sessions.clone();
+                let previous_native = self.os_suspended_native_sessions.clone();
+                let mut resumable = decision
                     .session_ids
                     .iter()
                     .filter(|id| !native_sessions.contains(id))
@@ -506,7 +515,14 @@ impl ControlPlane {
                     }
                 }
                 self.os_suspended_native_sessions = if transition == OsTransition::Sleep {
-                    native_sessions.clone()
+                    let mut retained = previous_native;
+                    retained.extend(native_sessions);
+                    retained.sort_by(|left, right| left.as_str().cmp(right.as_str()));
+                    retained.dedup();
+                    resumable.extend(previous_sessions);
+                    resumable.sort_by(|left, right| left.as_str().cmp(right.as_str()));
+                    resumable.dedup();
+                    retained
                 } else {
                     Vec::new()
                 };
@@ -543,6 +559,26 @@ impl ControlPlane {
                 };
                 let session_ids = std::mem::take(&mut self.os_suspended_sessions);
                 let native_session_ids = std::mem::take(&mut self.os_suspended_native_sessions);
+                let eligible = |id: &EntityId| {
+                    self.get_session(id).is_ok()
+                        && !self.session_is_recording(id)
+                        && !self.session_has_failed_plugin(id)
+                };
+                let excluded = session_ids
+                    .iter()
+                    .chain(&native_session_ids)
+                    .any(|id| !eligible(id));
+                let session_ids = session_ids
+                    .into_iter()
+                    .filter(&eligible)
+                    .collect::<Vec<_>>();
+                let native_session_ids = native_session_ids
+                    .into_iter()
+                    .filter(eligible)
+                    .collect::<Vec<_>>();
+                if excluded {
+                    self.last_audio_pump_error = Some("resume offer excluded: route missing, recorder armed or recording, or plugin failed; deliberate recovery required".into());
+                }
                 let decision = plan_os_transition(transition, &session_ids, &[], &[]);
                 Ok(json!({
                     "transition": "resume",

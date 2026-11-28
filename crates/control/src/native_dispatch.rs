@@ -1436,6 +1436,9 @@ impl ControlPlane {
             .runtimes
             .get(&id)
             .is_some_and(|runtime| runtime.state() == RuntimeState::Running);
+        if playing && !self.device_lost_sessions.contains(&id) {
+            self.device_lost_sessions.push(id.clone());
+        }
         if !playing || self.session_is_recording(&id) || self.session_has_failed_plugin(&id) {
             return;
         }

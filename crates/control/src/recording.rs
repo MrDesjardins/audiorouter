@@ -882,12 +882,10 @@ impl ControlPlane {
             })
         });
         node_recording
-            || self.recorders.get(session_id).is_some_and(|recorder| {
-                matches!(
-                    recorder.state(),
-                    RecorderState::Recording | RecorderState::Paused | RecorderState::Stopping
-                )
-            })
+            || self
+                .recorders
+                .get(session_id)
+                .is_some_and(|recorder| recorder_is_active(recorder.state()))
     }
 
     pub(crate) fn dispatch_recorder_create(

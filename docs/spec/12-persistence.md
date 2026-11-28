@@ -25,6 +25,17 @@ Milestone ownership: M01 storage/revisions/import schema; M04 recording state; M
   evidence. Quit silences every route before finalizing any recorder.
 - **STATE-10 — Recovery.** On backend crash, endpoints go silent, then optional supervisor restart uses the last committed graph and prior startup/recovery policy. Default is to restore previously running non-recording routes after one recoverable crash, preserving privacy mute; after three crashes in ten minutes start in safe mode stopped. Recording never silently resumes into an old file.
 - **STATE-11 — OS transitions.** On lock, keep explicitly running sessions according to saved policy; default permits a live call to continue and retains visible tray status when unlocked. On sign-out stop and release ownership; on sleep suspend streams; on resume re-enumerate and revalidate before continuing. No cross-user automatic microphone substitution.
+
+Owner decision 2026-11-27 (A5-A9): cancelled stale recovery stops audio,
+finalizes recorders through the bounded Stop path and reports its reason.
+Start on an interrupted lost-device runtime returns `nodeNotReady` until Stop
+retires it. Repeated Sleep retains eligible stopped-route restart offers;
+portable routes still require deliberate restart. Failed-plugin routes are
+excluded from restart offers, including faults after suspension. Armed
+recorders receive the same recovery protection as recording recorders.
+Existing bounded automatic recovery of exact saved endpoints remains approved;
+no device substitution or automatic recording restart is permitted. See the
+[execution plan](../plans/active/recovery-state-consistency.md).
 - **STATE-12 — Backups and retention.** Keep at least the ten most recent daily configuration backups and pre-migration backup, subject to a documented 100 MiB default configuration backup budget; large referenced plugin assets are deduplicated and counted. Imported audio (Audio File and Soundboard sounds, at most 512 MiB) is stored in the same database, so a backup may hold up to 612 MiB: the configuration budget plus the audio library limit (decision 2026-11-01, below). Never prune recordings as part of configuration retention. Provide explicit export and restore preview via API.
 
 ## Storage settings (2026-10-07)
