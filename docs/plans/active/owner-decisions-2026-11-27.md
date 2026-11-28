@@ -117,12 +117,31 @@ at Play again, as before.
 
 Status 2026-11-27: steps 1, 2 and 4 done; step 3 needed nothing, because
 `devices.list` already reports `format.channels` for every device and the UI
-labels it. The limit is 2–32 float channels. Local results: both `cargo fmt`
-checks and both Clippy runs clean; `audiorouter-windows-audio` (169, including
-the drift simulation suite and the three new tests) and `audiorouter-control`
-(530) passed, including the flipped `setup_check` tests. **Open:** the
-continuity harness through CABLE-B at 7.1 (needs the owner's quiet window), and
-an attended Play to a 7.1 output in the built app.
+labels it. The limit is 2–32 float channels (`MAX_RENDER_CHANNELS`, one value
+for every worker). Local results: both `cargo fmt` checks and both Clippy runs
+clean; `audiorouter-windows-audio` (170, including the drift simulation suite,
+the widening tests and the multichannel endpoint-bridge test) and
+`audiorouter-control` (530) passed, including the flipped `setup_check` tests.
+
+Live qualification, 2026-11-27, owner's quiet window, Windows 11 dev PC.
+CABLE-B Input reported 8 channels, float32, 48 kHz. Harness
+`live_backend_service_keeps_a_routed_tone_continuous` (997 Hz tone, CABLE Output
+→ Gain → CABLE-B Input, result read from CABLE-B Output):
+
+| Worker | Length | Reference glitches | Routed glitches | Result |
+| --- | --- | --- | --- | --- |
+| multi-path (default) | 30 s | 0 | 0 | pass, peak 0.0500 |
+| multi-path | 60 s | 0 | 0 | pass (one 37 ms late audio pass absorbed) |
+| single endpoint | 30 s | not recorded | 4 | fail |
+| single endpoint | 30 s ×3 | 0 | 0 | pass |
+| single endpoint | 30 s | 2 (1 silent run) | 4 | system hiccup: reference also broken, 18 ms late pass |
+
+The routed tone arrived at full level with zero glitches in every run whose
+reference was clean, so the stereo route reaches the 7.1 cable's front left/right
+intact. The first endpoint failure kept no reference figures, so it cannot be
+attributed; it did not recur in three runs. Not checked: that channels 3–8 are
+silent on hardware (CABLE-B Output is read as stereo; the unit tests cover it),
+the application worker live, and an attended Play in the built app.
 
 ## Validation
 
