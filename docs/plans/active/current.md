@@ -21,6 +21,11 @@ predate the fix.
 
 ## Current priorities
 
+Owner requested the next non-driver work on 2026-11-27. Backend A5-A9 baseline
+investigation is in [recovery-state consistency](recovery-state-consistency.md);
+behavior choices are awaiting the owner's response. Prior frontend work is kept
+on `improve/ui-accessibility-app-qualification` and is not part of this branch.
+
 1. **Owner gates.** Take any task from [human-gated tasks](human-gated-tasks.md).
    The first virtual-cable task is D1 (sign in to AR-DriverTest on a quiet PC).
 2. **CABLE-A continuity (ARCH-08, CAP-04, NFR-03).** Failed 3 of 6 runs on
