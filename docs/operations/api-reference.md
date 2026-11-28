@@ -158,12 +158,12 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `plugins.programs` | `pluginScan` | read-only; bounded program list for a plugin in a playing route (VST2 and VST3; VST3 is read-only); optional `sessionId`, `nodeId` is an ID or exact name |
 | `plugins.selectProgram` | `pluginScan` | mutating; selects a bounded VST2 program index on a playing plugin; optional `sessionId`, `nodeId` is an ID or exact name |
 | `plugins.applyPreset` | `sessionControl` | external operation; applies a bounded VST2 `.fxp`/`.fxb` file from the plugin's own directory to a playing plugin; optional `sessionId`, `nodeId` is an ID or exact name |
-| `virtualDevices.list` | `read` | read-only |
+| `virtualDevices.list` | `read` | read-only; MCP tool `list_virtual_devices` (default since A3, 2026-11-27) |
 | `virtualDevices.plan` | `deviceAdministration` | plan-only |
 | `virtualDevices.apply` | `deviceAdministration` | mutating; requires an idempotency key |
 | `virtualDevices.provision` | `deviceAdministration` | external operation; requires an idempotency key; explicitly creates and owns one managed software device |
 | `virtualDevices.remove` | `deviceAdministration` | external operation; requires an idempotency key; explicitly removes one owned managed software device |
-| `virtualRoutes.list` | `read` | read-only; returns explicit durable cross-session routes |
+| `virtualRoutes.list` | `read` | read-only; returns explicit durable cross-session routes; MCP tool `list_virtual_routes` (default since A3, 2026-11-27) |
 | `virtualRoutes.replace` | `deviceAdministration` | mutating; revision-checked and requires an idempotency key |
 | `apps.list` | `read` | read-only; `audioEndpoints` names each endpoint the process has a session on (`render` also covers a loopback recorder of that output) |
 | `obs.status` | `read` | read-only; OBS Studio facts from the backend's OBS thread: installed, connection, `live` or `savedFile` source, scene collection, up to 64 audio sources (UUID, kind, device ID, application, muted, active in Program, enabled audio tracks 1–6, Monitor Only) and the last change. Activity, tracks and monitoring are null for saved files or unavailable facts. Never returns the password |

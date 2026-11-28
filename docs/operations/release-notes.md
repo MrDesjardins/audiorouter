@@ -13,6 +13,10 @@
 - **Rename a session from a script or an assistant.** New API method
   `sessions.rename` and MCP tool `rename_session` (Editor). It saves a
   revision, so Undo brings the old name back.
+- **Assistants can see the virtual buses.** The read-only lists
+  `list_virtual_devices` and `list_virtual_routes` are now default MCP tools.
+  Creating, removing or rerouting buses still needs device administration,
+  which assistants are not given.
 - **Safer device recovery.** Editing a route, starting a recording or a plugin
   failing while a device is being recovered now stops the route with a reason
   instead of restarting it. Play on a route whose device is still missing says
