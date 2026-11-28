@@ -150,6 +150,9 @@ the application worker live, and an attended Play in the built app.
 
 ## 0.0.33 candidate (local branch `candidate/0.0.33`)
 
+Historical first integration, superseded by the merged A4 branch and the complete
+package in [the integration record](evidence/2026-11-27-app-candidate-integration.md).
+
 Built 2026-11-27 from `main` (`babbf051b`, includes the API-07 fix) merged with
 #199 (`fix/recovery-state-consistency`), `improve/ui-accessibility-app-qualification`,
 `feat/mcp-rename-and-recording` and `docs/site-device-wording`, then a version

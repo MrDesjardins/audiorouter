@@ -18,23 +18,27 @@ runbooks.
 
 Inputs audited against `candidate/0.0.33` (`29bbb6b74`) before merging:
 
-- `origin/feat/multichannel-output` (`53afc3ce1`), which already contains
-  `origin/docs/site-device-wording` (`4f8f20d8f`),
-  `origin/feat/mcp-rename-and-recording` (`ba2350941`) and
-  `origin/improve/ui-accessibility-app-qualification` (`c27f6cfd1`).
-- `origin/main` (`d912424c2`, #199). The candidate already contained an
-  equivalent recovery tree; the later branches add two harness fixes, the A4
-  plan text and the 0.0.33 release notes.
+- `origin/feat/multichannel-output` (`53afc3ce1`, then `e7783dfae`), which
+  already contains `origin/docs/site-device-wording`,
+  `origin/feat/mcp-rename-and-recording` and
+  `origin/improve/ui-accessibility-app-qualification`. The second merge adds
+  A4 for the single-endpoint and application workers (`205892499`), A3 default
+  bus-list tools (`62551f1b2`), the A4 live-continuity plan (`0145e83f2`) and
+  the A3 release note (`6b8728299`).
+- `origin/main` (`d912424c2`, #199, then `fe6a08b40`, #200). The candidate
+  already contained an equivalent recovery tree and the frontend port; the
+  later branch adds the harness fixes, the A4 plan text and 0.0.33 notes.
 
 The candidate's earlier branch is left untouched for byte comparison. No
 unrelated untracked files or owner profiles are used.
 
 ## Decisions and ordered tasks
 
-1. Merge `origin/feat/multichannel-output` into `t3/integrate-next-app-candidate`,
-   keeping the approved A4 decision, #199 wording and both plan additions.
+1. Merge `origin/feat/multichannel-output` into `t3/integrate-next-app-candidate`
+   as it advanced, keeping the approved A4/A3 decisions, #199 wording and both
+   plan additions.
 2. Correct the A4 implementation notes to the code actually merged (2–32 float32
-   channels; channel 0/1 widening, not channel-mask positions).
+   channels in every worker; channel 0/1 widening, not channel-mask positions).
 3. Run the full portable checks and the complete desktop release build; verify
    the embedded UI is newer than its source and the executable reports 0.0.33.
 4. Build the app-only unsigned NSIS package through
@@ -45,8 +49,8 @@ unrelated untracked files or owner profiles are used.
    the owner's app and profiles out of every run.
 6. Record results in a unique evidence file, update this plan and add the
    verified status to `current.md` only after the checks and build finish.
-7. Commit only the audited source, plan and evidence changes. Do not tag, publish
-   or open a PR.
+7. Commit the audited source, plan and evidence changes and open one stacked PR
+   for review. Do not tag, publish or merge it.
 
 ## Validation matrix and evidence
 
@@ -69,6 +73,32 @@ unrelated untracked files or owner profiles are used.
   Windows scaling, Narrator, tray/dialog language, Defender/MOTW, clean machine,
   second PC or signing. Those remain human/other-thread gates.
 
+## Results
+
+Integration commit `8b7d3af48` is clean and locally qualified. Both formatting
+and Clippy runs are clean; 64 workspace test targets (1,683 passed, 0 failed), 186
+`src-tauri` tests, 1,210 UI tests and 35 Stream Deck tests passed. Contract drift
+(157 methods), documentation validation (332 files), site/CSP tests, UI hooks,
+quality policy tests and `release-tests` passed. One full run hit a transport
+timing flake (`busy_pipe_wait`); it passed 3/3 in isolation and in the complete
+rerun, and is reported without a product change.
+
+The app-only release preparation produced a complete unsigned 0.0.33 package
+(`AudioRouter_0.0.33_x64-setup.exe`, SHA-256
+`5aca2f06221c210556a0120952c5265c90e807c5b9c3d17a5706778ba798b259`) with the CLI,
+four workers, tunnel runtime, Stream Deck package, sound library, SBOMs and
+checksums. The manifest verifier passed. The qualified shell is
+`29b63d115d6b0902d1dbb409bafea48e6a8baa18ca3b0c5cb1a64f0f7c691039`.
+
+`fresh_install_shell` passed on that shell with a disposable database and
+WebView profile, and all eleven packaged-shell qualification cases passed. The
+final baseline used a clean tree, denied device access, produced no uncaught UI
+errors and exited both owned shells with code 0. The installer was not installed;
+its VM lifecycle, attended audio/device checks and every human gate above remain
+open.
+
+Evidence: [2026-11-27 app-only candidate integration](evidence/2026-11-27-app-candidate-integration.md).
+
 ## Risks and rollback
 
 The merge touches plan text and the A4 output path. A bad widening would affect
@@ -79,8 +109,6 @@ away from the owner's route and consent. The previous candidate executables are
 retained under `target/candidate-0.0.33/bytes/` with recorded SHA-256 values.
 
 ## Evidence and next action
-
-Evidence: [2026-11-27 app-only candidate integration](evidence/2026-11-27-app-candidate-integration.md).
 
 Next: hand the candidate to the owner for attended testing; the multichannel
 thread supplies the quiet-window continuity evidence, the frontend thread owns
