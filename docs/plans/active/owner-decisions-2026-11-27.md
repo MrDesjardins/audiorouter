@@ -81,9 +81,12 @@ assistant can see why a device is refused. **Owner choice (2026-11-27): option (
 
 ## A4 option (a): implementation plan (branch `feat/multichannel-output`)
 
-Scope: the multi-input output fan-out, which every Play uses. The older
-single-endpoint worker (`nativeEndpoints.prepare`) and the single application
-worker stay stereo-only, with their refusal messages unchanged.
+Scope: every worker Play can choose. The multi-input output fan-out serves
+multi-device routes; the UI picks the single-endpoint worker
+(`nativeEndpoints.prepare`) for a simple one-input, one-output route and the
+application worker for a single app route. A first version covered only the
+fan-out; the single-endpoint bridge (stereo graph and resamplers whatever the
+device width) and the application worker check were added before handoff.
 
 1. `SharedRender` records the stream's channel count, float32 flag and the
    positions of front left/right (from the channel mask; the first two channels

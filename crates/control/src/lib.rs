@@ -331,11 +331,12 @@ fn multi_path_rate_supported(sample_rate_hz: u32) -> bool {
     (8_000..=192_000).contains(&sample_rate_hz)
 }
 
-/// Shared output eligibility for native preparation and setup checks (UI-27).
 /// The most channels an output device may have. A stereo route plays on its
-/// first two (front left/right) and the rest stay silent (decision A4).
-pub(crate) const MAX_OUTPUT_DEVICE_CHANNELS: u16 = 32;
+/// first two (front left/right) and the rest stay silent (decision A4). One
+/// value for every worker: the render client owns it.
+pub(crate) const MAX_OUTPUT_DEVICE_CHANNELS: u16 = audiorouter_windows_audio::MAX_RENDER_CHANNELS;
 
+/// Shared output eligibility for native preparation and setup checks (UI-27).
 /// Whether Play can send a stereo route to an output device: IEEE float32,
 /// stereo or wider (the render client widens each frame, owner decision A4,
 /// 2026-11-27), at a supported rate. Mono output devices stay refused.
