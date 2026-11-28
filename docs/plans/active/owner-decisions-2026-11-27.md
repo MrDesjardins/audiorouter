@@ -25,9 +25,14 @@ AUTO-06/10/15/18, R2-1a, R2-4, SEC-02, API-07, ARCH-08, NFR-03, UI-17, L10N-01.
 | A12, A13, A15–A18 | Defaults kept | Recorded in the human-gated table |
 | A14 | Site and guides use the app's words ("input device", "output device") | Separate site branch |
 
-A3 (bus lists stay expert-only): on 2026-11-27 the owner asked what "expert-only"
-means; it was explained and is still open. The owner's flexibility goal
-may argue for reversing it; ask before changing it.
+A3 (bus lists expert-only): on 2026-11-27 the owner asked what "expert-only"
+meant. Explained: the two read-only lists were offered to assistants only with
+`--advanced-tools`, REST already served them, and changing buses needs device
+administration either way. The owner then answered **yes, make them default
+tools**. Done on this branch: both are in `DEFAULT_MCP_TOOLS` with plain
+descriptions, their exclusions are removed, and
+`an_observer_reads_the_virtual_bus_lists_through_default_mcp_tools` calls both
+through `mcp_tool_call` as an Observer.
 
 ## Tasks and status
 

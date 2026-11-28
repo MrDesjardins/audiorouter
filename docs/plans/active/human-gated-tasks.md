@@ -73,7 +73,7 @@ you do not answer.
 | --- | --- | --- | --- | --- |
 | A1 | Assistant recordings | **Approved 2026-11-27: yes**, option (a): a per-client opt-in, off by default, set in the window. Owner goal: as much flexibility as possible for API and MCP users | R2-1a, AUTO-10/18, SEC-02 | [Owner decisions 2026-11-27](owner-decisions-2026-11-27.md) |
 | A2 | Assistant renames a session | **Approved 2026-11-27: yes**, add `sessions.rename` with a default MCP tool | R2-4, AUTO-06/18 | [Owner decisions 2026-11-27](owner-decisions-2026-11-27.md) |
-| A3 | Keep the virtual bus lists as expert-only tools? | An agent decided yes: no assistant role can set up buses. Say no to reverse it | R2-4 | [API and MCP](../archived/2026-11-24-api-mcp-quality.md) |
+| A3 | Virtual bus lists for assistants | **Decided 2026-11-27: reversed.** `list_virtual_devices` and `list_virtual_routes` are default MCP tools (read-only); changing buses still needs device administration | R2-4 | [Owner decisions 2026-11-27](owner-decisions-2026-11-27.md) |
 | A4 | Multichannel virtual-cable outputs | **Decided 2026-11-27: option (a).** AudioRouter must work with whatever virtual cables a PC has: a stereo route plays into the front left/right of any multichannel output device, other channels silent | ARCH-08, NFR-03 | [Owner decisions 2026-11-27](owner-decisions-2026-11-27.md) |
 | A5 | Cancelled device recovery | **Approved 2026-11-27:** stop with a reason and finalize recorders safely; never restart the edited/faulted route | RES-3, STATE-10 | [Recovery repairs](recovery-state-consistency.md) |
 | A6 | Start on a lost-device route | **Approved 2026-11-27:** `nodeNotReady` until Stop retires the interrupted runtime; eligible exact-device recovery remains automatic | RES-3, CAP-11 | [Recovery repairs](recovery-state-consistency.md) |
@@ -90,7 +90,7 @@ you do not answer.
 | A17 | Signed updater, UAD inventory | **Decided 2026-11-27: both stay in `future/`** | SEC-11, PLUG | [Owner decisions 2026-11-27](owner-decisions-2026-11-27.md) |
 | A18 | Edit journal limit (16,384 per 24 h) | **Decided 2026-11-27: keep** | API-07/11 | [Owner decisions 2026-11-27](owner-decisions-2026-11-27.md) |
 
-**Result:** owner answers recorded 2026-11-27 (A1, A2, A4, A12–A18); A3, A10 and A11 still as above.
+**Result:** owner answers recorded 2026-11-27 (A1–A4, A12–A18); A10 and A11 still as above.
 
 ## B. Purchases and outside companies
 
