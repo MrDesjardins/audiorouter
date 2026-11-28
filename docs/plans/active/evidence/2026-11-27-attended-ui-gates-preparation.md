@@ -88,6 +88,10 @@ and no audio was started.
   `-p audiorouter-control --lib device_loss` **20 passed**, including simulated
   sleep/resume and recorder-arm cases. These exercise logic, not physical
   devices or OS power transitions.
+- Static trace of the live-language path: `App.changeLanguage` updates React
+  state, the local preference and i18n, then calls only the shell
+  `setUiLanguage` command. It does not call a session read, graph commit, Play
+  or Stop. This is code-path evidence for F6, not audible continuity.
 - `node tools/docs/validate.mjs`: passed before this record was added.
 
 ## Prepared attended session
