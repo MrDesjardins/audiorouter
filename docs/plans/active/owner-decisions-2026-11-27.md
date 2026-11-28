@@ -67,10 +67,11 @@ Findings (2026-11-27, code reading):
 - Output does not. `output_format_supported` (`crates/control/src/lib.rs`)
   accepts only stereo IEEE float32, so Play refuses any route whose output is
   a 4-, 6- or 8-channel endpoint ("output fan-out endpoints must be stereo
-  IEEE float32"), and `SharedRender::submit_bytes` rejects other frame sizes.
-- Common cables differ: VB-Cable and AudioRouter's own cables are stereo, but
-  VoiceMeeter's virtual inputs default to 8 channels and some users set
-  VB-Cable to 7.1. Those PCs cannot use such a cable as an output today.
+  IEEE float32"). `SharedRender::submit_bytes` accepted a narrower stride but
+  copied it packed, which would have scrambled the channels.
+- Cables differ by PC: the owner's CABLE-B Input is set to 7.1 on purpose, and
+  other virtual-cable products may default to more than two channels (not
+  verified here). Such a cable cannot be an output today.
 
 Options for the owner:
 
@@ -82,6 +83,70 @@ Options for the owner:
 
 Either way, list every endpoint's channel count in `list_devices` so an
 assistant can see why a device is refused. **Owner choice (2026-11-27): option (a).**
+
+## A4 option (a): implementation plan (branch `feat/multichannel-output`)
+
+Scope: every worker Play can choose. The multi-input output fan-out serves
+multi-device routes; the UI picks the single-endpoint worker
+(`nativeEndpoints.prepare`) for a simple one-input, one-output route and the
+application worker for a single app route. A first version covered only the
+fan-out; the single-endpoint bridge (stereo graph and resamplers whatever the
+device width) and the application worker check were added before handoff.
+
+1. `SharedRender` records the stream's channel count, float32 flag and the
+   positions of front left/right (from the channel mask; the first two channels
+   when the mask is 0 or lacks them). `submit_bytes` keeps the exact-width copy,
+   and a stereo float source into a wider float32 stream is written frame by
+   frame into the device buffer: L and R into those positions, every other
+   channel exactly 0.0. The expansion is a pure helper on borrowed slices: no
+   allocation, no pump or ring changes, frame counts unchanged, so the drift
+   controller and its queue math are untouched.
+2. `output_format_supported` accepts float32 render devices with 2 to 8
+   channels at 8–192 kHz (mono still refused). The fan-out refusal message and
+   `setup_check` follow it. Spatial (binaural) capture rules are unchanged.
+3. The device list reports each device's channel count where it does not
+   already, so a script or assistant can see the layout.
+4. Docs: the API reference and the device guidance say what a multichannel
+   output plays.
+
+Verification: unit tests of the helper (4, 6 and 8 channels, masks with and
+without front left/right, exact-width passthrough, refused partial or non-float
+input); `setup_check_tests` flipped deliberately; the drift simulation suite
+and the windows-audio, control and engine suites; both Clippy runs. Hardware
+proof needs the continuity harness through CABLE-B set to 7.1, which plays into
+a cable the owner uses live: it waits for a quiet window, and A4 is not done
+before it passes.
+
+Rollback: revert the branch; devices with more than two channels are refused
+at Play again, as before.
+
+Status 2026-11-27: steps 1, 2 and 4 done; step 3 needed nothing, because
+`devices.list` already reports `format.channels` for every device and the UI
+labels it. The limit is 2–32 float channels (`MAX_RENDER_CHANNELS`, one value
+for every worker). Local results: both `cargo fmt` checks and both Clippy runs
+clean; `audiorouter-windows-audio` (170, including the drift simulation suite,
+the widening tests and the multichannel endpoint-bridge test) and
+`audiorouter-control` (530) passed, including the flipped `setup_check` tests.
+
+Live qualification, 2026-11-27, owner's quiet window, Windows 11 dev PC.
+CABLE-B Input reported 8 channels, float32, 48 kHz. Harness
+`live_backend_service_keeps_a_routed_tone_continuous` (997 Hz tone, CABLE Output
+→ Gain → CABLE-B Input, result read from CABLE-B Output):
+
+| Worker | Length | Reference glitches | Routed glitches | Result |
+| --- | --- | --- | --- | --- |
+| multi-path (default) | 30 s | 0 | 0 | pass, peak 0.0500 |
+| multi-path | 60 s | 0 | 0 | pass (one 37 ms late audio pass absorbed) |
+| single endpoint | 30 s | not recorded | 4 | fail |
+| single endpoint | 30 s ×3 | 0 | 0 | pass |
+| single endpoint | 30 s | 2 (1 silent run) | 4 | system hiccup: reference also broken, 18 ms late pass |
+
+The routed tone arrived at full level with zero glitches in every run whose
+reference was clean, so the stereo route reaches the 7.1 cable's front left/right
+intact. The first endpoint failure kept no reference figures, so it cannot be
+attributed; it did not recur in three runs. Not checked: that channels 3–8 are
+silent on hardware (CABLE-B Output is read as stereo; the unit tests cover it),
+the application worker live, and an attended Play in the built app.
 
 ## Validation
 

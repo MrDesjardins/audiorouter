@@ -1,6 +1,7 @@
 //! Tests for `setup_check.rs`. Each finding has a regression, including the
 //! 2026-11-02 cases: a 7.1 cable feeding a Surround input is correct, the
-//! same cable as an output is refused, and two routes looping through cables.
+//! same cable as an output plays on its front left/right (A4, 2026-11-27),
+//! and two routes looping through cables.
 
 use super::*;
 use audiorouter_domain::{Edge, Node, Port};
@@ -110,15 +111,43 @@ fn a_surround_input_on_a_stereo_device_is_refused() {
 }
 
 #[test]
-fn an_output_to_a_7_1_device_is_refused_with_the_play_rule() {
+fn an_output_to_a_7_1_device_plays_on_its_front_left_and_right() {
+    // Owner decision A4 (2026-11-27): any PC's virtual cables, whatever their
+    // layout, are usable outputs. A 7.1 output is no longer a problem.
     let test = route("test", "cable-out", false, "cable-b-in");
     let findings = check_setup(&[(&test, false)], &devices());
-    assert_eq!(codes(&findings), ["outputFormat"]);
-    assert!(findings[0].message.contains("8 channel(s)"));
+    assert!(!codes(&findings).contains(&"outputFormat"), "{findings:?}");
     // The check and native preparation share the predicate.
-    assert!(!output_format_supported(true, 8, 48_000));
+    for channels in [2, 4, 6, 8, 16, MAX_OUTPUT_DEVICE_CHANNELS] {
+        assert!(
+            output_format_supported(true, channels, 48_000),
+            "{channels}"
+        );
+    }
     assert!(output_format_supported(true, 2, 44_100));
+}
+
+#[test]
+fn an_output_to_a_mono_or_non_float_device_is_refused_with_the_play_rule() {
+    let mut devices = devices();
+    let output = devices
+        .iter_mut()
+        .find(|device| device.id == "cable-b-in")
+        .unwrap();
+    output.channels = 1;
+    output.channel_mask = 0x4;
+    let test = route("test", "cable-out", false, "cable-b-in");
+    let findings = check_setup(&[(&test, false)], &devices);
+    assert_eq!(codes(&findings), ["outputFormat"]);
+    assert!(findings[0].message.contains("1 channel(s)"));
+    assert!(!output_format_supported(true, 1, 48_000));
+    assert!(!output_format_supported(
+        true,
+        MAX_OUTPUT_DEVICE_CHANNELS + 1,
+        48_000
+    ));
     assert!(!output_format_supported(false, 2, 48_000));
+    assert!(!output_format_supported(true, 2, 4_000));
 }
 
 #[test]
@@ -361,8 +390,8 @@ fn a_loop_through_a_7_1_loopback_input_is_found() {
         .parameters
         .insert("endpointId".into(), json!("cable-b-in"));
     let findings = check_setup(&[(&test, false), (&siege, true)], &devices());
-    // The 7.1 output is refused too; the loop is still named.
-    assert_eq!(codes(&findings), ["outputFormat", "crossSessionLoop"]);
+    // The 7.1 output plays (A4); the loop is still named.
+    assert_eq!(codes(&findings), ["crossSessionLoop"]);
 }
 
 #[test]
