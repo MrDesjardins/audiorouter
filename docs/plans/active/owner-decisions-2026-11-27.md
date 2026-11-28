@@ -93,14 +93,15 @@ application worker for a single app route. A first version covered only the
 fan-out; the single-endpoint bridge (stereo graph and resamplers whatever the
 device width) and the application worker check were added before handoff.
 
-1. `SharedRender` records whether the stream is float32. `submit_bytes` keeps
-   the exact-width copy, and a narrower float32 source into a wider float32
-   stream is written frame by frame into the device buffer: the first channels
-   receive the source frame (a stereo route plays on channels 0 and 1, front
-   left/right in any standard layout), every other channel exactly 0.0. The
-   expansion is a pure helper on borrowed slices: no allocation, no pump or ring
-   changes, frame counts unchanged, so the drift controller and its queue math
-   are untouched.
+1. `SharedRender` records the stream's float32 flag and byte stride.
+   `submit_bytes` keeps the exact-width copy, and a narrower float32 source into
+   a wider float32 stream is written frame by frame into the device buffer: the
+   source channels fill the first channels, every other channel exactly 0.0.
+   Windows orders standard masks front-left/right first, so a stereo route lands
+   on front L/R; the first two channels are used without a mask. The expansion
+   is a pure helper on borrowed slices: no allocation, no pump or ring changes,
+   frame counts unchanged, so the drift controller and its queue math are
+   untouched.
 2. `output_format_supported` accepts float32 render devices with 2 to 32
    channels at 8–192 kHz (mono still refused). The fan-out refusal message and
    `setup_check` follow it. Spatial (binaural) capture rules are unchanged.
@@ -127,6 +128,15 @@ for every worker). Local results: both `cargo fmt` checks and both Clippy runs
 clean; `audiorouter-windows-audio` (170, including the drift simulation suite,
 the widening tests and the multichannel endpoint-bridge test) and
 `audiorouter-control` (530) passed, including the flipped `setup_check` tests.
+The qualification audit also ran the whole `audiorouter-engine` suite,
+including `source_combinations` (6/6) and `tool_combinations` (6/6), and docs
+validation (331 files). It found and corrected three stale statements that still
+refused a multichannel output — the setup-check contract in
+`docs/spec/09-interface.md`, the quickstart's setup-check section, and the
+`nativeOutputs.prepare` text in the API reference. Evidence:
+[multichannel output audit](evidence/2026-11-27-multichannel-output.md). A fresh
+release shell was built from this branch for the attended gate (SHA-256
+`5D06A08C…`).
 
 Live qualification, 2026-11-27, owner's quiet window, Windows 11 dev PC.
 CABLE-B Input reported 8 channels, float32, 48 kHz. Harness
