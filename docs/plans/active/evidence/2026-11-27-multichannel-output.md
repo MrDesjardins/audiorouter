@@ -108,6 +108,20 @@ Preparation and prerequisites (to confirm in the window):
 2. Close Discord, Zoom, games and AudioRouter; nobody may be listening to
    CABLE-A or CABLE-B. Confirm `Get-Process audiorouter-shell*` prints nothing.
 3. Do not run this while C1 or any other cable run is active.
+4. Before the continuity run, confirm the route render endpoint really is
+   wider than stereo. The M00 probe was built for this window (release,
+   SHA-256 `753E1EB0…`); it opens each stream briefly, so run it only in the
+   quiet window and read the two CABLE-B lines:
+
+   ```powershell
+   & .\tools\m00-wasapi-probe\target\release\m00-wasapi-probe.exe |
+     Select-String -Pattern '03498a2a|ef18e30a'
+   ```
+
+   Require the CABLE-B Input line (`{0.0.0.…03498a2a…}`) to show
+   `channels=8`, a float format and the 7.1 mask, and record the CABLE-B Output
+   capture line. If the render side is not wider than two channels, the run
+   does not exercise A4 and must not be recorded as a pass.
 
 Agent command (the same route as C1, so CABLE-B Input is the route's render
 endpoint and the stereo graph must be widened):
