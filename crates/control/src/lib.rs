@@ -463,6 +463,9 @@ pub struct ControlPlane {
         HashMap<(EntityId, EntityId), std::sync::Arc<audiorouter_engine::SoundboardSource>>,
 
     enrollments: HashMap<String, (ClientRole, bool)>,
+    /// In-memory copy of the per-client recording opt-in (A1); storage holds
+    /// the durable value when present.
+    recording_clients: std::collections::HashSet<String>,
     events: EventLog,
     mutation_limiter: MutationRateLimiter,
     operation_outcomes: HashMap<String, Value>,
@@ -695,6 +698,7 @@ impl ControlPlane {
             test_signal_sources: HashMap::new(),
             soundboard_sources: HashMap::new(),
             enrollments: HashMap::new(),
+            recording_clients: std::collections::HashSet::new(),
             events: EventLog::new(1),
             mutation_limiter: MutationRateLimiter::default(),
             operation_outcomes: HashMap::new(),

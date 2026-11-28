@@ -510,6 +510,8 @@ export interface UiBackend {
     clientId: string,
     role: "observer" | "editor" | "operator",
     idempotencyKey: string,
+    /** Also let this client control recordings (A1); omitted means no. */
+    allowRecording?: boolean,
   ): Promise<ClientAuthorizeResult>;
   revokeClient(clientId: string, idempotencyKey: string): Promise<ClientRevokeResult>;
   /** Opt-in verbose logging (P2-3); absent when there is no backend. */
@@ -1404,8 +1406,11 @@ export function createLiveBackend(
     async listClients() {
       return client.request("clients.list", undefined);
     },
-    async authorizeClient(clientId, role, idempotencyKey) {
-      return client.request("clients.authorize", { clientId, role, idempotencyKey });
+    async authorizeClient(clientId, role, idempotencyKey, allowRecording) {
+      return client.request(
+        "clients.authorize",
+        allowRecording ? { clientId, role, allowRecording: true, idempotencyKey } : { clientId, role, idempotencyKey },
+      );
     },
     async revokeClient(clientId, idempotencyKey) {
       return client.request("clients.revoke", { clientId, idempotencyKey });

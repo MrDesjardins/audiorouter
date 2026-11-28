@@ -1161,6 +1161,8 @@ export interface ClientAuthorizeResult {
   clientId: EntityId;
   role: "observer" | "editor" | "operator";
   revoked: false;
+  /** Absent on a replay of an authorization recorded before 2026-11-27. */
+  allowRecording?: boolean;
 }
 
 export interface ClientRevokeResult {
@@ -1623,6 +1625,7 @@ export type ImplementedMethod =
   | "toolPresets.delete"
   | "sessions.createFromGoal"
   | "sessions.delete"
+  | "sessions.rename"
   | "sessions.active.get"
   | "sessions.active.set"
   | "graph.plan"
@@ -1768,6 +1771,7 @@ export const METHOD_DEADLINES: Readonly<Record<ImplementedMethod, MethodDeadline
   "sessions.importPlan": "long",
   "sessions.list": "quick",
   "sessions.play": "long",
+  "sessions.rename": "long",
   "sessions.start": "long",
   "sessions.stop": "long",
   "sessions.summary": "quick",
@@ -1813,7 +1817,12 @@ export type MethodParams = {
   "system.quit": { idempotencyKey: string };
   "system.osTransition": { transition: OsTransition; idempotencyKey: string };
   "clients.list": undefined;
-  "clients.authorize": { clientId: string; role: "observer" | "editor" | "operator"; idempotencyKey: string };
+  "clients.authorize": {
+    clientId: string;
+    role: "observer" | "editor" | "operator";
+    allowRecording?: boolean;
+    idempotencyKey: string;
+  };
   "clients.revoke": { clientId: string; idempotencyKey: string };
   "operations.get": { operationId: string };
   "operations.cancel": { operationId: string; idempotencyKey?: string };
@@ -2038,6 +2047,7 @@ export type MethodParams = {
     idempotencyKey?: string;
   };
   "sessions.delete": { sessionId: EntityId; idempotencyKey?: string };
+  "sessions.rename": { sessionId?: EntityId; name: string; idempotencyKey: string };
   "sessions.active.get": undefined;
   "sessions.active.set": { sessionId: EntityId; idempotencyKey: string };
   "graph.plan": { sessionId: EntityId; baseRevision: number; candidate: Session };
@@ -2071,7 +2081,7 @@ export type MethodResult = {
   "diagnostics.setVerbose": VerboseDiagnosticsStatus;
   "system.quit": SystemQuitResult;
   "system.osTransition": OsTransitionResult;
-  "clients.list": Array<{ clientId: string; role: string; revoked: boolean }>;
+  "clients.list": Array<{ clientId: string; role: string; revoked: boolean; allowRecording: boolean }>;
   "clients.authorize": ClientAuthorizeResult;
   "clients.revoke": ClientRevokeResult;
   "operations.get": OperationCompleted | OperationUnknown;
@@ -2237,6 +2247,7 @@ export type MethodResult = {
   "sessions.createFromGoal": SessionFromGoalResult;
   "sessions.duplicate": SessionCreateResult;
   "sessions.delete": SessionDeleteResult;
+  "sessions.rename": SimpleEditResult & { name: string; previousName: string };
   "sessions.active.get": { sessionId: EntityId | null };
   "sessions.active.set": { sessionId: EntityId };
   "graph.plan": GraphPlanResult;

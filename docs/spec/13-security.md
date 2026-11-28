@@ -106,6 +106,28 @@ fresh install):
   `pluginScan`, which no MCP role holds. Those assistant tools are removed
   from the default list and say so. Rollback: restore the five permissions in
   `API_METHODS`.
+- **Decision A1 (2026-11-27, owner: "A1: Yes", option (a)): per-client
+  recording opt-in.** Goal stated by the owner: as much flexibility as
+  possible for API and MCP users. The window's Connected clients panel has an
+  **Also allow recordings** box, off by default. `clients.authorize` takes an
+  optional `allowRecording` (strict boolean); `grant_for_client` then adds the
+  `record` scope to that client's role grant, so the client can call
+  `recorders.startRecording`/`stopRecording`, `recordings.setMetadata` and
+  `recordings.rename`, and the default MCP tools `start_recording`,
+  `stop_recording`, `set_recording_metadata` and `rename_recording`.
+  Unchanged: the role grants themselves, choosing the recording folder
+  (`recordings.setRoot`, window only), device administration and Play, the
+  privacy mute, and microphone fail-closed rules; `record` never opens a
+  capture device. Every authorization restates the choice (a role change
+  without the tick turns it off), a revocation clears it, and the grant is
+  resolved on every request, so a change reaches a live MCP sidecar at once.
+  Only the window can authorize (an assistant cannot hold the scope that
+  `clients.authorize` needs, and REST refuses it with 403). The flag is a
+  `control_settings` row (`clientRecording:<clientId>`), not a schema change,
+  so an older build ignores it and its clients lose the opt-in. Tests:
+  `recording_opt_in_is_per_client_off_by_default_and_cleared_by_revocation`,
+  `real_mcp_pipe_honors_the_recording_opt_in_and_its_live_removal`. Rollback:
+  remove the parameter and the scope addition; stored rows are then ignored.
 - **Unchanged:** driver installation still needs Windows elevation.
 
 Show the concrete action and affected resources: for example, “Allow this client to edit Gaming and record under D:\\Recordings.” Do not ask for a universal “AI access” grant. Existing grants may persist until revoked, with last-used time and scope visible. Driver install uses Windows elevation; granting API device administration alone cannot bypass the OS prompt.

@@ -32,6 +32,8 @@ pub const MAX_PENDING_PLAN_RECORDS: usize = 100;
 /// Maximum number of enrolled local client identities retained by the control
 /// plane. The extra row used by list reads is a fail-closed overflow sentinel.
 pub const MAX_CLIENT_ENROLLMENTS: usize = 256;
+/// `control_settings` key prefix of a client's recording opt-in.
+const CLIENT_RECORDING_KEY_PREFIX: &str = "clientRecording:";
 /// Maximum number of recent idempotency outcomes retained by SQLite. A graph
 /// edit writes two rows (the edit outcome and its commit), so this holds 16,384
 /// edits in the 24-hour API-07 window. Every commit counts the rows, so the
@@ -4005,6 +4007,50 @@ impl Storage {
         Ok(records)
     }
 
+    /// The window's per-client opt-in that lets an enrolled assistant start,
+    /// stop, rename and tag recordings (owner decision A1, 2026-11-27). Kept
+    /// in `control_settings` so older builds simply ignore it (no schema
+    /// change); absent means not allowed.
+    pub fn save_client_recording_allowed(
+        &self,
+        client_id: &str,
+        allowed: bool,
+    ) -> Result<(), StorageError> {
+        validate_client_id(client_id)?;
+        let key = format!("{CLIENT_RECORDING_KEY_PREFIX}{client_id}");
+        if allowed {
+            self.connection.execute(
+                "INSERT INTO control_settings(key, value) VALUES (?1, 'true')
+                 ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                params![key],
+            )?;
+        } else {
+            self.connection
+                .execute("DELETE FROM control_settings WHERE key = ?1", params![key])?;
+        }
+        Ok(())
+    }
+
+    pub fn load_client_recording_allowed(&self, client_id: &str) -> Result<bool, StorageError> {
+        validate_client_id(client_id)?;
+        let key = format!("{CLIENT_RECORDING_KEY_PREFIX}{client_id}");
+        let value = self
+            .connection
+            .query_row(
+                "SELECT value FROM control_settings WHERE key = ?1",
+                params![key],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        match value.as_deref() {
+            None => Ok(false),
+            Some("true") => Ok(true),
+            Some(_) => Err(StorageError::CorruptDatabase(
+                "client recording permission is not a boolean".into(),
+            )),
+        }
+    }
+
     pub fn journal_commit(
         &self,
         key: &str,
@@ -7740,6 +7786,33 @@ mod tests {
             storage.load_client_enrollment("client").unwrap(),
             Some(("observer".into(), false))
         );
+    }
+
+    #[test]
+    fn client_recording_opt_in_is_off_by_default_and_round_trips() {
+        let storage = Storage::open_memory().unwrap();
+        assert!(!storage.load_client_recording_allowed("client").unwrap());
+        storage
+            .save_client_recording_allowed("client", true)
+            .unwrap();
+        assert!(storage.load_client_recording_allowed("client").unwrap());
+        assert!(!storage.load_client_recording_allowed("other").unwrap());
+        storage
+            .save_client_recording_allowed("client", false)
+            .unwrap();
+        assert!(!storage.load_client_recording_allowed("client").unwrap());
+        assert!(storage.save_client_recording_allowed("", true).is_err());
+        storage
+            .connection
+            .execute(
+                "INSERT INTO control_settings(key, value) VALUES ('clientRecording:bad', 'yes')",
+                [],
+            )
+            .unwrap();
+        assert!(matches!(
+            storage.load_client_recording_allowed("bad"),
+            Err(StorageError::CorruptDatabase(_))
+        ));
     }
 
     #[test]

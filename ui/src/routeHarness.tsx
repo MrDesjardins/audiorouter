@@ -401,14 +401,15 @@ const previewBackend: UiBackend = {
   async listClients() {
     return injected.__routeFixtureMcpClients ?? fixtureBackend.listClients();
   },
-  async authorizeClient(clientId, role, idempotencyKey) {
-    if (!injected.__routeFixtureMcpClients) return fixtureBackend.authorizeClient(clientId, role, idempotencyKey);
-    injected.__routeFixtureMcpGrants?.push(`${clientId}:${role}`);
+  async authorizeClient(clientId, role, idempotencyKey, allowRecording) {
+    if (!injected.__routeFixtureMcpClients)
+      return fixtureBackend.authorizeClient(clientId, role, idempotencyKey, allowRecording);
+    injected.__routeFixtureMcpGrants?.push(`${clientId}:${role}${allowRecording ? ":record" : ""}`);
     injected.__routeFixtureMcpClients = [
       ...injected.__routeFixtureMcpClients.filter((client) => client.clientId !== clientId),
-      { clientId, role, revoked: false },
+      { clientId, role, revoked: false, allowRecording: allowRecording === true },
     ];
-    return { clientId, role, revoked: false };
+    return { clientId, role, revoked: false, allowRecording: allowRecording === true };
   },
   async getVerboseDiagnostics() {
     return verboseStatus();

@@ -745,6 +745,11 @@ pub fn retries() -> Vec<Retry> {
             changed: json!({ "sessionId": "contract", "node": "Mic in", "idempotencyKey": "retry-remove" }),
         },
         Retry {
+            method: "sessions.rename",
+            params: json!({ "sessionId": "contract", "name": "Renamed once", "idempotencyKey": "retry-rename" }),
+            changed: json!({ "sessionId": "contract", "name": "Renamed other", "idempotencyKey": "retry-rename" }),
+        },
+        Retry {
             method: "sessions.create",
             params: json!({ "session": created("created-once"), "idempotencyKey": "retry-create" }),
             changed: json!({ "session": created("created-other"), "idempotencyKey": "retry-create" }),

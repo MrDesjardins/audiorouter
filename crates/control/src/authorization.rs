@@ -346,7 +346,7 @@ pub(crate) fn validate_method_params(
         "system.quit" => &["idempotencyKey"],
         "system.osTransition" => &["transition", "idempotencyKey"],
         "system.checkSetup" => &["sessionId"],
-        "clients.authorize" => &["clientId", "role", "idempotencyKey"],
+        "clients.authorize" => &["clientId", "role", "allowRecording", "idempotencyKey"],
         "clients.revoke" => &["clientId", "idempotencyKey"],
         "operations.get" => &["operationId"],
         "operations.cancel" => &["operationId", "idempotencyKey"],
@@ -436,6 +436,7 @@ pub(crate) fn validate_method_params(
             "idempotencyKey",
         ],
         "nodes.remove" => &["sessionId", "node", "bridge", "idempotencyKey"],
+        "sessions.rename" => &["sessionId", "name", "idempotencyKey"],
         "connections.add" | "connections.remove" => &[
             "sessionId",
             "from",
@@ -657,6 +658,9 @@ impl ControlPlane {
         if let Some(entry) = self.enrollments.get_mut(client_id) {
             entry.1 = true;
         }
+        // A revoked client keeps no opt-in: authorizing it again starts from
+        // "may not record".
+        self.set_client_recording_allowed(client_id, false)?;
         Ok(changed)
     }
 
@@ -669,9 +673,44 @@ impl ControlPlane {
                 .and_then(|(role, revoked)| role_from_name(&role).map(|role| (role, revoked))),
             None => enrollment,
         };
-        Ok(enrollment
-            .filter(|(_, revoked)| !revoked)
-            .map(|(role, _)| ClientGrant::for_role(role)))
+        let Some((role, _)) = enrollment.filter(|(_, revoked)| !revoked) else {
+            return Ok(None);
+        };
+        let mut grant = ClientGrant::for_role(role);
+        if self.client_recording_allowed(client_id)? {
+            grant.scopes.insert(PermissionScope::Record);
+        }
+        Ok(Some(grant))
+    }
+
+    /// The window's opt-in for one enrolled client to control recordings
+    /// (owner decision A1, 2026-11-27). Off unless the user turned it on when
+    /// authorizing that client; a new authorization or a revocation resets it.
+    pub fn client_recording_allowed(&self, client_id: &str) -> Result<bool, ControlError> {
+        match &self.storage {
+            Some(storage) => storage
+                .load_client_recording_allowed(client_id)
+                .map_err(storage_error),
+            None => Ok(self.recording_clients.contains(client_id)),
+        }
+    }
+
+    fn set_client_recording_allowed(
+        &mut self,
+        client_id: &str,
+        allowed: bool,
+    ) -> Result<(), ControlError> {
+        if let Some(storage) = &self.storage {
+            storage
+                .save_client_recording_allowed(client_id, allowed)
+                .map_err(storage_error)?;
+        }
+        if allowed {
+            self.recording_clients.insert(client_id.to_owned());
+        } else {
+            self.recording_clients.remove(client_id);
+        }
+        Ok(())
     }
 
     pub(crate) fn client_records(&self) -> Result<Vec<Value>, ControlError> {
@@ -688,16 +727,18 @@ impl ControlPlane {
             records.sort_by(|left, right| left.0.cmp(&right.0));
             records
         };
-        Ok(records
+        records
             .into_iter()
             .map(|(client_id, role, revoked)| {
-                json!({
+                let allow_recording = !revoked && self.client_recording_allowed(&client_id)?;
+                Ok(json!({
                     "clientId": client_id,
                     "role": role,
-                    "revoked": revoked
-                })
+                    "revoked": revoked,
+                    "allowRecording": allow_recording
+                }))
             })
-            .collect())
+            .collect()
     }
 
     pub(crate) fn dispatch_clients_list(&self) -> Result<Value, ControlError> {
@@ -726,15 +767,33 @@ impl ControlPlane {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let allow_recording = match params.get("allowRecording") {
+            None => false,
+            Some(Value::Bool(allowed)) => *allowed,
+            Some(_) => {
+                return Err(ControlError::InvalidRequest(
+                    "allowRecording must be true or false".into(),
+                ))
+            }
+        };
+        // The flag joins the request hash only when set, so a retry recorded
+        // before the flag existed still matches its original request.
+        let mut hashed = json!({ "clientId": client_id, "role": role_name_value });
+        if allow_recording {
+            hashed["allowRecording"] = json!(true);
+        }
         let operation = (
             self.scoped_idempotency_key("clients.authorize", idempotency_key),
-            Self::request_hash(&json!({ "clientId": client_id, "role": role_name_value })),
+            Self::request_hash(&hashed),
         );
         if let Some(previous) = self.lookup_idempotent_result(&operation.0, &operation.1)? {
             return Ok(previous);
         }
         self.enroll_client(client_id, role)?;
-        let result = json!({ "clientId": client_id, "role": role_name_value, "revoked": false });
+        // Every authorization states the recording choice again: changing a
+        // role without ticking it turns recording off.
+        self.set_client_recording_allowed(client_id, allow_recording)?;
+        let result = json!({ "clientId": client_id, "role": role_name_value, "revoked": false, "allowRecording": allow_recording });
         self.journal_idempotent_result(&operation.0, "clients.authorize", &operation.1, &result)?;
         Ok(result)
     }

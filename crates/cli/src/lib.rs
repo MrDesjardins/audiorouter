@@ -2518,6 +2518,7 @@ const DEFAULT_MCP_TOOLS: &[&str] = &[
     "list_sessions",
     "open_session",
     "create_session",
+    "rename_session",
     "list_goals",
     "list_saved_versions",
     "go_back_to_version",
@@ -2552,6 +2553,10 @@ const DEFAULT_MCP_TOOLS: &[&str] = &[
     "list_recordings",
     "list_live_recorders",
     "get_recording",
+    "start_recording",
+    "stop_recording",
+    "set_recording_metadata",
+    "rename_recording",
     "get_startup",
     "get_operation",
     "cancel_operation",
@@ -2606,7 +2611,7 @@ fn is_known_mcp_tool(name: &str) -> bool {
 const MCP_LEGACY_VERSIONS: [&str; 3] = ["2025-11-25", "2025-06-18", "2025-03-26"];
 
 /// Sent at initialize: how an assistant should approach AudioRouter.
-const MCP_SERVER_INSTRUCTIONS: &str = "AudioRouter routes and processes the user's audio on this PC. Start with get_session_summary to see the open setup, and with get_recipes when the user asks for a result rather than a step. Name nodes as get_session_summary shows them. Tools that act on one session use the open session when sessionId is omitted; on list tools sessionId is an optional filter. Never choose a microphone or output device for the user: ask. Tools use the permissions of this enrolled client (Observer reads, including saved recordings and the plugin list; Editor builds routes; Operator also stops, starts prepared routes and controls running audio). Starting audio with Play, starting or stopping a recording, and inspecting plugins are done by the user in the AudioRouter window; if a call is refused, say so and suggest the user do it in the AudioRouter window. No audio content is ever exposed. A retry reuses the same idempotency key and returns the recorded outcome; after AudioRouter restarted, a recorded play or recording is refused with idempotencyConflict instead of starting again, so send a new request. Use a new key for a new action, or omit it to get a fresh one.";
+const MCP_SERVER_INSTRUCTIONS: &str = "AudioRouter routes and processes the user's audio on this PC. Start with get_session_summary to see the open setup, and with get_recipes when the user asks for a result rather than a step. Name nodes as get_session_summary shows them. Tools that act on one session use the open session when sessionId is omitted; on list tools sessionId is an optional filter. Never choose a microphone or output device for the user: ask. Tools use the permissions of this enrolled client (Observer reads, including saved recordings and the plugin list; Editor builds routes; Operator also stops, starts prepared routes and controls running audio). Starting audio with Play and inspecting plugins are done by the user in the AudioRouter window. Starting, stopping, renaming and tagging recordings work only if the user allowed recording for this assistant in AudioRouter; start a recording only when the user asked for one. If a call is refused, say so and suggest the user do it in the AudioRouter window. No audio content is ever exposed. A retry reuses the same idempotency key and returns the recorded outcome; after AudioRouter restarted, a recorded play or recording is refused with idempotencyConflict instead of starting again, so send a new request. Use a new key for a new action, or omit it to get a fresh one.";
 
 fn mcp_listed_tools(advanced: bool) -> Value {
     let tools = mcp_tools();
@@ -2950,6 +2955,7 @@ fn mcp_tools() -> Value {
         { "name": "list_sessions", "description": "List every saved session (setup) with its ID, name and revision. AudioRouter works on one open session at a time.", "inputSchema": { "type": "object", "properties": { "limit": { "type": "integer", "minimum": 1, "maximum": 100 } }, "required": [], "additionalProperties": false } },
         { "name": "open_session", "description": "Open (select) a session by ID so later calls without sessionId use it. Does not start audio. Needs the Operator role; an Editor can read and edit a session only by passing its sessionId.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; generated when omitted." } }, "required": ["sessionId"], "additionalProperties": false } },
         { "name": "create_session", "description": "Create a new empty session with a name and open it; then add_tool and connect_nodes to build it. Needs the Operator role, because opening the new session is a session control; ask the user to create it in AudioRouter otherwise.", "inputSchema": { "type": "object", "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; generated when omitted." } }, "required": ["name"], "additionalProperties": false } },
+        { "name": "rename_session", "description": "Rename a session (default: the one open in AudioRouter). Saved as a new version that undo_last_change can reverse; audio keeps playing. Editor or Operator.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "name": { "type": "string", "minLength": 1, "maxLength": 120, "description": "New session name." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["name"], "additionalProperties": false } },
         { "name": "get_session_summary", "description": "Read the current audio setup in plain terms: every node with its readable settings, every connection by name, and whether audio is playing or the mic is muted. Call this before changing anything.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." } }, "required": [], "additionalProperties": false } },
         { "name": "list_tool_kinds", "description": "List the tools and devices you can add (kind, plain description, inputs, outputs, settings with ranges and defaults).", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
         { "name": "add_tool", "description": "Add a tool or device by kind, for example compressor, gate, duck, meter or recorder. Use between to insert it into an existing connection, or after to place it after a node. Saved and live.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "kind": { "type": "string", "minLength": 1, "description": "Kind from list_tool_kinds." }, "name": { "type": "string", "minLength": 1, "description": "Optional display name." }, "parameters": { "type": "object", "description": "Optional settings, by name." }, "between": { "type": "object", "properties": { "from": { "type": "string" }, "to": { "type": "string" } }, "required": ["from", "to"], "description": "Insert into the connection from -> to." }, "after": { "type": "string", "minLength": 1, "description": "Place after this node (by name)." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["kind"], "additionalProperties": false } },
@@ -3037,16 +3043,16 @@ fn mcp_tools() -> Value {
         { "name": "pause_recorder", "description": "Pause a recorder at an explicit frame boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame", "idempotencyKey"], "additionalProperties": false } },
         { "name": "resume_recorder", "description": "Resume a recorder at an explicit frame boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame", "idempotencyKey"], "additionalProperties": false } },
         { "name": "split_recorder", "description": "Split a recorder at an explicit frame boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame", "idempotencyKey"], "additionalProperties": false } },
-        { "name": "start_recording", "description": "Start recording now on a Recorder node of the session (the simplest way to record). Uses the node settings for format and automatic file splitting; works while audio plays. Returns the file path. Not available to assistants by default: recording needs a permission MCP clients are not given, so a call is refused and the user records in the AudioRouter window.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Recorder node name or ID." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["node"], "additionalProperties": false } },
-        { "name": "stop_recording", "description": "Stop recording on a Recorder node and save the file. Safe to call when it is not recording. Not available to assistants by default: needs a permission MCP clients are not given; the user stops recording in the AudioRouter window.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Recorder node name or ID." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["node"], "additionalProperties": false } },
+        { "name": "start_recording", "description": "Start recording now on a Recorder node of the session (the simplest way to record). Uses the node settings for format and automatic file splitting; works while audio plays. Returns the file path. Needs the recording permission, which the user turns on for this assistant in AudioRouter (AI assistants, Allow recording); without it the call is refused: ask the user to record in the window or to allow it. Start only when the user asked for a recording.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Recorder node name or ID." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["node"], "additionalProperties": false } },
+        { "name": "stop_recording", "description": "Stop recording on a Recorder node and save the file. Safe to call when it is not recording. Needs the recording permission the user can give this assistant in AudioRouter; without it, ask the user to stop recording in the window.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Recorder node name or ID." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["node"], "additionalProperties": false } },
         { "name": "stop_recorder", "description": "Stop a recorder at an explicit frame boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame", "idempotencyKey"], "additionalProperties": false } },
         { "name": "control_recorder", "description": "Control one recorder through the authorized lifecycle API; arm omits frame and other actions require it, all require an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "action": { "enum": ["arm", "start", "pause", "resume", "split", "stop"] }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "action", "idempotencyKey"], "additionalProperties": false } },
         { "name": "get_recording", "description": "Read one saved recording's details (title, artist, file, length, format) by its ID from list_recordings, without reading any audio.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "get_recording_recovery", "description": "Read a validated recorder recovery checkpoint without audio content; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "preview_recording", "description": "Inspect recording file metadata without decoding audio; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "reveal_recording", "description": "Reveal a recording in the operating system file browser; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
-        { "name": "set_recording_metadata", "description": "Set a saved recording's title, artist or comment (null clears one). The audio and the file stay as they are. Not available to assistants by default: needs a permission MCP clients are not given.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "title": { "type": ["string", "null"], "maxLength": 256 }, "artist": { "type": ["string", "null"], "maxLength": 256 }, "comment": { "type": ["string", "null"], "maxLength": 256 }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["recordingId"], "additionalProperties": false } },
-        { "name": "rename_recording", "description": "Rename a saved recording's file. newPath must stay in the same folder as the recording. Not available to assistants by default: needs a permission MCP clients are not given.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "newPath": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["recordingId", "newPath"], "additionalProperties": false } },
+        { "name": "set_recording_metadata", "description": "Set a saved recording's title, artist or comment (null clears one). The audio and the file stay as they are. Needs the recording permission the user can give this assistant in AudioRouter.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "title": { "type": ["string", "null"], "maxLength": 256 }, "artist": { "type": ["string", "null"], "maxLength": 256 }, "comment": { "type": ["string", "null"], "maxLength": 256 }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["recordingId"], "additionalProperties": false } },
+        { "name": "rename_recording", "description": "Rename a saved recording's file. newPath must stay in the same folder as the recording. Needs the recording permission the user can give this assistant in AudioRouter.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "newPath": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["recordingId", "newPath"], "additionalProperties": false } },
         { "name": "set_privacy_mute", "description": "Mute (muted=true) or unmute (muted=false) every microphone path at once, like the privacy mute in the tray. Muting takes effect immediately and stays until cleared. Needs Operator access; toggle_mic_mute flips it instead.", "inputSchema": { "type": "object", "properties": { "muted": { "type": "boolean" }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["muted"], "additionalProperties": false } },
         { "name": "clear_recovery_safe_mode", "description": "Clear the latched crash-recovery safe mode after stability is confirmed; requires session-control scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["idempotencyKey"], "additionalProperties": false } },
         { "name": "remove_recording_entry", "description": "Remove recording library metadata without deleting the file; requires an idempotency key.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["recordingId", "idempotencyKey"], "additionalProperties": false } },
@@ -3650,6 +3656,7 @@ fn mcp_simple_tool(name: &str) -> Option<(&'static str, bool)> {
         "get_levels" => ("meters.levels", false),
         "add_tool" => ("nodes.add", true),
         "remove_tool" => ("nodes.remove", true),
+        "rename_session" => ("sessions.rename", true),
         "connect_nodes" => ("connections.add", true),
         "disconnect_nodes" => ("connections.remove", true),
         "change_settings" => ("nodes.set", true),
@@ -3824,7 +3831,7 @@ fn mcp_generated_key(tool: &str) -> String {
     )
 }
 
-const MCP_RECIPES: &str = "AudioRouter recipes (use the names shown by get_session_summary).\n1. Clean up a microphone: add_tool kind=gate after the microphone; add_tool kind=compressor after the gate; add_tool kind=limiter after the compressor. Then play, ask the user to talk, read get_levels: the gate threshold sits between room noise and voice (change_settings thresholdDb), the compressor should reduce 3-6 dB on loud words.\n2. Lower game or music while the user talks: add_tool kind=duck between the game source and its output with parameters {keyNodeId: <microphone node ID>, amountDb: 10}. Raise amountDb for more ducking; thresholdDb sets how loud the voice must be.\n3. Record a podcast or stream: add_tool kind=recorder after the node to record (often a Mixer or the voice chain). change_settings parameters {autoRecord: true} to record on every Play, {splitMinutes: 30} for a new file every 30 minutes. An assistant cannot start or stop recording (that permission is not given to assistants): tell the user to use the Record controls in the AudioRouter window; list_recordings and get_recording read the saved files.\n4. Use AudioRouter as a Discord or OBS microphone: connect the processed voice chain to an Output device whose device is a virtual cable input (e.g. CABLE Input; list_devices shows IDs; change_settings parameters {endpointId: ...}). In Discord choose the matching cable output as the microphone.\n5. Switch between two sources live (host and guest, or two scenes): add_tool kind=inputSwitch, connect_nodes each source to it (first to A, second to B), then toggle_setting target=selected to switch.\n6. Quick safety: toggle_mic_mute mutes all capture immediately. control_session action=stop stops audio. play / toggle_play start it when this client may open audio devices; if play is refused, ask the user to press Play in AudioRouter.\n7. Play sound effects into a stream or call: add_tool kind=soundboard, then connect_nodes from it to the Mixer that feeds the output (a Mixer accepts several sources), or straight to an output. list_sounds shows the built-in sounds; change_settings on the Soundboard with parameters {slot1MediaId: \"lib:...\", slot1Caption: \"Applause\", slot1Mode: \"once\"} fills slot 1 (slots 1-9; a category id in slot1Set picks a random sound of that category; slot1GainDb from -24 to 6). While audio plays, trigger_sound node=<Soundboard name> slot=1 plays it, stop_sounds stops, get_soundboard_status shows what plays. The same keys work from Stream Deck.\n8. Play is refused, the sound loops or a device seems wrong: run check_setup first. Each finding names the session, node and device and gives the fix; Windows device settings (channels, rate) are changed by the user in Windows Sound settings, not by you. A 7.1 device feeding a Surround input is correct; do not tell the user to make it stereo.\n9. Start from what the user wants: list_goals shows ready routes; start_from_goal goal=clean-mic makes a stopped session with those tools connected. Then ask which microphone and output to use and set them with change_settings parameters {endpointId: ...}; never choose a microphone yourself.\n10. Keep settings the user likes: save_my_preset kind=compressor name=\"Steady voice\" parameters={...}; apply later by passing a preset's parameters from list_my_presets to change_settings.\n11. See or return to an earlier setup: list_saved_versions, then go_back_to_version revision=N. Later versions are kept. Say which client saved a version only as reported; never guess a person.\n12. Play a VST synth or sampler: the user adds an Instrument tool in the AudioRouter window (Add tool, then pick the plugin; it needs a file chosen there) and connects it to an output or Mixer. Then list_midi_devices shows keyboards; change_settings on the Instrument with parameters {midiInput: \"keyboard\"} (the on-screen keyboard and play_notes only), \"all\" (every connected keyboard) or a device name from list_midi_devices. With the route playing, play_notes node=<Instrument name> events=[{type:noteOn,note:60,durationMs:500},{type:noteOn,note:64,afterMs:500,durationMs:500}] plays a phrase; events=[{type:allNotesOff}] stops stuck notes. The instrument is silent until a note arrives; if a device is not connected, list_midi_devices says so and no other device is used.\n13. Key a plugin effect from a second source (a plugin sidechain): add the effect first. Ask the user to check in the AudioRouter window whether the plugin has an auxiliary (key) input; list_plugins shows its file; assistants cannot inspect plugin buses. If it has none, say so and stop. Otherwise add_plugin_sidechain_port node=<plugin name> adds a port named sidechain (no Mixer, no connection), and connect_nodes from=<key source> to=<plugin name> toInput=sidechain connects the key. Only one source can feed the port; replace it by disconnect_nodes first. Editor access builds; the user presses Play.\nAlways describe what you changed to the user. Settings are validated: if a call fails, read its message (it names the problem and the allowed choices).";
+const MCP_RECIPES: &str = "AudioRouter recipes (use the names shown by get_session_summary).\n1. Clean up a microphone: add_tool kind=gate after the microphone; add_tool kind=compressor after the gate; add_tool kind=limiter after the compressor. Then play, ask the user to talk, read get_levels: the gate threshold sits between room noise and voice (change_settings thresholdDb), the compressor should reduce 3-6 dB on loud words.\n2. Lower game or music while the user talks: add_tool kind=duck between the game source and its output with parameters {keyNodeId: <microphone node ID>, amountDb: 10}. Raise amountDb for more ducking; thresholdDb sets how loud the voice must be.\n3. Record a podcast or stream: add_tool kind=recorder after the node to record (often a Mixer or the voice chain). change_settings parameters {autoRecord: true} to record on every Play, {splitMinutes: 30} for a new file every 30 minutes. start_recording node=<Recorder name> and stop_recording work when the user allowed recording for this assistant in AudioRouter (AI assistants, Allow recording); if they are refused, tell the user to use the Record controls in the AudioRouter window or to allow recording. list_recordings and get_recording read the saved files; set_recording_metadata and rename_recording tag and rename them.\n4. Use AudioRouter as a Discord or OBS microphone: connect the processed voice chain to an Output device whose device is a virtual cable input (e.g. CABLE Input; list_devices shows IDs; change_settings parameters {endpointId: ...}). In Discord choose the matching cable output as the microphone.\n5. Switch between two sources live (host and guest, or two scenes): add_tool kind=inputSwitch, connect_nodes each source to it (first to A, second to B), then toggle_setting target=selected to switch.\n6. Quick safety: toggle_mic_mute mutes all capture immediately. control_session action=stop stops audio. play / toggle_play start it when this client may open audio devices; if play is refused, ask the user to press Play in AudioRouter.\n7. Play sound effects into a stream or call: add_tool kind=soundboard, then connect_nodes from it to the Mixer that feeds the output (a Mixer accepts several sources), or straight to an output. list_sounds shows the built-in sounds; change_settings on the Soundboard with parameters {slot1MediaId: \"lib:...\", slot1Caption: \"Applause\", slot1Mode: \"once\"} fills slot 1 (slots 1-9; a category id in slot1Set picks a random sound of that category; slot1GainDb from -24 to 6). While audio plays, trigger_sound node=<Soundboard name> slot=1 plays it, stop_sounds stops, get_soundboard_status shows what plays. The same keys work from Stream Deck.\n8. Play is refused, the sound loops or a device seems wrong: run check_setup first. Each finding names the session, node and device and gives the fix; Windows device settings (channels, rate) are changed by the user in Windows Sound settings, not by you. A 7.1 device feeding a Surround input is correct; do not tell the user to make it stereo.\n9. Start from what the user wants: list_goals shows ready routes; start_from_goal goal=clean-mic makes a stopped session with those tools connected. Then ask which microphone and output to use and set them with change_settings parameters {endpointId: ...}; never choose a microphone yourself.\n10. Keep settings the user likes: save_my_preset kind=compressor name=\"Steady voice\" parameters={...}; apply later by passing a preset's parameters from list_my_presets to change_settings.\n11. See or return to an earlier setup: list_saved_versions, then go_back_to_version revision=N. Later versions are kept. Say which client saved a version only as reported; never guess a person.\n12. Play a VST synth or sampler: the user adds an Instrument tool in the AudioRouter window (Add tool, then pick the plugin; it needs a file chosen there) and connects it to an output or Mixer. Then list_midi_devices shows keyboards; change_settings on the Instrument with parameters {midiInput: \"keyboard\"} (the on-screen keyboard and play_notes only), \"all\" (every connected keyboard) or a device name from list_midi_devices. With the route playing, play_notes node=<Instrument name> events=[{type:noteOn,note:60,durationMs:500},{type:noteOn,note:64,afterMs:500,durationMs:500}] plays a phrase; events=[{type:allNotesOff}] stops stuck notes. The instrument is silent until a note arrives; if a device is not connected, list_midi_devices says so and no other device is used.\n13. Key a plugin effect from a second source (a plugin sidechain): add the effect first. Ask the user to check in the AudioRouter window whether the plugin has an auxiliary (key) input; list_plugins shows its file; assistants cannot inspect plugin buses. If it has none, say so and stop. Otherwise add_plugin_sidechain_port node=<plugin name> adds a port named sidechain (no Mixer, no connection), and connect_nodes from=<key source> to=<plugin name> toInput=sidechain connects the key. Only one source can feed the port; replace it by disconnect_nodes first. Editor access builds; the user presses Play.\nAlways describe what you changed to the user. Settings are validated: if a call fails, read its message (it names the problem and the allowed choices).";
 
 const NETWORK_PAIRING_RECIPE: &str = "14. Send encrypted audio between computers: update AudioRouter on both peers together. On the sending PC add_tool kind=networkSend with parameters {host: <receiving PC IP>, port: 47777}; connect its input to the audio to send. On the receiving PC add_tool kind=networkReceive with parameters {sender: <sending PC IP>, port: 47777}; connect it to an output or Mixer. Ask the user to Generate a strong Pairing key in Properties and copy it to both peers with change_settings parameters {pairingKey: <same key>}. Never repeat the key in summaries or logs. With a key, audio is encrypted and authenticated and captured packets cannot play after receiver restart. Blank keys mean unencrypted, unpaired audio. Running-audio edits and Play require Operator/device authority; an Editor can prepare the stopped graph.";
 
@@ -3954,11 +3961,8 @@ mod tests {
         // Scopes no MCP role holds (Observer, Editor and Operator are Read,
         // GraphWrite and SessionControl). The tools stay in the advanced list
         // for a client enrolled by other means; assistants are told to ask
-        // the user to use the window.
-        ("recorders.startRecording", RECORD_SCOPE),
-        ("recorders.stopRecording", RECORD_SCOPE),
-        ("recordings.setMetadata", RECORD_SCOPE),
-        ("recordings.rename", RECORD_SCOPE),
+        // the user to use the window. Recording control is no longer here:
+        // the window can allow it per client (owner decision A1, 2026-11-27).
         ("plugins.buses", "loads the plugin in a worker to read its buses, which needs the plugin-scan permission no MCP role holds"),
         ("plugins.programs", "asks a running plugin worker for its programs; needs the plugin-scan permission no MCP role holds"),
         ("plugins.prepareUpdate", "needs the plugin-scan permission no MCP role holds; the user updates a plugin in the window"),
@@ -4014,8 +4018,6 @@ mod tests {
         ("virtualRoutes.list", VIRTUAL),
         ("virtualRoutes.replace", VIRTUAL),
     ];
-    const RECORD_SCOPE: &str =
-        "needs the recording permission no MCP role holds; the user records in the window (reads are open: list_recordings, get_recording)";
     const ALIAS: &str = "older alias of a method a default tool already calls";
     const WINDOW_ONLY: &str =
         "desktop-window only by design (user consent or an outside app); refused to MCP and HTTP";
@@ -6436,6 +6438,80 @@ mod tests {
     /// created and then `permissionDenied`, leaving a session it could not
     /// open. The tool now refuses before creating it; an Operator still
     /// creates and opens it.
+    /// A2 (owner decision 2026-11-27): an Editor renames a session with the
+    /// default `rename_session` tool, without a key or a session ID, and
+    /// `undo_last_change` restores the old name. An Observer is refused.
+    #[test]
+    fn rename_session_tool_renames_the_open_session_and_undo_restores_it() {
+        use audiorouter_control::{ClientGrant, ClientRole};
+
+        let mut plane = ControlPlane::default();
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        let session_id = session.id.clone();
+        let original = session.name.clone();
+        plane.insert_session(session).unwrap();
+        let operator = ClientGrant::for_role(ClientRole::Operator);
+        let opened = plane.dispatch_authorized_for_client(
+            audiorouter_protocol::JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(0)),
+                method: "sessions.active.set".into(),
+                params: Some(json!({ "sessionId": session_id, "idempotencyKey": "open" })),
+            },
+            "window",
+            &operator,
+        );
+        assert!(opened.result.is_some(), "{opened:?}");
+        let name_now = |plane: &ControlPlane| plane.get_session(&session_id).unwrap().name.clone();
+        let call = |plane: &mut ControlPlane,
+                    client: &str,
+                    grant: &ClientGrant,
+                    tool: &str,
+                    arguments: Value| {
+            mcp_tool_call(
+                plane,
+                client,
+                grant,
+                None,
+                &json!({ "id": 1, "params": { "name": tool, "arguments": arguments } }),
+            )
+        };
+
+        let observer = ClientGrant::for_role(ClientRole::Observer);
+        let refused = call(
+            &mut plane,
+            "observer",
+            &observer,
+            "rename_session",
+            json!({ "name": "Nope" }),
+        );
+        assert_eq!(refused["result"]["isError"], true, "{refused}");
+        assert_eq!(name_now(&plane), original);
+
+        let editor = ClientGrant::for_role(ClientRole::Editor);
+        let renamed = call(
+            &mut plane,
+            "editor",
+            &editor,
+            "rename_session",
+            json!({ "name": "Podcast night" }),
+        );
+        assert_eq!(renamed["result"]["isError"], false, "{renamed}");
+        assert_eq!(name_now(&plane), "Podcast night");
+
+        let undone = call(
+            &mut plane,
+            "editor",
+            &editor,
+            "undo_last_change",
+            json!({ "sessionId": session_id.as_str() }),
+        );
+        assert_eq!(undone["result"]["isError"], false, "{undone}");
+        assert_eq!(name_now(&plane), original);
+    }
+
     #[test]
     fn create_session_refuses_an_editor_before_creating_a_session() {
         use audiorouter_control::{ClientGrant, ClientRole};
@@ -7213,7 +7289,7 @@ mod tests {
         let transition_content = transition["result"]["content"][0]["text"].as_str().unwrap();
         let transition_payload: Value = serde_json::from_str(transition_content).unwrap();
         assert_eq!(transition_payload["result"]["transition"], "lock");
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 108);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 109);
         // The default list is the task-level subset; every default name is a
         // real tool and every tool the recipes mention is in it.
         let all = mcp_tools();

@@ -201,6 +201,7 @@ export const MESSAGE_TONES = {
   "g2.vrReplacing": PROGRESS,
   "g2.vrRevisionInvalid": INFO,
   "g3Adv.authorized": INFO,
+  "g3Adv.authorizedRecording": INFO,
   "g3Adv.committing": PROGRESS,
   "g3Adv.deletedUnavailable": ERROR,
   "g3Adv.exported": INFO,
