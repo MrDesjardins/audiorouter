@@ -61,3 +61,39 @@ repairs. Existing ignored hardware gates remain ignored, not waived.
 Next: short attended exact-endpoint loss/resume qualification when a quiet
 device window is available. Keep the independent frontend qualification branch
 intact. PR creation still requires explicit human approval.
+
+## Continuation: fresh executable and real recording file
+
+2026-11-27, owner requested continuation. Built the real offline backend with
+`cargo build -p audiorouter-control --example e2e_backend --locked`, then ran
+`node --test tools/quality/recovery-process.test.mjs`. Passed in under one
+second. Local evidence: `target/recovery-state-consistency/process-qualification.log`.
+The test retains its exclusively created `audiorouter-e2e-recovery-*` directory
+under Temp for inspection, prints its path and captures the JSON-RPC exchanges.
+Each request has a five-second deadline and shutdown has a two-second deadline;
+only the test's owned backend child may be terminated.
+
+The process test proved these outcomes through stdio and the real dispatcher:
+
+- Two Sleep notifications retained exactly one resume offer; the route stayed
+  stopped until an explicit Start.
+- With a real file-recorder worker attached, Armed refused Sleep and left
+  the running route unchanged.
+- After two synthetic 128-frame quanta, session Stop finalized a real float32
+  stereo WAV. The index recorded 256 frames; its complete data chunk contained
+  all 256 expected +0.1/-0.1 sample pairs, with no truncated chunk.
+- After graceful process exit and relaunch on the same isolated SQLite file,
+  the saved graph and recording index matched exactly. No route restarted and
+  no transient resume offer survived restart.
+
+The offline fixture now permits `system.osTransition`; this invokes only the
+backend policy handler, never Windows power management. Production endpoints,
+the default MCP catalog and public schemas are unchanged. The first harness
+attempt incorrectly sent an idempotency key to read methods and was rejected;
+the runner now sends keys only for its mutation calls. This was a harness error,
+not a product behavior change.
+
+Workspace strict Clippy (including examples), both formatting checks and
+documentation validation passed. This adds real process/storage/file evidence;
+it still does not prove physical endpoint loss, actual suspend/resume, desktop
+UI behavior or audible continuity. The short attended hardware gate is next.

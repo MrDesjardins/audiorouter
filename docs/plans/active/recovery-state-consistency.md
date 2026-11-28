@@ -68,6 +68,19 @@ existing recovery policy. Do not roll back microphone fail-closed protections.
 
 ## Evidence and next action
 
+Continuation 2026-11-27: owner requested further work. Before the attended
+hardware gate, build and run the offline backend executable with an exclusively
+created disposable SQLite/recording directory. Exercise repeated Sleep through
+the real stdio dispatcher, recorder arm refusal, bounded Stop/file finalization,
+and process restart persistence. Add only `system.osTransition` to the offline
+fixture allowlist; this sends a backend notification and never sleeps Windows.
+Retain generated evidence locally; close only the owned child process. Revert
+the fixture allowance and qualification script to roll back this test-only work.
+Result: fresh executable qualification passed, including real recorder-worker
+arm refusal, 256 verified WAV frames and exact graph/index persistence across
+process restart. See the evidence continuation section. The remaining next
+action is the short attended physical-device gate, not another simulated run.
+
 Implementation and local verification are complete. See the
 [evidence](evidence/2026-11-27-recovery-state-consistency.md) for regression
 proof, command outcomes and physical-hardware limits. Next: short attended
