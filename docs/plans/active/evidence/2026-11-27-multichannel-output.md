@@ -1,7 +1,9 @@
 # Multichannel output (A4 option a): audit and preparation
 
-Date: 2026-11-27. Branch: `t3/multichannel-output-qualification`, stacked on
-`feat/multichannel-output` (implementation `bb479548d`). Owning plan:
+Date: 2026-11-27. Branch: `t3/multichannel-output-qualification`. It contains
+`feat/multichannel-output` (including `205892499`, the single-endpoint and
+application-worker widening, and `0145e83f2`, the live results) merged, and the
+docs/evidence commits are stacked on that branch. Owning plan:
 [owner decisions](../owner-decisions-2026-11-27.md). No driver, publication,
 release or live-audio change was made in this task.
 
@@ -10,8 +12,9 @@ release or live-audio change was made in this task.
 Owner decision A4 (2026-11-27): a stereo route plays into the front left/right
 of any multichannel output device, and the other channels stay silent, so
 whatever virtual cable a PC has is usable. This record audits that
-implementation, records the local checks, and prepares the two hardware gates.
-It does not claim either hardware gate is passed.
+implementation, records the local checks, and records the live continuity
+result plus the remaining attended gate. It does not claim the feature or a
+release is qualified.
 
 ## What the implementation does
 
@@ -28,11 +31,14 @@ It does not claim either hardware gate is passed.
   layout"; it does not need to read the mask. A mask without front left/right
   is not a layout this feature claims.
 - The multi-path output fan-out is fixed at 2 graph channels in
-  `prepare_native_output_fanout_with`; only the device frame width grows. The
-  pump's frame counts, ring shape and drift controller are unchanged.
-- `output_format_supported` accepts IEEE-float32 render devices with 2 to 32
-  channels at 8-192 kHz; mono is still refused. The single application worker
-  and process-loopback render binding stay stereo, as before.
+  `prepare_native_output_fanout_with`, and the single-endpoint bridge keeps a
+  stereo graph and stereo resamplers whatever the render device's width
+  (`205892499`). Only the device frame width grows. The pump's frame counts,
+  ring shape and drift controller are unchanged.
+- `output_format_supported` and `render_channels_supported` accept IEEE-float32
+  render devices with 2 to 32 channels (at 8-192 kHz where the rate is checked);
+  mono is still refused. The multi-path fan-out, the single-endpoint bridge and
+  the application worker use the same `MAX_RENDER_CHANNELS` limit.
 
 ## Coverage audit and defects fixed
 
@@ -49,13 +55,17 @@ not actually complete:
   behavior stated and the same-cable example narrowed to capture.
 - [api-reference.md](../../../operations/api-reference.md): `nativeOutputs.prepare`
   still described one to eight stereo 48 kHz clients. Corrected to the new
-  predicate and the widening rule. The single-endpoint worker row was left as
-  stereo because that worker is unchanged.
+  predicate and the widening rule, and the `nativeEndpoints.prepare` paragraph
+  now states that its render side plays the stereo graph on the first two
+  channels too.
 
-No code defect was reproduced by the audit or the tests below. The plan's
-original step 1 wording mentioned reading the channel mask; the shipped rule is
-the equivalent first-two-channels rule described above, and the plan status was
-corrected to match the code.
+The audit of the first implementation (`bb479548d`) found no code defect. The
+later `205892499` fixed a gap found during integration: the single-endpoint and
+application workers still refused a wide output even though the UI uses them
+for a simple route. The plan's original step 1 wording mentioned reading the
+channel mask; the shipped rule is the equivalent first-two-channels rule
+described above, and the plan status was corrected to match the code. The local
+checks below were re-run after merging that implementation.
 
 ## Local checks (Windows 11 dev PC, Rust 1.96.0)
 
@@ -68,7 +78,7 @@ devices or the owner's data.
 | Rust formatting (shell) | `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` | clean |
 | Clippy workspace | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | clean |
 | Clippy shell | `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings` | clean (after `ui/dist` was built; the first attempt failed only because the embed path was absent) |
-| Windows audio | `cargo test -p audiorouter-windows-audio --lib` | 169 passed, 4 ignored |
+| Windows audio | `cargo test -p audiorouter-windows-audio --lib` | 170 passed, 4 ignored |
 | Control | `cargo test -p audiorouter-control --lib` | 530 passed, 31 ignored |
 | Engine, all targets | `cargo test -p audiorouter-engine` | 189 unit + every integration suite passed |
 | Source layouts | inside the engine run: `source_combinations` | 6/6 passed |
@@ -79,52 +89,32 @@ The widening unit tests cover 3, 4, 6, 8 and 16 device channels, equal-width
 pass-through, partial/non-float/oversized refusals, and the float32 mix-format
 predicate. The setup-check regression now expects a 7.1 output to play and a
 mono or non-float output to be refused through the same predicate Play uses.
+The endpoint-bridge regression keeps a stereo graph and resamplers for a
+multichannel render device (`205892499`).
 
-Desktop preparation: `powershell -NoProfile -ExecutionPolicy Bypass -File
-tools/build-desktop.ps1` completed. Shell
+Desktop preparation: a fresh release build was made from the merged head for
+the attended gate. Shell
 `src-tauri/target/release/audiorouter-shell.exe` SHA-256
-`2ADA29A93BAD12F493E45ADF130A48E44E0A1459F21037C95839169CCCFD13E0`,
-built after `ui/dist`. Other workers and `audiorouter-cli.exe` were produced
-with their own hashes by the same script. The continuity test binary was
-compiled without running it:
-`cargo test -p audiorouter-transport --test live_audio_continuity --release --locked --no-run`.
+`5D06A08C7DA19EB9461BA4ECC812A964D17E8DAAB11DEE4136B09ED6719F89BA`,
+built after `ui/dist`; the other workers and `audiorouter-cli.exe` were
+produced by the same script. The live continuity run used the release
+continuity binary on the feature branch.
 
-## Hardware gate 1: continuity through CABLE-B at 7.1
+## Hardware gate 1: continuity through CABLE-B at 7.1 (passed)
 
-This is A4's required hardware proof and reuses the C1 harness. It needs the
-owner's quiet window, and it must not overlap the live-reliability thread's
-CABLE runs.
+Passed on 2026-11-27 in the owner's quiet window and recorded with the full
+table in the [owning plan](../owner-decisions-2026-11-27.md#a4-option-a-implementation-plan-branch-featmultichannel-output);
+this record does not re-run or re-claim it. CABLE-B Input was 8 channels,
+float32, 48 kHz. The harness routed CABLE Output -> Gain -> CABLE-B Input and
+read CABLE-B Output. The multi-path runs had zero routed glitches with a clean
+reference; the single-endpoint worker passed 3 of 3 clean runs after one
+unattributed failure that kept no reference figures. The routed tone reached
+full level, so the stereo route lands on the 7.1 cable's front left/right.
+Channels 3-8 were not read on hardware (CABLE-B Output is stereo; the unit tests
+cover the silence); the application worker was not run live.
 
-Preparation and prerequisites (to confirm in the window):
-
-1. CABLE-B Input is configured for 7.1 at 48 kHz (the owner states it is). Its
-   current ID is expected to be
-   `{0.0.0.00000000}.{03498a2a-ef6a-4dd4-b9ba-72e22f567d7a}`; CABLE-B Output
-   capture is expected to be
-   `{0.0.1.00000000}.{ef18e30a-69c9-4299-bae2-1a2452fb8e4f}`. Read the active
-   formats without changing Windows Sound settings; use the disposable profile
-   or the M00 probe only inside the quiet window, because the probe starts each
-   render stream briefly.
-2. Close Discord, Zoom, games and AudioRouter; nobody may be listening to
-   CABLE-A or CABLE-B. Confirm `Get-Process audiorouter-shell*` prints nothing.
-3. Do not run this while C1 or any other cable run is active.
-4. Before the continuity run, confirm the route render endpoint really is
-   wider than stereo. The M00 probe was built for this window (release,
-   SHA-256 `753E1EB0…`); it opens each stream briefly, so run it only in the
-   quiet window and read the two CABLE-B lines:
-
-   ```powershell
-   & .\tools\m00-wasapi-probe\target\release\m00-wasapi-probe.exe |
-     Select-String -Pattern '03498a2a|ef18e30a'
-   ```
-
-   Require the CABLE-B Input line (`{0.0.0.…03498a2a…}`) to show
-   `channels=8`, a float format and the 7.1 mask, and record the CABLE-B Output
-   capture line. If the render side is not wider than two channels, the run
-   does not exercise A4 and must not be recorded as a pass.
-
-Agent command (the same route as C1, so CABLE-B Input is the route's render
-endpoint and the stereo graph must be widened):
+Reproduction command (the same route as C1, so CABLE-B Input is the route's
+render endpoint and the stereo graph must be widened):
 
 ```powershell
 $env:CARGO_BUILD_JOBS=4
@@ -140,8 +130,7 @@ cargo test -p audiorouter-transport --test live_audio_continuity --release --loc
 
 The recorder analyses the result-capture left channel, which is front left
 after widening; a wrongly routed or silent channel 0 fails the steady-tone
-check. The unit tests already prove channels 2..N are exact silence. Pass: zero
-routed glitches and no silent run on a clean reference.
+check. The unit tests already prove channels 2..N are exact silence.
 
 ## Hardware gate 2: attended Play in the built app
 
@@ -163,10 +152,11 @@ set `AUDIOROUTER_ALLOW_DEVICE_ADMIN`; answer the in-window device question.
 
 ## Not run / open
 
-- No continuity or built-app Play has run yet: the quiet/attended window is
-  not available to this thread. Both gates remain open and A4 is not hardware
-  complete until they pass.
-- The live-reliability thread owns C1; this run must be scheduled separately
-  (sequentially, never at the same time). The same endpoints are involved.
+- Attended Play in the built app remains open; it needs the owner present. The
+  live continuity gate passed (above), and the application worker was not run
+  live (its code path is covered by the unit and compile checks).
+- Hardware did not verify channels 3-8 exact silence; CABLE-B Output is read as
+  stereo, and the unit tests cover the silence.
 - Not re-run: full UI test suites (no UI code changed), the eight-hour soak
-  (owner-deferred), and the release qualification gates.
+  (owner-deferred), and the release qualification gates. No feature or release
+  is qualified.

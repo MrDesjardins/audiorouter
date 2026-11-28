@@ -2605,9 +2605,8 @@ impl WasapiSchedulerBridge {
         if capture.direction != EndpointDirection::Capture
             || render.direction != EndpointDirection::Render
             || !capture.is_ieee_float32()
-            || !render.is_ieee_float32()
+            || !render_channels_supported(render)
             || !(1..=2).contains(&capture.channels)
-            || render.channels != 2
         {
             return Err(AudioError::InvalidFrameSize);
         }
@@ -2637,15 +2636,17 @@ impl WasapiSchedulerBridge {
         if capture.direction != EndpointDirection::Capture
             || render.direction != EndpointDirection::Render
             || !capture.is_ieee_float32()
-            || !render.is_ieee_float32()
+            || !render_channels_supported(render)
             || !(1..=2).contains(&capture.channels)
-            || render.channels != 2
         {
             return Err(AudioError::InvalidFrameSize);
         }
+        // The graph and both resamplers are stereo whatever the render
+        // device's width: SharedRender widens each stereo frame into a wider
+        // device frame, silent beyond front left/right (A4).
         let mut bridge = Self::new_at_sample_rate(
             ring_capacity,
-            usize::from(render.channels),
+            STEREO_CHANNELS,
             quantum_frames,
             max_packet_frames,
             graph_sample_rate_hz,
@@ -2661,7 +2662,7 @@ impl WasapiSchedulerBridge {
         bridge.capture_samples = vec![0.0; max_packet_frames * bridge.capture_channels];
         if capture.sample_rate_hz != graph_sample_rate_hz {
             bridge.capture_resampler = Some(InterleavedStreamingResampler::new(
-                usize::from(render.channels),
+                STEREO_CHANNELS,
                 max_packet_frames.max(quantum_frames),
                 capture.sample_rate_hz,
                 graph_sample_rate_hz,
@@ -2669,7 +2670,7 @@ impl WasapiSchedulerBridge {
         }
         if graph_sample_rate_hz != render.sample_rate_hz {
             bridge.render_resampler = Some(InterleavedStreamingResampler::new(
-                usize::from(render.channels),
+                STEREO_CHANNELS,
                 max_packet_frames.max(quantum_frames),
                 graph_sample_rate_hz,
                 render.sample_rate_hz,
@@ -4353,6 +4354,20 @@ pub struct SharedRender {
     started: bool,
     event: EventHandle,
     _com: ComApartment,
+}
+
+/// Channels of AudioRouter's graph output to a render device.
+const STEREO_CHANNELS: usize = 2;
+
+/// The most channels a render (output) device may have. A stereo route plays
+/// on its first two and the rest stay silent (owner decision A4, 2026-11-27).
+pub const MAX_RENDER_CHANNELS: u16 = 32;
+
+/// Whether a stereo route can play to `render`: a float32 device with 2 to
+/// [`MAX_RENDER_CHANNELS`] channels (wider frames are filled by
+/// [`SharedRender::submit_bytes`]). Mono render devices are refused.
+pub fn render_channels_supported(render: &EndpointInfo) -> bool {
+    render.is_ieee_float32() && (2..=MAX_RENDER_CHANNELS).contains(&render.channels)
 }
 
 /// Copy whole float32 frames of `source_bytes_per_frame` into wider float32
@@ -12029,6 +12044,46 @@ mod tests {
         assert_eq!(bridge.capture_bytes_per_frame, 4);
         assert_eq!(bridge.bytes_per_frame, 8);
         assert!(bridge.capture_resampler.is_none());
+    }
+
+    #[test]
+    fn scheduler_bridge_keeps_a_stereo_graph_for_a_multichannel_render_device() {
+        // A4: the single-endpoint worker (a simple one-input, one-output route)
+        // plays to a 7.1 device. The graph, its resamplers and the submitted
+        // frames stay stereo; SharedRender widens them into the device frame.
+        let endpoint = |direction, channels, sample_rate_hz| EndpointInfo {
+            id: format!("{direction:?}-{channels}"),
+            direction,
+            default_period_100ns: 100_000,
+            minimum_period_100ns: 20_000,
+            sample_rate_hz,
+            channels,
+            bits_per_sample: 32,
+            format_tag: 0xfffe,
+            channel_mask: if channels == 8 { 0x63f } else { 3 },
+            subformat_guid: "{00000003-0000-0010-8000-00AA00389B71}".into(),
+        };
+        let capture = endpoint(EndpointDirection::Capture, 2, 48_000);
+        for channels in [3, 4, 6, 8, MAX_RENDER_CHANNELS] {
+            let render = endpoint(EndpointDirection::Render, channels, 96_000);
+            let bridge = WasapiSchedulerBridge::new_for_endpoints_at_graph_rate(
+                2, &capture, &render, 128, 256, 48_000,
+            )
+            .unwrap();
+            assert_eq!(bridge.bytes_per_frame, 8, "{channels} channels");
+            assert_eq!(bridge.render_resampler.as_ref().unwrap().channels, 2);
+            assert!(render_channels_supported(&render));
+        }
+        for channels in [1, MAX_RENDER_CHANNELS + 1] {
+            let render = endpoint(EndpointDirection::Render, channels, 48_000);
+            assert!(!render_channels_supported(&render), "{channels} channels");
+            assert!(
+                WasapiSchedulerBridge::new_for_endpoints(2, &capture, &render, 128, 256).is_err()
+            );
+        }
+        let mut pcm = endpoint(EndpointDirection::Render, 8, 48_000);
+        pcm.subformat_guid = "{00000001-0000-0010-8000-00AA00389B71}".into();
+        assert!(!render_channels_supported(&pcm));
     }
 
     #[test]
