@@ -14,7 +14,10 @@
 > the CABLE-B 8-channel owner decision (no valid CABLE-B result endpoint
 > exists), and the licensed latency-changing commercial-plugin run. This plan
 > stays **KEEP** until a clean isolated repeat passes; the three of six
-> failures are not a human gate yet.
+> failures are not a human gate yet. On 2026-11-27 the failed logs were audited
+> and capture-side instrumentation plus C2/G8 harness options were prepared; see
+> [C1/C2/G8 preparation](evidence/2026-11-27-live-audio-reliability-gates.md).
+> No live tone was rendered.
 
 Owner request, 2026-11-01: "do the two code review markdown in the future
 folder. Set them in current and tackle all of them." Sources:
@@ -673,3 +676,31 @@ to trace at the glitch offset. (2) The CABLE-B 8-channel decision. (3) A
 licensed latency-changing non-Blue-Cat plugin run; installed UADx/TDR
 candidates were not used because licensing and the exact choice are the
 owner’s, and UADx previously returned input unchanged.
+
+### C1/C2/G8 preparation (2026-11-27)
+
+The 2026-11-24 failures were audited before any new run; the full record is
+[C1/C2/G8 preparation](evidence/2026-11-27-live-audio-reliability-gates.md).
+
+- Each failure is one contiguous 10.98–12.04 ms block (527/544/578 samples) with
+  no WASAPI discontinuity flag, no route output underrun, and a healthy service
+  thread. The old logs cannot say whether the result capture lost a packet or
+  the route rendered silence, because both appear as 480 zero samples.
+- The harness now counts capture `device_position` steps and `SILENT`-flagged
+  packets, prints the measurement-window underrun delta, and can prefix raw
+  dumps. A portable classifier test covers continuous, lost, rewound and unknown
+  positions.
+- A read-only `AUDIOROUTER_CONTINUITY_PREFLIGHT=1` test lists any active Windows
+  audio session on the four endpoints without opening a stream. It must be
+  repeated before each run; a snapshot is not a quiet-window proof.
+- C2 gained an opt-in privacy-mute test (silence, same running route, restore on
+  clear, no underrun). UDP-under-load reuses the harness network/CPU-stress
+  variables; worker kill, endpoint removal and sleep/resume remain owner-attended.
+- G8 gained `_FORCE_BYPASS`, `_EXPECT_PLUGIN_DELAY_MS`, `_REQUIRE_PLUGIN_RUNNING`,
+  `_DUMP_PREFIX` and `_EXPECT_DIFFERENT_FROM`, so a copied session can be run
+  bypassed and active and checked for reported latency, a running worker and a
+  changed signal. The owner still names and signs in to the plugin; the ear check
+  is not automated.
+- Portable checks: the harness test binary has 3 passing portable tests and 12
+  ignored live tests, Clippy for `audiorouter-transport` all targets/features is
+  clean, and formatting is clean. No live tone was rendered.
