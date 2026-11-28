@@ -127,12 +127,13 @@ impl ControlPlane {
                 "native worker is already attached".into(),
             ));
         }
+        // The worker's graph is stereo; a wider output plays it on front
+        // left/right with the other channels silent (A4).
         if config.render.direction != audiorouter_windows_audio::EndpointDirection::Render
-            || !config.render.is_ieee_float32()
-            || config.render.channels != 2
+            || !audiorouter_windows_audio::render_channels_supported(config.render)
         {
             return Err(ControlError::InvalidRequest(
-                "process-loopback render binding must be stereo IEEE float32".into(),
+                "process-loopback render binding must be IEEE float32 with 2 to 32 channels".into(),
             ));
         }
         let application = audiorouter_windows_audio::bind_application_or_restarted(

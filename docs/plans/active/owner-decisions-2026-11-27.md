@@ -25,9 +25,14 @@ AUTO-06/10/15/18, R2-1a, R2-4, SEC-02, API-07, ARCH-08, NFR-03, UI-17, L10N-01.
 | A12, A13, A15–A18 | Defaults kept | Recorded in the human-gated table |
 | A14 | Site and guides use the app's words ("input device", "output device") | Separate site branch |
 
-A3 (bus lists stay expert-only): on 2026-11-27 the owner asked what "expert-only"
-means; it was explained and is still open. The owner's flexibility goal
-may argue for reversing it; ask before changing it.
+A3 (bus lists expert-only): on 2026-11-27 the owner asked what "expert-only"
+meant. Explained: the two read-only lists were offered to assistants only with
+`--advanced-tools`, REST already served them, and changing buses needs device
+administration either way. The owner then answered **yes, make them default
+tools**. Done on this branch: both are in `DEFAULT_MCP_TOOLS` with plain
+descriptions, their exclusions are removed, and
+`an_observer_reads_the_virtual_bus_lists_through_default_mcp_tools` calls both
+through `mcp_tool_call` as an Observer.
 
 ## Tasks and status
 
@@ -81,9 +86,12 @@ assistant can see why a device is refused. **Owner choice (2026-11-27): option (
 
 ## A4 option (a): implementation plan (branch `feat/multichannel-output`)
 
-Scope: the multi-input output fan-out, which every Play uses. The older
-single-endpoint worker (`nativeEndpoints.prepare`) and the single application
-worker stay stereo-only, with their refusal messages unchanged.
+Scope: every worker Play can choose. The multi-input output fan-out serves
+multi-device routes; the UI picks the single-endpoint worker
+(`nativeEndpoints.prepare`) for a simple one-input, one-output route and the
+application worker for a single app route. A first version covered only the
+fan-out; the single-endpoint bridge (stereo graph and resamplers whatever the
+device width) and the application worker check were added before handoff.
 
 1. `SharedRender` records whether the stream is float32. `submit_bytes` keeps
    the exact-width copy, and a narrower float32 source into a wider float32
@@ -114,12 +122,31 @@ at Play again, as before.
 
 Status 2026-11-27: steps 1, 2 and 4 done; step 3 needed nothing, because
 `devices.list` already reports `format.channels` for every device and the UI
-labels it. The limit is 2–32 float channels. Local results: both `cargo fmt`
-checks and both Clippy runs clean; `audiorouter-windows-audio` (169, including
-the drift simulation suite and the three new tests) and `audiorouter-control`
-(530) passed, including the flipped `setup_check` tests. **Open:** the
-continuity harness through CABLE-B at 7.1 (needs the owner's quiet window), and
-an attended Play to a 7.1 output in the built app.
+labels it. The limit is 2–32 float channels (`MAX_RENDER_CHANNELS`, one value
+for every worker). Local results: both `cargo fmt` checks and both Clippy runs
+clean; `audiorouter-windows-audio` (170, including the drift simulation suite,
+the widening tests and the multichannel endpoint-bridge test) and
+`audiorouter-control` (530) passed, including the flipped `setup_check` tests.
+
+Live qualification, 2026-11-27, owner's quiet window, Windows 11 dev PC.
+CABLE-B Input reported 8 channels, float32, 48 kHz. Harness
+`live_backend_service_keeps_a_routed_tone_continuous` (997 Hz tone, CABLE Output
+→ Gain → CABLE-B Input, result read from CABLE-B Output):
+
+| Worker | Length | Reference glitches | Routed glitches | Result |
+| --- | --- | --- | --- | --- |
+| multi-path (default) | 30 s | 0 | 0 | pass, peak 0.0500 |
+| multi-path | 60 s | 0 | 0 | pass (one 37 ms late audio pass absorbed) |
+| single endpoint | 30 s | not recorded | 4 | fail |
+| single endpoint | 30 s ×3 | 0 | 0 | pass |
+| single endpoint | 30 s | 2 (1 silent run) | 4 | system hiccup: reference also broken, 18 ms late pass |
+
+The routed tone arrived at full level with zero glitches in every run whose
+reference was clean, so the stereo route reaches the 7.1 cable's front left/right
+intact. The first endpoint failure kept no reference figures, so it cannot be
+attributed; it did not recur in three runs. Not checked: that channels 3–8 are
+silent on hardware (CABLE-B Output is read as stereo; the unit tests cover it),
+the application worker live, and an attended Play in the built app.
 
 ## 0.0.33 candidate (local branch `candidate/0.0.33`)
 
