@@ -13,6 +13,12 @@ for (const theme of AUDIT_THEMES) {
     await expect(box).toBeVisible();
     await expect(box).not.toBeChecked();
     await expect(panel.getByText(/cannot choose the recording folder/)).toBeVisible();
+    const noteBounds = await panel.locator("#client-recording-note").boundingBox();
+    const authorizeBounds = await panel.getByRole("button", { name: "Authorize client", exact: true }).boundingBox();
+    expect(noteBounds && authorizeBounds).toBeTruthy();
+    if (noteBounds && authorizeBounds) {
+      expect(authorizeBounds.y - (noteBounds.y + noteBounds.height)).toBeGreaterThanOrEqual(8);
+    }
     const panelBox = await panel.boundingBox();
     const boxBounds = await box.boundingBox();
     expect(panelBox && boxBounds).toBeTruthy();
