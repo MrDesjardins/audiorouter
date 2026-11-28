@@ -21,11 +21,12 @@ AUTO-06/10/15/18, R2-1a, R2-4, SEC-02, API-07, ARCH-08, NFR-03, UI-17, L10N-01.
 | --- | --- | --- |
 | A1 | Option (a): per-client recording opt-in, off by default, set in the window | This branch; decision record in `docs/spec/13-security.md` and AUTO-18 |
 | A2 | `sessions.rename` with the default MCP tool `rename_session` (Editor) | This branch |
-| A4 | Open. Not CABLE-B specific: AudioRouter must work with whatever virtual cables a PC has. An agent investigates and proposes | Investigation below; owner chooses |
+| A4 | Option (a), chosen 2026-11-27 after the investigation below: stereo routes play into the front left/right of any multichannel output device | Its own branch, stacked on this one |
 | A12, A13, A15–A18 | Defaults kept | Recorded in the human-gated table |
 | A14 | Site and guides use the app's words ("input device", "output device") | Separate site branch |
 
-A3 (bus lists stay expert-only) was not answered. The owner's flexibility goal
+A3 (bus lists stay expert-only): on 2026-11-27 the owner asked what "expert-only"
+means; it was explained and is still open. The owner's flexibility goal
 may argue for reversing it; ask before changing it.
 
 ## Tasks and status
@@ -48,7 +49,7 @@ may argue for reversing it; ask before changing it.
    screenshots showed the toggle and the Authorize button on one line, so the
    note now sits under the toggle and the button has its own row.
 5. Site wording (A14) goes on its own branch.
-6. A4 investigation, then ask the owner.
+6. Done: A4 investigation; the owner chose option (a) on 2026-11-27. Implementation is a separate branch.
 7. 0.0.33 candidate: once #199, the UI port and this branch are on `main`, or
    from a local integration if the owner wants to test first.
 
@@ -75,7 +76,7 @@ Options for the owner:
 | (c) | Keep stereo-only and explain it in the device picker | No engine work; such cables stay unusable |
 
 Either way, list every endpoint's channel count in `list_devices` so an
-assistant can see why a device is refused. Waiting for the owner's choice.
+assistant can see why a device is refused. **Owner choice (2026-11-27): option (a).**
 
 ## Validation
 
