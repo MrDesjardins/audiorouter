@@ -77,6 +77,27 @@ Options for the owner:
 Either way, list every endpoint's channel count in `list_devices` so an
 assistant can see why a device is refused. Waiting for the owner's choice.
 
+## 0.0.33 candidate (local branch `candidate/0.0.33`)
+
+Built 2026-11-27 from `main` (`babbf051b`, includes the API-07 fix) merged with
+#199 (`fix/recovery-state-consistency`), `improve/ui-accessibility-app-qualification`,
+`feat/mcp-rename-and-recording` and `docs/site-device-wording`, then a version
+bump by package name (only `audiorouter-*` lock entries changed). Plan-file
+conflicts were resolved by keeping both sides; the approved A5–A9 rows and the
+open A4 row stay.
+
+- On the merged tree: both `cargo fmt` checks, Clippy `-D warnings` (workspace and
+  `src-tauri`), all 64 workspace test targets, contract drift (157 methods), docs
+  validation (330 files), UI lint, format, i18n, typecheck and unit tests
+  (1210/1210), site CSP check and site tests (4/4) passed.
+- `tools/build-desktop.ps1` (release) succeeded. The shell exe (20:11:46) is
+  newer than `ui/dist/index.html` (20:10:42), and the bundle contains "Also allow
+  recordings". Shell SHA256 `3B6B86CD6CDEFE6803637D2D51A03C351B3D5308ECAF44192E77603BAEBCBDF0`.
+- `fresh_install_shell` on that exe (new database, fresh WebView profile, default
+  pipe, no `AUDIOROUTER_*` variables, no other AudioRouter running): passed.
+- Not done: installer packaging, release notes, signing and publication (owner
+  decision E1); no attended audio run on this build.
+
 ## Validation
 
 - `sessions_rename_saves_a_revision_through_dispatch_and_respects_roles`
