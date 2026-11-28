@@ -9,7 +9,7 @@
     <path d="M198 332h105q30 0 30-30v-30" stroke="#78a9ff" stroke-width="2" stroke-dasharray="4 5"/>
   </g>
   <g font-family="Arial,sans-serif" fill="#e7edf5">
-    <g><rect x="53" y="132" width="130" height="76" rx="12" fill="#202b3b" stroke="#56718b"/><circle cx="73" cy="153" r="5" fill="#78a9ff"/><text x="68" y="179" font-size="14" font-weight="bold">Microphone</text><text x="68" y="195" fill="#92a1b4" font-size="10">Physical input</text></g>
+    <g><rect x="53" y="132" width="130" height="76" rx="12" fill="#202b3b" stroke="#56718b"/><circle cx="73" cy="153" r="5" fill="#78a9ff"/><text x="68" y="179" font-size="14" font-weight="bold">Microphone</text><text x="68" y="195" fill="#92a1b4" font-size="10">Input device</text></g>
     <g><rect x="264" y="198" width="78" height="74" rx="12" fill="#203630" stroke="#478a77"/><path d="M281 237h10l8-19 8 36 8-26 8 9" fill="none" stroke="#67d5b3" stroke-width="2"/><text x="279" y="263" font-size="10">EQ</text></g>
     <g><rect x="478" y="65" width="112" height="70" rx="12" fill="#282239" stroke="#74679d"/><text x="497" y="96" font-size="13" font-weight="bold">Voice chat</text><text x="497" y="115" fill="#a8a0c5" font-size="10">Virtual endpoint</text></g>
     <g><rect x="528" y="302" width="122" height="70" rx="12" fill="#202b3b" stroke="#56718b"/><text x="548" y="333" font-size="13" font-weight="bold">Headphones</text><text x="548" y="352" fill="#92a1b4" font-size="10">Monitor mix</text></g>
